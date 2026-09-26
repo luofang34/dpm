@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 /// Whether all predecessor work is complete under the MVP's conservative execution policy.
 ///
 /// Temporal relationship kinds and lag affect schedule projections, not wall-clock execution timers.
+/// Waived soft constraints are excluded; hard and unwaived soft constraints always apply.
 pub fn dependencies_satisfied(plan: &Plan, work: WorkItemId) -> bool {
     dependencies_with_completion(plan, work, &completion(plan))
 }
@@ -17,8 +18,7 @@ fn dependencies_with_completion(
 ) -> bool {
     plan.work_items.contains_key(&work)
         && plan
-            .dependencies
-            .iter()
+            .enforced_dependencies()
             .filter(|dep| dep.successor == work)
             .all(|dep| done.contains(&dep.predecessor))
 }

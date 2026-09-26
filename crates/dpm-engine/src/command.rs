@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use dpm_model::{
-    ActorId, Artifact, DecisionId, ExternalIdentity, ExternalLinkRole, ExternalReferenceId,
-    ExternalState, Key, OperationId, ValidationError, WorkItemId, WorkKind, WorkStatus,
+    ActorId, Artifact, DecisionId, DependencyId, ExternalIdentity, ExternalLinkRole,
+    ExternalReferenceId, ExternalState, Key, OperationId, ValidationError, WorkItemId, WorkKind,
+    WorkStatus,
 };
 use dpm_schedule::ScheduleError;
 use serde::{Deserialize, Serialize};
@@ -75,6 +76,20 @@ pub enum Command {
         work: WorkItemId,
         /// New artifact attributed to the caller.
         artifact: Artifact,
+    },
+    /// Stop enforcing a soft constraint as a human or service, recording who, when and why.
+    WaiveDependency {
+        /// Soft constraint to set aside.
+        dependency: DependencyId,
+        /// Non-empty justification.
+        reason: String,
+    },
+    /// Enforce a waived soft constraint again; the operation records who, when and why.
+    RestoreDependency {
+        /// Waived constraint to enforce again.
+        dependency: DependencyId,
+        /// Non-empty justification.
+        reason: String,
     },
     /// Resolve an open gate.
     Decide {
@@ -169,6 +184,9 @@ pub enum EngineError {
     /// Referenced work does not exist.
     #[error("work item {0} does not exist")]
     MissingWorkItem(WorkItemId),
+    /// Referenced temporal constraint does not exist.
+    #[error("dependency {0} does not exist")]
+    MissingDependency(DependencyId),
     /// Referenced gate does not exist.
     #[error("decision {0} does not exist")]
     MissingDecision(DecisionId),

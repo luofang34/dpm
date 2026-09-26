@@ -1,5 +1,7 @@
 use crate::{EngineError, completion};
-use dpm_model::{ActorId, DependencyKind, Plan, WorkItem, WorkItemId, WorkStatus};
+use dpm_model::{
+    ActorId, DependencyId, DependencyKind, DependencyPolicy, Plan, WorkItem, WorkItemId, WorkStatus,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -23,6 +25,10 @@ pub enum UnmetGate {
     },
     /// A predecessor must complete independently of the temporal projection.
     Dependency {
+        /// Stable identity of the unwaived constraint.
+        dependency: DependencyId,
+        /// Whether a human or service may waive the constraint.
+        policy: DependencyPolicy,
         /// Stable identity of the prerequisite.
         predecessor: WorkItemId,
         /// Human-readable prerequisite key.
@@ -86,12 +92,13 @@ pub(crate) fn with_completion(
         });
     }
     for dep in plan
-        .dependencies
-        .iter()
+        .enforced_dependencies()
         .filter(|dep| dep.successor == work.id && !done.contains(&dep.predecessor))
     {
         if let Some(item) = plan.work_items.get(&dep.predecessor) {
             unmet.push(UnmetGate::Dependency {
+                dependency: dep.id,
+                policy: dep.policy,
                 resource_keys: item
                     .resources
                     .iter()
@@ -131,7 +138,7 @@ impl GateReport {
             UnmetGate::ContractNotRatified => "contract not ratified".into(),
             UnmetGate::Lifecycle { status } => format!("work lifecycle state is {status:?}"),
             UnmetGate::Blocker { reason } => format!("work is blocked: {reason}"),
-            UnmetGate::Dependency { key, relation, lag_hours, .. } => format!("awaits verified prerequisite {key} ({relation:?}, {lag_hours:+}h; relation and lag apply to schedule projection)"),
+            UnmetGate::Dependency { key, relation, lag_hours, policy, .. } => format!("awaits verified prerequisite {key} ({relation:?}, {lag_hours:+}h, {policy:?}; relation and lag apply to schedule projection)"),
             UnmetGate::Decision { key } => format!("work awaits decision: {key}"),
         }).collect()
     }

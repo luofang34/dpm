@@ -1,6 +1,6 @@
 use dpm_model::{
     Artifact, Decision, DecisionId, Dependency, Plan, Project, Requirement, Risk, WorkItem,
-    WorkItemId,
+    WorkItemId, WorkLink,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -22,8 +22,10 @@ pub struct ExecutionContext {
     pub decisions: Vec<Decision>,
     /// Risks related to this work or its containing work packages.
     pub risks: Vec<Risk>,
-    /// Incoming and outgoing temporal relationships.
+    /// Incoming and outgoing temporal relationships, with identity, policy and any waiver.
     pub dependencies: Vec<Dependency>,
+    /// Non-gating links in which this work is the source or target.
+    pub links: Vec<WorkLink>,
     /// Directly dependent work items.
     pub successors: Vec<WorkItem>,
     /// External tracker objects linked to this work or its packages; never evidence or gates.
@@ -121,6 +123,12 @@ pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContex
             .dependencies
             .iter()
             .filter(|d| d.predecessor == work.id || d.successor == work.id)
+            .cloned()
+            .collect(),
+        links: plan
+            .links
+            .iter()
+            .filter(|l| l.source == work.id || l.target == work.id)
             .cloned()
             .collect(),
         successors: plan

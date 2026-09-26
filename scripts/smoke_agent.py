@@ -71,7 +71,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'project_status', 'next_work', 'get_work', 'explain_work', 'claim_work', 'report_blocker', 'unblock_work', 'submit_work', 'verify_work', 'report_progress', 'add_artifact', 'attach_git_head', 'decide_gate', 'ratify_contract', 'reject_work', 'workspace_list', 'workspace_register', 'export_plan', 'propose_change', 'apply_change', 'history', 'link_external', 'unlink_external'} == names
+        assert {'project_status', 'next_work', 'get_work', 'explain_work', 'claim_work', 'report_blocker', 'unblock_work', 'submit_work', 'verify_work', 'report_progress', 'add_artifact', 'attach_git_head', 'decide_gate', 'ratify_contract', 'reject_work', 'workspace_list', 'workspace_register', 'export_plan', 'propose_change', 'apply_change', 'history', 'link_external', 'unlink_external', 'waive_dependency', 'restore_dependency'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),
@@ -253,10 +253,76 @@ def scope_smoke(directory):
     assert run_cli(database, 'history')['entries'] == []
 
 
+def dependency_smoke(directory):
+    """Soft-edge waiver/restore and non-gating links behave identically through CLI and MCP."""
+    database = directory / 'dependencies.sqlite'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    worker = Agent(database, 'agent:parity')
+    reviewer = Agent(database, 'human:reviewer')
+    try:
+        plan = run_cli(database, 'export')
+        keys = {w['key']: w['id'] for w in plan['work_items'].values()}
+        edge = next(d for d in plan['dependencies'] if d['predecessor'] == keys['TEST-A'] and d['successor'] == keys['TEST-B'])
+        hard = next(d for d in plan['dependencies'] if d['id'] != edge['id'])
+        assert edge['id'] and edge['policy'] == 'Hard' and len({d['id'] for d in plan['dependencies']}) == len(plan['dependencies'])
+        edge['policy'], edge['rationale'] = 'Soft', 'B may start from a prototype of A'
+        plan['links'] = [{'kind': 'RelatesTo', 'source': keys['TEST-F'], 'target': keys['TEST-A'], 'note': 'shared fixture'}]
+        candidate = directory / 'soft.json'
+        candidate.write_text(json.dumps(plan))
+        preview = worker.call('propose_change', {'plan': plan})['data']
+        assert preview == run_cli(database, 'plan', 'diff', str(candidate))
+        assert [(c['collection'], c['id'], c['fields']) for c in preview['changes']] == [
+            ('dependencies', edge['id'], ['policy', 'rationale']), ('links', None, [])]
+        before_links = worker.call('next_work', {'probabilistic': False})['data']
+        run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'Allow prototype overlap', '--actor', 'human:reviewer')
+        assert worker.call('next_work', {'probabilistic': False})['data'] == before_links
+        linked = worker.call('explain_work', {'key': 'TEST-F'})['data']
+        assert linked == run_cli(database, 'explain', 'TEST-F') and linked['context']['links'] == plan['links']
+        reviewer.call('decide_gate', {'decision': 'TEST-GATE', 'outcome': 'Proceed', 'base_revision': 1})
+        enforced = worker.call('explain_work', {'key': 'TEST-B'})['data']
+        assert enforced == run_cli(database, 'explain', 'TEST-B') and not enforced['ready']
+        [gate] = enforced['gates']['unmet']
+        assert (gate['type'], gate['dependency'], gate['policy']) == ('dependency', edge['id'], 'Soft')
+        [shown] = [d for d in enforced['context']['dependencies'] if d['id'] == edge['id']]
+        assert shown['policy'] == 'Soft' and shown['rationale'] == edge['rationale'] and 'waiver' not in shown
+        refusals = [
+            (worker, 'waive_dependency', {'dependency': edge['id'], 'reason': 'skip'}, ('waive-dependency', edge['id'], '--reason', 'skip', '--actor', 'agent:parity'), 'invalid_command'),
+            (reviewer, 'waive_dependency', {'dependency': hard['id'], 'reason': 'skip'}, ('waive-dependency', hard['id'], '--reason', 'skip'), 'invalid_command'),
+            (reviewer, 'waive_dependency', {'dependency': edge['id'], 'reason': ' '}, ('waive-dependency', edge['id'], '--reason', ' '), 'invalid_command'),
+            (reviewer, 'restore_dependency', {'dependency': edge['id'], 'reason': 'not waived'}, ('restore-dependency', edge['id'], '--reason', 'not waived'), 'invalid_command'),
+            (reviewer, 'waive_dependency', {'dependency': 'not-an-edge', 'reason': 'skip'}, ('waive-dependency', 'not-an-edge', '--reason', 'skip'), 'not_found'),
+            (reviewer, 'waive_dependency', {'dependency': edge['id'], 'reason': 'skip', 'base_revision': 0}, ('--base-revision', '0', 'waive-dependency', edge['id'], '--reason', 'skip'), 'revision_conflict'),
+        ]
+        for actor, tool, arguments, command, code in refusals:
+            remote = actor.call(tool, {'base_revision': 2, **arguments}, error=code)
+            assert remote['message'] == run_cli(database, *command, error=code)['error']['message'], (tool, arguments)
+        assert run_cli(database, 'export')['revision'] == 2
+        waived = reviewer.call('waive_dependency', {'dependency': edge['id'], 'reason': 'Prototype of A is sufficient', 'base_revision': 2})['data']
+        assert waived['command']['WaiveDependency']['reason'] == 'Prototype of A is sufficient'
+        detail = worker.call('explain_work', {'key': 'TEST-B'})['data']
+        assert detail == run_cli(database, 'explain', 'TEST-B') and detail['ready'] and detail['gates']['unmet'] == []
+        [shown] = [d for d in detail['context']['dependencies'] if d['id'] == edge['id']]
+        assert shown['waiver']['actor'] == {'kind': 'Human', 'name': 'reviewer'} and shown['waiver']['reason'] == 'Prototype of A is sufficient'
+        assert detail['schedule']['earliest_start_hours'] == 0.0 < enforced['schedule']['earliest_start_hours']
+        assert 'TEST-B' in {c['work']['key'] for c in worker.call('next_work', {'probabilistic': False})['data']['candidates']}
+        run_cli(database, 'restore-dependency', edge['id'], '--reason', 'Prototype rejected', '--actor', 'service:ci')
+        assert worker.call('explain_work', {'key': 'TEST-B'})['data'] == enforced == run_cli(database, 'explain', 'TEST-B')
+        history = worker.call('history', {'after_sequence': 2})['data']
+        assert history == run_cli(database, 'history', '--after-sequence', '2')
+        restored = history['entries'][-1]['operation']
+        assert restored['actor'] == {'kind': 'Service', 'name': 'ci'} and restored['timestamp']
+        assert restored['command'] == {'RestoreDependency': {'dependency': edge['id'], 'reason': 'Prototype rejected'}}
+    finally:
+        worker.close()
+        reviewer.close()
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-agent-') as directory:
         smoke(Path(directory) / 'plan.sqlite')
         review_smoke(Path(directory))
         scope_smoke(Path(directory))
+        dependency_smoke(Path(directory))
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')
     print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')
+    print('PASS: CLI/MCP dependency identity, soft-edge waiver/restore, refusals and non-gating links')

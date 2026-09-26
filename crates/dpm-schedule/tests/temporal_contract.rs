@@ -100,12 +100,9 @@ impl Network {
     }
 
     pub fn link(&mut self, from: WorkItemId, to: WorkItemId, kind: DependencyKind, lag: f64) {
-        self.plan.dependencies.push(Dependency {
-            predecessor: from,
-            successor: to,
-            kind,
-            lag_hours: lag,
-        });
+        self.plan
+            .dependencies
+            .push(Dependency::new(from, to, kind, lag));
     }
 
     pub fn durations(&self) -> &BTreeMap<WorkItemId, f64> {

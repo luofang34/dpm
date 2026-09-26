@@ -1,33 +1,6 @@
 use crate::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-/// Temporal lower bound relating two activity endpoints.
-pub enum DependencyKind {
-    /// Successor start is bounded by predecessor finish plus lag.
-    FinishStart,
-    /// Successor start is bounded by predecessor start plus lag.
-    StartStart,
-    /// Successor finish is bounded by predecessor finish plus lag.
-    FinishFinish,
-    /// Successor finish is bounded by predecessor start plus lag.
-    StartFinish,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-/// Temporal constraint between two work items.
-#[serde(deny_unknown_fields)]
-pub struct Dependency {
-    /// Activity providing the constrained start or finish.
-    pub predecessor: WorkItemId,
-    /// Activity whose start or finish has the lower bound.
-    pub successor: WorkItemId,
-    /// Domain category of this value.
-    pub kind: DependencyKind,
-    /// Positive values add delay; negative values are lead time.
-    pub lag_hours: f64,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Authoritative graph and revision; scheduling and completion views are derived.
 #[serde(deny_unknown_fields)]
@@ -57,6 +30,9 @@ pub struct Plan {
     /// External tracker objects linked to work; context only, never evidence or gates.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub external_references: BTreeMap<ExternalReferenceId, ExternalReference>,
+    /// Contextual work relationships that never gate readiness, scheduling or progress.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<WorkLink>,
 }
 
 impl Plan {
@@ -78,6 +54,7 @@ impl Plan {
             risks: BTreeMap::new(),
             dependencies: Vec::new(),
             external_references: BTreeMap::new(),
+            links: Vec::new(),
         }
     }
 
@@ -89,6 +66,18 @@ impl Plan {
     /// Mutably find authoritative work; callers must validate edits.
     pub fn find_work_by_key_mut(&mut self, key: &str) -> Option<&mut WorkItem> {
         self.work_items.values_mut().find(|work| work.key.0 == key)
+    }
+
+    /// Find a temporal constraint by its stable identity.
+    pub fn find_dependency(&self, id: DependencyId) -> Option<&Dependency> {
+        self.dependencies.iter().find(|edge| edge.id == id)
+    }
+
+    /// Constraints that currently gate execution and remaining projections; waived edges are omitted.
+    pub fn enforced_dependencies(&self) -> impl Iterator<Item = &Dependency> {
+        self.dependencies
+            .iter()
+            .filter(|edge| edge.waiver.is_none())
     }
 
     /// Find a gate by its human-readable key.

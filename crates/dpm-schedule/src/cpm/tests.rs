@@ -51,12 +51,12 @@ fn finish_start_chain_has_expected_finish() {
     plan.projects.insert(project.id, project);
     plan.work_items.insert(a.id, a.clone());
     plan.work_items.insert(b.id, b.clone());
-    plan.dependencies.push(Dependency {
-        predecessor: a.id,
-        successor: b.id,
-        kind: DependencyKind::FinishStart,
-        lag_hours: 0.0,
-    });
+    plan.dependencies.push(Dependency::new(
+        a.id,
+        b.id,
+        DependencyKind::FinishStart,
+        0.0,
+    ));
 
     let schedule = deterministic(&plan).expect("schedule");
     assert_eq!(schedule.project_finish_hours, 5.0);
@@ -81,12 +81,12 @@ fn cycles_are_rejected() {
     plan.work_items.insert(a.id, a.clone());
     plan.work_items.insert(b.id, b.clone());
     for (pred, succ) in [(a.id, b.id), (b.id, a.id)] {
-        plan.dependencies.push(Dependency {
-            predecessor: pred,
-            successor: succ,
-            kind: DependencyKind::FinishStart,
-            lag_hours: 0.0,
-        });
+        plan.dependencies.push(Dependency::new(
+            pred,
+            succ,
+            DependencyKind::FinishStart,
+            0.0,
+        ));
     }
     assert!(matches!(
         deterministic(&plan),
@@ -122,12 +122,7 @@ fn all_temporal_relationships_and_lead_lag_produce_expected_dates() {
         (DependencyKind::StartFinish, 5.0, 2.0, 5.0),
     ] {
         let (mut plan, a, b) = pair(4.0, 3.0);
-        plan.dependencies.push(Dependency {
-            predecessor: a,
-            successor: b,
-            kind,
-            lag_hours: lag,
-        });
+        plan.dependencies.push(Dependency::new(a, b, kind, lag));
         let schedule = deterministic(&plan).expect("schedule");
         assert_eq!(
             schedule.activities[&b].earliest_start_hours, start,
@@ -144,19 +139,20 @@ fn parallel_paths_float_and_duplicate_constraints_are_consistent() {
     assert_eq!(schedule.activities[&b].total_float_hours, 2.0);
     assert!(schedule.activities[&a].critical);
     assert!(!schedule.activities[&b].critical);
-    let edge = Dependency {
-        predecessor: a,
-        successor: b,
-        kind: DependencyKind::FinishStart,
-        lag_hours: 0.0,
-    };
+    let edge = Dependency::new(a, b, DependencyKind::FinishStart, 0.0);
     plan.dependencies = vec![edge.clone(), edge];
-    assert_eq!(
-        deterministic(&plan)
-            .expect("duplicate")
-            .project_finish_hours,
-        6.0
-    );
+    assert!(matches!(
+        deterministic(&plan),
+        Err(ScheduleError::Validation(_))
+    ));
+    // Distinct relations between the same ordered pair each bound the successor.
+    plan.dependencies = vec![
+        Dependency::new(a, b, DependencyKind::FinishStart, 0.0),
+        Dependency::new(a, b, DependencyKind::StartStart, 5.0),
+    ];
+    let schedule = deterministic(&plan).expect("parallel relations");
+    assert_eq!(schedule.activities[&b].earliest_start_hours, 5.0);
+    assert_eq!(schedule.project_finish_hours, 7.0);
 }
 
 #[test]
@@ -172,12 +168,8 @@ fn missing_negative_nonfinite_and_overflowing_durations_are_rejected() {
             Err(ScheduleError::InvalidDuration(_))
         ));
     }
-    plan.dependencies.push(Dependency {
-        predecessor: a,
-        successor: b,
-        kind: DependencyKind::FinishStart,
-        lag_hours: f64::MAX,
-    });
+    plan.dependencies
+        .push(Dependency::new(a, b, DependencyKind::FinishStart, f64::MAX));
     assert!(matches!(
         deterministic_with_durations(&plan, &BTreeMap::from([(a, f64::MAX), (b, 1.0)])),
         Err(ScheduleError::ArithmeticOverflow(_))
@@ -192,12 +184,8 @@ fn missing_negative_nonfinite_and_overflowing_durations_are_rejected() {
 #[test]
 fn completed_dependencies_do_not_reintroduce_historical_lag() {
     let (mut plan, a, b) = pair(4.0, 3.0);
-    plan.dependencies.push(Dependency {
-        predecessor: a,
-        successor: b,
-        kind: DependencyKind::FinishStart,
-        lag_hours: 9.0,
-    });
+    plan.dependencies
+        .push(Dependency::new(a, b, DependencyKind::FinishStart, 9.0));
     let item = plan.work_items.get_mut(&a).expect("task");
     item.status = WorkStatus::Verified;
     item.owner = Some(dpm_model::ActorId::agent("owner"));
@@ -234,12 +222,7 @@ fn free_float_distinguishes_successor_delay_from_project_delay_for_all_relations
             let (mut plan, a, b) = pair(10.0, 4.0);
             let c = task(plan.work_items[&a].project, "C", 30.0);
             plan.work_items.insert(c.id, c);
-            plan.dependencies.push(Dependency {
-                predecessor: a,
-                successor: b,
-                kind,
-                lag_hours: lag,
-            });
+            plan.dependencies.push(Dependency::new(a, b, kind, lag));
             let original = plan.clone();
             let schedule = deterministic(&plan).expect("schedule");
             let left = &schedule.activities[&a];
@@ -260,12 +243,8 @@ fn free_float_distinguishes_successor_delay_from_project_delay_for_all_relations
     let (mut plan, a, b) = pair(10.0, 4.0);
     let c = task(plan.work_items[&a].project, "C", 20.0);
     plan.work_items.insert(c.id, c);
-    plan.dependencies.push(Dependency {
-        predecessor: a,
-        successor: b,
-        kind: DependencyKind::FinishStart,
-        lag_hours: 0.0,
-    });
+    plan.dependencies
+        .push(Dependency::new(a, b, DependencyKind::FinishStart, 0.0));
     let schedule = deterministic(&plan).expect("schedule");
     assert_eq!(schedule.activities[&a].free_float_hours, 0.0);
     assert_eq!(schedule.activities[&a].total_float_hours, 6.0);

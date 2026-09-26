@@ -103,12 +103,12 @@ fn wrapped_unicode_title_and_all_offscreen_links_can_be_read_by_scrolling() {
         child.id = WorkItemId::new();
         child.key = dpm_model::Key::new(format!("EXTRA-{index:02}"));
         child.title = format!("Dependent task {index:02} COMPLETE_NAME");
-        plan.dependencies.push(dpm_model::Dependency {
-            predecessor: a,
-            successor: child.id,
-            kind: dpm_model::DependencyKind::FinishStart,
-            lag_hours: 2.0,
-        });
+        plan.dependencies.push(dpm_model::Dependency::new(
+            a,
+            child.id,
+            dpm_model::DependencyKind::FinishStart,
+            2.0,
+        ));
         plan.work_items.insert(child.id, child);
     }
     let before = plan.clone();

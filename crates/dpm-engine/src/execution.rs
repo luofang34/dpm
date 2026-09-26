@@ -90,6 +90,12 @@ fn execute(
         Command::AttachArtifact { work, artifact } => attach(plan, actor, *work, artifact),
         Command::LinkExternal(request) => tracking::link(plan, actor, request, at),
         Command::UnlinkExternal { work, reference } => tracking::unlink(plan, *work, *reference),
+        Command::WaiveDependency { dependency, reason } => {
+            waiver::waive(plan, actor, *dependency, reason, at)
+        }
+        Command::RestoreDependency { dependency, reason } => {
+            waiver::restore(plan, actor, *dependency, reason)
+        }
         Command::Decide { decision, outcome } => {
             nonempty(&decision.to_string(), "outcome", outcome)?;
             let gate = plan
@@ -276,6 +282,7 @@ fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
 
 mod review;
 mod tracking;
+mod waiver;
 
 #[cfg(test)]
 #[allow(clippy::expect_used, clippy::panic)]

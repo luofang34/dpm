@@ -78,6 +78,14 @@ const NAMES: &[(&str, &str)] = &[
         "unlink_external",
         "Remove a work item's external tracking link without changing the work graph",
     ),
+    (
+        "waive_dependency",
+        "Stop enforcing a soft dependency as a human or service with a reason; hard dependencies need plan review",
+    ),
+    (
+        "restore_dependency",
+        "Enforce a waived soft dependency again as a human or service with a reason",
+    ),
 ];
 
 pub(crate) fn definitions() -> Vec<Value> {
@@ -120,6 +128,10 @@ pub(crate) fn definitions() -> Vec<Value> {
                     properties.insert("role".into(),json!({"type":"string","enum":["Tracks","Relates"],"default":"Tracks"}));
                     properties.insert("observed".into(),json!({"type":"string","enum":["Open","Closed","Merged"],"description":"Reported external state; an observation only"}));
                 }
+            }
+            "waive_dependency"|"restore_dependency" => {
+                properties.insert("dependency".into(),json!({"type":"string","format":"uuid","description":"Stable dependency id from explain_work context.dependencies or export_plan"}));
+                properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.extend(["dependency","reason"]);
             },
             "decide_gate" => {
                 properties.insert("decision".into(),json!({"type":"string"})); properties.insert("outcome".into(),json!({"type":"string","minLength":1})); required.extend(["decision","outcome"]);
@@ -164,6 +176,7 @@ struct Arguments {
     url: Option<String>,
     role: Option<ExternalLinkRole>,
     observed: Option<ExternalState>,
+    dependency: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -250,6 +263,15 @@ fn mutation_blocking(
         return Ok(Command::Decide {
             decision,
             outcome: required(args.outcome, "outcome")?,
+        });
+    }
+    if matches!(name, "waive_dependency" | "restore_dependency") {
+        let dependency = app.dependency_id_blocking(&required(args.dependency, "dependency")?)?;
+        let reason = required(args.reason, "reason")?;
+        return Ok(if name == "waive_dependency" {
+            Command::WaiveDependency { dependency, reason }
+        } else {
+            Command::RestoreDependency { dependency, reason }
         });
     }
     let key = required(args.key, "key")?;

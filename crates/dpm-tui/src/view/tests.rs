@@ -139,12 +139,12 @@ fn reached_pending_and_partial_progress_are_visible() {
     let mut reached = plan.find_work_by_key("TEST-M1").expect("milestone").clone();
     reached.id = dpm_model::WorkItemId::new();
     reached.key = dpm_model::Key::new("TEST-REACHED");
-    plan.dependencies.push(dpm_model::Dependency {
-        predecessor: a,
-        successor: reached.id,
-        kind: dpm_model::DependencyKind::FinishStart,
-        lag_hours: 0.0,
-    });
+    plan.dependencies.push(dpm_model::Dependency::new(
+        a,
+        reached.id,
+        dpm_model::DependencyKind::FinishStart,
+        0.0,
+    ));
     plan.work_items.insert(reached.id, reached);
     let mut view = View::new(&plan).expect("view");
     view.handle_key(KeyCode::Char('g'));

@@ -17,8 +17,13 @@ pub(crate) fn lines(plan: &Plan, selected: Option<WorkItemId>) -> Vec<String> {
         .iter()
         .filter(|d| selected.is_none_or(|id| d.predecessor == id || d.successor == id))
         .map(|d| {
+            let policy = match (d.policy, d.is_waived()) {
+                (dpm_model::DependencyPolicy::Hard, _) => "",
+                (dpm_model::DependencyPolicy::Soft, false) => " [soft]",
+                (dpm_model::DependencyPolicy::Soft, true) => " [soft, waived]",
+            };
             format!(
-                "{} --{} ({:?}) {:+.1}h--> {}",
+                "{} --{} ({:?}) {:+.1}h--> {}{policy}",
                 plan.work_items[&d.predecessor].key,
                 abbreviation(d.kind),
                 d.kind,

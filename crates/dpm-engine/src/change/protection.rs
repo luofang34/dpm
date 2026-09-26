@@ -24,6 +24,7 @@ pub(super) fn validate(current: &Plan, proposed: &Plan) -> Result<(), EngineErro
             "use the evidence command; plan changes cannot alter evidence",
         ));
     }
+    super::policy::protect_waivers(current, proposed)?;
     let locked = execution_basis(current);
     for work in current.work_items.values() {
         let next = proposed.work_items.get(&work.id);

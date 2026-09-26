@@ -111,23 +111,23 @@ fn milestone_completion_unlocks_successors_without_mutating_authoritative_state(
         .retain(|id, _| [work, milestone].contains(id));
     plan.decisions.clear();
     plan.risks.clear();
-    plan.dependencies = vec![Dependency {
-        predecessor: work,
-        successor: milestone,
-        kind: DependencyKind::FinishStart,
-        lag_hours: 0.0,
-    }];
+    plan.dependencies = vec![Dependency::new(
+        work,
+        milestone,
+        DependencyKind::FinishStart,
+        0.0,
+    )];
     let mut successor = plan.work_items[&work].clone();
     successor.id = WorkItemId::new();
     successor.key = Key::new("AFTER");
     let after = successor.id;
     plan.work_items.insert(after, successor);
-    plan.dependencies.push(Dependency {
-        predecessor: milestone,
-        successor: after,
-        kind: DependencyKind::FinishStart,
-        lag_hours: 0.0,
-    });
+    plan.dependencies.push(Dependency::new(
+        milestone,
+        after,
+        DependencyKind::FinishStart,
+        0.0,
+    ));
     finish(&mut plan, work);
     assert_eq!(plan.work_items[&milestone].status, WorkStatus::Planned);
     assert_eq!(

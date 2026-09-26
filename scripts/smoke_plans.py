@@ -69,14 +69,18 @@ def smoke(directory):
 
 
 def reject_invalid(database, worker, reviewer, candidate, current):
-    for error_case in ['acceptance', 'cycle', 'lifecycle', 'gate', 'noop']:
+    for error_case in ['acceptance', 'cycle', 'duplicate_edge', 'lifecycle', 'gate', 'noop']:
         bad = copy.deepcopy(current)
         task = next(w for w in bad['work_items'].values() if w['key'] == 'TEST-A')
         if error_case == 'acceptance':
             task['acceptance'] = [{'text': 'Lower the accepted result'}]
         elif error_case == 'cycle':
             edge = bad['dependencies'][0]
-            bad['dependencies'].append({**edge, 'predecessor': edge['successor'], 'successor': edge['predecessor']})
+            reverse = {**edge, 'predecessor': edge['successor'], 'successor': edge['predecessor']}
+            del reverse['id']
+            bad['dependencies'].append(reverse)
+        elif error_case == 'duplicate_edge':
+            bad['dependencies'].append({**bad['dependencies'][-1], 'kind': 'StartStart'})
         elif error_case == 'lifecycle':
             task['status'] = 'Verified'
         elif error_case == 'gate':

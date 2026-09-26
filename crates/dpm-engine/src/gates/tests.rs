@@ -16,6 +16,7 @@ fn structured_gates_report_every_constraint_and_inherited_decision() {
         .expect("edge")
         .clone();
     edge.kind = DependencyKind::StartStart;
+    edge.id = dpm_model::DependencyId::new();
     plan.dependencies.push(edge);
     let report = gate_report(&plan, work).expect("gates");
     assert!(!report.ready);

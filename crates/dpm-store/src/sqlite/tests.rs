@@ -182,3 +182,73 @@ fn corrupt_revision_and_lifecycle_are_rejected_on_load() {
         Err(StoreError::Validation(_))
     ));
 }
+
+#[test]
+fn stores_written_before_edge_identity_keep_history_and_accept_new_operations() {
+    let dir = tempfile::tempdir().expect("directory");
+    let path = dir.path().join("legacy.sqlite");
+    let legacy: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("legacy json");
+    assert!(legacy["dependencies"][0].get("id").is_none());
+    let mut renamed = legacy.clone();
+    renamed["workspace"]["name"] = "Renamed".into();
+    renamed["revision"] = 1.into();
+    let change = serde_json::json!({"ApplyChange": {"plan": legacy, "reason": "rename"}});
+    {
+        let store = SqliteStore::open_blocking(&path).expect("schema");
+        store
+            .connection
+            .execute(
+                "INSERT INTO plan_state(singleton, revision, plan_json) VALUES(1, 1, ?1)",
+                [renamed.to_string()],
+            )
+            .expect("legacy snapshot");
+        store
+            .connection
+            .execute(
+                "INSERT INTO operations(operation_id, base_revision, resulting_revision, actor_json, timestamp, command_json)
+                 VALUES('6f1c1a52-7d1e-4d57-9d53-0d3f7a1b2c3d', 0, 1, '{\"kind\":\"Human\",\"name\":\"lead\"}', '2026-01-01T00:00:00+00:00', ?1)",
+                [change.to_string()],
+            )
+            .expect("legacy operation");
+    }
+    let mut store = SqliteStore::open_existing_blocking(&path).expect("reopen");
+    let mut plan = store.load_blocking().expect("load").expect("plan");
+    for edge in &plan.dependencies {
+        let derived =
+            dpm_model::Dependency::derived_id(edge.predecessor, edge.successor, edge.kind);
+        assert_eq!(edge.id, derived);
+    }
+    let derived: Vec<String> = plan.dependencies.iter().map(|d| d.id.to_string()).collect();
+    assert_eq!(
+        store
+            .history_blocking(0, 10)
+            .expect("history")
+            .entries
+            .len(),
+        1
+    );
+    let op = claim(&mut plan, "worker");
+    store
+        .persist_blocking(&plan, &op)
+        .expect("persist on a legacy snapshot");
+    drop(store);
+    let reopened = SqliteStore::open_existing_blocking(&path).expect("reopen");
+    let stored: String = reopened
+        .connection
+        .query_row("SELECT plan_json FROM plan_state", [], |row| row.get(0))
+        .expect("snapshot");
+    let stored: serde_json::Value = serde_json::from_str(&stored).expect("json");
+    let stored_ids: Vec<String> = stored["dependencies"]
+        .as_array()
+        .expect("edges")
+        .iter()
+        .map(|d| d["id"].as_str().expect("explicit id").to_string())
+        .collect();
+    assert_eq!(stored_ids, derived);
+    assert_eq!(reopened.load_blocking().expect("load"), Some(plan));
+    let history = reopened.history_blocking(0, 10).expect("history");
+    assert_eq!(history.entries.len(), 2);
+}

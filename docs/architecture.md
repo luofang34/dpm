@@ -28,8 +28,8 @@ screens.
 
 ## Authoritative vs derived
 
-Authoritative inputs include work lifecycle, objective, acceptance criteria, dependency type and
-lag, duration estimates, requirements, decision outcomes, risks, ownership, artifacts, actors, and
+Authoritative inputs include work lifecycle, objective, acceptance criteria, dependency identity,
+type, lag, policy and waivers, non-gating work links, duration estimates, requirements, decision outcomes, risks, ownership, artifacts, actors, and
 commands.
 
 Derived values include readiness, earliest/latest start/finish, float, critical activities,
@@ -44,7 +44,8 @@ expectation of a task's three-point estimate, or 0 for milestones and unestimate
 packages cannot be dependency endpoints. v0.1 uses elapsed hours; working calendars are a future
 input adapter and must not change dependency semantics. Remaining forecasts give completed tasks
 zero duration and remove constraints touching completed tasks or reached milestones, using the same
-completion and decision-gate projection as execution queries.
+completion and decision-gate projection as execution queries. They also drop waived soft constraints;
+the baseline projection keeps every constraint.
 
 ### Relations
 
@@ -59,7 +60,9 @@ one endpoint of `a` and one endpoint of `b`. Every relation reduces to a start-t
 | FF       | `S_b + d_b >= S_a + d_a + L` | `d_a - d_b + L` |
 | SF       | `S_b + d_b >= S_a + L`     | `-d_b + L`        |
 
-There are no upper-bound (maximum-lag) constraints. Parallel edges between the same pair each apply.
+There are no upper-bound (maximum-lag) constraints. Every dependency has a stable `id`. An ordered pair
+carries at most one relation of each kind, so SS and FF bounds between the same two tasks coexist,
+each applies, and each is edited or waived on its own.
 A zero-duration endpoint has coincident start and finish, so FS and SS (and FF and SF) coincide for
 a zero-duration predecessor, while FS and FF (and SS and SF) coincide for a zero-duration successor.
 
@@ -128,10 +131,36 @@ an independent relaxation oracle.
 
 Temporal bounds describe when work could run in the projection; they never authorize a claim.
 Execution readiness is a separate, conservative policy in `dpm-engine`: a task is claimable only
-when every predecessor is complete (a verified task or a reached milestone), for all four relation
-kinds and any lag. A lead that lets B's projected start precede A's finish does not make B
-claimable while A is unverified; `UnmetGate::Dependency` reports the relation and lag as context
-only.
+when the predecessor of every unwaived incoming edge is complete (a verified task or a reached
+milestone), for all four relation kinds, any lag and either policy. A lead that lets B's projected
+start precede A's finish does not make B claimable while A is unverified; `UnmetGate::Dependency`
+reports the edge identity and policy, with the relation and lag as context only.
+
+### Dependency identity, policy and waivers
+
+A dependency's `policy` is `Hard` (the default) or `Soft`, with an optional `rationale`. Policy,
+kind, lag and rationale change only through a reviewed plan change; edges into started work stay
+protected like the rest of its prerequisite basis. A human or service may waive an unwaived `Soft`
+edge, or restore a waived one, with a nonempty reason; `Hard` edges cannot be waived and agents may
+do neither. The waiver's actor, time and reason stay on the edge until restoration, and each waiver
+or restoration is a semantic operation in the history. Plan changes cannot add, alter or remove a
+waiver.
+
+A waived edge no longer gates claims, verification or milestone completion, and no longer bounds
+the remaining forecast or simulation. It still counts for cycle validation, the baseline schedule,
+review protection and execution context. A milestone whose every incoming edge is waived has no
+enforced prerequisite and therefore stays unreached. Restoring an edge does not revoke an existing
+claim, but it applies again to the successor's verification.
+
+Edges written without an `id` receive one derived deterministically from predecessor, successor and
+relation kind, so snapshots and operation logs that predate edge identity load unchanged and every
+reload agrees. Such edges are `Hard`. Serialization always writes the identity and policy.
+
+`links` hold typed non-gating relationships (`RelatesTo`, `Duplicates`, `DerivedFrom`,
+`Supersedes`) from a `source` to a `target` work item with an optional note. Both endpoints must
+exist and differ, and one pair of work items carries at most one link of each kind in either
+direction. Links never affect readiness, scheduling, ranking or progress; `explain` returns them as
+context.
 
 ### Uncertain durations
 

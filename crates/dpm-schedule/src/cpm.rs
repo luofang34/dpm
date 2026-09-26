@@ -72,6 +72,8 @@ pub fn deterministic(plan: &Plan) -> Result<Schedule, ScheduleError> {
 }
 
 /// Project outstanding work, treating verified tasks as zero remaining duration.
+///
+/// Waived constraints no longer bound outstanding work; the baseline projection keeps them.
 pub fn deterministic_remaining(plan: &Plan) -> Result<Schedule, ScheduleError> {
     plan.validate()?;
     let remaining = remaining_plan(plan);
@@ -96,9 +98,9 @@ pub fn deterministic_remaining(plan: &Plan) -> Result<Schedule, ScheduleError> {
 pub(crate) fn remaining_plan(plan: &Plan) -> Plan {
     let mut remaining = plan.clone();
     let completed = dpm_model::completion(plan);
-    remaining
-        .dependencies
-        .retain(|d| !completed.contains(&d.predecessor) && !completed.contains(&d.successor));
+    remaining.dependencies.retain(|d| {
+        !d.is_waived() && !completed.contains(&d.predecessor) && !completed.contains(&d.successor)
+    });
     remaining
 }
 

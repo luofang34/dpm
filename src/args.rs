@@ -189,6 +189,24 @@ pub(crate) enum Commands {
     },
     /// Open the Ratatui operator console.
     Tui,
+    /// Stop enforcing a soft dependency as a human or service; hard dependencies need plan review.
+    WaiveDependency {
+        /// Stable dependency identity, as shown by explain or export.
+        dependency: String,
+        #[arg(long)]
+        reason: String,
+        #[arg(long, default_value = "human:local")]
+        actor: String,
+    },
+    /// Enforce a waived soft dependency again as a human or service.
+    RestoreDependency {
+        /// Stable dependency identity, as shown by explain or export.
+        dependency: String,
+        #[arg(long)]
+        reason: String,
+        #[arg(long, default_value = "human:local")]
+        actor: String,
+    },
 }
 
 /// Provider-scoped identity of an external object, independent of labels and URLs.

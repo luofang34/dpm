@@ -4,6 +4,7 @@ mod actor;
 mod completion;
 pub use completion::{completion, decisions_resolved};
 mod context;
+mod dependency;
 mod identity;
 mod instructions;
 mod plan;
@@ -17,6 +18,7 @@ mod work;
 
 pub use actor::*;
 pub use context::*;
+pub use dependency::*;
 pub use identity::*;
 pub use instructions::*;
 pub use plan::*;

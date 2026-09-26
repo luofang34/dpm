@@ -2,8 +2,9 @@ use crate::EngineError;
 use dpm_model::Plan;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
+mod policy;
 mod protection;
 mod replacement;
 pub use replacement::AffectedWork;
@@ -11,9 +12,10 @@ pub use replacement::AffectedWork;
 /// One entity-level semantic difference, including explicit additions and removals.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EntityChange {
-    /// Domain collection such as `external_references`, or `workspace` / `dependencies`.
+    /// Domain collection such as `external_references`, `dependencies` per edge, or the workspace-wide
+    /// `workspace` / `links`.
     pub collection: String,
-    /// Stable entity identity, absent for workspace-wide constraints.
+    /// Stable entity identity, absent for workspace-wide values.
     pub id: Option<String>,
     /// Changed field names; empty for an added or removed entity.
     pub fields: Vec<String>,
@@ -74,12 +76,27 @@ pub fn propose_change(current: &Plan, proposed: &Plan) -> Result<ChangePreview, 
             );
         }
     }
+    let before_edges = edges_by_id(current)?;
+    let after_edges = edges_by_id(proposed)?;
+    for id in before_edges
+        .keys()
+        .chain(after_edges.keys())
+        .collect::<BTreeSet<_>>()
+    {
+        append(
+            &mut changes,
+            "dependencies",
+            Some(id.clone()),
+            before_edges.get(id).unwrap_or(&Value::Null),
+            after_edges.get(id).unwrap_or(&Value::Null),
+        );
+    }
     append(
         &mut changes,
-        "dependencies",
+        "links",
         None,
-        &sorted_dependencies(current)?,
-        &sorted_dependencies(proposed)?,
+        &sorted_links(current)?,
+        &sorted_links(proposed)?,
     );
     Ok(ChangePreview {
         base_revision: current.revision,
@@ -124,14 +141,17 @@ fn append(
     });
 }
 
-fn sorted_dependencies(plan: &Plan) -> Result<Value, EngineError> {
-    let mut edges = plan.dependencies.clone();
-    edges.sort_by(|a, b| {
-        (a.predecessor, a.successor, a.kind as u8)
-            .cmp(&(b.predecessor, b.successor, b.kind as u8))
-            .then(a.lag_hours.total_cmp(&b.lag_hours))
-    });
-    Ok(serde_json::to_value(edges)?)
+fn edges_by_id(plan: &Plan) -> Result<BTreeMap<String, Value>, EngineError> {
+    plan.dependencies
+        .iter()
+        .map(|edge| Ok((edge.id.to_string(), serde_json::to_value(edge)?)))
+        .collect()
+}
+
+fn sorted_links(plan: &Plan) -> Result<Value, EngineError> {
+    let mut links = plan.links.clone();
+    links.sort_by_key(|l| (l.kind, l.source, l.target));
+    Ok(serde_json::to_value(links)?)
 }
 
 pub(crate) fn invalid(entity: impl ToString, reason: &str) -> EngineError {

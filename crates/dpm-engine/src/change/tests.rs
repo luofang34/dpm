@@ -95,12 +95,12 @@ fn invalid_graphs_and_fabricated_execution_fail_without_changes() {
     for mutation in 0..5 {
         let mut proposal = plan.clone();
         match mutation {
-            0 => proposal.dependencies.push(dpm_model::Dependency {
-                predecessor: proposal.dependencies[0].successor,
-                successor: proposal.dependencies[0].predecessor,
-                kind: dpm_model::DependencyKind::FinishStart,
-                lag_hours: 0.0,
-            }),
+            0 => proposal.dependencies.push(dpm_model::Dependency::new(
+                proposal.dependencies[0].successor,
+                proposal.dependencies[0].predecessor,
+                dpm_model::DependencyKind::FinishStart,
+                0.0,
+            )),
             1 => {
                 proposal.find_work_by_key_mut("TEST-A").expect("task").owner =
                     Some(ActorId::agent("fake"));
@@ -221,12 +221,12 @@ fn dangling_references_and_illegal_milestones_fail_before_any_change() {
     for case in 0..10 {
         let mut proposal = plan.clone();
         match case {
-            0 => proposal.dependencies.push(dpm_model::Dependency {
-                predecessor: WorkItemId::new(),
-                successor: task,
-                kind: dpm_model::DependencyKind::FinishStart,
-                lag_hours: 0.0,
-            }),
+            0 => proposal.dependencies.push(dpm_model::Dependency::new(
+                WorkItemId::new(),
+                task,
+                dpm_model::DependencyKind::FinishStart,
+                0.0,
+            )),
             1 => drop(proposal.work_items.remove(&task)),
             2 => {
                 let risk = proposal.risks.values_mut().next().expect("risk");

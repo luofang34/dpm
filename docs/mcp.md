@@ -38,6 +38,8 @@ which the store still checks atomically. Presentation text is not the API contra
 | unlink-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | unlink_external | Remove one link; the work graph is unchanged |
 | workspace list | workspace_list | List device-local bindings without changing the plan |
 | workspace register --database PATH | workspace_register | Register an existing store; explicit replace redirects a local binding |
+| waive-dependency ID --reason TEXT | waive_dependency | Human/service stops enforcing a Soft edge; Hard edges need plan review |
+| restore-dependency ID --reason TEXT | restore_dependency | Human/service enforces a waived Soft edge again |
 
 Project initialization/import and opening the TUI are local CLI administration. `export_plan` supplies
 the full candidate shape for `propose_change` and `apply_change` (argument `plan`). Preserve its
@@ -102,6 +104,32 @@ rewrite one; record it with `link_external`.
 `history` returns entries in append order with a `next_after_sequence` cursor (default limit 100,
 capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export
 is not an operation backup; retain consistent SQLite backups for recovery.
+
+## Dependency policies, waivers and links
+
+Every dependency in `export_plan` and `explain_work.context.dependencies` carries a stable `id`,
+`policy` (`Hard` or `Soft`), optional `rationale` and, while set aside, a `waiver` with actor, time
+and reason. An ordered task pair holds at most one edge per relation kind, so SS and FF coexist;
+`propose_change` reports each edge as its own `dependencies` entry keyed by `id`. Commands name
+edges by `id` (argument `dependency`); malformed or absent IDs return `not_found`. Proposals may
+omit `id` on new edges, which then receive a deterministic identity from predecessor, successor and
+kind. Duplicate identities or relations, missing endpoints, cycles and stale revisions reject the
+whole proposal.
+
+Policy, kind, lag and rationale change only through reviewed `apply_change`; proposals cannot add,
+alter or remove waivers. `waive_dependency` and `restore_dependency` take `dependency`, a nonempty
+`reason` and `base_revision`. Only human/service actors may use them, only Soft edges can be waived,
+and restoring requires a current waiver. The waiver's actor, time and reason stay on the edge until
+restoration; `history` records both operations with actor, time and reason. A waived edge is absent
+from `gates.unmet`, readiness, verification prerequisites, milestone completion and the remaining
+forecast. An unwaived Soft edge gates exactly like a Hard one, and `gates.unmet` reports its
+`dependency` and `policy`.
+
+`links` in the plan are typed non-gating relationships (`RelatesTo`, `Duplicates`, `DerivedFrom`,
+`Supersedes`) with `source`, `target` and optional `note`, edited through reviewed plan changes.
+Endpoints must exist and differ; one pair holds at most one link of each kind in either direction.
+`explain_work.context.links` lists those touching the work. Links never change readiness,
+scheduling, ranking or progress.
 
 ## Prepared self-host example
 

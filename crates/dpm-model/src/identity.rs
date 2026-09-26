@@ -41,6 +41,7 @@ uuid_id!(RiskId);
 uuid_id!(OperationId);
 uuid_id!(ResourceId);
 uuid_id!(ExternalReferenceId);
+uuid_id!(DependencyId);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Human-readable identifier, unique within its entity category.

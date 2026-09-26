@@ -64,6 +64,9 @@ pub enum AppError {
     /// No external reference with this canonical identity is recorded.
     #[error("unknown external reference {0}")]
     UnknownExternalReference(String),
+    /// Dependency identity is malformed or not in the current plan.
+    #[error("unknown dependency {0}")]
+    UnknownDependency(String),
 }
 
 /// Stable machine diagnostic shared by adapters.
@@ -90,6 +93,7 @@ impl AppError {
             Self::NotInitialized => "not_initialized",
             Self::UnknownWork(_)
             | Self::UnknownDecision(_)
+            | Self::UnknownDependency(_)
             | Self::UnknownExternalReference(_)
             | Self::Scope(_)
             | Self::Engine(

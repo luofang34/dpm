@@ -113,12 +113,7 @@ fn dependency_indications_cover_all_relationships_and_signed_lag() {
         (DependencyKind::FinishFinish, "FF", 3.0),
         (DependencyKind::StartFinish, "SF", 4.0),
     ] {
-        plan.dependencies = vec![Dependency {
-            predecessor: a,
-            successor: b,
-            kind,
-            lag_hours: lag,
-        }];
+        plan.dependencies = vec![Dependency::new(a, b, kind, lag)];
         let text = render(&plan, 120, 32);
         assert!(
             text.contains(&format!("{short}{lag:+.1}h→TEST-B")),
@@ -147,4 +142,25 @@ fn viewport_navigation_is_bounded_for_zero_and_large_horizons() {
         view.pan(false);
         assert_eq!(view.start, 0.0);
     }
+}
+#[test]
+fn dependency_lines_mark_soft_and_waived_edges() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    plan.dependencies[0].policy = dpm_model::DependencyPolicy::Soft;
+    plan.dependencies[1].policy = dpm_model::DependencyPolicy::Soft;
+    plan.dependencies[1].waiver = Some(
+        serde_json::from_value(serde_json::json!({
+            "actor": {"kind": "Human", "name": "lead"},
+            "at": "2026-01-01T00:00:00Z",
+            "reason": "overlap accepted"
+        }))
+        .expect("waiver"),
+    );
+    let lines = dependencies::lines(&plan, None);
+    assert!(lines[0].ends_with(" [soft]"), "{}", lines[0]);
+    assert!(lines[1].ends_with(" [soft, waived]"), "{}", lines[1]);
+    assert!(!lines[2].contains('['), "{}", lines[2]);
 }

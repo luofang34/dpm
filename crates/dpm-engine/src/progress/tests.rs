@@ -19,12 +19,12 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
     let work = plan.find_work_by_key("TEST-A").expect("task").id;
     let milestone = plan.find_work_by_key("TEST-M1").expect("milestone").id;
     plan.dependencies.retain(|d| d.successor != milestone);
-    plan.dependencies.push(Dependency {
-        predecessor: work,
-        successor: milestone,
-        kind: DependencyKind::FinishStart,
-        lag_hours: 0.0,
-    });
+    plan.dependencies.push(Dependency::new(
+        work,
+        milestone,
+        DependencyKind::FinishStart,
+        0.0,
+    ));
     let schedule = dpm_schedule::deterministic_remaining(&plan).expect("schedule");
     apply(&mut plan, Command::Claim { work });
     apply(

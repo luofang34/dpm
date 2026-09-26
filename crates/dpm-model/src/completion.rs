@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 /// Derive completed task, milestone, and work-package identities without changing stored state.
 ///
-/// Milestones need at least one prerequisite and work packages need at least one child.
+/// Milestones need at least one unwaived prerequisite and work packages need at least one child.
 pub fn completion(plan: &Plan) -> BTreeSet<WorkItemId> {
     let mut done: BTreeSet<_> = plan
         .work_items
@@ -23,8 +23,7 @@ pub fn completion(plan: &Plan) -> BTreeSet<WorkItemId> {
             let prerequisites: Vec<_> = match work.kind {
                 WorkKind::Task => continue,
                 WorkKind::Milestone => plan
-                    .dependencies
-                    .iter()
+                    .enforced_dependencies()
                     .filter(|d| d.successor == work.id)
                     .map(|d| d.predecessor)
                     .collect(),

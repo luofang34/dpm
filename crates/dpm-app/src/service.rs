@@ -4,7 +4,7 @@ use dpm_engine::{
     Command, NextWorkQuery, Operation, WorkScope, apply_command, explain_work, next_in_scope,
     show_work, status,
 };
-use dpm_model::{ActorId, DecisionId, Plan, WorkItemId};
+use dpm_model::{ActorId, DecisionId, DependencyId, Plan, WorkItemId};
 use dpm_store::SqliteStore;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -194,6 +194,16 @@ impl Application {
             .find_decision_by_key(key)
             .map(|decision| decision.id)
             .ok_or_else(|| AppError::UnknownDecision(key.into()))
+    }
+    /// Resolve a dependency identity string to an existing edge in the current plan.
+    pub fn dependency_id_blocking(&self, id: &str) -> Result<DependencyId, AppError> {
+        // A malformed identity cannot name an edge, so it is reported exactly like an absent one.
+        let parsed = serde_json::from_value::<DependencyId>(Value::from(id.trim())).ok();
+        let plan = self.plan_blocking()?;
+        parsed
+            .and_then(|parsed| plan.find_dependency(parsed))
+            .map(|edge| edge.id)
+            .ok_or_else(|| AppError::UnknownDependency(id.into()))
     }
     /// Compute one query from a consistent snapshot.
     pub fn query_blocking(&self, query: Query) -> Result<QueryResponse, AppError> {
