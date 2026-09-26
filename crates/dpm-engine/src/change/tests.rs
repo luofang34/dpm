@@ -206,3 +206,46 @@ fn deletion_is_explicit_in_diff_and_order_only_changes_are_not_semantic() {
             .any(|c| c.after.is_null() && c.before["key"] == "TEST-F")
     );
 }
+
+fn work(plan: &mut Plan, id: WorkItemId) -> &mut dpm_model::WorkItem {
+    plan.work_items.get_mut(&id).expect("work")
+}
+
+#[test]
+fn dangling_references_and_illegal_milestones_fail_before_any_change() {
+    let mut plan = fixture();
+    let before = plan.clone();
+    let task = plan.find_work_by_key("TEST-F").expect("task").id;
+    let milestone = plan.find_work_by_key("TEST-M1").expect("milestone").id;
+    let estimate = plan.work_items[&task].estimate;
+    for case in 0..10 {
+        let mut proposal = plan.clone();
+        match case {
+            0 => proposal.dependencies.push(dpm_model::Dependency {
+                predecessor: WorkItemId::new(),
+                successor: task,
+                kind: dpm_model::DependencyKind::FinishStart,
+                lag_hours: 0.0,
+            }),
+            1 => drop(proposal.work_items.remove(&task)),
+            2 => {
+                let risk = proposal.risks.values_mut().next().expect("risk");
+                risk.related_work.insert(WorkItemId::new());
+            }
+            3 => drop(
+                work(&mut proposal, task)
+                    .requirement_ids
+                    .insert(dpm_model::RequirementId::new()),
+            ),
+            4 => proposal.resources.clear(),
+            5 => work(&mut proposal, task).parent = Some(WorkItemId::new()),
+            6 => work(&mut proposal, milestone).estimate = estimate,
+            7 => work(&mut proposal, milestone).owner = Some(ActorId::agent("fake")),
+            8 => work(&mut proposal, task).parent = Some(milestone),
+            _ => work(&mut proposal, milestone).kind = dpm_model::WorkKind::Task,
+        }
+        assert!(propose_change(&plan, &proposal).is_err(), "case {case}");
+        assert!(apply(&mut plan, proposal).is_err(), "case {case}");
+        assert_eq!(plan, before, "case {case}");
+    }
+}
