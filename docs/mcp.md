@@ -45,10 +45,12 @@ means addition/deletion. Preview has no side effects. Applying requires a nonemp
 human/service actor. Agents draft scope; they do not approve their own expansion.
 
 New tasks must be Proposed, without execution/evidence. Existing work keys/kinds, lifecycle, owners,
-progress, reviews and artifacts cannot be changed through this route. Started work and
-its prerequisite/containment/context basis are protected; add follow-up work instead. Unstarted
-contracts, dependencies, projects, requirements, resources and risks can be maintained after review.
-New decisions are Open questions. Undo is not part of this route.
+progress, reviews and artifacts cannot be changed through this route. Started work, its
+prerequisites and containing packages, and the projects, requirements and resources it names are
+protected, and no new gate may block them; add follow-up work instead. Unstarted contracts,
+dependencies, projects, requirements, resources and risks can be maintained after review. New
+decisions are Open questions; decision replacement below may list started work for reassessment.
+Git remotes in a shared plan cannot embed `user:password@` credentials. Undo is not part of this route.
 
 A Decided choice is replaced, never edited: the proposal changes only its `status` to `Superseded`
 and adds one new Decided decision whose `supersedes` names it, with a nonempty `rationale` and no

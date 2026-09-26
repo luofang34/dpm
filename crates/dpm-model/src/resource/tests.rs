@@ -56,3 +56,24 @@ fn resource_identity_survives_renames_and_contract_references_are_validated() {
     plan.format_version = 1;
     assert!(plan.validate().is_err());
 }
+
+#[test]
+fn remotes_with_embedded_passwords_cannot_enter_a_shared_plan() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let id = *plan.resources.keys().next().expect("repository");
+    for (remote, accepted) in [
+        ("https://example.invalid/org/repo.git", true),
+        ("git@example.invalid:org/repo.git", true),
+        ("ssh://git@example.invalid/org/repo.git", true),
+        ("https://user:token@example.invalid/org/repo.git", false),
+        ("ssh://user:secret@example.invalid:22/repo.git", false),
+    ] {
+        plan.resources.get_mut(&id).expect("resource").kind = ResourceKind::GitRepository {
+            remotes: vec![remote.into()],
+        };
+        assert_eq!(plan.validate().is_ok(), accepted, "{remote}");
+    }
+}

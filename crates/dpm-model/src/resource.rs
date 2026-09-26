@@ -75,6 +75,13 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), ValidationError> {
             {
                 return Err(invalid("resource remote", id, "address cannot be empty"));
             }
+            ResourceKind::GitRepository { remotes } if remotes.iter().any(|r| has_password(r)) => {
+                return Err(invalid(
+                    "resource remote",
+                    id,
+                    "shared plans cannot carry remote credentials",
+                ));
+            }
             _ => {}
         }
     }
@@ -93,6 +100,16 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), ValidationError> {
         }
     }
     Ok(())
+}
+
+/// A `user:secret@` authority exports a credential; `ssh://git@host` and `git@host:path` do not.
+fn has_password(remote: &str) -> bool {
+    remote.split_once("://").is_some_and(|(_, rest)| {
+        let authority = rest.split('/').next().unwrap_or_default();
+        authority
+            .rsplit_once('@')
+            .is_some_and(|(userinfo, _)| userinfo.contains(':'))
+    })
 }
 
 #[cfg(test)]
