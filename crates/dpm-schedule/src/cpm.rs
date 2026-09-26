@@ -2,6 +2,11 @@ use crate::{ActivitySchedule, Schedule, ScheduleError};
 use dpm_model::{DependencyKind, Plan, WorkItemId};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+/// Absolute tolerance, in hours, below which total float counts as zero.
+///
+/// Inputs are elapsed hours; at a million hours the f64 spacing is about 1e-10, so rounding from
+/// sums of durations and lags stays at least two orders of magnitude below this bound while any
+/// intentional slack (whole seconds and above) stays far above it.
 const EPSILON: f64 = 1e-8;
 type Times = BTreeMap<WorkItemId, f64>;
 
@@ -136,7 +141,8 @@ pub fn deterministic_with_durations(
                 latest_start_hours: latest[&id],
                 latest_finish_hours: finite(id, latest[&id] + durations[&id])?,
                 total_float_hours: total_float,
-                free_float_hours: free_float(plan, durations, &earliest, id, finish)?,
+                free_float_hours: free_float(plan, durations, &earliest, id, finish)?
+                    .min(total_float),
                 critical,
             },
         );
