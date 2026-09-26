@@ -151,6 +151,17 @@ fn proposals_cannot_record_or_remove_waivers_or_change_started_prerequisites() {
     let before = plan.clone();
     assert!(apply(&mut plan, restored).is_err());
     assert_eq!(plan, before);
+    // A waived edge must be restored before review can harden it.
+    let mut hardened = plan.clone();
+    edge_mut(&mut hardened, ss).policy = DependencyPolicy::Hard;
+    let error = apply(&mut plan, hardened).expect_err("waived hard edge");
+    assert!(
+        error
+            .to_string()
+            .contains("hard constraints cannot be waived"),
+        "{error}"
+    );
+    assert_eq!(plan, before);
     let mut unrelated = plan.clone();
     unrelated.workspace.name = "renamed".into();
     apply(&mut plan, unrelated).expect("carrying an unchanged waiver is allowed");
