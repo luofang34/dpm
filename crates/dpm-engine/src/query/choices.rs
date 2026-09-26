@@ -151,7 +151,14 @@ fn forecast(
     let mut stranded: Vec<_> = hypothetical
         .applicability()
         .into_iter()
-        .filter(|(_, a)| matches!(a, Applicability::Stranded { .. } | Applicability::EmptyJoin))
+        .filter(|(_, a)| {
+            matches!(
+                a,
+                Applicability::Stranded { .. }
+                    | Applicability::ChildrenStranded { .. }
+                    | Applicability::EmptyJoin
+            )
+        })
         .filter_map(|(id, _)| hypothetical.work_items.get(&id).map(|w| w.key.clone()))
         .collect();
     stranded.sort();

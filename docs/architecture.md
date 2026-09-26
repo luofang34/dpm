@@ -245,7 +245,8 @@ decision's `supersedes` chain, so a reviewed replacement (with the same option k
 choice changes. A task or milestone may declare an explicit `join` policy for its incoming edges.
 
 `dpm_model::Timeline` derives each work item's applicability once, from decisions, conditions,
-join policies and unwaived edges in dependency order, and every projection reads that result:
+join policies and unwaived edges in dependency order, then derives each work package from its
+children (innermost first), and every projection reads that result:
 
 | Situation | Rule |
 |-----------|------|
@@ -256,8 +257,16 @@ join policies and unwaived edges in dependency order, and every projection reads
 | Edge from undecided or awaiting work | the successor is `awaiting_choice`: not committed until the choice is made |
 | `active_branches` join, edge from not-selected work | a skipped branch, released at the choice's `resolved_at` |
 | `active_branches` join, every branch skipped | `empty_join` unless `allow_empty`; with it, reached at the latest choice time |
-| Work package | complete when every child a choice did not exclude is complete, and at least one is |
+| Work package with an applicable child | `applicable`; complete when every child a choice did not exclude is complete, and at least one is |
+| Work package whose every child is excluded (`not_selected` or itself `all_children_excluded`) | `all_children_excluded`: treated exactly as `not_selected` (listed, not counted, never completion, a skipped branch of its parent at the latest excluding choice) |
+| Work package with no applicable child and one still awaiting a choice | `awaiting_choice` naming that child: not committed, not complete, the workspace stays open |
+| Work package whose remaining children are all stranded or empty joins | `children_stranded` naming the first: it can never complete without a reviewed plan change |
 | Selected task already verified | stays `applicable`; a later choice cannot strand finished work |
+
+A package's applicability and its completion rule read the same children, so no view can call a
+package applicable that the timeline can never complete. Work packages cannot be dependency
+endpoints, so no edge leaves an excluded package; its container and the workspace are its only
+consumers. A package with no children at all is outside these rules and stays `applicable`.
 
 Only `applicable` work passes any lifecycle gate (`UnmetGate::Applicability` otherwise), is
 recommended by `next`, or enters the remaining projections; excluded activities are absent from
@@ -316,7 +325,8 @@ MCP execution tools add revision metadata around the same CLI JSON data. Device-
 return local configuration without a project revision.
 
 The Gantt page renders `deterministic_remaining` as a read-only hour-axis chart. Work packages
-roll up descendant ranges for display, milestones remain zero-duration points, and selecting a row
+roll up descendant ranges for display; a row that the `Timeline` marks not applicable shows its
+applicability state instead of a bar, read from the timeline rather than inferred from the schedule; milestones remain zero-duration points, and selecting a row
 opens the same work context used by other views. Nothing in navigation or rendering updates state.
 The console displays an explicit revision snapshot. `r` reloads through the application boundary,
 retaining selection and viewport. Validation or source-identity failures preserve the last valid view

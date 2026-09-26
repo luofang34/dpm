@@ -380,3 +380,73 @@ fn conditional_work_shows_scenarios_exclusions_and_the_stranded_reason() {
     let detail = crate::detail::text(&plan, &explanation);
     assert!(detail.contains("never releases from it"), "{detail}");
 }
+
+/// An unconditional package whose only task applies to supplier A, with supplier B selected.
+fn excluded_package_plan() -> Plan {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/conditional-plan.json"
+    ))
+    .expect("fixture");
+    let decision = plan.decisions.keys().next().copied().expect("decision");
+    let mut package = plan.find_work_by_key("SUP-PKG-A").expect("package").clone();
+    package.id = dpm_model::WorkItemId::new();
+    package.key = dpm_model::Key::new("X-PKG");
+    package.condition = None;
+    let mut task = plan.find_work_by_key("SUP-A-QUOTE").expect("task").clone();
+    task.id = dpm_model::WorkItemId::new();
+    task.key = dpm_model::Key::new("X-A1");
+    task.parent = Some(package.id);
+    task.condition = Some(dpm_model::WorkCondition {
+        decision,
+        option: "A".into(),
+    });
+    plan.work_items.insert(package.id, package);
+    plan.work_items.insert(task.id, task);
+    dpm_engine::apply_command(
+        &mut plan,
+        dpm_model::ActorId::human("lead"),
+        dpm_engine::Command::Decide {
+            decision,
+            outcome: "B".into(),
+        },
+        chrono::Utc::now(),
+    )
+    .expect("decide");
+    plan
+}
+
+/// The rendered row that mentions `key`, at a width that keeps the whole Gantt bar text.
+fn row_of(view: &mut View, key: &str) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(240, 40)).expect("test terminal");
+    terminal.draw(|frame| view.render(frame)).expect("render");
+    terminal
+        .backend()
+        .buffer()
+        .content
+        .chunks(240)
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+        .find(|row| row.contains(key))
+        .expect("row")
+}
+
+#[test]
+fn a_package_of_only_unselected_work_reads_its_exclusion_from_the_timeline() {
+    let plan = excluded_package_plan();
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
+    view.page = Page::Gantt;
+    let bar = row_of(&mut view, "X-PKG");
+    assert!(
+        bar.contains("outside the active graph: all children excluded"),
+        "{bar}"
+    );
+    view.page = Page::Work;
+    let listed = row_of(&mut view, "X-PKG");
+    assert!(listed.contains("[not selected]"), "{listed}");
+    let id = plan.find_work_by_key("X-PKG").expect("package").id;
+    let explanation = dpm_engine::explain_work(&plan, id, chrono::Utc::now()).expect("explain");
+    let detail = crate::detail::text(&plan, &explanation);
+    assert!(
+        detail.contains("Applicability: all children excluded"),
+        "{detail}"
+    );
+}

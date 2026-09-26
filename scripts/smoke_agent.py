@@ -417,4 +417,4 @@ if __name__ == '__main__':
     print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')
     print('PASS: CLI/MCP dependency identity, soft-edge waiver/restore, refusals and non-gating links')
     print('PASS: CLI/MCP start events, elapsed-lag gates, unknown legacy event times and lead explanations')
-    print('PASS: CLI/MCP conditional work: options, applicability gates, branch joins, scenarios and reviewed choice changes')
+    print('PASS: CLI/MCP conditional work: options, applicability gates, branch joins, excluded packages, scenarios and reviewed choice changes')

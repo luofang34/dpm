@@ -231,9 +231,11 @@ Applicability is derived at query time and never stored. `explain_work.applicabi
 | `applicable` | Selected, and every prerequisite can proceed | gated as usual | included | counted |
 | `undecided` | A condition awaits an open decision | refused | excluded; see scenarios | not counted; container/workspace incomplete |
 | `not_selected` | A decision selected another option | refused | excluded | not counted; never completion |
-| `awaiting_choice` | A prerequisite is undecided | refused | excluded; see scenarios | counted |
+| `awaiting_choice` | A prerequisite (or, for a work package, a child) is undecided | refused | excluded; see scenarios | counted |
 | `stranded` | An ordinary edge from not-selected or stranded work never releases | refused | excluded | counted, outstanding |
 | `empty_join` | Every branch into an active-branch join was not selected and `allow_empty` is false | refused | excluded | never reached |
+| `all_children_excluded` | Every child of a work package was excluded; `decisions` names the excluding decisions | — | excluded | not counted; never completion; not required for workspace completion |
+| `children_stranded` | No child of a work package is applicable and `child` is stranded or an empty join | — | excluded | never complete |
 
 A refused transition reports `{type: "applicability", applicability}` in `unmet`. A dependency from
 not-selected work reports `release.state = "not_selected"` into an ordinary successor and
@@ -241,8 +243,12 @@ not-selected work reports `release.state = "not_selected"` into an ordinary succ
 at least one branch is verified (or `allow_empty` is set and every branch was skipped), every active
 branch is released, and its gates are resolved; its time includes the `resolved_at` of the choices
 that selected it or skipped its branches. A work package completes when every child that a choice
-did not exclude is complete, with at least one. `progress.scope` is `not_selected` or `undecided`
-for work outside the counted scope.
+did not exclude is complete, with at least one; its applicability follows the same children: with
+no applicable child it is `all_children_excluded` (every child excluded, handled like
+`not_selected`, including as a skipped branch of its parent package), `awaiting_choice` (a child
+still waits for a choice; `predecessor` names it) or `children_stranded`. These package states are
+additive values of `state`; `api_version` is unchanged. `progress.scope` is `not_selected` (also for
+`all_children_excluded`) or `undecided` for work outside the counted scope.
 
 `next`, scoped `next`, `status`, `explain`, progress, milestone completion, the remaining CPM and
 Monte Carlo and the TUI read one evaluation. While open decisions condition work,

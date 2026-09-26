@@ -1,6 +1,6 @@
 use crate::text_panel::TextPanel;
 use dpm_engine::{EngineError, ProgressSummary, progress};
-use dpm_model::{Plan, WorkItem, WorkItemId, WorkKind};
+use dpm_model::{Plan, Timeline, WorkItem, WorkItemId, WorkKind};
 use dpm_schedule::{Schedule, deterministic_remaining};
 use ratatui::{layout::Rect, text::Span};
 use std::collections::BTreeMap;
@@ -17,6 +17,7 @@ use viewport::Viewport;
 /// Read-only remaining-work timeline; dates and progress never enter the stored graph.
 pub(crate) struct Gantt {
     schedule: Schedule,
+    timeline: Timeline,
     progress: BTreeMap<WorkItemId, ProgressSummary>,
     viewport: Viewport,
     palette: Palette,
@@ -38,6 +39,7 @@ impl Gantt {
         let viewport = Viewport::new(schedule.project_finish_hours);
         Ok(Self {
             schedule,
+            timeline: Timeline::at(plan, clock),
             progress: progress(plan, clock)?.work,
             viewport,
             palette: Palette { enabled: true },
@@ -78,9 +80,12 @@ impl Gantt {
         }
         bar.into_iter().collect()
     }
-    /// Scheduled range of work, or `None` for work outside the active graph, which the remaining
-    /// schedule omits; packages span their scheduled descendants.
+    /// Scheduled range of work, or `None` for work the timeline places outside the active graph;
+    /// packages span their applicable descendants.
     fn bounds(&self, plan: &Plan, item: &WorkItem) -> Option<(f64, f64, bool)> {
+        if !self.timeline.applicability(item.id).is_applicable() {
+            return None;
+        }
         if item.kind != WorkKind::WorkPackage {
             let activity = self.schedule.activities.get(&item.id)?;
             return Some((

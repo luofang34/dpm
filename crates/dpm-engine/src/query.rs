@@ -138,12 +138,14 @@ pub fn status(
 fn downstream_counts(plan: &Plan, timeline: &Timeline) -> BTreeMap<WorkItemId, usize> {
     let mut outgoing = BTreeMap::<WorkItemId, Vec<WorkItemId>>::new();
     for dep in plan.dependencies.iter().filter(|d| {
-        !matches!(
-            timeline.applicability(d.successor),
-            Applicability::NotSelected { .. }
-                | Applicability::Stranded { .. }
-                | Applicability::EmptyJoin
-        )
+        let state = timeline.applicability(d.successor);
+        !(state.is_not_selected()
+            || matches!(
+                state,
+                Applicability::Stranded { .. }
+                    | Applicability::ChildrenStranded { .. }
+                    | Applicability::EmptyJoin
+            ))
     }) {
         outgoing
             .entry(dep.predecessor)

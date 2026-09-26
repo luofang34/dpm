@@ -36,9 +36,50 @@ def parity(database, worker, label):
         ('explain_work', {'key': 'SUP-A-QUAL'}, ('explain', 'SUP-A-QUAL')),
         ('explain_work', {'key': 'SUP-A-AUDIT'}, ('explain', 'SUP-A-AUDIT')),
         ('get_work', {'key': 'SUP-PKG-A'}, ('show', 'SUP-PKG-A')),
+        ('explain_work', {'key': 'X-PKG'}, ('explain', 'X-PKG')),
+        ('get_work', {'key': 'X-PKG'}, ('show', 'X-PKG')),
     ]
     for tool, arguments, command in pairs:
         assert call(worker, tool, arguments)['data'] == cli(database, *command), (label, tool)
+
+
+def with_excluded_package(directory):
+    """The fixture plus an unconditional package whose only task applies to supplier A.
+
+    The task follows supplier A's quote, so selecting A later does not change what `next` offers.
+    """
+    plan = json.loads(FIXTURE.read_text())
+    items = plan['work_items']
+    package_id, task_id = (str(uuid.UUID(int=0x0d << 96 | n)) for n in (0x51, 0x52))
+    package = {**copy.deepcopy(next(w for w in items.values() if w['key'] == 'SUP-PKG-A')),
+               'id': package_id, 'key': 'X-PKG', 'title': 'Supplier A onboarding'}
+    package.pop('condition')
+    quote = next(w for w in items.values() if w['key'] == 'SUP-A-QUOTE')
+    task = {**copy.deepcopy(quote), 'id': task_id, 'key': 'X-A1', 'title': 'Onboard supplier A',
+            'parent': package_id, 'condition': {'decision': supplier_id(plan), 'option': 'A'}}
+    items[package_id], items[task_id] = package, task
+    plan['dependencies'].append({'predecessor': quote['id'], 'successor': task_id, 'kind': 'FinishStart',
+                                 'lag_hours': 0.0})
+    path = Path(directory) / 'conditional-package.json'
+    path.write_text(json.dumps(plan))
+    return path
+
+
+def supplier_id(plan):
+    return next(d['id'] for d in plan['decisions'].values() if d['key'] == 'DEC-SUPPLIER')
+
+
+def package_state(database, worker):
+    """X-PKG's applicability as explain, status and progress each report it, identical over MCP."""
+    explained = cli(database, 'explain', 'X-PKG')['applicability']
+    status = cli(database, 'status')
+    listed = [w['applicability'] for w in status['not_applicable'] if w['key'] == 'X-PKG']
+    assert call(worker, 'project_status', {})['data'] == status
+    if explained['state'] == 'applicable':
+        assert listed == [], listed
+    else:
+        assert listed == [explained], (listed, explained)
+    return explained, cli(database, 'show', 'X-PKG')['progress']
 
 
 def applicability_gate(error):
@@ -63,7 +104,7 @@ def complete(database, key, revision):
 
 def smoke(directory):
     database = Path(directory) / 'conditional.sqlite'
-    cli(database, 'import', str(FIXTURE))
+    cli(database, 'import', str(with_excluded_package(directory)))
     worker = Agent(database, 'agent:parity')
     reviewer = Agent(database, 'human:reviewer')
     try:
@@ -74,6 +115,8 @@ def smoke(directory):
         merge = cli(database, 'explain', 'SUP-MERGE')
         assert merge['applicability']['state'] == 'awaiting_choice'
         assert 'DEC-SUPPLIER' in {d['key'] for d in cli(database, 'explain', 'SUP-A-QUAL')['context']['decisions']}
+        state, _ = package_state(database, worker)
+        assert state == {'state': 'awaiting_choice', 'predecessor': 'X-A1'}, state
 
         revision = complete(database, 'SUP-DESIGN', 0)
         unknown = refused_alike(database, worker, 'claim_work', {'key': 'SUP-A-QUOTE', 'base_revision': revision},
@@ -87,6 +130,9 @@ def smoke(directory):
         parity(database, worker, 'supplier B selected')
         next_work = cli(database, 'next')
         assert [c['work']['key'] for c in next_work['candidates']] == ['SUP-B-QUOTE']
+        state, progress = package_state(database, worker)
+        assert state == {'state': 'all_children_excluded', 'decisions': ['DEC-SUPPLIER']}, state
+        assert progress['scope'] == 'not_selected' and not progress['verified'], progress
         skipped = refused_alike(database, worker, 'claim_work', {'key': 'SUP-A-QUAL', 'base_revision': revision},
                                 ('claim', 'SUP-A-QUAL', '--actor', 'agent:parity'))
         assert applicability_gate(skipped) == 'not_selected'
@@ -134,6 +180,8 @@ def change_after_start(database, worker, reviewer, revision):
                   ('submit', 'SUP-B-QUAL', '--actor', 'agent:parity'))
     parity(database, worker, 'choice switched under started work')
     assert [c['work']['key'] for c in cli(database, 'next')['candidates']] == ['SUP-A-QUOTE']
+    state, progress = package_state(database, worker)
+    assert state == {'state': 'applicable'} and 'scope' not in progress, (state, progress)
 
 
 if __name__ == '__main__':
@@ -146,3 +194,4 @@ if __name__ == '__main__':
         options.transcript.write_text(''.join(json.dumps(entry) + '\n' for entry in TRANSCRIPT))
     print('PASS: CLI/MCP conditional parity: options, undecided/not-selected/stranded gates, branch join and scenarios')
     print('PASS: choice change under started work needs review, is reported and keeps the work; refusals change nothing')
+    print('PASS: CLI/MCP agree a package of only unselected work is awaiting, then excluded, then applicable again')

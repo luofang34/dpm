@@ -29,7 +29,8 @@ impl Timeline {
     /// containers is released; its time is the latest of those releases and of the choices that
     /// selected it or skipped its branches. A work package completes when every child that a
     /// choice did not exclude is complete, and at least one is, at the latest child, choice or
-    /// gate time.
+    /// gate time; a package whose children were all excluded or cannot proceed is not applicable,
+    /// so it is never complete.
     #[must_use]
     pub fn at(plan: &Plan, now: DateTime<Utc>) -> Self {
         let Derived { states, choice_at } = applicability::derive(plan);

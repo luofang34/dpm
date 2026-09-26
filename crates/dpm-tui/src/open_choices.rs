@@ -1,4 +1,19 @@
 use dpm_engine::{ProgressScope, StatusSummary};
+use dpm_model::Applicability;
+
+/// Short name of a derived applicability state, shared by every TUI surface that shows it.
+pub(crate) fn applicability_label(applicability: &Applicability) -> &'static str {
+    match applicability {
+        Applicability::Applicable => "applicable",
+        Applicability::Undecided { .. } => "undecided",
+        Applicability::NotSelected { .. } => "not selected",
+        Applicability::AwaitingChoice { .. } => "awaiting a choice",
+        Applicability::Stranded { .. } => "stranded",
+        Applicability::EmptyJoin => "empty join",
+        Applicability::AllChildrenExcluded { .. } => "all children excluded",
+        Applicability::ChildrenStranded { .. } => "children stranded",
+    }
+}
 
 /// Short list-row tag for work a choice keeps out of progress.
 pub(crate) fn scope_tag(scope: ProgressScope) -> &'static str {

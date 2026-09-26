@@ -149,5 +149,19 @@ pub(super) fn describe_applicability(applicability: &Applicability) -> String {
             "prerequisite {predecessor} was not selected or can never proceed, and an ordinary dependency never releases from it; only a reviewed plan change that rewires the dependency, or a waiver of a Soft dependency, lets this work proceed"
         ),
         Applicability::EmptyJoin => "every branch into this join was not selected, and the join does not permit an empty result".into(),
+        Applicability::AllChildrenExcluded { decisions } => format!(
+            "every child of this work package was excluded by {}; the package is excluded with them",
+            join_keys(decisions)
+        ),
+        Applicability::ChildrenStranded { child } => format!(
+            "no child of this work package is applicable and {child} can never proceed, so the package cannot complete without a reviewed plan change"
+        ),
     }
+}
+
+fn join_keys(keys: &[dpm_model::Key]) -> String {
+    keys.iter()
+        .map(|k| k.0.as_str())
+        .collect::<Vec<_>>()
+        .join(", ")
 }

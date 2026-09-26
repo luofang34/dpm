@@ -29,7 +29,8 @@ pub enum ProgressScope {
     /// The work counts: it is unconditional or every condition names the selected option.
     #[default]
     Counted,
-    /// A decision selected a different option; the work is excluded, not completed.
+    /// A decision selected a different option, for the work or for every child of a package; the
+    /// work is excluded, not completed.
     NotSelected,
     /// A condition awaits an open decision; the work is not counted, and its container or
     /// workspace cannot be complete until the choice is made.
@@ -43,7 +44,9 @@ impl ProgressScope {
 
     fn of(applicability: &Applicability) -> Self {
         match applicability {
-            Applicability::NotSelected { .. } => Self::NotSelected,
+            Applicability::NotSelected { .. } | Applicability::AllChildrenExcluded { .. } => {
+                Self::NotSelected
+            }
             Applicability::Undecided { .. } => Self::Undecided,
             _ => Self::Counted,
         }

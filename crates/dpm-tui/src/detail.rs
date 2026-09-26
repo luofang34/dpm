@@ -12,6 +12,13 @@ pub(crate) fn text(plan: &Plan, detail: &WorkExplanation) -> String {
         ),
         format!("Objective: {}", work.objective),
     ];
+    if !detail.applicability.is_applicable() {
+        lines.push(format!(
+            "Applicability: {} — outside the active graph ({:?})",
+            crate::open_choices::applicability_label(&detail.applicability),
+            detail.applicability
+        ));
+    }
     if let Some(owner) = &work.owner {
         lines.push(format!("Owner: {owner}"));
     }

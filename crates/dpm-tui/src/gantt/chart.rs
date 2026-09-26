@@ -1,7 +1,5 @@
 use super::*;
 
-/// Bar text for work the remaining schedule omits because it is outside the active graph.
-const OUTSIDE_GRAPH: &str = " outside the active graph; see detail";
 use ratatui::{
     Frame,
     layout::{Constraint, Layout},
@@ -151,7 +149,7 @@ impl Gantt {
             Span::styled(
                 match bounds {
                     Some((start, end, _)) => self.bar(start, end, width, symbol, item.kind),
-                    None => format!("{:<width$}", truncate(OUTSIDE_GRAPH, width)),
+                    None => format!("{:<width$}", truncate(&self.outside_graph(item), width)),
                 },
                 bar_style.add_modifier(if selected || marker == "~ " {
                     Modifier::BOLD
@@ -161,5 +159,16 @@ impl Gantt {
             ),
             Span::raw("|"),
         ])
+    }
+}
+
+impl Gantt {
+    /// Bar text naming why the timeline keeps work out of the remaining schedule.
+    fn outside_graph(&self, item: &WorkItem) -> String {
+        let state = self.timeline.applicability(item.id);
+        format!(
+            " outside the active graph: {}; see detail",
+            crate::open_choices::applicability_label(state)
+        )
     }
 }

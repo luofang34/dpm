@@ -5,6 +5,8 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
 
+mod packages;
+
 /// Whether work belongs to the active execution graph, derived from decisions and constraints.
 ///
 /// Only `Applicable` work can take lifecycle transitions or enter the remaining schedule. The
@@ -32,9 +34,10 @@ pub enum Applicability {
         selected: String,
     },
     /// A prerequisite is undecided or itself waits for a choice, so the work's place in the plan
-    /// is not yet committed.
+    /// is not yet committed. For a work package with no applicable child, the prerequisite is a
+    /// child that still waits for a choice.
     AwaitingChoice {
-        /// Prerequisite whose applicability is still unknown.
+        /// Prerequisite, or package child, whose applicability is still unknown.
         predecessor: Key,
     },
     /// An ordinary constraint from not-selected work, or from work that can never proceed, never
@@ -47,6 +50,18 @@ pub enum Applicability {
     },
     /// Every branch into an active-branch join was excluded and the join does not permit that.
     EmptyJoin,
+    /// Every child of this work package was excluded by a choice, so the package is excluded as
+    /// well: it holds no work that could complete it.
+    AllChildrenExcluded {
+        /// Decisions whose selected options excluded the children, in key order.
+        decisions: Vec<Key>,
+    },
+    /// No child of this work package is applicable and at least one that a choice did not exclude
+    /// is stranded or an empty join, so the package can never complete without a plan change.
+    ChildrenStranded {
+        /// First such child, in key order.
+        child: Key,
+    },
 }
 
 impl Applicability {
@@ -56,10 +71,14 @@ impl Applicability {
         matches!(self, Self::Applicable)
     }
 
-    /// Whether a choice excluded the work from the plan's scope.
+    /// Whether a choice excluded the work from the plan's scope, directly or through every child
+    /// of a work package.
     #[must_use]
     pub fn is_not_selected(&self) -> bool {
-        matches!(self, Self::NotSelected { .. })
+        matches!(
+            self,
+            Self::NotSelected { .. } | Self::AllChildrenExcluded { .. }
+        )
     }
 
     /// Whether the work's own conditions are selected, so its lifecycle may count as completion.
@@ -77,7 +96,8 @@ pub(crate) struct Derived {
     pub(crate) choice_at: BTreeMap<WorkItemId, EventTime>,
 }
 
-/// Derive applicability: conditions through containment first, then constraints in dependency order.
+/// Derive applicability: conditions through containment first, then constraints in dependency
+/// order, then work packages from their children.
 pub(crate) fn derive(plan: &Plan) -> Derived {
     let mut derived = Derived {
         states: BTreeMap::new(),
@@ -103,6 +123,7 @@ pub(crate) fn derive(plan: &Plan) -> Derived {
         let state = through_constraints(plan, work, &derived.states);
         derived.states.insert(id, state);
     }
+    packages::derive(plan, &mut derived);
     derived
 }
 
@@ -202,10 +223,12 @@ fn through_constraints(
             continue;
         };
         match states.get(&edge.predecessor) {
-            Some(Applicability::NotSelected { .. }) if work.join.skips_unselected() => {}
+            Some(state) if state.is_not_selected() && work.join.skips_unselected() => {}
             Some(
                 Applicability::NotSelected { .. }
+                | Applicability::AllChildrenExcluded { .. }
                 | Applicability::Stranded { .. }
+                | Applicability::ChildrenStranded { .. }
                 | Applicability::EmptyJoin,
             ) => {
                 return Applicability::Stranded {
