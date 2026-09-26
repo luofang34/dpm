@@ -94,7 +94,10 @@ pub(crate) fn derive(plan: &Plan) -> Derived {
         let Some(work) = plan.work_items.get(&id) else {
             continue;
         };
-        if work.kind == WorkKind::WorkPackage || !derived.states[&id].is_applicable() {
+        // A selected task already verified has taken every transition; its prerequisites no longer
+        // decide whether it can proceed, so a later choice change cannot strand it.
+        let finished = work.is_executable() && work.status.satisfies_dependency();
+        if work.kind == WorkKind::WorkPackage || finished || !derived.states[&id].is_applicable() {
             continue;
         }
         let state = through_constraints(plan, work, &derived.states);

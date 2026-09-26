@@ -248,7 +248,11 @@ Monte Carlo and the TUI read one evaluation. While open decisions condition work
 `project_status.open_choices` lists them with `scenario_count` and one `scenarios` entry per option
 combination (up to 16): `choices`, `expected_finish_hours`, optional percentiles and the work that
 would be `stranded`. The headline `expected_finish_hours` then covers committed work only and the
-headline percentiles are null: branches without a probability model are never blended.
+headline percentiles are null: branches without a probability model are never blended. Float and
+criticality in `next` and `explain` are likewise computed over committed work. Lifecycle counts
+(`in_flight`, `blocked`, `awaiting_verification`) still tally excluded work whose lifecycle a
+reviewed choice change kept; `complete` and progress do not count it. A replacement decision carries
+no `blocks`, as for any replacement.
 
 `decide` refuses a choice that would exclude claimed or started work. Changing a made choice is a
 reviewed decision replacement; it keeps in-flight work's lifecycle, owner and evidence, lists it in

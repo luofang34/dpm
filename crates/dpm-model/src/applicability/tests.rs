@@ -239,6 +239,12 @@ fn verified_work_counts_only_while_its_option_is_selected() {
         "lifecycle is kept"
     );
     assert!(!Timeline::at(&plan, t(3)).completed().contains(&quote));
+    verify(&mut plan, "SUP-A-AUDIT", t(2));
+    assert_eq!(
+        state(&plan, "SUP-A-AUDIT"),
+        Applicability::Applicable,
+        "verified unconditional work is not re-labelled stranded by a later choice"
+    );
 }
 
 #[test]

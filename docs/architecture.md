@@ -235,6 +235,7 @@ join policies and unwaived edges in dependency order, and every projection reads
 | `active_branches` join, edge from not-selected work | a skipped branch, released at the choice's `resolved_at` |
 | `active_branches` join, every branch skipped | `empty_join` unless `allow_empty`; with it, reached at the latest choice time |
 | Work package | complete when every child a choice did not exclude is complete, and at least one is |
+| Selected task already verified | stays `applicable`; a later choice cannot strand finished work |
 
 Only `applicable` work passes any lifecycle gate (`UnmetGate::Applicability` otherwise), is
 recommended by `next`, or enters the remaining projections; excluded activities are absent from
