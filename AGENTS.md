@@ -146,8 +146,11 @@ not claim the check passed.
 
 ## Licensing
 
-All repository code is **AGPL-3.0-only** unless a file explicitly states otherwise. Dependencies may
-use compatible licenses, but do not copy incompatible source code into this repository.
+All repository code is **AGPL-3.0-only** unless a file explicitly states otherwise. Contributions are
+accepted under the [CLA](CLA.md), which grants the copyright holder relicensing rights for
+application-store distribution. Third-party dependencies linked into DPM binaries must be permissively
+licensed; copyleft third-party code cannot be relicensed and would block store builds. Do not copy
+incompatible source code into this repository.
 
 ## CLI and agent-tool parity
 

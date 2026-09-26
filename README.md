@@ -196,7 +196,11 @@ the [self-host roadmap](examples/self-host/README.md), not as a status document.
 
 ## License
 
+Copyright © 2026 Fang Luo.
+
 GNU Affero General Public License v3.0 **only** (`AGPL-3.0-only`). See [`LICENSE`](LICENSE).
+Contributions require the [Contributor License Agreement](CLA.md), which also permits the copyright
+holder to distribute application-store builds; see [CONTRIBUTING](CONTRIBUTING.md).
 
 ## Gantt preview and agent interface
 
