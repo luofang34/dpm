@@ -20,5 +20,36 @@
     "M5-ALPHA",
     "M6-COLLAB",
     "M7-DESIGN"
-  ]
+  ],
+  "context_decisions": {
+    "DEC-WORKSPACE": [
+      "CORE-10",
+      "CORE-20",
+      "QA-10",
+      "SYNC-10"
+    ],
+    "DEC-INTERCHANGE": [
+      "CORE-10",
+      "CORE-20",
+      "QA-10"
+    ],
+    "DEC-DURABILITY": [
+      "CORE-10",
+      "CORE-30",
+      "SELF-10",
+      "SYNC-10",
+      "SYNC-20"
+    ],
+    "DEC-SYNC-ORDER": [
+      "AUTH-10",
+      "SERVER-10",
+      "SYNC-10",
+      "SYNC-20"
+    ],
+    "DEC-WORK-CONTEXT": [
+      "CORE-20",
+      "CORE-30",
+      "UI-10"
+    ]
+  }
 }

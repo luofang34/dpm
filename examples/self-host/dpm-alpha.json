@@ -655,7 +655,8 @@
       ],
       "requirement_ids": [
         "56af87d0-71ea-5575-bc04-f070a8e9191e",
-        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "c79a01b2-9102-5dce-9b1b-f67d67972424"
       ],
       "artifact_ids": [
         "217b89c7-a7bc-5fc7-9278-212b3febf70b",
@@ -852,6 +853,12 @@
         },
         {
           "text": "Keep AGPL-3.0-only and prevent derived schedule/progress projections from becoming stored truth."
+        },
+        {
+          "text": "TOML/JSON round trips preserve lifecycle, ownership, contracts, evidence references and stable IDs with deterministic output; unsupported required fields fail explicitly."
+        },
+        {
+          "text": "Separate format/domain/API/database versions; represent revision tokens without signed-integer truncation and retain compatibility with existing JSON snapshots."
         }
       ],
       "status": "Planned",
@@ -868,7 +875,10 @@
       ],
       "requirement_ids": [
         "087248db-f9e4-5c27-968d-c2b539178037",
+        "2493971c-2616-5deb-b3a6-750e7d826522",
+        "2d5a1316-0b52-5ddc-aecc-23d92a73ec8b",
         "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "c79a01b2-9102-5dce-9b1b-f67d67972424",
         "f334b834-595d-5136-af46-0b308c643c81"
       ],
       "artifact_ids": [
@@ -881,7 +891,7 @@
       "instructions": {
         "steps": [
           {
-            "action": "Inventory plan/snapshot serialization and enumerate supported input versions and compatibility rules.",
+            "action": "Specify a versioned portable TOML/JSON model, distinct locator/storage/API schemas, stable identity rules and supported migrations.",
             "expected_result": "A reviewed version envelope specifies defaults, stable ID behavior and unsupported-version errors."
           },
           {
@@ -889,19 +899,21 @@
             "expected_result": "Valid supported snapshots load consistently; failed migrations leave the original database usable."
           },
           {
-            "action": "Add old-snapshot, restart, failure and unsupported-version regressions and update format documentation.",
+            "action": "Test cross-format semantic round trips, unsupported fields, failed migrations and restart; keep usage examples limited to working commands.",
             "expected_result": "Compatibility evidence and examples state which persisted inputs are authoritative."
           }
         ],
         "in_scope": [
-          "Versioned plan/storage formats and compatible migrations."
+          "Versioned plan/storage formats and compatible migrations.",
+          "Versioned interchange envelope, TOML/JSON codecs and explicit initialization/fork/restore/join identity rules."
         ],
         "out_of_scope": [
           "Change stable IDs, persist derived dates, replace live history or implement plan editing in this task."
         ],
         "verification": [
           "Run model/store migration tests including failed migration followed by restart.",
-          "./ci.sh; compare IDs and authoritative values before/after every supported migration."
+          "./ci.sh; compare IDs and authoritative values before/after every supported migration.",
+          "Round-trip omitted optionals, enum values, timestamps and u64 boundary revisions; reject non-finite schedule inputs and unsupported versions without writes."
         ]
       }
     },
@@ -922,6 +934,15 @@
         },
         {
           "text": "Expose matching CLI/MCP behavior and regression coverage; do not advertise an API before it works."
+        },
+        {
+          "text": "Resource bindings support several checkouts sharing one workspace and tasks with zero or multiple repositories; local paths and credentials stay outside shared plans."
+        },
+        {
+          "text": "Imported edits produce an actor/reason-attributed semantic diff, explicit deletions and atomic validation; stale changes and fabricated verification are rejected."
+        },
+        {
+          "text": "Decision amendments preserve reason/source and replacement linkage, identify affected tasks for review, and appear equally in CLI/MCP explain without turning context into gates."
         }
       ],
       "status": "Planned",
@@ -938,6 +959,10 @@
       ],
       "requirement_ids": [
         "087248db-f9e4-5c27-968d-c2b539178037",
+        "2202b173-92fd-52d8-a2a2-d94275a7a48f",
+        "2493971c-2616-5deb-b3a6-750e7d826522",
+        "2d5a1316-0b52-5ddc-aecc-23d92a73ec8b",
+        "ab68d6d6-0145-554f-980b-c5bb2bd4514b",
         "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
         "f334b834-595d-5136-af46-0b308c643c81"
       ],
@@ -952,7 +977,7 @@
       "instructions": {
         "steps": [
           {
-            "action": "Specify reviewable proposals and semantic diffs for task, dependency and gate edits against an observed revision.",
+            "action": "Specify semantic diffs for tasks, resource/context associations, dependencies and decision replacements against an observed revision.",
             "expected_result": "The contract defines validation, actor/reason attribution and review/apply boundaries."
           },
           {
@@ -965,14 +990,18 @@
           }
         ],
         "in_scope": [
-          "Reviewed semantic edits to tasks, dependency edges and gates with revision preconditions."
+          "Reviewed semantic edits to tasks, dependency edges and gates with revision preconditions.",
+          "Portable resource/context associations and reviewed decision replacement through the common proposal boundary."
         ],
         "out_of_scope": [
-          "Replace live databases, merge raw Git state as truth, or add UI-specific mutation rules."
+          "Replace live databases, merge raw Git state as truth, or add UI-specific mutation rules.",
+          "Automatic file-watcher imports, silent database forks on clone, arbitrary checkout execution or fine-grained partial-graph permissions."
         ],
         "verification": [
           "Test valid edits, cyclic/dangling edits, stale revisions and atomic failure across restart.",
-          "Compare CLI/MCP proposal and application data; run ./ci.sh."
+          "Compare CLI/MCP proposal and application data; run ./ci.sh.",
+          "Move or rename a checkout without changing resource/work IDs; reject ambiguous repository capture and show missing bindings explicitly.",
+          "Replace a contextual decision and inspect affected tasks; reject dangling references, stale imports and lifecycle bypasses with unchanged persisted state."
         ]
       }
     },
@@ -993,6 +1022,9 @@
         },
         {
           "text": "Test stale-revision conflicts, failures and CLI/MCP consistency through restart."
+        },
+        {
+          "text": "Distinguish a portable snapshot from a recovery bundle containing a consistent checkpoint, operation suffix, lineage and pending local work."
         }
       ],
       "status": "Planned",
@@ -1009,7 +1041,9 @@
       ],
       "requirement_ids": [
         "087248db-f9e4-5c27-968d-c2b539178037",
+        "2202b173-92fd-52d8-a2a2-d94275a7a48f",
         "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "c79a01b2-9102-5dce-9b1b-f67d67972424",
         "f334b834-595d-5136-af46-0b308c643c81"
       ],
       "artifact_ids": [
@@ -1042,7 +1076,8 @@
         ],
         "verification": [
           "Test historical reads and inverse application after intervening valid/conflicting changes.",
-          "Assert operation count grows on revert and failed inverses leave storage unchanged; run ./ci.sh."
+          "Assert operation count grows on revert and failed inverses leave storage unchanged; run ./ci.sh.",
+          "Recover a disposable workspace with accepted and pending operations; preserve unsent work and reject incomplete/redacted input as a full restore."
         ]
       }
     },
@@ -1497,7 +1532,10 @@
       ],
       "requirement_ids": [
         "087248db-f9e4-5c27-968d-c2b539178037",
+        "2493971c-2616-5deb-b3a6-750e7d826522",
+        "2d5a1316-0b52-5ddc-aecc-23d92a73ec8b",
         "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+        "ab68d6d6-0145-554f-980b-c5bb2bd4514b",
         "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
         "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
       ],
@@ -1511,7 +1549,7 @@
       "instructions": {
         "steps": [
           {
-            "action": "Specify bounded synthetic software and procurement/manufacturing scenarios from cross-domain invariants.",
+            "action": "Specify bounded software and procurement scenarios with cross-project dependencies, multiple repositories, non-Git human work and portable resource references.",
             "expected_result": "Each scenario names actors, evidence, dependencies, milestones and decision gates without copying a retired demo."
           },
           {
@@ -1531,7 +1569,9 @@
         ],
         "verification": [
           "Run both scenarios through gate, blocker, submit/independent-verify and milestone checks.",
-          "Validate all test plans and run ./ci.sh; self-host remains the sole user-facing example."
+          "Validate all test plans and run ./ci.sh; self-host remains the sole user-facing example.",
+          "Exercise one workspace spanning differently located repositories plus a non-Git human task, multiple immutable evidence sources and cross-project dependencies.",
+          "Verify checkout changes do not reset state; planning access alone must not imply access to external evidence."
         ]
       }
     },
@@ -1601,7 +1641,8 @@
         ],
         "verification": [
           "./ci.sh on the declared toolchain; record stable/MSRV and platform results individually.",
-          "Run available cargo audit/deny checks and review license findings; document tools that were unavailable."
+          "Run available cargo audit/deny checks and review license findings; document tools that were unavailable.",
+          "Measure representative graph sizes before claiming scale; preserve revision-consistent queries and complete graph validation when optimizing."
         ]
       }
     },
@@ -1622,6 +1663,9 @@
         },
         {
           "text": "Respect repository permissions and explicit requirements for shared-history/tag actions; record any blocker rather than inventing success."
+        },
+        {
+          "text": "Registry/distribution availability is claimed only after verifying the published package, dependency order, release archives, checksums and supported target installation."
         }
       ],
       "status": "Planned",
@@ -1643,6 +1687,7 @@
       "artifact_ids": [
         "217b89c7-a7bc-5fc7-9278-212b3febf70b",
         "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "b0d5a43d-1ada-5322-ba2d-a6f235c5d211",
         "c28035da-dc5a-5058-a8fb-bd375aa71bda",
         "fcdcae00-adad-5569-b4fb-926602835c87"
       ],
@@ -1671,7 +1716,9 @@
         ],
         "verification": [
           "Check public repository visibility and resolve every linked artifact to the intended reviewed commit.",
-          "Re-run documented demo commands and applicable quality gates before publication."
+          "Re-run documented demo commands and applicable quality gates before publication.",
+          "Verify hosted CI against the intended source; local build or package inventory does not establish registry installation or unrun platforms.",
+          "Check package-manager name acceptance separately from GitHub naming; do not promise short upstream install commands without an actual accepted package."
         ]
       }
     },
@@ -1692,6 +1739,12 @@
         },
         {
           "text": "Test protocol examples without introducing a SaaS dependency."
+        },
+        {
+          "text": "Version the workspace/lineage, opaque revision, operation ID, principal/device and command/reason envelope; timestamps do not determine authoritative order."
+        },
+        {
+          "text": "Specify checkpoint plus operation recovery, durable pending/rejected proposals and tentative offline claims without treating wrapping local counters as global identity."
         }
       ],
       "status": "Planned",
@@ -1707,8 +1760,10 @@
         "sync"
       ],
       "requirement_ids": [
+        "2493971c-2616-5deb-b3a6-750e7d826522",
         "430279b8-809d-5dbf-9795-4b698c09aa6e",
         "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "c79a01b2-9102-5dce-9b1b-f67d67972424",
         "f334b834-595d-5136-af46-0b308c643c81"
       ],
       "artifact_ids": [
@@ -1721,7 +1776,7 @@
       "instructions": {
         "steps": [
           {
-            "action": "Specify semantic operation envelopes, base revisions, actor attribution and deduplication keys.",
+            "action": "Specify lineage-aware semantic envelopes, authoritative per-workspace ordering, durable outbox state and idempotent retries.",
             "expected_result": "Protocol examples define accepted, duplicate, stale and invalid operation outcomes."
           },
           {
@@ -1737,11 +1792,13 @@
           "Minimal operation/revision exchange contract and LocalOnly boundary."
         ],
         "out_of_scope": [
-          "SaaS dependencies, full collaboration transport or CRDT writes bypassing domain validation."
+          "SaaS dependencies, full collaboration transport or CRDT writes bypassing domain validation.",
+          "Cross-workspace federation, raw SQL/page synchronization or compulsory hosted SaaS."
         ],
         "verification": [
           "Test accepted/duplicate/stale/invalid exchange examples and deterministic conflict responses.",
-          "Run ./ci.sh and compare resulting operations to engine validation outcomes."
+          "Run ./ci.sh and compare resulting operations to engine validation outcomes.",
+          "Reject the same operation ID with different content and matching numeric revisions from different histories; recover gaps from a validated checkpoint."
         ]
       }
     },
@@ -1762,6 +1819,9 @@
         },
         {
           "text": "Test local credential rejection and principal attribution without building an account product."
+        },
+        {
+          "text": "Separate workspace permissions from repository/evidence access; bind authenticated principals at the service boundary and keep credentials out of shared locators and artifact URLs."
         }
       ],
       "status": "Planned",
@@ -1779,6 +1839,7 @@
       "requirement_ids": [
         "430279b8-809d-5dbf-9795-4b698c09aa6e",
         "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+        "ab68d6d6-0145-554f-980b-c5bb2bd4514b",
         "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
       ],
       "artifact_ids": [
@@ -1811,7 +1872,8 @@
         ],
         "verification": [
           "Test absent/invalid credentials, wrong workspace permission and attributable accepted operations.",
-          "Check self-verification rejection under principal mapping; run ./ci.sh."
+          "Check self-verification rejection under principal mapping; run ./ci.sh.",
+          "Reject spoofed actor strings, unauthorized workspace selection and credential-bearing shared configuration; preserve independent-verifier identity."
         ]
       }
     },
@@ -1832,6 +1894,9 @@
         },
         {
           "text": "Keep the storage/transport boundary explicit and avoid unimplemented collaboration promises."
+        },
+        {
+          "text": "Sequence accepted operations per workspace and atomically persist result/deduplication; portable database copies do not constitute enrollment."
         }
       ],
       "status": "Planned",
@@ -1882,7 +1947,8 @@
         ],
         "verification": [
           "Use ephemeral 127.0.0.1:0 listeners to test valid/invalid auth, stale operations and restart persistence.",
-          "Exercise graceful shutdown and atomic failure; run ./ci.sh and shared adapter checks."
+          "Exercise graceful shutdown and atomic failure; run ./ci.sh and shared adapter checks.",
+          "Retry an acknowledged operation without duplicating it; return the same typed conflict for stale proposals through each supported adapter."
         ]
       }
     },
@@ -1921,7 +1987,8 @@
       "requirement_ids": [
         "430279b8-809d-5dbf-9795-4b698c09aa6e",
         "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
-        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "c79a01b2-9102-5dce-9b1b-f67d67972424"
       ],
       "artifact_ids": [
         "7973b4e3-8557-5f76-866a-df2a4b8fef50",
@@ -1953,7 +2020,9 @@
         ],
         "verification": [
           "Use event synchronization and ephemeral ports; verify revision continuity and operation deduplication.",
-          "Test restarts and rejected invalid changes leave state intact; run ./ci.sh."
+          "Test restarts and rejected invalid changes leave state intact; run ./ci.sh.",
+          "Race disconnected claims and accept only one owner; retain the rejected proposal for review rather than silently dropping it.",
+          "Restart with pending outbox work, reconnect, deduplicate retries and verify snapshot/checkpoint lineage and final accepted state."
         ]
       }
     },
@@ -1974,6 +2043,9 @@
         },
         {
           "text": "Require separate implementation scope before selecting or building a production UI stack."
+        },
+        {
+          "text": "Work views expose contextual decisions with reasons/sources separately from blocking gates; pending collaboration state never appears as globally accepted ownership."
         }
       ],
       "status": "Planned",
@@ -1989,7 +2061,9 @@
         "ui"
       ],
       "requirement_ids": [
+        "2202b173-92fd-52d8-a2a2-d94275a7a48f",
         "430279b8-809d-5dbf-9795-4b698c09aa6e",
+        "ab68d6d6-0145-554f-980b-c5bb2bd4514b",
         "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
         "bf2a0e85-cd71-5fff-87ad-f66a8591a269"
       ],
@@ -2034,7 +2108,7 @@
       "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
       "kind": "Task",
       "title": "Bound rich text and CloudKit collaboration designs",
-      "objective": "Document optional comments/presence/CRDT and CloudKit integration points while preserving strongly validated execution state.",
+      "objective": "Specify optional text/presence and CloudKit boundaries as reviewed contracts and conflict examples while preserving validated execution state.",
       "acceptance": [
         {
           "text": "Separate text/presence data from lifecycle, gates, dependencies and permissions."
@@ -2080,15 +2154,16 @@
             "expected_result": "Conflict examples preserve domain checks and distinguish optional transport from local authority."
           },
           {
-            "action": "Document deferred resource/cost/portfolio/procurement extension points and separate implementation milestones.",
-            "expected_result": "A bounded design records non-goals without adding speculative domain enums or unfinished services."
+            "action": "Capture deferred extension constraints in linked work/requirements and executable contract examples.",
+            "expected_result": "The plan states scope and acceptance without a second narrative roadmap or speculative domain enums."
           }
         ],
         "in_scope": [
           "Design boundaries for optional rich text/presence and CloudKit integration."
         ],
         "out_of_scope": [
-          "Implement CRDT/CloudKit transport, relax execution invariants or expand into full enterprise portfolio/resource management."
+          "Implement CRDT/CloudKit transport, relax execution invariants or expand into full enterprise portfolio/resource management.",
+          "CRDT writes to lifecycle, dependencies, gates, ownership, acceptance or permissions; cross-workspace transactions and unmeasured large-portfolio claims."
         ],
         "verification": [
           "Review offline/conflict examples against semantic operation and authorization contracts.",
@@ -2159,7 +2234,7 @@
       "key": "REQ-SYNC-001",
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
       "title": "Validated collaboration",
-      "statement": "Any later network or credential adapter authenticates principals, checks revisions and routes operations through domain validation."
+      "statement": "Collaboration exchanges validated semantic operations and checkpoints within a workspace lineage. Bind principals to authentication, validate base revisions, deduplicate stable operation IDs, retain pending/rejected proposals and return explicit conflicts. Git, SQLite file copying and CRDT text merges cannot bypass domain invariants."
     },
     "bd186e65-ccd7-5720-abd2-1c75c67da7f6": {
       "id": "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
@@ -2167,6 +2242,41 @@
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
       "title": "Explicit stage authorization",
       "statement": "This seed is planning only. Broad roadmap entries, provisional estimates and existing source references are not execution authorization, completed work or release evidence."
+    },
+    "2493971c-2616-5deb-b3a6-750e7d826522": {
+      "id": "2493971c-2616-5deb-b3a6-750e7d826522",
+      "key": "REQ-WORKSPACE-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Repository-independent workspace identity",
+      "statement": "A workspace is one validated graph containing nested projects and code or non-code tasks. Stable workspace, project and task IDs survive checkout moves and repository renames; cross-project edges are validated together. Work-package containment stays within its project."
+    },
+    "ab68d6d6-0145-554f-980b-c5bb2bd4514b": {
+      "id": "ab68d6d6-0145-554f-980b-c5bb2bd4514b",
+      "key": "REQ-RESOURCE-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Portable resource references and local bindings",
+      "statement": "Tasks may reference zero, one or multiple resources. Shared resource IDs are independent of remote URLs and device-local checkout paths. Explicit locators select one workspace across repositories; ambiguous bindings fail and context filters are visible. Resource references do not count as completion evidence."
+    },
+    "2d5a1316-0b52-5ddc-aecc-23d92a73ec8b": {
+      "id": "2d5a1316-0b52-5ddc-aecc-23d92a73ec8b",
+      "key": "REQ-PORTABLE-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Lossless versioned plan interchange",
+      "statement": "TOML and JSON encode the same versioned interchange model independently of locator, API and storage schemas. Preserve supported authoritative values and IDs; exclude derived views, credentials and local bindings. Import validates and proposes changes at an observed revision without replacing live history or bypassing lifecycle verification."
+    },
+    "c79a01b2-9102-5dce-9b1b-f67d67972424": {
+      "id": "c79a01b2-9102-5dce-9b1b-f67d67972424",
+      "key": "REQ-STORAGE-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Durable operational state and recovery",
+      "statement": "SQLite holds durable standalone state or a collaborative replica with pending operations. Text exports may be stale and omit history; startup never rebuilds live state from them. Recovery preserves checkpoints, operation lineage and unsent work; active database files are not a file-sync protocol."
+    },
+    "2202b173-92fd-52d8-a2a2-d94275a7a48f": {
+      "id": "2202b173-92fd-52d8-a2a2-d94275a7a48f",
+      "key": "REQ-DECISION-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Decisions consumed with work",
+      "statement": "Explain returns relevant requirements and decisions with their rationale, source and status. Context associations do not gate execution. Reviewed decision replacement preserves prior rationale and identifies affected work for reassessment; source discussion or a recorded choice is not implementation or execution authorization."
     }
   },
   "artifacts": {
@@ -2206,7 +2316,7 @@
       "id": "2e7768c2-5844-53f4-9e45-3387c2eb79e5",
       "kind": "File",
       "uri": "repo:docs/architecture.md",
-      "label": "Local MVP capability and validation report; not independent acceptance",
+      "label": "Application architecture; not independent acceptance evidence",
       "metadata": {
         "path": "docs/architecture.md",
         "purpose": "source context, not task-completion evidence",
@@ -2311,6 +2421,38 @@
         "name": "roadmap-curator"
       },
       "created_at": "2026-09-26T06:32:05.434178Z"
+    },
+    "4b8243e7-0435-52dd-99db-d080846956c6": {
+      "id": "4b8243e7-0435-52dd-99db-d080846956c6",
+      "kind": "File",
+      "uri": "git:7797ea3a5814579fb6f9eced78536e418cad5d19:docs/workspaces-and-collaboration.md",
+      "label": "Workspace design discussion; not implementation or acceptance evidence",
+      "metadata": {
+        "commit": "7797ea3a5814579fb6f9eced78536e418cad5d19",
+        "path": "docs/workspaces-and-collaboration.md",
+        "role": "planning_source"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "planning-migration"
+      },
+      "created_at": "2026-09-26T09:50:46.081002Z"
+    },
+    "b0d5a43d-1ada-5322-ba2d-a6f235c5d211": {
+      "id": "b0d5a43d-1ada-5322-ba2d-a6f235c5d211",
+      "kind": "File",
+      "uri": "git:4efcce187a76dd04752baa3340e92ab4ac3abe14:docs/release-readiness.md",
+      "label": "Release preparation constraints; historical check results are not current evidence",
+      "metadata": {
+        "commit": "4efcce187a76dd04752baa3340e92ab4ac3abe14",
+        "path": "docs/release-readiness.md",
+        "role": "planning_source"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "planning-migration"
+      },
+      "created_at": "2026-09-26T09:50:46.081121Z"
     }
   },
   "decisions": {
@@ -2329,7 +2471,7 @@
       "id": "a7fb9363-39af-5e46-a1a1-2b05baa9fff4",
       "key": "DEC-BASELINE",
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
-      "question": "Which real source commit, local database and independent reviewer are approved for live self-hosting and publication evidence? The current MVP is not yet a committed/released baseline.",
+      "question": "Which source commit, operational workspace and independent reviewer are explicitly selected for the live self-host cycle and publication evidence?",
       "status": "Open",
       "outcome": null,
       "blocks": [
@@ -2362,6 +2504,100 @@
         "b6805961-ff6d-5d4e-9b95-82a46e79170c",
         "cc81da22-ff27-51ec-811f-7ffdcc4257b2"
       ]
+    },
+    "7d520a23-dcd3-5334-b325-7c385cfe2ca1": {
+      "id": "7d520a23-dcd3-5334-b325-7c385cfe2ca1",
+      "key": "DEC-WORKSPACE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "How do projects spanning repositories and non-code work share state?",
+      "status": "Decided",
+      "outcome": "Use one workspace graph with multiple entry points. Repository/resource identity is separate from local bindings; Git discovery boundaries remain conservative.",
+      "rationale": "Checkout layout differs between users and must not fragment project dependencies or create independent writable copies of the same workspace.",
+      "related_work": [
+        "24c9cece-f53f-569e-b653-0d3e583fd858",
+        "973bf299-2998-54fa-a1dc-a58d2f66eff8",
+        "b56fb8da-2746-5f32-b2d5-c121053aded2",
+        "cd3eed21-6613-5c8e-a874-5d62002f0c9b"
+      ],
+      "artifact_ids": [
+        "4b8243e7-0435-52dd-99db-d080846956c6"
+      ],
+      "blocks": []
+    },
+    "6b66a3f5-abe1-5d84-9b98-0bcc5a5ed9ae": {
+      "id": "6b66a3f5-abe1-5d84-9b98-0bcc5a5ed9ae",
+      "key": "DEC-INTERCHANGE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "What role do TOML and JSON have relative to operational state?",
+      "status": "Decided",
+      "outcome": "Use TOML for human plan interchange and JSON for the same machine model. Keep locator configuration separate; apply imported edits as validated semantic proposals.",
+      "rationale": "Reviewable text is useful for sharing, but an edited or stale export cannot safely overwrite lifecycle, independent verification or operation history.",
+      "related_work": [
+        "24c9cece-f53f-569e-b653-0d3e583fd858",
+        "b56fb8da-2746-5f32-b2d5-c121053aded2",
+        "cd3eed21-6613-5c8e-a874-5d62002f0c9b"
+      ],
+      "artifact_ids": [
+        "4b8243e7-0435-52dd-99db-d080846956c6"
+      ],
+      "blocks": []
+    },
+    "3e1bbddb-282e-5557-a40a-a00cd39c2298": {
+      "id": "3e1bbddb-282e-5557-a40a-a00cd39c2298",
+      "key": "DEC-DURABILITY",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "Is SQLite a disposable hot copy of a plan file?",
+      "status": "Decided",
+      "outcome": "Keep SQLite as durable local operational storage, including pending work in collaborative mode. Use consistent backups for recovery and semantic operations for synchronization.",
+      "rationale": "The latest committed or unsent actions can exist only in the local store; neither an older text snapshot nor copying a live main database file preserves that record.",
+      "related_work": [
+        "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
+        "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
+        "973bf299-2998-54fa-a1dc-a58d2f66eff8",
+        "9d92e316-9dd6-5d1c-8b2e-d876cb24aa1c",
+        "cd3eed21-6613-5c8e-a874-5d62002f0c9b"
+      ],
+      "artifact_ids": [
+        "4b8243e7-0435-52dd-99db-d080846956c6"
+      ],
+      "blocks": []
+    },
+    "b76b00cd-d98c-5526-b73b-e30ebf17cff8": {
+      "id": "b76b00cd-d98c-5526-b73b-e30ebf17cff8",
+      "key": "DEC-SYNC-ORDER",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "How should the first collaboration protocol order competing changes?",
+      "status": "Decided",
+      "outcome": "Use one logical sequencer per workspace, durable client outboxes and explicit revision conflicts. Offline claims are tentative until acknowledged; no automatic stale-command merge.",
+      "rationale": "Equal numeric revisions can have different histories, and disconnected agents cannot guarantee exclusive ownership. Conservative validation gives a testable first protocol without mandatory SaaS.",
+      "related_work": [
+        "0752410b-cd82-5af0-b289-e88a6138c82e",
+        "7b02eb97-e80f-56ee-a52c-33f492517ffa",
+        "973bf299-2998-54fa-a1dc-a58d2f66eff8",
+        "9d92e316-9dd6-5d1c-8b2e-d876cb24aa1c"
+      ],
+      "artifact_ids": [
+        "4b8243e7-0435-52dd-99db-d080846956c6"
+      ],
+      "blocks": []
+    },
+    "946a3b57-6bf1-52c9-a2d6-b26f77a92592": {
+      "id": "946a3b57-6bf1-52c9-a2d6-b26f77a92592",
+      "key": "DEC-WORK-CONTEXT",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "Where should durable planning choices be consumed?",
+      "status": "Decided",
+      "outcome": "Store constraints and concise choices in linked requirements/decisions; put future work in task contracts and implementation evidence in artifacts. Read them through explain rather than a parallel narrative plan.",
+      "rationale": "A decision needs an execution-time reader, scope and replacement handling; changing a prose document into a different file format does not keep it current.",
+      "related_work": [
+        "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
+        "24c9cece-f53f-569e-b653-0d3e583fd858",
+        "46190a5d-e9f7-5102-be21-40f587988e97"
+      ],
+      "artifact_ids": [
+        "4b8243e7-0435-52dd-99db-d080846956c6"
+      ],
+      "blocks": []
     }
   },
   "risks": {
@@ -2395,7 +2631,7 @@
       "id": "cf654136-d86c-5ad9-99e2-2dd5b817fe88",
       "key": "RISK-PLAN-EDIT",
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
-      "description": "The MVP cannot yet apply semantic task/dependency edits in place or expose full history/revert.",
+      "description": "A requested task/dependency edit or recovery workflow may exceed the operations exposed by the installed version.",
       "probability": 0.7,
       "impact": "Medium",
       "related_work": [

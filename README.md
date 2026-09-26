@@ -110,10 +110,9 @@ documents nested projects, cloned configurations and existing databases.
 
 A workspace may span several Git repositories and non-code projects. Use explicit project/database
 selection for a central local plan; automatic discovery remains conservative at Git boundaries.
-The [workspace and collaboration design](docs/workspaces-and-collaboration.md) defines the future
-portable TOML/JSON format, resource bindings and semantic operation sync. SQLite holds durable
-runtime state, not a disposable cache. Plan interchange currently uses JSON; TOML currently configures
-only project locators. Remote sync and portable repository bindings are not implemented yet.
+SQLite holds durable runtime state. Plan interchange uses JSON; TOML configures project locators.
+Inspect the prepared `CORE-10`, `CORE-20` and `SYNC-10` contracts with `explain` for future format,
+resource-binding and sync requirements, including their decision rationale and sources.
 
 Self-host is the only bundled example. `demo` explicitly initializes a copy in another project or
 an explicit database; it never overwrites existing state. Each task includes ordered actions and
@@ -183,8 +182,9 @@ release compilation, and a disposable-database CLI workflow and project-discover
 
 The self-host integration checks are read-only and require revision 0 with an empty operation log.
 The internal synthetic graph exercises the agent/human mutation loop, gates and downstream work.
-Read-only checks compare all 24 self-host task contracts through actual CLI and MCP processes.
-Complex changes should use an ExecPlan as described in [`PLANS.md`](PLANS.md).
+Read-only checks compare every self-host task contract through actual CLI and MCP processes.
+Keep future changes in task scope/acceptance and related requirements/decisions; inspect them with
+`cargo run -- explain CORE-10 --json`.
 
 ## Name
 

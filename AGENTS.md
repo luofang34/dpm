@@ -1,8 +1,8 @@
 # AGENTS.md
 
 This repository is designed to be worked on by humans and coding agents. Read this file before
-changing code. For substantial multi-file changes, also read `PLANS.md` and maintain an ExecPlan
-under `docs/exec/`.
+changing code. Keep scope and acceptance in existing task contracts, constraints in requirements,
+and choices in related decisions. Do not create a parallel Markdown planning system.
 
 ## Mission
 
@@ -39,8 +39,8 @@ The v0.1 product question is:
    over false precision. Deterministic CPM and probabilistic simulation are complementary views.
 7. **Human priority and schedule criticality are distinct.** Never conflate P0/P1 priority with
    zero float or Monte Carlo criticality.
-8. **Decisions are gates, not comments.** If a decision blocks work, `next` must not recommend that
-   work until the decision is resolved.
+8. **Gates are explicit.** `Decision.blocks` gates execution; `related_work` supplies context only.
+   An unresolved contextual decision must not block a task unless it also names it as blocked.
 9. **Identity exists even locally.** Every operation has a Human, Agent, or Service actor. Future
    passkeys, Sign in with Apple, OIDC, and device keys attach credentials to principals; they do
    not redefine the domain actor model.
@@ -83,7 +83,7 @@ Implement and harden:
 
 ## Explicit non-goals for v0.1
 
-Do not implement these unless an accepted ExecPlan explicitly advances the milestone:
+Do not implement these unless the user explicitly authorizes the corresponding task scope:
 
 - Gantt editor or drag/drop scheduling UI;
 - web, SwiftUI, Android, CloudKit, or hosted server;
@@ -212,17 +212,10 @@ incompatible source code into this repository.
 - This repository's locator selects an in-memory read-only preview. All adapters reject mutations
   on it; do not convert the preview to a live workspace merely to obtain executable tasks.
 
-## Workspace and interchange boundaries
+## Planning context
 
-- Follow [the workspace design](docs/workspaces-and-collaboration.md) when implementing format,
-  repository-binding or sync milestones. Its future contracts do not authorize their implementation.
-- Workspace/project/task identity is independent of Git repositories and local directory paths.
-  One workspace may span many repositories and non-code work; directory discovery is only selection.
-- Local SQLite state and unsent operations are durable data, never disposable cache. Never infer
-  that a tracked plan export contains all operation history or the newest state.
-- Keep locator TOML separate from plan interchange TOML/JSON. Current plans use JSON; adding the
-  intended TOML encoding requires a versioned DTO and semantic round-trip tests.
-- Imports and sync must pass through the same command/validation boundary. No file watcher, raw
-  SQLite replication, Git merge or CRDT may bypass it or silently overwrite running work.
-- Keep machine-specific checkout bindings and credentials out of shared plans and tracked locators.
-  Checkpoints/lineage, authentication, deduplication and durable pending work precede collaboration.
+- Read task-linked requirements and contextual decisions through `explain`; keep changes in the
+  existing self-host Plan until a live workspace is explicitly authorized.
+- A recorded design choice is not task completion or permission to execute. Preserve open gates.
+- Sources and rationale belong to decisions; concrete steps, exclusions and checks belong to work.
+  Historical verification belongs to its commit/artifact, not a duplicated current-status document.

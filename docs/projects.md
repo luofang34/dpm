@@ -119,6 +119,5 @@ yet. Several processes on the same machine may open the same local workspace; co
 onto another device does not establish collaboration. Do not put live SQLite files on a shared
 network/cloud folder as a sync mechanism.
 
-The [workspace and collaboration design](workspaces-and-collaboration.md) defines the planned
-separation between TOML/JSON interchange, durable SQLite state, device-local bindings and semantic
-operation exchange. Today TOML is only the locator format; plan import/export still uses JSON.
+For planned resource bindings and operation exchange, inspect `CORE-20` and `SYNC-10` in this
+repository's prepared plan with `explain`. TOML is the locator format; plan import/export uses JSON.

@@ -22,8 +22,8 @@ block application-store builds. Tools that run as separate processes are evaluat
 
 ## Making a change
 
-Read [AGENTS.md](AGENTS.md) for the architectural invariants and engineering rules, and
-[PLANS.md](PLANS.md) for when an ExecPlan is required. Keep one issue per change and include the
+Read [AGENTS.md](AGENTS.md) for the architectural invariants and engineering rules. Keep scope and
+acceptance in the relevant task contract. Keep one issue per change and include the
 regression test or guard that protects it. Run the full local pipeline before submitting:
 
 ```sh

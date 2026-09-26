@@ -36,6 +36,7 @@ fn prepared_contracts_have_no_owners_progress_or_implicit_authorization() {
     assert!(
         plan.decisions
             .values()
+            .filter(|d| !d.blocks.is_empty())
             .all(|d| d.status == DecisionStatus::Open && d.outcome.is_none())
     );
     for item in plan.work_items.values() {
@@ -65,6 +66,63 @@ fn prepared_contracts_have_no_owners_progress_or_implicit_authorization() {
         }
     }
     assert_eq!(plan, before);
+}
+
+#[test]
+fn recorded_design_choices_are_context_and_never_execution_approval() {
+    let plan = fixture();
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../examples/self-host/dpm-alpha.expected.json"
+    ))
+    .expect("expected");
+    let choices = expected["context_decisions"].as_object().expect("choices");
+    for (key, tasks) in choices {
+        let decision = plan.find_decision_by_key(key).expect("recorded choice");
+        assert_eq!(decision.status, DecisionStatus::Decided);
+        assert!(decision.blocks.is_empty());
+        assert!(
+            decision
+                .rationale
+                .as_ref()
+                .is_some_and(|r| !r.trim().is_empty())
+        );
+        assert!(!decision.artifact_ids.is_empty());
+        let task_ids: BTreeSet<_> = tasks
+            .as_array()
+            .expect("tasks")
+            .iter()
+            .map(|key| {
+                plan.find_work_by_key(key.as_str().expect("key"))
+                    .expect("task")
+                    .id
+            })
+            .collect();
+        assert_eq!(decision.related_work, task_ids);
+        for id in &decision.artifact_ids {
+            assert_eq!(plan.artifacts[id].metadata["role"], "planning_source");
+        }
+    }
+    for work in plan.work_items.values().filter(|w| w.is_executable()) {
+        let detail = explain_work(&plan, work.id).expect("explain");
+        for decision in plan
+            .decisions
+            .values()
+            .filter(|d| choices.contains_key(&d.key.0))
+        {
+            assert_eq!(
+                detail.context.decisions.contains(decision),
+                decision.related_work.contains(&work.id)
+            );
+            if decision.related_work.contains(&work.id) {
+                for id in &decision.artifact_ids {
+                    assert!(detail.context.artifacts.iter().any(|a| a.id == *id));
+                }
+            }
+        }
+        assert!(!detail.ready);
+        assert_eq!(work.status, WorkStatus::Planned);
+    }
+    assert_eq!(plan.revision, 0);
 }
 
 #[test]

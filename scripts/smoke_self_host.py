@@ -35,6 +35,14 @@ def audit_contracts(database, actor, plan, expected):
         context = detail['context']
         assert context['requirements'] and context['artifacts'] and context['risks'], key
         assert expected['execution_gate'] in {gate['key'] for gate in context['decisions']}, key
+        choices = expected['context_decisions']
+        actual_choices = {d['key']: d for d in context['decisions'] if d['key'] in choices}
+        assert set(actual_choices) == {choice for choice, tasks in choices.items() if key in tasks}, key
+        source_ids = {artifact['id'] for artifact in context['artifacts']}
+        for decision in actual_choices.values():
+            assert decision['status'] == 'Decided' and not decision['blocks'], key
+            assert decision['rationale'].strip() and decision['artifact_ids'], key
+            assert set(decision['artifact_ids']) <= source_ids, key
         edges = [d for d in plan['dependencies'] if task['id'] in (d['predecessor'], d['successor'])]
         assert context['dependencies'] == edges, key
     print(f"PASS: all {len(tasks)} task contracts expose ordered steps, scope, acceptance and resolved context identically through CLI/MCP", flush=True)

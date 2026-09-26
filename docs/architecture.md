@@ -62,9 +62,9 @@ milestones.
 
 SQLite is durable operational state, not a disposable cache of an exported plan. A workspace can
 span multiple repositories and non-code projects; Git roots affect discovery, not domain scope.
-The [workspace and collaboration design](workspaces-and-collaboration.md) specifies future
-TOML/JSON interchange, local resource bindings and operation-based sync. These are design contracts;
-TOML plan import/export and remote sync are not implemented by the current locator/store.
+Future format, resource and sync requirements live in the prepared `CORE-10/20` and `SYNC-10`
+contracts. `explain` resolves their requirements and decision rationale; those records do not
+implement TOML plan import/export or remote sync.
 
 ## Git
 
@@ -105,3 +105,8 @@ model validates present instructions at import/command boundaries; existing snap
 this additive field. Both CLI and MCP serialize these same domain values through `dpm-app`.
 Instructions contain no execution code, grant no authorization and never bypass decision gates.
 The sole example supplies complete contracts while its tasks remain unstarted.
+
+`Decision.related_work` adds a choice/question to a task's context without gating it. `blocks`
+alone controls gating; both associations inherit through work-package ancestors. Optional rationale
+and source artifact references are returned by `explain`, and source artifacts remain distinct from
+completion evidence attached to work. Inputs without these optional fields remain compatible.

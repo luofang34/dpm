@@ -1,8 +1,8 @@
 # DPM manages dpm — prepared example
 
 This is the default `dpm demo` plan. It is a **prepared roadmap, not a started project**.
-It uses the existing domain model, with 24 task contracts, 9 work packages, 8 zero-duration
-milestones, 10 requirements, 4 open decisions, 5 risks and 9 context artifacts.
+It uses the domain model for task contracts, work packages, zero-duration milestones,
+requirements, decision gates, recorded design choices, risks and source artifacts.
 
 The implementation currently supports **TUI MVP plus agent task understanding and operations**.
 The longer roadmap is planning data only. Do not claim, report progress, submit, verify, resolve
@@ -84,9 +84,17 @@ Gates are separate from technical capability. Do not resolve one merely because 
 The MVP trusts local actor identities; these gates express planning intent and are not an external
 authentication system. Future credentials must not be confused with the seed's artifact author.
 
+`explain CORE-10`, `explain CORE-20` and `explain SYNC-10` expose the relevant design choices,
+reasons and sources alongside constraints and acceptance checks. Their `related_work` links supply
+context; empty `blocks` means they are not authorization gates. Choosing a design does not start
+or complete its implementation task. Release preparation is in `QA-20/30`.
+
 `repo:PATH` artifacts refer to files relative to this repository. They are source context, not
 completion evidence. Their `created_by` service only records who prepared the references, not a
 reviewer. Source references are not claimed public releases, review approvals or execution evidence.
+`git:COMMIT:PATH` sources identify historical discussion in Git; they are not live files or claims
+that historical checks still pass. Inspect them with `git show COMMIT:PATH` in a clone containing
+that history.
 
 After an explicit later start instruction, use the existing operation names from
 [the CLI/MCP contract](../../docs/mcp.md). No `start`, `propose-change`, `history` or `revert` command
