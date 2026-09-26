@@ -144,7 +144,7 @@ protected like the rest of its prerequisite basis. A human or service may waive 
 edge, or restore a waived one, with a nonempty reason; `Hard` edges cannot be waived and agents may
 do neither. The waiver's actor, time and reason stay on the edge until restoration, and each waiver
 or restoration is a semantic operation in the history. Plan changes cannot add, alter or remove a
-waiver.
+waiver, and a waived edge must be restored before a reviewed change edits or removes it.
 
 A waived edge no longer gates claims, verification or milestone completion, and no longer bounds
 the remaining forecast or simulation. It still counts for cycle validation, the baseline schedule,

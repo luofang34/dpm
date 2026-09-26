@@ -37,6 +37,8 @@ fn edge_mut(plan: &mut Plan, id: DependencyId) -> &mut Dependency {
         .expect("edge")
 }
 
+type EdgeEdit = fn(&mut Dependency, WorkItemId);
+
 /// Adds soft SS and FF relations between TEST-A and TEST-C through a reviewed change.
 fn with_parallel_relations() -> (Plan, DependencyId, DependencyId) {
     let mut plan = fixture();
@@ -257,4 +259,53 @@ fn duplicate_identities_missing_endpoints_cycles_and_stale_revisions_fail_atomic
         assert!(applied.to_string().contains(fragment), "{applied}");
         assert_eq!(plan, before);
     }
+}
+
+#[test]
+fn a_waiver_never_moves_with_an_edited_or_removed_edge() {
+    let (mut plan, ss, _) = with_parallel_relations();
+    run(
+        &mut plan,
+        ActorId::human("lead"),
+        Command::WaiveDependency {
+            dependency: ss,
+            reason: "overlap accepted".into(),
+        },
+    )
+    .expect("waive");
+    let other = key(&plan, "TEST-D");
+    let edits: [(&str, EdgeEdit); 4] = [
+        ("retarget", |e, w| e.successor = w),
+        ("re-source", |e, w| e.predecessor = w),
+        ("re-kind", |e, _| e.kind = DependencyKind::StartFinish),
+        ("lag", |e, _| e.lag_hours = 40.0),
+    ];
+    for (name, edit) in edits {
+        let mut proposal = plan.clone();
+        edit(edge_mut(&mut proposal, ss), other);
+        let before = plan.clone();
+        let error = apply(&mut plan, proposal).expect_err(name);
+        assert!(
+            error.to_string().contains("restore a waived dependency"),
+            "{name}: {error}"
+        );
+        assert_eq!(plan, before, "{name}");
+    }
+    let mut removed = plan.clone();
+    removed.dependencies.retain(|e| e.id != ss);
+    let before = plan.clone();
+    assert!(apply(&mut plan, removed).is_err());
+    assert_eq!(plan, before);
+    run(
+        &mut plan,
+        ActorId::human("lead"),
+        Command::RestoreDependency {
+            dependency: ss,
+            reason: "edit the constraint instead".into(),
+        },
+    )
+    .expect("restore");
+    let mut retargeted = plan.clone();
+    edge_mut(&mut retargeted, ss).lag_hours = 40.0;
+    apply(&mut plan, retargeted).expect("unwaived edges are edited through review");
 }
