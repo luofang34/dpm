@@ -82,39 +82,39 @@ pub(crate) enum Commands {
     /// Approve a proposed contract with objective and acceptance criteria.
     Ratify {
         key: String,
-        #[arg(long, default_value = "human:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Return submitted work to its owner with an independent review.
     Reject {
         key: String,
         reason: String,
-        #[arg(long, default_value = "human:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Reserve a ready work item; a claim is not a start.
     Claim {
         key: String,
-        #[arg(long, default_value = "agent:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Start owned claimed work, recording the start event SS/SF successors wait for.
     Start {
         key: String,
-        #[arg(long, default_value = "agent:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Mark work blocked with a concrete reason.
     Block {
         key: String,
         reason: String,
-        #[arg(long, default_value = "human:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Resume blocked work, retaining its owner when claimed.
     Unblock {
         key: String,
-        #[arg(long, default_value = "human:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Report owned task progress (0..100); 100% still requires submission and verification.
@@ -123,7 +123,7 @@ pub(crate) enum Commands {
         percent: u8,
         #[arg(long)]
         note: Option<String>,
-        #[arg(long, default_value = "agent:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Submit started work for verification once its FF/SF prerequisites are released.
@@ -131,7 +131,7 @@ pub(crate) enum Commands {
         key: String,
         #[arg(long)]
         note: Option<String>,
-        #[arg(long, default_value = "agent:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Verify submitted work, recording the finish event FS/FF successors wait for.
@@ -139,20 +139,20 @@ pub(crate) enum Commands {
         key: String,
         #[arg(long)]
         note: Option<String>,
-        #[arg(long, default_value = "human:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Resolve an open decision; a decision with options takes exactly one option key as outcome.
     Decide {
         key: String,
         outcome: String,
-        #[arg(long, default_value = "human:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Attach the current Git commit as an artifact to a work item.
     AttachGitHead {
         key: String,
-        #[arg(long, default_value = "agent:local")]
+        #[arg(long)]
         actor: String,
         /// Repository resource represented by the current checkout; defaults to the locator binding.
         #[arg(long)]
@@ -162,7 +162,7 @@ pub(crate) enum Commands {
     Artifact {
         key: String,
         file: PathBuf,
-        #[arg(long, default_value = "agent:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Link work to an external tracker object; context only, never evidence or verification.
@@ -182,7 +182,7 @@ pub(crate) enum Commands {
         /// Reported external state (open, closed, merged); recorded only as an observation.
         #[arg(long)]
         observed: Option<String>,
-        #[arg(long, default_value = "agent:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Remove a work item's link to an external tracker object.
@@ -190,7 +190,7 @@ pub(crate) enum Commands {
         key: String,
         #[command(flatten)]
         identity: ExternalIdentityArgs,
-        #[arg(long, default_value = "agent:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Open the Ratatui operator console.
@@ -201,7 +201,7 @@ pub(crate) enum Commands {
         dependency: String,
         #[arg(long)]
         reason: String,
-        #[arg(long, default_value = "human:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Enforce a waived soft dependency again as a human or service.
@@ -210,7 +210,7 @@ pub(crate) enum Commands {
         dependency: String,
         #[arg(long)]
         reason: String,
-        #[arg(long, default_value = "human:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Re-base started work on a predecessor's current attempt after the relied-on one was rejected.
@@ -225,7 +225,7 @@ pub(crate) enum Commands {
         attempt: u32,
         #[arg(long)]
         reason: String,
-        #[arg(long, default_value = "human:local")]
+        #[arg(long)]
         actor: String,
     },
 }
@@ -271,7 +271,7 @@ pub(crate) enum PlanCommand {
         file: PathBuf,
         #[arg(long)]
         reason: String,
-        #[arg(long, default_value = "human:local")]
+        #[arg(long)]
         actor: String,
     },
     /// Map a Microsoft Project XML (MSPDI) file onto a reviewed candidate; changes nothing.

@@ -7,11 +7,11 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from smoke_agent import Agent, CLI, MCP, ROOT
+from smoke_agent import Agent, CLI, MCP, ROOT, with_actor
 
 
 def cli(cwd, *arguments, error=None):
-    result = subprocess.run([str(CLI), '--json', *map(str, arguments)], cwd=cwd,
+    result = subprocess.run([str(CLI), '--json', *map(str, with_actor(arguments))], cwd=cwd,
                             capture_output=True, text=True, timeout=30)
     value = json.loads(result.stdout)
     if error:
@@ -115,7 +115,7 @@ def bindings(directory):
     cli(directory, '--database', database, 'import', ROOT / 'tests/support/execution-plan.json')
     env = {**os.environ, 'DPM_CONFIG_DIR': str(directory / 'config')}
     def local(*args, error=None):
-        result = subprocess.run([str(CLI), '--json', *map(str, args)], cwd=directory, env=env, capture_output=True, text=True, timeout=30)
+        result = subprocess.run([str(CLI), '--json', *map(str, with_actor(args))], cwd=directory, env=env, capture_output=True, text=True, timeout=30)
         value = json.loads(result.stdout)
         if error:
             assert result.returncode and value['error']['code'] == error, value

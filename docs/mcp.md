@@ -6,10 +6,13 @@ The same [project discovery](projects.md) rules apply to CLI and MCP; the reposi
 project mutations with `read_only_project` and never creates a project database.
 The configured actor is the local principal for every project mutation. A separate verifier process uses
 `--actor human:reviewer` or a service actor. This is a trusted local workspace, not remote authentication.
+Every CLI mutation likewise requires an explicit `--actor KIND:NAME`; there is no default identity, so
+omitting it can never make one caller its own reviewer.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
 The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:6`
-and the observed `revision`, so an agent can send `base_revision` with its next mutation. CLI callers
+and the observed `revision`; every MCP mutation tool requires that `base_revision`, and a call without it
+is refused with `invalid_request`. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
 which the store still checks atomically. Presentation text is not the API contract.
 

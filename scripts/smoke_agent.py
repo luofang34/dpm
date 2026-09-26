@@ -55,8 +55,28 @@ class Agent:
         self.process.stderr.close()
 
 
+# The CLI requires an explicit actor for every mutation; these smoke defaults name who acts.
+WORKER_COMMANDS = {'claim', 'start', 'progress', 'block', 'unblock', 'submit', 'artifact', 'attach-git-head',
+                   'link-external', 'unlink-external'}
+REVIEW_COMMANDS = {'verify', 'reject', 'ratify', 'decide', 'waive-dependency', 'restore-dependency', 'revalidate-basis'}
+
+
+def with_actor(args):
+    rest = [str(a) for a in args]
+    while rest and rest[0] in {'--base-revision', '--project', '--database', '--db'}:
+        rest = rest[2:]
+    command = rest[:2] if rest[:1] == ['plan'] else rest[:1]
+    if '--actor' in rest or not command:
+        return list(args)
+    if command == ['plan', 'apply'] or command[0] in REVIEW_COMMANDS:
+        return [*args, '--actor', 'human:local']
+    if command[0] in WORKER_COMMANDS:
+        return [*args, '--actor', 'agent:local']
+    return list(args)
+
+
 def run_cli(database, *args, error=None):
-    result = subprocess.run([str(CLI), '--database', str(database), '--json', *args], cwd=ROOT, capture_output=True, text=True, timeout=15)
+    result = subprocess.run([str(CLI), '--database', str(database), '--json', *with_actor(args)], cwd=ROOT, capture_output=True, text=True, timeout=15)
     value = json.loads(result.stdout)
     if error:
         assert result.returncode != 0 and value['error']['code'] == error, (args, value)
@@ -86,6 +106,12 @@ def smoke(database):
             ('claim_work', {'key': 'missing', 'base_revision': 0}, ('claim', 'missing')),
             ('decide_gate', {'decision': 'missing', 'outcome': 'choice', 'base_revision': 0}, ('decide', 'missing', 'choice')),
         ]
+        # Omitting the actor must never let one caller act as its own independent reviewer.
+        before = run_cli(database, 'export')
+        for command in (['claim', 'TEST-A'], ['verify', 'TEST-A'], ['ratify', 'TEST-A'], ['plan', 'apply', 'x.json', '--reason', 'r']):
+            refused = subprocess.run([str(CLI), '--database', str(database), '--json', *command], cwd=ROOT, capture_output=True, text=True, timeout=15)
+            assert refused.returncode != 0 and '--actor' in refused.stderr, (command, refused.stderr)
+        assert run_cli(database, 'export') == before
         for tool, arguments, command in missing_pairs:
             agent_error = worker.call(tool, arguments, error='not_found')
             cli_error = run_cli(database, *command, error='not_found')['error']
