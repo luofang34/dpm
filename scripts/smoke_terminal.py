@@ -5,7 +5,6 @@ import fcntl
 import os
 import pty
 import select
-import signal
 import sqlite3
 import struct
 import subprocess
@@ -33,11 +32,12 @@ class Console:
             env={**os.environ, 'TERM': 'xterm-256color', 'NO_COLOR': '1'},
             preexec_fn=controlling_terminal,
         )
+        os.close(self.slave)
         self.output = b''
         self.reply_offset = 0
 
     def size(self, columns, rows):
-        fcntl.ioctl(self.slave, termios.TIOCSWINSZ, struct.pack('HHHH', rows, columns, 0, 0))
+        fcntl.ioctl(self.master, termios.TIOCSWINSZ, struct.pack('HHHH', rows, columns, 0, 0))
 
     def read_until(self, marker, start=0):
         deadline = time.monotonic() + 15
@@ -65,6 +65,22 @@ class Console:
 
     def stop(self, key):
         self.key(key, b'\x1b[?1049l')
+        # Drain output before waiting: a PTY close can wait for its final cursor bytes.
+        deadline = time.monotonic() + 15
+        while True:
+            remaining = deadline - time.monotonic()
+            assert remaining > 0, self.output[-6000:]
+            readable, _, _ = select.select([self.master], [], [], remaining)
+            assert readable, self.output[-6000:]
+            try:
+                chunk = os.read(self.master, 65536)
+            except OSError as error:
+                if error.errno != errno.EIO:
+                    raise
+                break
+            if not chunk:
+                break
+            self.output += chunk
         self.process.wait(timeout=5)
         assert self.process.returncode == 0, self.output[-6000:]
         assert b'\x1b[?1000l' in self.output, 'mouse capture not disabled'
@@ -72,10 +88,10 @@ class Console:
 
     def close(self):
         if self.process.poll() is None:
-            os.killpg(self.process.pid, signal.SIGKILL)
+            self.process.kill()
             self.process.wait(timeout=5)
         os.close(self.master)
-        os.close(self.slave)
+
 
 
 def smoke(directory):
