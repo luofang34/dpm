@@ -129,6 +129,12 @@ fn why_now(
                 Transition::Claim => "work can be claimed now: every FS/SS predecessor event and positive lag has elapsed and no decision gates it".into(),
                 other => format!("work can {other} now: every gate for this transition is satisfied"),
             });
+            why_now.extend(
+                report
+                    .provisional
+                    .iter()
+                    .map(crate::ProvisionalRelease::describe),
+            );
         } else {
             why_now.extend(report.reasons());
         }

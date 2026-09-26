@@ -199,33 +199,35 @@ fn status_of(plan: &Plan, work: &WorkItem, basis: &DependencyBasis) -> Option<Ba
     })
 }
 
-/// Release of an edge for the successor's start, and the pending attempt it relies on, if any.
+/// Release of an edge for the successor's start, and the predecessor attempt it was measured from.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StartRelease {
     /// Release state at the timeline's clock reading.
     pub release: Release,
-    /// Pending predecessor attempt that released a provisional edge; `None` for a verified finish.
+    /// Predecessor attempt whose submission time a provisional release is measured from.
     pub attempt: Option<u32>,
+    /// Whether that attempt still awaits review, so a start on it relies on an unverified result.
+    pub provisional: bool,
 }
 
 impl Timeline {
     /// Evaluate an edge for the successor's claim or start.
     ///
-    /// A provisional edge whose predecessor is not yet verified releases on the predecessor's
-    /// pending attempt plus positive lag. Every other evaluation, including the successor's
-    /// verification and milestone reach, uses [`Timeline::edge`], so a submission never counts as
-    /// a finish there. A legacy submission without an attempt record has nothing a basis could
-    /// reference, so its edge waits for verification.
+    /// A provisional edge releases on the predecessor's current attempt's submission plus positive
+    /// lag until its verified finish releases it, so verifying that attempt never pushes an
+    /// elapsing start gate later. Every other evaluation, including the successor's verification
+    /// and milestone reach, uses [`Timeline::edge`], so a submission never counts as a finish
+    /// there. A legacy submission without an attempt record has nothing a basis could reference,
+    /// so its edge waits for verification.
     #[must_use]
     pub fn start_edge(&self, plan: &Plan, edge: &Dependency) -> StartRelease {
         let release = self.edge(plan, edge);
-        let pending = (edge.start_basis == StartBasis::Provisional
-            && matches!(release, Release::AwaitingEvent))
+        let current = (edge.start_basis == StartBasis::Provisional
+            && release.released_at().is_none())
         .then(|| plan.work_items.get(&edge.predecessor))
         .flatten()
-        .and_then(WorkItem::current_attempt)
-        .filter(|a| a.outcome == AttemptOutcome::Pending);
-        match pending {
+        .and_then(WorkItem::current_attempt);
+        match current {
             Some(attempt) => StartRelease {
                 release: Release::evaluate(
                     Some(EventTime::Recorded(attempt.submitted_at)),
@@ -233,10 +235,12 @@ impl Timeline {
                     self.now(),
                 ),
                 attempt: Some(attempt.number),
+                provisional: attempt.outcome == AttemptOutcome::Pending,
             },
             None => StartRelease {
                 release,
                 attempt: None,
+                provisional: false,
             },
         }
     }

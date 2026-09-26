@@ -170,7 +170,8 @@ Each submission appends a `SubmissionAttempt` with a deterministic per-task ordi
 verification close it in place, so attempts are never removed or renumbered. A finish-to-start edge
 between tasks may declare `start_basis = Provisional`, an authoritative policy changed only by
 reviewed plan change. `Timeline::start_edge` releases such an edge for the successor's claim and
-start on the predecessor's pending attempt plus positive lag; every other evaluation, including the
+start on the submission of the predecessor's current (pending or verified) attempt plus positive
+lag, so verifying that attempt never delays an elapsing start; every other evaluation, including the
 successor's submission and verification, milestone reach, progress and the remaining forecast, uses
 `Timeline::edge`, so a submission never counts as a finish. A submission recorded before attempts
 existed has no identity to rely on and does not release the edge.

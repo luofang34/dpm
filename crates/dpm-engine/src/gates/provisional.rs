@@ -20,6 +20,17 @@ pub(super) fn basis_gates(plan: &Plan, work: &WorkItem) -> Vec<UnmetGate> {
         .collect()
 }
 
+impl super::ProvisionalRelease {
+    /// Human-readable reliance on an unverified attempt, shared by `explain` and `next`.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        format!(
+            "provisional: {} attempt #{} is only submitted; a start relies on it, and verification still requires its verified finish",
+            self.key, self.attempt
+        )
+    }
+}
+
 pub(super) fn describe_start(
     key: &str,
     release: Release,

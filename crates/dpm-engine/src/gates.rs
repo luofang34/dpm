@@ -165,11 +165,11 @@ pub(crate) fn evaluate(
             StartRelease {
                 release: timeline.edge(plan, dep),
                 attempt: None,
+                provisional: false,
             }
         };
         match (edge.release.released_at(), edge.attempt) {
-            (Some(_), None) => {}
-            (Some(_), Some(attempt)) => provisional.push(ProvisionalRelease {
+            (Some(_), Some(attempt)) if edge.provisional => provisional.push(ProvisionalRelease {
                 dependency: dep.id,
                 predecessor: item.id,
                 key: item.key.to_string(),
@@ -183,6 +183,7 @@ pub(crate) fn evaluate(
                 edge.release,
                 attempt,
             )),
+            (Some(_), _) => {}
         }
     }
     if transition.checks_basis() {

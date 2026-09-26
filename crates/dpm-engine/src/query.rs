@@ -261,12 +261,12 @@ fn candidate(
         "start gates are satisfied: every FS/SS predecessor event and positive lag has elapsed"
             .into(),
     );
-    for release in &claim.provisional {
-        reasons.push(format!(
-            "provisional: {} attempt #{} is only submitted; a start relies on it, and verification still requires its verified finish",
-            release.key, release.attempt
-        ));
-    }
+    reasons.extend(
+        claim
+            .provisional
+            .iter()
+            .map(crate::ProvisionalRelease::describe),
+    );
     let pending_finish = finish
         .unmet
         .iter()

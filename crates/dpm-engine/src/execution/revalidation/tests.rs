@@ -382,6 +382,30 @@ fn provisional_lag_elapses_from_the_attempt_and_a_verified_basis_needs_no_review
 }
 
 #[test]
+fn verifying_the_attempt_never_delays_an_elapsing_provisional_start() {
+    let mut p = provisional(24.0, DependencyPolicy::Hard);
+    let (a, b) = (p.a, p.b);
+    ok(&mut p.plan, &author(), Command::Claim { work: a }, 0);
+    ok(&mut p.plan, &author(), Command::Start { work: a }, 0);
+    ok(&mut p.plan, &author(), submit(a), 1);
+    ok(&mut p.plan, &reviewer(), verify(a), 5);
+    let report = gate_report(&p.plan, b, Transition::Claim, t(24)).expect("report");
+    let [UnmetGate::Dependency { release, .. }] = report.unmet.as_slice() else {
+        panic!("the lag from attempt 1 is still elapsing: {report:?}");
+    };
+    assert!(matches!(release, Release::Elapsing { opens_at, .. } if *opens_at == t(25)));
+    assert!(agree(&p.plan, 24).is_empty());
+    let open = gate_report(&p.plan, b, Transition::Claim, t(25)).expect("report");
+    assert!(open.ready && open.provisional.is_empty(), "{open:?}");
+    ok(&mut p.plan, &builder(), Command::Claim { work: b }, 25);
+    ok(&mut p.plan, &builder(), Command::Start { work: b }, 25);
+    assert!(
+        p.plan.work_items[&b].basis.is_empty(),
+        "a verified attempt is not a provisional basis"
+    );
+}
+
+#[test]
 fn revalidation_is_an_independent_human_or_service_review() {
     let mut p = provisional(0.0, DependencyPolicy::Hard);
     let (a, b) = (p.a, p.b);

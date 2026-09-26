@@ -276,8 +276,10 @@ no attempt record and remain valid.
 A finish-to-start edge between two tasks may carry `start_basis: "Provisional"`, set or cleared
 only through reviewed `apply_change` like `policy` (and, like every edge into started work, frozen
 once its successor is claimed). For the successor's `claim` and `start` gates it releases on the
-predecessor's pending attempt plus positive lag; `gates.provisional[]` names each edge released
-this way with the `attempt` relied on, and `next_work` reasons say so. A legacy submission without
+submission of the predecessor's current (pending or verified) attempt plus positive lag, so
+verifying that attempt never delays an elapsing start; `gates.provisional[]` names each edge
+released on a still-pending attempt with the `attempt` relied on, and `why_now` and `next_work`
+reasons say so. A legacy submission without
 an attempt record does not release it. `submit`, `verify`, milestone completion, progress and the
 remaining forecast still wait for the predecessor's verified finish: in `transitions.verify` the
 edge appears with `start_basis: "Provisional"` and no `accepts_submission`.

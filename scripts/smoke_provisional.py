@@ -44,6 +44,10 @@ def provisional_smoke(directory):
             author.call(tool, {'key': 'TEST-A', 'base_revision': revision})
         claimable = same_views(builder, database)
         assert claimable['ready'] and [r['attempt'] for r in claimable['gates']['provisional']] == [1]
+        reliance = 'provisional: TEST-A attempt #1 is only submitted'
+        assert any(reliance in reason for reason in claimable['why_now'])
+        [candidate] = [c for c in builder.call('next_work', {'probabilistic': False})['data']['candidates'] if c['work']['key'] == 'TEST-B']
+        assert any(reliance in reason for reason in candidate['reasons'])
         builder.call('claim_work', {'key': 'TEST-B', 'base_revision': 3})
         run_cli(database, 'start', 'TEST-B', '--actor', 'agent:builder')
         started = same_views(builder, database)
