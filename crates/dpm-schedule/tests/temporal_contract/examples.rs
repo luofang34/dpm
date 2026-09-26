@@ -189,7 +189,13 @@ fn assert_cycle_rejected(net: &Network, label: &str) {
         iterations: 4,
         seed: 1,
     };
-    assert!(simulate(&net.plan, config).is_err(), "{label}: simulation");
+    assert!(
+        matches!(
+            simulate(&net.plan, config),
+            Err(ScheduleError::Validation(_))
+        ),
+        "{label}: simulation validates the plan first"
+    );
     assert_eq!(
         net.plan, before,
         "{label}: rejection must not edit the plan"
