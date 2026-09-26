@@ -3,12 +3,12 @@
 Run `dpm-mcp --actor agent:coder` as a stdio subprocess inside a configured project.
 Use `--project DIR` for an exact project, or `--database PATH` (`--db` alias) for a SQLite file.
 The same [project discovery](projects.md) rules apply to CLI and MCP; the repository preview rejects
-mutations with `read_only_project` and never creates a database.
-The configured actor is the local principal for every mutation. A separate verifier process uses
+project mutations with `read_only_project` and never creates a project database.
+The configured actor is the local principal for every project mutation. A separate verifier process uses
 `--actor human:reviewer` or a service actor. This is a trusted local workspace, not remote authentication.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
-The CLI's `--json` output equals the MCP result's `structuredContent.data`. MCP adds `api_version:2`
+The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:2`
 and the observed `revision`, so an agent can send `base_revision` with its next mutation. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
 which the store still checks atomically. Presentation text is not the API contract.
@@ -19,6 +19,8 @@ which the store still checks atomically. Presentation text is not the API contra
 | next | next_work | Eligible leaf tasks, deterministic ranking and reasons |
 | show KEY | get_work | Objective, steps/results, scope, acceptance/checks and derived status |
 | explain KEY | explain_work | Readiness, dependencies, resolved requirements/gates/risks/evidence |
+| ratify KEY | ratify_contract | Human/service approves a complete Proposed contract |
+| reject KEY REASON | reject_work | Independent reviewer returns Submitted work for rework |
 | claim KEY | claim_work | Claim only ready tasks |
 | block KEY REASON | report_blocker | Record blocker and preserve owner |
 | unblock KEY | unblock_work | Resume without changing owner |
@@ -27,9 +29,11 @@ which the store still checks atomically. Presentation text is not the API contra
 | verify KEY --note TEXT | verify_work | Reject the submitting actor's self-verification |
 | decide KEY OUTCOME | decide_gate | Resolve an open decision gate |
 | artifact KEY FILE.json | add_artifact | Attach the same Artifact JSON object |
-| attach-git-head KEY | attach_git_head | Capture the current repository's immutable HEAD |
+| attach-git-head KEY --resource KEY | attach_git_head | Capture HEAD for an explicit task resource; locator binding is the default |
+| workspace list | workspace_list | List device-local bindings without changing the plan |
+| workspace register --database PATH | workspace_register | Register an existing store; explicit replace redirects a local binding |
 
-Workspace setup/import/export and opening the TUI are local CLI administration, not agent execution
+Project initialization/import/export and opening the TUI are local CLI administration, not agent execution
 operations. Plan proposals and edits beyond these commands remain future work; no unsupported tool
 is advertised. The same SQLite schema, engine and stable IDs remain available for future adapters.
 

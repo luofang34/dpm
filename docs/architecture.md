@@ -62,9 +62,9 @@ milestones.
 
 SQLite is durable operational state, not a disposable cache of an exported plan. A workspace can
 span multiple repositories and non-code projects; Git roots affect discovery, not domain scope.
-Future format, resource and sync requirements live in the prepared `CORE-10/20` and `SYNC-10`
-contracts. `explain` resolves their requirements and decision rationale; those records do not
-implement TOML plan import/export or remote sync.
+Resources have stable IDs and explicit task requirements. Device-local workspace bindings select
+one store from multiple entry points; locators check its identity before use. Semantic plan editing,
+TOML plan interchange and sync remain task contracts available through `explain`.
 
 ## Git
 
@@ -76,7 +76,8 @@ useful export/version projection, but Git is not the live collaborative database
 `dpm-app` owns application orchestration over the pure engine and SQLite store. CLI and stdio
 MCP use the same query results, command validation and atomic persistence. Structured execution
 context resolves references into requirements, decisions, risks, evidence and related work.
-MCP tool transport adds revision metadata; CLI JSON retains its existing data format.
+MCP execution tools add revision metadata around the same CLI JSON data. Device-registry tools
+return local configuration without a project revision.
 
 The Gantt page renders `deterministic_remaining` as a read-only hour-axis chart. Work packages
 roll up descendant ranges for display, milestones remain zero-duration points, and selecting a row
@@ -85,8 +86,7 @@ The console is explicitly a revision snapshot; reopening refreshes it.
 
 ## Execution progress
 
-Task `reported_progress_percent` is an authoritative owner report with a default of zero for older
-snapshots. `ReportProgress` validates ownership, range and lifecycle and persists a semantic operation.
+Task `reported_progress_percent` is an authoritative owner report defaulting to zero. `ReportProgress` validates ownership, range and lifecycle and persists a semantic operation.
 It may move Claimed to InProgress but never verifies work. Submission displays 100% execution;
 verification remains a separate condition. Reports on blocked work preserve the blocker.
 
@@ -101,12 +101,11 @@ CPM/Monte Carlo duration inputs.
 
 `WorkItem.instructions` optionally holds ordered action/result pairs, scope inclusions/exclusions
 and verification checks. Acceptance criteria remain the conditions for independent review. The
-model validates present instructions at import/command boundaries; existing snapshots may omit
-this additive field. Both CLI and MCP serialize these same domain values through `dpm-app`.
+model validates present instructions at import/command boundaries; plans may omit instructions. Both CLI and MCP serialize these same domain values through `dpm-app`.
 Instructions contain no execution code, grant no authorization and never bypass decision gates.
 The sole example supplies complete contracts while its tasks remain unstarted.
 
 `Decision.related_work` adds a choice/question to a task's context without gating it. `blocks`
 alone controls gating; both associations inherit through work-package ancestors. Optional rationale
 and source artifact references are returned by `explain`, and source artifacts remain distinct from
-completion evidence attached to work. Inputs without these optional fields remain compatible.
+completion evidence attached to work.

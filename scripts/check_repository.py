@@ -22,6 +22,7 @@ if (ROOT / 'fixtures').exists():
 
 # Statements whose truth depends on history or on the current size of the repository.
 ROT_PATTERNS = [
+    (r'\bpreview contains \d+\b', 'example inventory count'),
     (r'\bPR #\d+', 'PR number reference'),
     (r'(?<![\w.])\d+ (?:rust |unit |integration )?tests\b', 'absolute test count'),
     (r'\b(?:one|two|three|four|five|(?<![\w.])\d+) (?:clean |local )?(?:source )?commits\b', 'commit count'),

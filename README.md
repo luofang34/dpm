@@ -84,7 +84,7 @@ an in-memory preview, creates no database, and rejects modifications through bot
 The console labels it `PREVIEW read-only`. `cargo run tui` also works; root package `dpm` owns
 the CLI, while `cargo run -p dpm-mcp -- --actor agent:reader` starts the MCP adapter.
 
-The preview contains 24 task contracts, 8 milestones, requirements, open decision gates, risks and
+The preview contains task contracts, milestones, requirements, open decision gates, risks and
 source context. `next` deliberately returns `[]`: **DEC-EXECUTE** gates the entire roadmap. All
 contracts remain unowned at zero progress, and no execution is authorized by this example.
 See [the self-host guide](examples/self-host/README.md) for scope and acceptance details.
@@ -105,14 +105,14 @@ status rather than opening a terminal.
 
 Normal projects store their plan and operations in ignored `.dpm/state.sqlite`. Commit the locator,
 not the database. Preview and database sources share the same query/command boundary; preview
-sources additionally reject every mutation. [Project discovery and initialization](docs/projects.md)
+sources additionally reject every project mutation. [Project discovery and initialization](docs/projects.md)
 documents nested projects, cloned configurations and existing databases.
 
 A workspace may span several Git repositories and non-code projects. Use explicit project/database
 selection for a central local plan; automatic discovery remains conservative at Git boundaries.
 SQLite holds durable runtime state. Plan interchange uses JSON; TOML configures project locators.
-Inspect the prepared `CORE-10`, `CORE-20` and `SYNC-10` contracts with `explain` for future format,
-resource-binding and sync requirements, including their decision rationale and sources.
+Inspect `CORE-20`, `RES-10` and `SYNC-10` with `explain` for semantic plan editing, scoped queries
+and sync requirements. Current resource identities and local bindings are described in the project-selection guide.
 
 Self-host is the only bundled example. `demo` explicitly initializes a copy in another project or
 an explicit database; it never overwrites existing state. Each task includes ordered actions and
@@ -278,7 +278,7 @@ Use `dpm ratify KEY --actor human:reviewer` to approve a Proposed contract.
 Use `dpm reject KEY "unmet acceptance" --actor human:reviewer` to return Submitted work
 to its owner. `show` and `explain` retain the latest rejection across resubmission.
 
-The local quality gate requires `cargo-deny`: install it with
+The local quality gate requires Python 3.11+ and `cargo-deny`: install the latter with
 `cargo install cargo-deny --locked --version 0.19.8`, then run `./ci.sh`.
 License checks use resolved Cargo metadata, including workspace inheritance; security checks
 refresh the advisory database and fail if the check cannot complete.

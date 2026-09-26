@@ -99,3 +99,41 @@ fn empty_aggregates_and_proposed_tasks_are_not_complete_or_ready() {
     plan.work_items.get_mut(&parent).expect("package").kind = WorkKind::Milestone;
     assert!(!completion(&plan).contains(&parent));
 }
+
+#[test]
+fn readiness_rejects_foreign_stale_or_invalid_contracts() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let work = plan.find_work_by_key("TEST-A").expect("work").clone();
+    assert!(is_ready(&plan, &work));
+    let mut foreign = work.clone();
+    foreign.id = WorkItemId::new();
+    assert!(!is_ready(&plan, &foreign));
+    apply_command(
+        &mut plan,
+        ActorId::agent("owner"),
+        Command::Claim { work: work.id },
+        Utc::now(),
+    )
+    .expect("claim");
+    assert!(!is_ready(&plan, &work));
+    let stored = plan.work_items.get_mut(&work.id).expect("work");
+    stored.status = WorkStatus::Planned;
+    stored.owner = None;
+    stored.acceptance.clear();
+    let invalid = stored.clone();
+    assert!(!is_ready(&plan, &invalid));
+    let before = plan.clone();
+    assert!(
+        apply_command(
+            &mut plan,
+            ActorId::agent("owner"),
+            Command::Claim { work: work.id },
+            Utc::now()
+        )
+        .is_err()
+    );
+    assert_eq!(plan, before);
+}

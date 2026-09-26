@@ -101,7 +101,8 @@ fn ancestors(plan: &Plan, work: WorkItemId) -> Option<BTreeSet<WorkItemId>> {
 
 /// Whether a planned task with an execution contract can be claimed now.
 pub fn is_ready(plan: &Plan, work: &WorkItem) -> bool {
-    ready_with_completion(plan, work, &completion(plan))
+    plan.work_items.get(&work.id) == Some(work)
+        && crate::gate_report(plan, work.id).is_ok_and(|report| report.ready)
 }
 
 pub(crate) fn ready_with_completion(
