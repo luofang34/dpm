@@ -28,7 +28,7 @@ fn advertises_tools_and_preserves_revision_conflicts() {
     let list = server
         .handle_blocking(json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}))
         .expect("list");
-    assert_eq!(list["result"]["tools"].as_array().expect("tools").len(), 23);
+    assert_eq!(list["result"]["tools"].as_array().expect("tools").len(), 25);
     let request = json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"claim_work","arguments":{"key":"TEST-A","base_revision":0}}});
     assert_eq!(
         server.handle_blocking(request.clone()).expect("claim")["result"]["isError"],
