@@ -82,6 +82,12 @@ contradict gates/acceptance, report the gap instead of guessing permission or co
 `python3 scripts/smoke_self_host.py` imports the prepared plan into temporary storage, compares every
 task contract through real CLI/MCP processes and confirms no operations or revision changes.
 
+`context.decisions` includes both gates and related design choices. `blocks` controls readiness;
+`related_work` only supplies context, including through parent work packages. Optional `rationale`
+and `artifact_ids` provide the reason and sources, resolved under `context.artifacts`. These sources
+are planning context, not task completion evidence. A decided choice does not authorize execution
+of the task or resolve any other gate. Missing optional fields retain their empty/default meaning.
+
 ## Progress and schedule indications
 
 `report_progress` takes `key`, integer `percent` (0..100), required `base_revision`, and optional

@@ -25,7 +25,7 @@ pub struct StatusSummary {
     pub awaiting_verification: usize,
     /// Count of completed tasks and derived aggregate completions.
     pub complete: usize,
-    /// Number of unresolved gates.
+    /// Number of unresolved decisions, whether contextual or blocking.
     pub open_decisions: usize,
     /// Deterministic remaining project duration in elapsed hours.
     pub expected_finish_hours: f64,

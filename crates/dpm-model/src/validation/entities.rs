@@ -194,36 +194,7 @@ fn validate_context(plan: &Plan) -> Result<(), ValidationError> {
         nonempty("artifact creator", id, &artifact.created_by.name)?;
     }
     for decision in plan.decisions.values() {
-        project_reference(plan, decision.project, decision.id)?;
-        nonempty("decision", decision.id, &decision.question)?;
-        if decision.status == DecisionStatus::Open && decision.outcome.is_some() {
-            return Err(invalid(
-                "decision",
-                decision.id,
-                "open gate cannot carry a resolution",
-            ));
-        }
-        if decision.status == DecisionStatus::Decided
-            && decision
-                .outcome
-                .as_ref()
-                .is_none_or(|o| o.trim().is_empty())
-        {
-            return Err(invalid(
-                "decision",
-                decision.id,
-                "resolved gate requires a non-empty outcome",
-            ));
-        }
-        for id in &decision.blocks {
-            if !plan.work_items.contains_key(id) {
-                return Err(invalid(
-                    "decision",
-                    decision.id,
-                    format!("missing blocked work {id}"),
-                ));
-            }
-        }
+        validate_decision(plan, decision)?;
     }
     for risk in plan.risks.values() {
         project_reference(plan, risk.project, risk.id)?;
@@ -243,6 +214,57 @@ fn validate_context(plan: &Plan) -> Result<(), ValidationError> {
                     format!("missing related work {id}"),
                 ));
             }
+        }
+    }
+    Ok(())
+}
+
+fn validate_decision(plan: &Plan, decision: &Decision) -> Result<(), ValidationError> {
+    project_reference(plan, decision.project, decision.id)?;
+    nonempty("decision", decision.id, &decision.question)?;
+    if decision.status == DecisionStatus::Open && decision.outcome.is_some() {
+        return Err(invalid(
+            "decision",
+            decision.id,
+            "open decision cannot carry a resolution",
+        ));
+    }
+    if decision.status == DecisionStatus::Decided
+        && decision
+            .outcome
+            .as_ref()
+            .is_none_or(|o| o.trim().is_empty())
+    {
+        return Err(invalid(
+            "decision",
+            decision.id,
+            "resolved decision requires a non-empty outcome",
+        ));
+    }
+    if let Some(rationale) = &decision.rationale {
+        nonempty("decision rationale", decision.id, rationale)?;
+    }
+    for (relation, ids) in [
+        ("blocked", &decision.blocks),
+        ("related", &decision.related_work),
+    ] {
+        for id in ids {
+            if !plan.work_items.contains_key(id) {
+                return Err(invalid(
+                    "decision",
+                    decision.id,
+                    format!("missing {relation} work {id}"),
+                ));
+            }
+        }
+    }
+    for id in &decision.artifact_ids {
+        if !plan.artifacts.contains_key(id) {
+            return Err(invalid(
+                "decision",
+                decision.id,
+                format!("missing source artifact {id}"),
+            ));
         }
     }
     Ok(())

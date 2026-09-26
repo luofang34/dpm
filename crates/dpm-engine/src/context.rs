@@ -11,9 +11,9 @@ pub struct ExecutionContext {
     pub parents: Vec<WorkItem>,
     /// Requirements explicitly implemented by this work.
     pub requirements: Vec<Requirement>,
-    /// Evidence attached to this work or its direct predecessors.
+    /// Evidence attached to this work, its direct predecessors, or contextual decisions.
     pub artifacts: Vec<Artifact>,
-    /// Direct or inherited decision gates, including their resolution.
+    /// Direct or inherited gates and related decisions, including their reasons and sources.
     pub decisions: Vec<Decision>,
     /// Risks related to this work or its containing work packages.
     pub risks: Vec<Risk>,
@@ -32,7 +32,16 @@ pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContex
         parents.push(item.clone());
         parent = item.parent;
     }
+    let decisions: Vec<_> = plan
+        .decisions
+        .values()
+        .filter(|d| !d.blocks.is_disjoint(&ancestors) || !d.related_work.is_disjoint(&ancestors))
+        .cloned()
+        .collect();
     let mut artifact_ids = work.artifact_ids.clone();
+    for decision in &decisions {
+        artifact_ids.extend(&decision.artifact_ids);
+    }
     for dependency in &plan.dependencies {
         if dependency.successor == work.id {
             artifact_ids.extend(&plan.work_items[&dependency.predecessor].artifact_ids);
@@ -50,12 +59,7 @@ pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContex
             .iter()
             .filter_map(|id| plan.artifacts.get(id).cloned())
             .collect(),
-        decisions: plan
-            .decisions
-            .values()
-            .filter(|d| !d.blocks.is_disjoint(&ancestors))
-            .cloned()
-            .collect(),
+        decisions,
         risks: plan
             .risks
             .values()
@@ -76,3 +80,7 @@ pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContex
             .collect(),
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests;

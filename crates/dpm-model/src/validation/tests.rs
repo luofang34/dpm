@@ -16,6 +16,43 @@ fn fixture_and_empty_workspace_are_valid() {
 }
 
 #[test]
+fn decision_context_defaults_preserve_existing_serialized_gates() {
+    let source: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("source");
+    let plan: Plan = serde_json::from_value(source.clone()).expect("compatible plan");
+    for (id, decision) in &plan.decisions {
+        assert!(decision.related_work.is_empty() && decision.artifact_ids.is_empty());
+        assert!(decision.rationale.is_none());
+        assert_eq!(
+            serde_json::to_value(decision).expect("serialize"),
+            source["decisions"][id.to_string()]
+        );
+    }
+}
+
+#[test]
+fn decision_context_rejects_dangling_references_and_empty_reasons() {
+    let cases: Vec<fn(&mut Decision)> = vec![
+        |d| {
+            d.related_work.insert(WorkItemId::new());
+        },
+        |d| {
+            d.artifact_ids.insert(ArtifactId::new());
+        },
+        |d| {
+            d.rationale = Some("  ".into());
+        },
+    ];
+    for corrupt in cases {
+        let mut plan = fixture();
+        corrupt(plan.decisions.values_mut().next().expect("decision"));
+        assert!(plan.validate().is_err());
+    }
+}
+
+#[test]
 fn malformed_graphs_and_contracts_are_rejected() {
     let cases: Vec<fn(&mut Plan)> = vec![
         |p| p.workspace.name.clear(),

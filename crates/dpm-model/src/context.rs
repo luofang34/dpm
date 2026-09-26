@@ -64,18 +64,18 @@ pub struct Artifact {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-/// Lifecycle of a decision that can gate execution.
+/// Lifecycle of a recorded choice or question that can optionally gate execution.
 pub enum DecisionStatus {
-    /// Unresolved gate.
+    /// Unresolved question.
     Open,
-    /// Resolved gate with an outcome.
+    /// Recorded choice with an outcome.
     Decided,
-    /// Gate no longer applicable.
+    /// Decision no longer applicable.
     Superseded,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-/// Question whose resolution can unblock work.
+/// A question or choice included in work context, optionally blocking execution.
 pub struct Decision {
     /// Stable entity identity; it must match its containing map key.
     pub id: DecisionId,
@@ -89,6 +89,15 @@ pub struct Decision {
     pub status: DecisionStatus,
     /// Non-empty resolution for a decided gate.
     pub outcome: Option<String>,
+    /// Reason for the choice or for raising the question.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rationale: Option<String>,
+    /// Work whose context includes this decision, without imposing an execution gate.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub related_work: BTreeSet<WorkItemId>,
+    /// Sources supporting the decision, distinct from task completion evidence.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub artifact_ids: BTreeSet<ArtifactId>,
     /// Work items gated by this decision.
     pub blocks: BTreeSet<WorkItemId>,
 }
