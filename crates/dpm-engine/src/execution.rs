@@ -110,9 +110,9 @@ fn task_mut(plan: &mut Plan, work: WorkItemId) -> Result<&mut WorkItem, EngineEr
         .get_mut(&work)
         .ok_or(EngineError::MissingWorkItem(work))?;
     if !item.is_executable() {
-        return Err(EngineError::InvalidCommand {
-            entity: work.to_string(),
-            reason: "only tasks support execution commands".into(),
+        return Err(EngineError::NotATask {
+            work,
+            kind: item.kind,
         });
     }
     Ok(item)
@@ -131,6 +131,8 @@ fn owns(item: &WorkItem, actor: &ActorId) -> Result<(), EngineError> {
 }
 
 fn claim(plan: &mut Plan, actor: &ActorId, work: WorkItemId) -> Result<(), EngineError> {
+    // The kind check precedes readiness so a non-task never reports a misleading "not ready".
+    task_mut(plan, work)?;
     let item = plan
         .work_items
         .get(&work)
@@ -219,6 +221,7 @@ fn submit(plan: &mut Plan, actor: &ActorId, work: WorkItemId) -> Result<(), Engi
 }
 
 fn verify(plan: &mut Plan, actor: &ActorId, work: WorkItemId) -> Result<(), EngineError> {
+    task_mut(plan, work)?;
     if !dependencies_satisfied(plan, work) || !decisions_resolved(plan, work) {
         return Err(EngineError::NotReady(work));
     }

@@ -93,6 +93,9 @@ def smoke(database):
         assert context['requirements'] and context['decisions'][0]['key'] == 'TEST-GATE'
         worker.call('claim_work', {'key': 'TEST-B', 'base_revision': 0}, error='invalid_command')
         run_cli(database, 'claim', 'TEST-B', error='invalid_command')
+        agent_error = worker.call('claim_work', {'key': 'TEST-M1', 'base_revision': 0}, error='invalid_command')
+        cli_error = run_cli(database, 'claim', 'TEST-M1', error='invalid_command')['error']
+        assert agent_error['message'] == cli_error['message'] and 'not a task' in cli_error['message']
         worker.call('report_progress', {'key': 'TEST-A', 'percent': 50, 'base_revision': 0}, error='invalid_command')
         run_cli(database, 'progress', 'TEST-A', '50', error='invalid_command')
         claim = worker.call('claim_work', {'key': 'TEST-A', 'base_revision': 0})['data']

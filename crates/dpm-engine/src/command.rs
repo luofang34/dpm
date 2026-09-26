@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use dpm_model::{
-    ActorId, Artifact, DecisionId, OperationId, ValidationError, WorkItemId, WorkStatus,
+    ActorId, Artifact, DecisionId, OperationId, ValidationError, WorkItemId, WorkKind, WorkStatus,
 };
 use dpm_schedule::ScheduleError;
 use serde::{Deserialize, Serialize};
@@ -140,6 +140,14 @@ pub enum EngineError {
     /// Referenced gate does not exist.
     #[error("decision {0} does not exist")]
     MissingDecision(DecisionId),
+    /// Execution commands target a grouping or condition rather than executable work.
+    #[error("work item {work} is a {kind:?}, not a task; only tasks accept execution commands")]
+    NotATask {
+        /// Targeted work item.
+        work: WorkItemId,
+        /// Non-executable kind of the target.
+        kind: WorkKind,
+    },
     /// Execution prerequisites or lifecycle do not permit this command.
     #[error("work item {0} is not ready because execution prerequisites are incomplete")]
     NotReady(WorkItemId),

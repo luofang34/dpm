@@ -1,6 +1,6 @@
 use super::*;
 use crate::{NextWorkQuery, completion, next_work, show_work, status};
-use dpm_model::{Dependency, DependencyKind, Key, WorkItemId};
+use dpm_model::{Dependency, DependencyKind, Key, WorkItemId, WorkKind};
 use std::collections::BTreeSet;
 
 fn fixture() -> Plan {
@@ -173,4 +173,73 @@ fn empty_commands_and_invalid_plans_do_not_change_state() {
         .is_err()
     );
     assert_eq!(plan, before);
+}
+
+fn with_work_package(mut plan: Plan) -> (Plan, WorkItemId) {
+    let mut package = plan.find_work_by_key("TEST-M1").expect("milestone").clone();
+    package.id = WorkItemId::new();
+    package.key = Key::new("TEST-WP");
+    package.kind = WorkKind::WorkPackage;
+    let id = package.id;
+    plan.work_items.insert(id, package);
+    plan.validate().expect("work package fixture");
+    (plan, id)
+}
+
+fn execution_commands(work: WorkItemId) -> Vec<(ActorId, Command)> {
+    let agent = ActorId::agent("owner");
+    let reviewer = ActorId::human("reviewer");
+    vec![
+        (agent.clone(), Command::Claim { work }),
+        (
+            agent.clone(),
+            Command::Block {
+                work,
+                reason: "waiting".into(),
+            },
+        ),
+        (agent.clone(), Command::Unblock { work }),
+        (
+            agent.clone(),
+            Command::ReportProgress {
+                work,
+                percent: 50,
+                note: None,
+            },
+        ),
+        (agent, Command::Submit { work, note: None }),
+        (reviewer.clone(), Command::Verify { work, note: None }),
+        (
+            reviewer.clone(),
+            Command::Reject {
+                work,
+                reason: "missing evidence".into(),
+            },
+        ),
+        (reviewer, Command::RatifyContract { work }),
+    ]
+}
+
+#[test]
+fn execution_commands_on_non_tasks_fail_atomically_as_not_a_task() {
+    let (plan, package) = with_work_package(fixture());
+    let milestone = plan.find_work_by_key("TEST-M1").expect("milestone").id;
+    for (work, kind) in [
+        (milestone, WorkKind::Milestone),
+        (package, WorkKind::WorkPackage),
+    ] {
+        for (actor, command) in execution_commands(work) {
+            let mut candidate = plan.clone();
+            let label = format!("{command:?}");
+            let error = apply_command(&mut candidate, actor, command, Utc::now())
+                .expect_err("non-task execution must fail");
+            assert!(
+                matches!(error, EngineError::NotATask { work: w, kind: k } if w == work && k == kind),
+                "{label}: {error:?}"
+            );
+            assert!(error.to_string().contains("not a task"), "{label}: {error}");
+            assert_eq!(candidate.revision, plan.revision, "{label}");
+            assert_eq!(candidate, plan, "{label}");
+        }
+    }
 }

@@ -76,7 +76,7 @@ def smoke(binary, directory):
     assert final['expected_finish_hours'] == 0
     assert final['p50_finish_hours'] == final['p80_finish_hours'] == final['p95_finish_hours'] == 0
     assert run('show', 'TEST-M1', structured=True)['status'] == 'Verified'
-    run('claim', 'TEST-M1', '--actor', 'agent:smoke', error='not ready')
+    run('claim', 'TEST-M1', '--actor', 'agent:smoke', error='not a task')
     with sqlite3.connect(database) as connection:
         count = connection.execute('SELECT COUNT(*) FROM operations').fetchone()[0]
         assert count == final['revision'] == 22
