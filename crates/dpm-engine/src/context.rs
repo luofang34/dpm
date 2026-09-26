@@ -48,7 +48,10 @@ pub(crate) fn decision_applies(decision: &Decision, lineage: &BTreeSet<WorkItemI
 ///
 /// A replacement need not repeat the old decision's work links, so work that was linked only to a
 /// superseded choice would otherwise lose sight of the choice that now applies to it.
-fn applicable_decisions(plan: &Plan, lineage: &BTreeSet<WorkItemId>) -> BTreeSet<DecisionId> {
+pub(crate) fn applicable_decisions(
+    plan: &Plan,
+    lineage: &BTreeSet<WorkItemId>,
+) -> BTreeSet<DecisionId> {
     let mut selected: BTreeSet<_> = plan
         .decisions
         .values()

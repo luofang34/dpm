@@ -230,3 +230,38 @@ fn work_linked_only_to_a_superseded_choice_still_sees_its_replacement() {
         .context;
     assert!(unrelated.decisions.iter().all(|d| d.id != new.id));
 }
+
+#[test]
+fn chained_replacement_lists_work_that_sees_it_only_through_the_chain() {
+    let (mut plan, first) = fixture();
+    let (proposal, second) = replace(&plan, first);
+    apply(&mut plan, proposal).expect("first replacement");
+    let mut proposal = plan.clone();
+    proposal
+        .decisions
+        .get_mut(&second.id)
+        .expect("second")
+        .status = DecisionStatus::Superseded;
+    let mut third = second.clone();
+    third.id = DecisionId::new();
+    third.key = Key::new("TEST-CHOICE-3");
+    third.outcome = Some("YAML".into());
+    third.rationale = Some("Configuration files already use YAML".into());
+    third.related_work.clear();
+    third.supersedes = Some(second.id);
+    proposal.decisions.insert(third.id, third.clone());
+    let preview = propose_change(&plan, &proposal).expect("reviewable chain");
+    let listed: BTreeSet<_> = preview
+        .affected_work
+        .iter()
+        .map(|a| a.key.0.as_str())
+        .collect();
+    assert_eq!(listed, BTreeSet::from(["TEST-A", "TEST-C", "TEST-F"]));
+    apply(&mut plan, proposal).expect("second replacement");
+    for key in listed {
+        let context = explain_work(&plan, work(&plan, key))
+            .expect("explain")
+            .context;
+        assert!(context.decisions.iter().any(|d| d.id == third.id), "{key}");
+    }
+}

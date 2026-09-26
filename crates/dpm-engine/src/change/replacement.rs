@@ -1,6 +1,6 @@
 use super::invalid;
 use crate::EngineError;
-use crate::context::{decision_applies, lineage};
+use crate::context::{applicable_decisions, lineage};
 use dpm_model::{Decision, DecisionStatus, Key, Plan, WorkItemId, WorkKind, WorkStatus};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -141,7 +141,9 @@ pub(super) fn affected_work(current: &Plan, proposed: &Plan) -> Vec<AffectedWork
         };
         for work in proposed.work_items.values() {
             let ids: BTreeSet<_> = lineage(proposed, work).iter().map(|w| w.id).collect();
-            if decision_applies(old, &ids) || decision_applies(new, &ids) {
+            // Uses explain's own selection, so every item whose context changes is listed.
+            let context = applicable_decisions(proposed, &ids);
+            if context.contains(&old.id) || context.contains(&new.id) {
                 affected.push(AffectedWork {
                     decision: old.key.clone(),
                     replacement: new.key.clone(),
