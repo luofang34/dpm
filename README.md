@@ -109,6 +109,13 @@ not the database. Preview and database sources share the same query/command boun
 sources additionally reject every mutation. [Project discovery and initialization](docs/projects.md)
 documents nested projects, cloned configurations and existing databases.
 
+A workspace may span several Git repositories and non-code projects. Use explicit project/database
+selection for a central local plan; automatic discovery remains conservative at Git boundaries.
+The [workspace and collaboration design](docs/workspaces-and-collaboration.md) defines the future
+portable TOML/JSON format, resource bindings and semantic operation sync. SQLite holds durable
+runtime state, not a disposable cache. Plan interchange currently uses JSON; TOML currently configures
+only project locators. Remote sync and portable repository bindings are not implemented yet.
+
 Self-host is the only bundled example. `demo` explicitly initializes a copy in another project or
 an explicit database; it never overwrites existing state. Each task includes ordered actions and
 expected results, scope boundaries, acceptance criteria and verification checks. `show/get_work`

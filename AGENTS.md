@@ -208,3 +208,18 @@ use compatible licenses, but do not copy incompatible source code into this repo
 - Normal projects keep SQLite and operations local; only locator/ignore rules belong in Git.
 - This repository's locator selects an in-memory read-only preview. All adapters reject mutations
   on it; do not convert the preview to a live workspace merely to obtain executable tasks.
+
+## Workspace and interchange boundaries
+
+- Follow [the workspace design](docs/workspaces-and-collaboration.md) when implementing format,
+  repository-binding or sync milestones. Its future contracts do not authorize their implementation.
+- Workspace/project/task identity is independent of Git repositories and local directory paths.
+  One workspace may span many repositories and non-code work; directory discovery is only selection.
+- Local SQLite state and unsent operations are durable data, never disposable cache. Never infer
+  that a tracked plan export contains all operation history or the newest state.
+- Keep locator TOML separate from plan interchange TOML/JSON. Current plans use JSON; adding the
+  intended TOML encoding requires a versioned DTO and semantic round-trip tests.
+- Imports and sync must pass through the same command/validation boundary. No file watcher, raw
+  SQLite replication, Git merge or CRDT may bypass it or silently overwrite running work.
+- Keep machine-specific checkout bindings and credentials out of shared plans and tracked locators.
+  Checkpoints/lineage, authentication, deduplication and durable pending work precede collaboration.

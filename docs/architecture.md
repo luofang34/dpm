@@ -60,6 +60,12 @@ Operations already include actor, timestamp, command, base revision, and resulti
 operation replay, semantic merge, CRDT text collaboration, and remote synchronization are future
 milestones.
 
+SQLite is durable operational state, not a disposable cache of an exported plan. A workspace can
+span multiple repositories and non-code projects; Git roots affect discovery, not domain scope.
+The [workspace and collaboration design](workspaces-and-collaboration.md) specifies future
+TOML/JSON interchange, local resource bindings and operation-based sync. These are design contracts;
+TOML plan import/export and remote sync are not implemented by the current locator/store.
+
 ## Git
 
 Git commits and pull requests are artifacts linked to work. Git history is valuable evidence and a

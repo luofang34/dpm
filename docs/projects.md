@@ -90,3 +90,35 @@ Existing SQLite databases retain their serialization and operation history. Open
 with `dpm --database PATH status --json`, or point a database locator at it. Discovery recognizes
 an unconfigured legacy workspace and asks for explicit selection; it never overwrites it or
 creates a second empty project that hides its history. A code rename is not an operation-log migration.
+
+## Multiple repositories and non-code work
+
+A project directory need not be a Git repository. Run `init` in a planning/document directory to
+keep a workspace there, then use `--project DIR` from any other checkout to query or operate on it.
+For example, for an already initialized central workspace:
+
+```sh
+dpm --project /path/to/product-planning status --json
+dpm --project /path/to/product-planning explain TASK-KEY --json
+```
+
+The graph can contain nested projects and tasks from multiple repositories, as well as procurement,
+design and other non-code work. They share work IDs and dependencies in one workspace. The upward
+search's Git boundary prevents accidental selection; it does not restrict graph membership.
+
+Current Git evidence capture uses the selected project directory. If the central planning directory
+is separate from the repository whose HEAD is needed, explicitly select the central database while
+running from that repository:
+
+```sh
+dpm --database /path/to/product-planning/.dpm/state.sqlite attach-git-head TASK-KEY --actor agent:worker
+```
+
+This is a manual local workflow. There is no typed repository binding or automatic checkout selection
+yet. Several processes on the same machine may open the same local workspace; copying its database
+onto another device does not establish collaboration. Do not put live SQLite files on a shared
+network/cloud folder as a sync mechanism.
+
+The [workspace and collaboration design](workspaces-and-collaboration.md) defines the planned
+separation between TOML/JSON interchange, durable SQLite state, device-local bindings and semantic
+operation exchange. Today TOML is only the locator format; plan import/export still uses JSON.
