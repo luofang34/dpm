@@ -93,7 +93,7 @@ pub(super) fn describe_release(
             let remedy = match policy {
                 DependencyPolicy::Soft => "a human or service may waive this Soft edge",
                 DependencyPolicy::Hard => {
-                    "a reviewed plan change may alter the lag while this work is unstarted"
+                    "a Hard edge cannot be waived; a reviewed plan change may alter its lag only while the successor is unstarted, and otherwise the gate stays closed"
                 }
             };
             format!(
