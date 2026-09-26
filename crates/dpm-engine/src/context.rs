@@ -26,6 +26,9 @@ pub struct ExecutionContext {
     pub dependencies: Vec<Dependency>,
     /// Directly dependent work items.
     pub successors: Vec<WorkItem>,
+    /// External tracker objects linked to this work or its packages; never evidence or gates.
+    #[serde(default)]
+    pub external_references: Vec<dpm_model::ExternalReference>,
 }
 
 /// Work and its containing packages, nearest first; decisions and risks attach through any of them.
@@ -125,6 +128,12 @@ pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContex
             .iter()
             .filter(|d| d.predecessor == work.id)
             .filter_map(|d| plan.work_items.get(&d.successor).cloned())
+            .collect(),
+        external_references: plan
+            .external_references
+            .values()
+            .filter(|r| r.links.iter().any(|l| ancestors.contains(&l.work)))
+            .cloned()
             .collect(),
     }
 }

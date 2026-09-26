@@ -10,6 +10,8 @@ mod plan;
 mod project;
 mod resource;
 pub use resource::*;
+mod tracking;
+pub use tracking::*;
 mod validation;
 mod work;
 

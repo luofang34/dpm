@@ -88,6 +88,8 @@ fn execute(
         Command::Submit { work, .. } => submit(plan, actor, *work),
         Command::Verify { work, .. } => verify(plan, actor, *work),
         Command::AttachArtifact { work, artifact } => attach(plan, actor, *work, artifact),
+        Command::LinkExternal(request) => tracking::link(plan, actor, request, at),
+        Command::UnlinkExternal { work, reference } => tracking::unlink(plan, *work, *reference),
         Command::Decide { decision, outcome } => {
             nonempty(&decision.to_string(), "outcome", outcome)?;
             let gate = plan
@@ -273,6 +275,7 @@ fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
 }
 
 mod review;
+mod tracking;
 
 #[cfg(test)]
 #[allow(clippy::expect_used, clippy::panic)]

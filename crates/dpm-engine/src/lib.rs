@@ -16,7 +16,7 @@ pub use scope::{
     WorkScope, next_in_scope,
 };
 
-pub use command::{Command, EngineError, Operation};
+pub use command::{Command, EngineError, ExternalLinkRequest, Operation};
 pub use execution::apply_command;
 pub use query::{
     NextWorkCandidate, NextWorkQuery, StatusSummary, WorkExplanation, explain_work, next_work,

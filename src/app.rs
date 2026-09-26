@@ -143,7 +143,7 @@ fn read_candidate_blocking(path: &Path) -> Result<Plan, CliError> {
     Ok(serde_json::from_str(&text)?)
 }
 
-fn actor(value: &str) -> Result<ActorId, CliError> {
+pub(crate) fn actor(value: &str) -> Result<ActorId, CliError> {
     let (kind, name) = value.split_once(':').ok_or_else(|| {
         CliError::Input("actor must be human:NAME, agent:NAME, or service:NAME".into())
     })?;
@@ -256,6 +256,9 @@ fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, C
         }
         artifact @ (Commands::Artifact { .. } | Commands::AttachGitHead { .. }) => {
             artifact_mutation_blocking(app, artifact)?
+        }
+        external @ (Commands::LinkExternal { .. } | Commands::UnlinkExternal { .. }) => {
+            crate::tracking::mutation_blocking(app, external)?
         }
         _ => return Err(CliError::Input("expected a state-changing command".into())),
     };

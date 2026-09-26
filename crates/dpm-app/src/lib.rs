@@ -5,7 +5,9 @@ mod git_artifact;
 mod project;
 mod registry;
 mod service;
+mod tracking;
 pub use registry::{RegistryError, WorkspaceBinding, WorkspaceRegistry};
+pub use tracking::ExternalLinkInput;
 
 pub use project::{
     ProjectError, ProjectLocation, ProjectSource, initialize_project_blocking,

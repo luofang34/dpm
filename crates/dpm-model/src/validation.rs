@@ -69,6 +69,7 @@ impl Plan {
         }
         crate::resource::validate(self)?;
         entities::validate(self)?;
+        crate::tracking::validate(self)?;
         graph::validate(self)
     }
 }

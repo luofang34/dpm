@@ -159,8 +159,56 @@ pub(crate) enum Commands {
         #[arg(long, default_value = "agent:local")]
         actor: String,
     },
+    /// Link work to an external tracker object; context only, never evidence or verification.
+    LinkExternal {
+        key: String,
+        #[command(flatten)]
+        identity: ExternalIdentityArgs,
+        /// Display label; defaults to the recorded label or the identity.
+        #[arg(long)]
+        label: Option<String>,
+        /// Display URL on the identity's instance, without credentials.
+        #[arg(long)]
+        url: Option<String>,
+        /// tracks (the single local owner) or relates (context).
+        #[arg(long, default_value = "tracks")]
+        role: String,
+        /// Reported external state (open, closed, merged); recorded only as an observation.
+        #[arg(long)]
+        observed: Option<String>,
+        #[arg(long, default_value = "agent:local")]
+        actor: String,
+    },
+    /// Remove a work item's link to an external tracker object.
+    UnlinkExternal {
+        key: String,
+        #[command(flatten)]
+        identity: ExternalIdentityArgs,
+        #[arg(long, default_value = "agent:local")]
+        actor: String,
+    },
     /// Open the Ratatui operator console.
     Tui,
+}
+
+/// Provider-scoped identity of an external object, independent of labels and URLs.
+#[derive(Debug, clap::Args)]
+pub(crate) struct ExternalIdentityArgs {
+    /// Provider family: github, gitlab, forgejo, gitea, jira, linear or another name.
+    #[arg(long)]
+    pub(crate) provider: String,
+    /// Hosted or self-hosted instance as host[:port], such as github.com.
+    #[arg(long)]
+    pub(crate) instance: String,
+    /// Tenant, owner/repository or project namespace where the provider scopes identifiers.
+    #[arg(long)]
+    pub(crate) namespace: Option<String>,
+    /// Object kind: issue, pull_request or another name.
+    #[arg(long, default_value = "issue")]
+    pub(crate) kind: String,
+    /// Stable provider identifier, such as an issue number.
+    #[arg(long = "id")]
+    pub(crate) external_id: String,
 }
 
 #[derive(Debug, Subcommand)]

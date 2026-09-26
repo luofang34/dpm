@@ -1,6 +1,7 @@
+use dpm_app::ExternalLinkInput;
 use dpm_app::{AppError, Application, CommandRequest, Query};
 use dpm_engine::Command;
-use dpm_model::{ActorId, Artifact};
+use dpm_model::{ActorId, Artifact, ExternalIdentity, ExternalLinkRole, ExternalState};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -69,6 +70,14 @@ const NAMES: &[(&str, &str)] = &[
         "Attach the current repository HEAD as immutable evidence",
     ),
     ("decide_gate", "Resolve an open decision gate"),
+    (
+        "link_external",
+        "Link work to a provider-scoped external issue or pull request; context only, never evidence, dependency satisfaction or verification",
+    ),
+    (
+        "unlink_external",
+        "Remove a work item's external tracking link without changing the work graph",
+    ),
 ];
 
 pub(crate) fn definitions() -> Vec<Value> {
@@ -76,7 +85,7 @@ pub(crate) fn definitions() -> Vec<Value> {
         let read = matches!(*name, "export_plan" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
-        if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head") {
+        if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external") {
             properties.insert("key".into(),json!({"type":"string"})); required.push("key");
         }
         if !read && *name != "workspace_register" {
@@ -103,6 +112,15 @@ pub(crate) fn definitions() -> Vec<Value> {
             "submit_work"|"verify_work" => { properties.insert("note".into(),json!({"type":"string"})); },
             "attach_git_head" => { properties.insert("resource".into(),json!({"type":"string"})); },
             "add_artifact" => { properties.insert("artifact".into(),artifact_schema()); required.push("artifact"); },
+            "link_external"|"unlink_external" => {
+                properties.insert("identity".into(),identity_schema()); required.push("identity");
+                if *name == "link_external" {
+                    properties.insert("label".into(),json!({"type":"string","minLength":1}));
+                    properties.insert("url".into(),json!({"type":"string","description":"http(s) URL on the identity instance, without credentials"}));
+                    properties.insert("role".into(),json!({"type":"string","enum":["Tracks","Relates"],"default":"Tracks"}));
+                    properties.insert("observed".into(),json!({"type":"string","enum":["Open","Closed","Merged"],"description":"Reported external state; an observation only"}));
+                }
+            },
             "decide_gate" => {
                 properties.insert("decision".into(),json!({"type":"string"})); properties.insert("outcome".into(),json!({"type":"string","minLength":1})); required.extend(["decision","outcome"]);
             },
@@ -141,6 +159,11 @@ struct Arguments {
     resource: Option<String>,
     decision: Option<String>,
     outcome: Option<String>,
+    identity: Option<ExternalIdentity>,
+    label: Option<String>,
+    url: Option<String>,
+    role: Option<ExternalLinkRole>,
+    observed: Option<ExternalState>,
 }
 
 fn default_true() -> bool {
@@ -230,6 +253,19 @@ fn mutation_blocking(
         });
     }
     let key = required(args.key, "key")?;
+    if name == "link_external" {
+        let input = ExternalLinkInput {
+            identity: required(args.identity, "identity")?,
+            label: args.label,
+            url: args.url,
+            role: args.role.unwrap_or(ExternalLinkRole::Tracks),
+            observed: args.observed,
+        };
+        return app.external_link_command_blocking(&key, input);
+    }
+    if name == "unlink_external" {
+        return app.external_unlink_command_blocking(&key, &required(args.identity, "identity")?);
+    }
     let work = app.work_id_blocking(&key)?;
     match name {
         "attach_git_head" => Ok(Command::AttachArtifact {
@@ -299,6 +335,19 @@ fn artifact_schema() -> Value {
         "created_by":{"type":"object","required":["kind","name"],"additionalProperties":false,
             "properties":{"kind":{"type":"string","enum":["Human","Agent","Service"]},"name":{"type":"string","minLength":1}}},
         "created_at":{"type":"string","format":"date-time"}
+    }})
+}
+
+fn identity_schema() -> Value {
+    let other = json!({"type":"object","required":["Other"],"additionalProperties":false,"properties":{"Other":{"type":"string","minLength":1}}});
+    json!({"type":"object","required":["provider","instance","kind","external_id"],"additionalProperties":false,
+    "description":"Provider-scoped identity, separate from label and URL; equal IDs on other instances or namespaces are different objects",
+    "properties":{
+        "provider":{"oneOf":[{"type":"string","enum":["GitHub","GitLab","Forgejo","Gitea","Jira","Linear"]},other]},
+        "instance":{"type":"string","minLength":1,"description":"host[:port] of the hosted or self-hosted instance"},
+        "namespace":{"type":"string","description":"Tenant, owner/repository or project namespace; required for forges and Linear"},
+        "kind":{"oneOf":[{"type":"string","enum":["Issue","PullRequest"]},other]},
+        "external_id":{"type":"string","minLength":1}
     }})
 }
 

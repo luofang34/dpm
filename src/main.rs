@@ -4,6 +4,7 @@ mod app;
 mod args;
 mod error;
 mod output;
+mod tracking;
 
 use clap::Parser;
 use std::process::ExitCode;

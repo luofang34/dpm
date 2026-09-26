@@ -71,7 +71,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'project_status', 'next_work', 'get_work', 'explain_work', 'claim_work', 'report_blocker', 'unblock_work', 'submit_work', 'verify_work', 'report_progress', 'add_artifact', 'attach_git_head', 'decide_gate', 'ratify_contract', 'reject_work', 'workspace_list', 'workspace_register', 'export_plan', 'propose_change', 'apply_change', 'history'} == names
+        assert {'project_status', 'next_work', 'get_work', 'explain_work', 'claim_work', 'report_blocker', 'unblock_work', 'submit_work', 'verify_work', 'report_progress', 'add_artifact', 'attach_git_head', 'decide_gate', 'ratify_contract', 'reject_work', 'workspace_list', 'workspace_register', 'export_plan', 'propose_change', 'apply_change', 'history', 'link_external', 'unlink_external'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),

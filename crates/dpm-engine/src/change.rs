@@ -11,7 +11,7 @@ pub use replacement::AffectedWork;
 /// One entity-level semantic difference, including explicit additions and removals.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EntityChange {
-    /// Domain collection, or `workspace` / `dependencies`.
+    /// Domain collection such as `external_references`, or `workspace` / `dependencies`.
     pub collection: String,
     /// Stable entity identity, absent for workspace-wide constraints.
     pub id: Option<String>,
@@ -59,6 +59,7 @@ pub fn propose_change(current: &Plan, proposed: &Plan) -> Result<ChangePreview, 
         "requirements",
         "decisions",
         "risks",
+        "external_references",
     ] {
         let ids: BTreeSet<_> = current_keys(&before[collection])
             .chain(current_keys(&after[collection]))

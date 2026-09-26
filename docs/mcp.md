@@ -34,6 +34,8 @@ which the store still checks atomically. Presentation text is not the API contra
 | decide KEY OUTCOME | decide_gate | Resolve an open decision gate |
 | artifact KEY FILE.json | add_artifact | Attach the same Artifact JSON object |
 | attach-git-head KEY --resource KEY | attach_git_head | Capture HEAD for an explicit task resource; locator binding is the default |
+| link-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | link_external | Link work to a provider-scoped external object; context only |
+| unlink-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | unlink_external | Remove one link; the work graph is unchanged |
 | workspace list | workspace_list | List device-local bindings without changing the plan |
 | workspace register --database PATH | workspace_register | Register an existing store; explicit replace redirects a local binding |
 
@@ -61,6 +63,38 @@ Open gates are resolved only by `decide`; superseding one, rewriting a prior dec
 repeated `supersedes` links, and replacements that add gates are rejected with no state change.
 `affected_work` in the preview lists every work item (key, kind, status) whose context contains either
 decision, including started work, so reviewers can reassess it; it never changes readiness.
+
+## External tracking references
+
+An external reference records an issue, pull request or other tracker object without making its
+state authoritative. Its identity is the tuple provider family (`GitHub`, `GitLab`, `Forgejo`,
+`Gitea`, `Jira`, `Linear` or `{"Other":"name"}`), `instance` (lowercase `host[:port]` of the hosted
+or self-hosted server), `namespace` (owner/repository, group path, tenant or project; required for
+repository forges and Linear), `kind` (`Issue`, `PullRequest` or `{"Other":"name"}`) and
+`external_id`. Equal IDs on another instance, namespace or kind are different objects. The label
+and URL are display data. Adapters canonicalize equivalent spellings (host and forge namespace
+case, `https://` prefixes, `#`/`!` ID prefixes) before lookup, and validation rejects any other form.
+
+`link_external` takes `key`, `identity`, `base_revision` and optional `label`, `url`, `role`
+(`Tracks` by default, or `Relates`) and `observed` (`Open`, `Closed` or `Merged`). The CLI uses
+lowercase flag values. Each identity is recorded once, under a stable reference ID that survives
+relabeling and namespace moves; links name work by stable ID, so key changes keep them. One work
+item may track an identity (`tracking_conflict` otherwise); any number may relate to it. A work item
+links an identity at most once. `unlink_external` removes one link, and removing the last one
+removes the record. Unknown work, identities or links are `not_found`; stale revisions are
+`revision_conflict`. Every failure leaves the snapshot and revision unchanged.
+
+Links are never evidence, dependency satisfaction, gates or verification. `observed` is an
+attributed report: a closed issue does not complete work, and a merged pull request does not
+submit or verify it. Attach a pull request as an Artifact through `add_artifact` when it is
+evidence; a separate verifier still decides. `explain.context.external_references` lists references
+linked to the work or its containing packages, while `next`, `status` and schedules ignore them.
+URLs must be http(s) on the identity's instance. Userinfo (`TOKEN@host` or `user:password@host`),
+credential parameters such as `access_token`, and credentials in labels or identity fields are
+rejected. No connector, token store or assignee write is involved.
+
+References are part of the exported plan, so reviewed plan changes can add, relabel, move or
+remove them under the same validation. `plan diff` reports them under `external_references`.
 
 `history` returns entries in append order with a `next_after_sequence` cursor (default limit 100,
 capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export
@@ -192,6 +226,7 @@ Specification:
 - https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle
 - https://modelcontextprotocol.io/specification/2025-11-25/server/tools
 
+`python3 scripts/smoke_tracking.py` covers external links through both adapters.
 `python3 scripts/smoke_agent.py` verifies real-process CLI/MCP query equality and shared execution,
 progress reporting, revision conflict, evidence, blocker, decision and independent-verification behavior.
 

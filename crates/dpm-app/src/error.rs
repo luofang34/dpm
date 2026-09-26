@@ -61,6 +61,9 @@ pub enum AppError {
     /// Decision key is not in the current plan.
     #[error("unknown decision key {0}")]
     UnknownDecision(String),
+    /// No external reference with this canonical identity is recorded.
+    #[error("unknown external reference {0}")]
+    UnknownExternalReference(String),
 }
 
 /// Stable machine diagnostic shared by adapters.
@@ -85,7 +88,15 @@ impl AppError {
             | Self::Store(dpm_store::StoreError::RevisionConflict { .. }) => "revision_conflict",
             Self::GitIo(_) | Self::Git { .. } | Self::GitEncoding(_) => "git_error",
             Self::NotInitialized => "not_initialized",
-            Self::UnknownWork(_) | Self::UnknownDecision(_) | Self::Scope(_) => "not_found",
+            Self::UnknownWork(_)
+            | Self::UnknownDecision(_)
+            | Self::UnknownExternalReference(_)
+            | Self::Scope(_)
+            | Self::Engine(
+                dpm_engine::EngineError::MissingExternalReference(_)
+                | dpm_engine::EngineError::MissingExternalLink { .. },
+            ) => "not_found",
+            Self::Engine(dpm_engine::EngineError::TrackingOwned { .. }) => "tracking_conflict",
             Self::Engine(_) => "invalid_command",
             Self::Store(_) => "storage_error",
             Self::Json(_) | Self::InvalidRequest(_) => "invalid_request",

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use dpm_model::{
-    ActorId, Artifact, DecisionId, OperationId, ValidationError, WorkItemId, WorkKind, WorkStatus,
+    ActorId, Artifact, DecisionId, ExternalIdentity, ExternalLinkRole, ExternalReferenceId,
+    ExternalState, Key, OperationId, ValidationError, WorkItemId, WorkKind, WorkStatus,
 };
 use dpm_schedule::ScheduleError;
 use serde::{Deserialize, Serialize};
@@ -82,6 +83,37 @@ pub enum Command {
         /// Non-empty outcome.
         outcome: String,
     },
+    /// Link work to an external tracker object without granting it local authority.
+    LinkExternal(ExternalLinkRequest),
+    /// Remove one work item's link to an external object; the last link removes the record.
+    UnlinkExternal {
+        /// Work whose link is removed.
+        work: WorkItemId,
+        /// Linked external reference.
+        reference: ExternalReferenceId,
+    },
+}
+
+/// Link request recording the resolved reference identifier so the operation log is explicit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalLinkRequest {
+    /// Work receiving the link.
+    pub work: WorkItemId,
+    /// The recorded reference for this identity, or a new identifier when none exists.
+    pub reference: ExternalReferenceId,
+    /// Canonical provider identity.
+    pub identity: ExternalIdentity,
+    /// Display label; replaces the recorded label without changing identity.
+    pub label: String,
+    /// Optional display URL; replaces the recorded URL without changing identity.
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Relationship of the work to the external object.
+    pub role: ExternalLinkRole,
+    /// Optional external state reported by the caller; recorded as an observation only.
+    #[serde(default)]
+    pub observed: Option<ExternalState>,
 }
 
 /// Audit envelope for one successfully applied command.
@@ -184,6 +216,33 @@ pub enum EngineError {
     /// A resolved gate cannot be resolved again.
     #[error("decision {0} is not open")]
     DecisionNotOpen(DecisionId),
+    /// Referenced external object is not recorded in this workspace.
+    #[error("external reference {0} does not exist")]
+    MissingExternalReference(ExternalReferenceId),
+    /// The work item has no link to the external reference.
+    #[error("work item {work} has no link to external reference {reference}")]
+    MissingExternalLink {
+        /// Work named by the request.
+        work: WorkItemId,
+        /// External reference named by the request.
+        reference: ExternalReferenceId,
+    },
+    /// The work item already links the external reference.
+    #[error("work item {work} already links external reference {reference}; unlink it first")]
+    DuplicateExternalLink {
+        /// Work named by the request.
+        work: WorkItemId,
+        /// External reference already linked.
+        reference: ExternalReferenceId,
+    },
+    /// Another work item already tracks the external object.
+    #[error("{identity} is already tracked by {owner}; unlink it before transferring tracking")]
+    TrackingOwned {
+        /// External identity whose tracking is owned.
+        identity: String,
+        /// Key of the work that tracks it.
+        owner: Key,
+    },
     /// Schedule projection failed.
     #[error(transparent)]
     Schedule(#[from] ScheduleError),

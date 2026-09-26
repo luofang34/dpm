@@ -54,6 +54,9 @@ pub struct Plan {
     pub risks: BTreeMap<RiskId, Risk>,
     /// Directed temporal constraints; cycles are rejected.
     pub dependencies: Vec<Dependency>,
+    /// External tracker objects linked to work; context only, never evidence or gates.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub external_references: BTreeMap<ExternalReferenceId, ExternalReference>,
 }
 
 impl Plan {
@@ -74,6 +77,7 @@ impl Plan {
             decisions: BTreeMap::new(),
             risks: BTreeMap::new(),
             dependencies: Vec::new(),
+            external_references: BTreeMap::new(),
         }
     }
 
