@@ -8,7 +8,7 @@ The configured actor is the local principal for every project mutation. A separa
 `--actor human:reviewer` or a service actor. This is a trusted local workspace, not remote authentication.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
-The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:3`
+The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:4`
 and the observed `revision`, so an agent can send `base_revision` with its next mutation. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
 which the store still checks atomically. Presentation text is not the API contract.
@@ -115,7 +115,9 @@ is not an operation backup; retain consistent SQLite backups for recovery.
 
 The supported external format is the documented Microsoft Project XML schema (MSPDI), which
 Microsoft Project, ProjectLibre, OmniPlan and MPXJ read and write. Binary `.mpp` and Primavera
-files are not supported; convert them to MSPDI with another tool first. `dpm-interchange` parses
+files are not supported; convert them to MSPDI with another tool first. Tests read documents
+written by MPXJ and check that MPXJ reads DPM's export back unchanged; acceptance by Microsoft
+Project itself is not verified. `dpm-interchange` parses
 and writes the subset without network access and never touches the store.
 
 `plan import-mspdi FILE --project-key KEY [--key-prefix P] [--candidate OUT.json]` and
@@ -131,7 +133,7 @@ revision and operation history unchanged.
 | Task `GUID` | Work identity. Without one, an identity derived from the project `GUID` and task `UID`; neither skips the task |
 | `OutlineLevel` order | `parent`; a summary task (or any task with children) becomes a WorkPackage |
 | `Milestone=1` | Milestone; a nonzero source duration is dropped and reported |
-| other tasks | Task, `Proposed`, empty acceptance: never executable until ratified |
+| other tasks | Task, `Proposed`, empty acceptance: never executable until ratified. A zero-duration task without the flag stays an unestimated Task, so exported unestimated tasks keep their kind |
 | `Name`, `Notes` | `title`, `objective` (absent notes keep the local objective) |
 | `Priority` 0..1000 | P0 ≥800, P1 ≥600, P2 ≥400, P3 ≥200, else P4; export writes 900/700/500/300/100 |
 | `Duration` `PTnHnMnS` | Single-point estimate O=M=P in hours; zero means unestimated |

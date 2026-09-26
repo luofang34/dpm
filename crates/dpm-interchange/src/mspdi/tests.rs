@@ -391,3 +391,21 @@ fn export_is_deterministic_and_reimports_without_changes() {
     };
     assert_eq!(error.code(), "invalid_command");
 }
+
+#[test]
+fn rejected_links_carry_only_the_rejection_and_zero_durations_are_reported() {
+    let plan = workspace();
+    // SS from a summary with a working-time lag: rejected, with no approximation note.
+    let result = import(&plan, &outline_document(&link(1, 3, 4800, 7)));
+    let rejected = &result.report.links[2];
+    assert_eq!(rejected.outcome, LinkOutcome::Rejected);
+    assert_eq!(rejected.notes.len(), 1, "{:?}", rejected.notes);
+    let current = result.candidate;
+    let zeroed = outline_document("").replace("PT16H0M0S", "PT0H0M0S");
+    let result = import(&current, &zeroed);
+    let spec = &result.report.items[1];
+    assert_eq!(spec.outcome, ItemOutcome::Updated);
+    assert!(!spec.preserved.contains(&"duration".to_string()));
+    assert!(spec.approximated.iter().any(|f| f.field == "duration"));
+    assert_eq!(work(&result.candidate, "MSP-2").estimate, None);
+}

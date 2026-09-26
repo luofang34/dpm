@@ -101,7 +101,6 @@ fn anchors(
         .ok_or_else(|| "link has no PredecessorUID".to_string())?;
     let successor = outline.work(task.uid)?;
     let predecessor = outline.work(predecessor_uid)?;
-    check_lag(link, report)?;
     let starts_bound = matches!(
         kind,
         DependencyKind::FinishStart | DependencyKind::StartStart
@@ -131,6 +130,7 @@ fn anchors(
             "link joins a task with itself or a summary task with its own descendant".into(),
         );
     }
+    check_lag(link, report)?;
     let expanded = from.len() > 1
         || to.len() > 1
         || predecessor.kind == WorkKind::WorkPackage

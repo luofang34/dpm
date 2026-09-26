@@ -381,11 +381,16 @@ fn task_estimate(
     let unchanged = existing
         .filter(|e| e.kind == WorkKind::Task)
         .is_some_and(|e| duration_seconds(e.estimate) == seconds);
-    if unchanged || seconds == 0 {
-        if !unchanged {
-            work.estimate = None;
-        }
+    if unchanged || (seconds == 0 && work.estimate.is_none()) {
         report.preserved.push("duration".into());
+        return;
+    }
+    if seconds == 0 {
+        work.estimate = None;
+        report.approximated.push(Finding::new(
+            "duration",
+            "zero source duration removes the local estimate; the task becomes unestimated",
+        ));
         return;
     }
     work.estimate = estimate_from_seconds(seconds);
