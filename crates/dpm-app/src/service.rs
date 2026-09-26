@@ -144,6 +144,22 @@ impl Application {
             Backing::Preview(plan) => Ok(plan.as_ref().clone()),
         }
     }
+    /// Reopen the selected source for an explicit UI reload without changing workspace identity or mode.
+    pub fn refreshed_plan_blocking(&self) -> Result<Plan, AppError> {
+        let current = self.plan_blocking()?;
+        let Some(root) = &self.project_root else {
+            return Ok(current);
+        };
+        let source = crate::ProjectLocation::at_blocking(root)?.open_blocking()?;
+        let next = source.plan_blocking()?;
+        if source.is_read_only() != self.is_read_only() || next.workspace.id != current.workspace.id
+        {
+            return Err(AppError::InvalidRequest(
+                "source identity or mode changed; reopen explicitly".into(),
+            ));
+        }
+        Ok(next)
+    }
     /// Resolve a work key to its stable UUID.
     pub fn work_id_blocking(&self, key: &str) -> Result<WorkItemId, AppError> {
         self.plan_blocking()?

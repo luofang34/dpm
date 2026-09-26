@@ -8,7 +8,7 @@ fn fixture() -> Plan {
     .expect("fixture")
 }
 
-fn render(view: &mut View<'_>) -> String {
+fn render(view: &mut View) -> String {
     let mut terminal = Terminal::new(TestBackend::new(120, 35)).expect("test terminal");
     terminal.draw(|frame| view.render(frame)).expect("render");
     terminal
@@ -222,4 +222,76 @@ fn file_preview_is_labeled_separately_from_database_snapshot() {
     assert!(render(&mut view).contains("PREVIEW read-only revision 0"));
     view.preview = false;
     assert!(render(&mut view).contains("snapshot revision 0"));
+}
+
+#[test]
+fn detail_exposes_complete_contract_context_and_latest_review_by_scrolling() {
+    let mut plan = fixture();
+    let work = plan.find_work_by_key_mut("TEST-A").expect("work");
+    work.instructions = Some(dpm_model::WorkInstructions {
+        steps: vec![dpm_model::ExecutionStep {
+            action: "Inspect the calibration sample".into(),
+            expected_result: "Recorded sample measurements".into(),
+        }],
+        in_scope: vec!["Sample calibration".into()],
+        out_of_scope: vec!["Hardware redesign".into()],
+        verification: vec!["Compare calibration residuals".into()],
+    });
+    work.owner = Some(dpm_model::ActorId::agent("owner"));
+    work.status = WorkStatus::InProgress;
+    work.last_rejection = Some(dpm_model::ReviewRejection {
+        actor: dpm_model::ActorId::human("reviewer"),
+        at: "2026-09-26T00:00:00Z".parse().expect("timestamp"),
+        reason: "Missing measured evidence".into(),
+    });
+    let mut view = View::new(&plan).expect("view");
+    view.handle_key(KeyCode::Enter);
+    let mut text = render(&mut view);
+    for _ in 0..10 {
+        view.handle_key(KeyCode::PageDown);
+        text.push_str(&render(&mut view));
+    }
+    for expected in [
+        "Inspect the calibration sample",
+        "Recorded sample measurements",
+        "Sample calibration",
+        "Hardware redesign",
+        "Compare calibration residuals",
+        "Missing measured evidence",
+        "TEST-REPO",
+    ] {
+        assert!(text.contains(expected), "missing {expected}");
+    }
+}
+
+#[test]
+fn refresh_preserves_selection_and_viewport_and_rejects_source_switches_atomically() {
+    let mut plan = fixture();
+    let mut view = View::new(&plan).expect("view");
+    view.handle_key(KeyCode::Char('g'));
+    view.handle_key(KeyCode::Right);
+    view.handle_key(KeyCode::Down);
+    let selected = view.work[view.state.selected().expect("selection")].id;
+    plan.work_items.get_mut(&selected).expect("work").title = "Refreshed task title".into();
+    plan.revision = 1;
+    view.refresh(&plan).expect("refresh");
+    assert_eq!(
+        view.work[view.state.selected().expect("selection")].id,
+        selected
+    );
+    let updated = render(&mut view);
+    assert!(
+        updated.contains("revision 1")
+            && updated.contains("Refreshed task title")
+            && updated.contains("12.0h")
+    );
+    let mut invalid = plan.clone();
+    invalid.workspace.id = dpm_model::WorkspaceId::new();
+    assert!(view.refresh(&invalid).is_err());
+    assert_eq!(view.plan, plan);
+    assert_eq!(render(&mut view), updated);
+    view.reload_failed(&"missing source");
+    assert!(render(&mut view).contains("missing source"));
+    view.refresh(&plan).expect("retry");
+    assert!(view.notice.is_none());
 }

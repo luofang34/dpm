@@ -13,6 +13,14 @@ impl Viewport {
             horizon,
         }
     }
+    pub(super) fn restore(&mut self, previous: &Self) {
+        self.span = if previous.span == previous.horizon {
+            self.horizon
+        } else {
+            previous.span.min(self.horizon)
+        };
+        self.start = previous.start.min(self.horizon - self.span);
+    }
     pub(super) fn end(&self) -> f64 {
         (self.start + self.span).min(self.horizon)
     }

@@ -259,3 +259,27 @@ fn a_cloned_database_locator_can_be_initialized_but_preview_cannot() {
         "read_only_project"
     );
 }
+
+#[test]
+fn explicit_refresh_reloads_preview_contracts_without_switching_identity_or_mode() {
+    let temp = TempDir::new().expect("temp");
+    let mut expected = plan();
+    let path = temp.path().join("plan.json");
+    fs::write(&path, serde_json::to_string(&expected).expect("json")).expect("plan");
+    locator_blocking(
+        temp.path(),
+        &format!(
+            "version = 2\nworkspace = '{}'\npreview = '../plan.json'",
+            expected.workspace.id
+        ),
+    );
+    let app = open_workspace_blocking(temp.path(), None, None).expect("preview");
+    expected.find_work_by_key_mut("TEST-A").expect("work").title = "Updated preview".into();
+    fs::write(&path, serde_json::to_string(&expected).expect("json")).expect("plan");
+    assert_eq!(app.refreshed_plan_blocking().expect("refresh"), expected);
+    expected.workspace.id = dpm_model::WorkspaceId::new();
+    fs::write(&path, serde_json::to_string(&expected).expect("json")).expect("plan");
+    assert!(app.refreshed_plan_blocking().is_err());
+    assert!(app.is_read_only());
+    assert!(!temp.path().join(".dpm/state.sqlite").exists());
+}

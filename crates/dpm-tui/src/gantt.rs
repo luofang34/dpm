@@ -48,6 +48,10 @@ impl Gantt {
             first_row: 0,
         })
     }
+    pub(crate) fn restore_navigation(&mut self, previous: &Self) {
+        self.viewport.restore(&previous.viewport);
+        self.palette.enabled = previous.palette.enabled;
+    }
     pub(crate) fn set_colors(&mut self, enabled: bool) {
         self.palette.enabled = enabled;
     }

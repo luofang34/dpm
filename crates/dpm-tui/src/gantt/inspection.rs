@@ -167,9 +167,7 @@ impl Gantt {
             Line::from(
                 "NO_COLOR=1 disables colors. Symbols, direction arrows, explicit states and selection emphasis remain available.",
             ),
-            Line::from(
-                "Navigation is read-only. This is a snapshot; reopen to load a new revision.",
-            ),
+            Line::from("Navigation is read-only. Press r to reload a fresh snapshot."),
         ];
         lines.push(Line::from("End of help · Esc or ? returns to the chart"));
         self.help_panel.render(

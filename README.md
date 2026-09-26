@@ -142,7 +142,9 @@ ordered estimates, acceptance contracts, and consistent lifecycle/ownership. Imp
 on authoritative snapshots; export does not include the operation history. Plan editing is through
 JSON import into a new workspace in this MVP. The console is a read-only snapshot: use `1`–`5` to
 switch views (`5` or `g` opens Gantt), arrows or `j`/`k` to select work, Enter for details, and `q` to
-quit. Reopen it to see external changes.
+quit. Press `r` to reload agent changes while retaining the selected work and Gantt viewport.
+Detail shows the full steps, scope, acceptance, review and linked context; scroll to read long contracts.
+A failed reload keeps the last valid view and displays its revision with the error.
 
 Only planned tasks can be claimed. Submitted work requires a different actor to verify it. Blocking
 and resuming claimed work retains its owner. Nonempty capability filters are eligibility constraints.

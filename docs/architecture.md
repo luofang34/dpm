@@ -82,7 +82,9 @@ return local configuration without a project revision.
 The Gantt page renders `deterministic_remaining` as a read-only hour-axis chart. Work packages
 roll up descendant ranges for display, milestones remain zero-duration points, and selecting a row
 opens the same work context used by other views. Nothing in navigation or rendering updates state.
-The console is explicitly a revision snapshot; reopening refreshes it.
+The console displays an explicit revision snapshot. `r` reloads through the application boundary,
+retaining selection and viewport. Validation or source-identity failures preserve the last valid view
+and display an error. Detail exposes the same execution contract and review context as `explain`.
 
 ## Execution progress
 

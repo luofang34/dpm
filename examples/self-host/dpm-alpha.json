@@ -520,6 +520,15 @@
         },
         {
           "text": "Capture TestBackend and manual results and show that navigation leaves revision and plan unchanged."
+        },
+        {
+          "text": "Read full steps, scope, acceptance, latest review and linked context in scrollable Detail; long contracts and Unicode remain inspectable."
+        },
+        {
+          "text": "Refresh external agent changes with r while retaining selection and Gantt viewport; malformed sources or changed workspace identity retain the last valid revision with an explicit error."
+        },
+        {
+          "text": "Exercise a real controlling terminal: navigation and refresh append no domain operations; q and Ctrl-C restore raw mode, mouse capture and the alternate screen."
         }
       ],
       "status": "Planned",
@@ -561,6 +570,10 @@
           {
             "action": "Run TUI TestBackend coverage and compare snapshot/revision before and after navigation.",
             "expected_result": "Automated and manual evidence demonstrates unchanged authoritative state."
+          },
+          {
+            "action": "Change a disposable database through the agent/CLI adapter while TUI remains open, then reload and inspect Detail. Exercise both normal quit and Ctrl-C.",
+            "expected_result": "The new revision and blocker appear, the full execution contract stays readable, terminal state is restored and only external semantic commands append operations."
           }
         ],
         "in_scope": [
@@ -571,7 +584,8 @@
         ],
         "verification": [
           "cargo test -p dpm-tui --all-targets",
-          "Compare exported snapshots before/after manual navigation; exercise Unicode and FS/SS/FF/SF signed lag."
+          "Compare exported snapshots before/after manual navigation; exercise Unicode and FS/SS/FF/SF signed lag.",
+          "Run python3 scripts/smoke_terminal.py against release binaries and inspect TestBackend refresh/contract coverage."
         ]
       },
       "resources": [

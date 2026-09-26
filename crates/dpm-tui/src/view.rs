@@ -33,8 +33,9 @@ impl Page {
     }
 }
 
-pub(crate) struct View<'a> {
-    plan: &'a Plan,
+pub(crate) struct View {
+    plan: Plan,
+    notice: Option<String>,
     pub(crate) preview: bool,
     pub(crate) page: Page,
     work: Vec<WorkItem>,
@@ -47,8 +48,8 @@ pub(crate) struct View<'a> {
     text_panel: crate::text_panel::TextPanel,
 }
 
-impl<'a> View<'a> {
-    pub(crate) fn new(plan: &'a Plan) -> Result<Self, EngineError> {
+impl View {
+    pub(crate) fn new(plan: &Plan) -> Result<Self, EngineError> {
         let summary = status(plan, true)?;
         let candidates = next_work(plan, &NextWorkQuery::default())?;
         let now = now_text(plan, &summary, candidates);
@@ -70,7 +71,8 @@ impl<'a> View<'a> {
             state.select(Some(0));
         }
         Ok(Self {
-            plan,
+            plan: plan.clone(),
+            notice: None,
             preview: false,
             page: Page::Now,
             work,
@@ -82,6 +84,38 @@ impl<'a> View<'a> {
             detail_cache: None,
             text_panel: crate::text_panel::TextPanel::default(),
         })
+    }
+
+    pub(crate) fn refresh(&mut self, plan: &Plan) -> Result<(), EngineError> {
+        if plan.workspace.id != self.plan.workspace.id {
+            return Err(EngineError::InvalidCommand {
+                entity: plan.workspace.id.to_string(),
+                reason: "workspace identity changed; reopen explicitly".into(),
+            });
+        }
+        let selected = self
+            .state
+            .selected()
+            .and_then(|index| self.work.get(index))
+            .map(|w| w.id);
+        let mut next = Self::new(plan)?;
+        next.page = self.page;
+        next.preview = self.preview;
+        next.gantt.restore_navigation(&self.gantt);
+        next.state.select(
+            selected
+                .and_then(|id| next.work.iter().position(|w| w.id == id))
+                .or_else(|| (!next.work.is_empty()).then_some(0)),
+        );
+        *self = next;
+        Ok(())
+    }
+
+    pub(crate) fn reload_failed(&mut self, error: &impl std::fmt::Display) {
+        self.notice = Some(format!(
+            "Reload failed: {error}. Showing revision {}; [r] retry.",
+            self.plan.revision
+        ));
     }
 
     pub(crate) fn set_colors(&mut self, enabled: bool) {
@@ -149,19 +183,27 @@ impl<'a> View<'a> {
     }
 
     pub(crate) fn render(&mut self, frame: &mut Frame<'_>) {
-        let areas =
-            Layout::vertical([Constraint::Length(3), Constraint::Min(1)]).split(frame.area());
+        let areas = Layout::vertical([
+            Constraint::Length(if self.notice.is_some() { 6 } else { 3 }),
+            Constraint::Min(1),
+        ])
+        .split(frame.area());
         frame.render_widget(
             Paragraph::new(format!(
-                "DPM · {} · {} revision {}  [1–5] Pages [↑↓/jk] Navigate [q] Quit",
+                "DPM · {} · {} revision {}  [1–5] Pages [↑↓/jk] Navigate [r] Reload [q] Quit{}",
                 self.page.title(),
                 if self.preview {
                     "PREVIEW read-only"
                 } else {
                     "snapshot"
                 },
-                self.plan.revision
+                self.plan.revision,
+                self.notice
+                    .as_ref()
+                    .map(|s| format!("\n{s}"))
+                    .unwrap_or_default()
             ))
+            .wrap(ratatui::widgets::Wrap { trim: false })
             .block(Block::bordered()),
             areas[0],
         );
@@ -169,7 +211,7 @@ impl<'a> View<'a> {
             self.gantt.render(
                 frame,
                 areas[1],
-                self.plan,
+                &self.plan,
                 &self.work,
                 self.state.selected(),
             );
@@ -179,7 +221,7 @@ impl<'a> View<'a> {
             let items = self.work.iter().map(|w| {
                 ListItem::new(format!(
                     "{}{}{}  {:?}  {:.0}%  {}",
-                    "  ".repeat(depth(self.plan, w)),
+                    "  ".repeat(depth(&self.plan, w)),
                     crate::work_label::milestone_badge(w, self.progress.work[&w.id].verified),
                     w.key,
                     w.status,
@@ -218,24 +260,8 @@ impl<'a> View<'a> {
         let Some(work) = self.state.selected().and_then(|i| self.work.get(i)) else {
             return "No work in this workspace.".into();
         };
-        let text = match explain_work(self.plan, work.id) {
-            Ok(explanation) => format!(
-                "{} — {}\nStatus: {:?} · {:.0}% · verified={}\nObjective: {}\n\nAcceptance:\n{}\n\n{}\n\nDependencies:\n{}\n{}",
-                work.key,
-                work.title,
-                work.status,
-                explanation.progress.percent_complete,
-                explanation.progress.verified,
-                work.objective,
-                work.acceptance
-                    .iter()
-                    .map(|a| format!("• {}", a.text))
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-                explanation.why_now.join("\n"),
-                dependencies::lines(self.plan, Some(work.id)).join("\n"),
-                dependencies::LEGEND
-            ),
+        let text = match explain_work(&self.plan, work.id) {
+            Ok(explanation) => crate::detail::text(&self.plan, &explanation),
             Err(error) => format!("Cannot explain work: {error}"),
         };
         if let Some(index) = self.state.selected() {
@@ -272,14 +298,42 @@ fn now_text(plan: &Plan, summary: &StatusSummary, candidates: Vec<NextWorkCandid
     {
         now.push_str(&format!("{}: {}\n", decision.key, decision.question));
     }
+    for (title, state) in [
+        ("Blocked work", WorkStatus::Blocked),
+        ("Needs review", WorkStatus::Submitted),
+    ] {
+        now.push_str(&format!("\n{title}:\n"));
+        for work in plan.work_items.values().filter(|w| w.status == state) {
+            now.push_str(&format!(
+                "{} — {} {}\n",
+                work.key,
+                work.title,
+                work.block_reason.as_deref().unwrap_or("")
+            ));
+        }
+    }
+    now.push_str("\nRisks:\n");
+    for risk in plan.risks.values() {
+        now.push_str(&format!(
+            "{} ({:?}): {}\n",
+            risk.key, risk.impact, risk.description
+        ));
+    }
     now.push_str("\nRecommended ready work:\n");
     if candidates.is_empty() {
         now.push_str("No ready work. Inspect Work or Detail for blockers and gates.\n");
     }
     for candidate in candidates {
         now.push_str(&format!(
-            "{}  {}  score {:.1}\n",
-            candidate.work.key, candidate.work.title, candidate.score
+            "{}  {}  score {:.1}{}\n",
+            candidate.work.key,
+            candidate.work.title,
+            candidate.score,
+            if candidate.critical {
+                " [critical]"
+            } else {
+                ""
+            }
         ));
     }
     now

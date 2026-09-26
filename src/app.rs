@@ -86,11 +86,9 @@ fn run_open_blocking(
         Commands::Export => output::json_blocking(&app.plan_blocking()?),
         Commands::Tui => {
             let plan = app.plan_blocking()?;
-            if app.is_read_only() {
-                dpm_tui::run_preview_blocking(&plan)?;
-            } else {
-                dpm_tui::run_blocking(&plan)?;
-            }
+            dpm_tui::run_reloading_blocking(&plan, app.is_read_only(), || {
+                app.refreshed_plan_blocking()
+            })?;
             Ok(())
         }
         mutation => mutate_blocking(app, mutation, json, base_revision),

@@ -18,3 +18,4 @@ python3 scripts/smoke_self_host.py
 python3 scripts/smoke_mvp.py
 python3 scripts/smoke_agent.py
 python3 scripts/smoke_projects.py
+python3 scripts/smoke_terminal.py

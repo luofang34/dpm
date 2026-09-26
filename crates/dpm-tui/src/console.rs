@@ -36,15 +36,24 @@ impl Drop for TerminalGuard {
 
 /// Open a read-only snapshot console until the operator quits.
 pub fn run_blocking(plan: &Plan) -> Result<(), TuiError> {
-    run_source_blocking(plan, false)
+    run_reloading_blocking(plan, false, || {
+        Ok::<_, std::convert::Infallible>(plan.clone())
+    })
 }
 
 /// Open a plan-file preview whose source also rejects operations through other adapters.
 pub fn run_preview_blocking(plan: &Plan) -> Result<(), TuiError> {
-    run_source_blocking(plan, true)
+    run_reloading_blocking(plan, true, || {
+        Ok::<_, std::convert::Infallible>(plan.clone())
+    })
 }
 
-fn run_source_blocking(plan: &Plan, preview: bool) -> Result<(), TuiError> {
+/// Run a read-only console whose reload action obtains a fresh snapshot through its adapter.
+pub fn run_reloading_blocking<E: std::fmt::Display>(
+    plan: &Plan,
+    preview: bool,
+    mut reload: impl FnMut() -> Result<Plan, E>,
+) -> Result<(), TuiError> {
     let mut view = View::new(plan)?;
     view.preview = preview;
     view.set_colors(std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()));
@@ -54,14 +63,15 @@ fn run_source_blocking(plan: &Plan, preview: bool) -> Result<(), TuiError> {
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
     terminal.clear()?;
-    let result = event_loop_blocking(&mut terminal, &mut view);
+    let result = event_loop_blocking(&mut terminal, &mut view, &mut reload);
     drop(guard);
     result
 }
 
-fn event_loop_blocking(
+fn event_loop_blocking<E: std::fmt::Display>(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     view: &mut View,
+    reload: &mut impl FnMut() -> Result<Plan, E>,
 ) -> Result<(), TuiError> {
     loop {
         terminal.draw(|frame| view.render(frame))?;
@@ -70,7 +80,23 @@ fn event_loop_blocking(
         }
         match event::read()? {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
-                if view.handle_key(key.code) {
+                if key.code == crossterm::event::KeyCode::Char('c')
+                    && key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL)
+                {
+                    return Ok(());
+                }
+                if key.code == crossterm::event::KeyCode::Char('r') {
+                    match reload() {
+                        Ok(plan) => {
+                            if let Err(error) = view.refresh(&plan) {
+                                view.reload_failed(&error);
+                            }
+                        }
+                        Err(error) => view.reload_failed(&error),
+                    }
+                } else if view.handle_key(key.code) {
                     return Ok(());
                 }
             }
