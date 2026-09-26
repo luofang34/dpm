@@ -2,6 +2,7 @@
 
 mod error;
 mod git_artifact;
+mod interchange;
 mod project;
 mod registry;
 mod service;

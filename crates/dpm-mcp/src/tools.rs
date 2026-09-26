@@ -6,10 +6,20 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
+mod interchange;
+
 const NAMES: &[(&str, &str)] = &[
     (
         "export_plan",
         "Get the full authoritative plan for a reviewed proposal",
+    ),
+    (
+        "import_mspdi",
+        "Map a Microsoft Project XML document onto a reviewed candidate with a per-item report; changes nothing, and new tasks stay Proposed",
+    ),
+    (
+        "export_mspdi",
+        "Write one project's work as the supported Microsoft Project XML subset with a report of omitted data",
     ),
     (
         "propose_change",
@@ -90,7 +100,7 @@ const NAMES: &[(&str, &str)] = &[
 
 pub(crate) fn definitions() -> Vec<Value> {
     NAMES.iter().map(|(name,description)| {
-        let read = matches!(*name, "export_plan" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
+        let read = matches!(*name, "export_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
         if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external") {
@@ -105,6 +115,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 properties.insert("plan".into(), json!({"type":"object","description":"Full export_plan data with the same workspace identity and observed revision; preserve execution/evidence fields. Omitted entities are reviewed deletions."})); required.push("plan");
                 if *name == "apply_change" { properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.push("reason"); }
             },
+            "import_mspdi" | "export_mspdi" => interchange::schema(name, &mut properties, &mut required),
             "history" => { properties.insert("after_sequence".into(),json!({"type":"integer","minimum":0,"default":0})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"maximum":1000,"default":100})); },
             "workspace_register" => { properties.insert("database".into(),json!({"type":"string"})); properties.insert("replace".into(),json!({"type":"boolean","default":false})); required.push("database"); },
             "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); },
@@ -177,6 +188,9 @@ struct Arguments {
     role: Option<ExternalLinkRole>,
     observed: Option<ExternalState>,
     dependency: Option<String>,
+    xml: Option<String>,
+    project_key: Option<String>,
+    key_prefix: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -204,6 +218,7 @@ pub(crate) fn call_tool_blocking(
     }
     let query = match name {
         "export_plan" => Some(Query::Export),
+        "import_mspdi" | "export_mspdi" => Some(interchange::query(name, &args)?),
         "propose_change" => Some(Query::ProposeChange {
             plan: required(args.plan.clone(), "plan")?,
         }),

@@ -253,4 +253,26 @@ pub(crate) enum PlanCommand {
         #[arg(long, default_value = "human:local")]
         actor: String,
     },
+    /// Map a Microsoft Project XML (MSPDI) file onto a reviewed candidate; changes nothing.
+    ImportMspdi {
+        file: PathBuf,
+        /// Existing project receiving the imported work.
+        #[arg(long)]
+        project_key: String,
+        /// Prefix for keys of new work (PREFIX-UID); defaults to the project key.
+        #[arg(long)]
+        key_prefix: Option<String>,
+        /// Also write the candidate plan here for review and `plan apply`.
+        #[arg(long)]
+        candidate: Option<PathBuf>,
+    },
+    /// Write one project's work as the supported Microsoft Project XML subset.
+    ExportMspdi {
+        /// Project whose work is written.
+        #[arg(long)]
+        project_key: String,
+        /// Write the document here instead of standard output.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }

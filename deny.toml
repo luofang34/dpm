@@ -5,6 +5,7 @@ exceptions = [
     { crate = "dpm", allow = ["AGPL-3.0-only"] },
     { crate = "dpm-app", allow = ["AGPL-3.0-only"] },
     { crate = "dpm-engine", allow = ["AGPL-3.0-only"] },
+    { crate = "dpm-interchange", allow = ["AGPL-3.0-only"] },
     { crate = "dpm-mcp", allow = ["AGPL-3.0-only"] },
     { crate = "dpm-model", allow = ["AGPL-3.0-only"] },
     { crate = "dpm-schedule", allow = ["AGPL-3.0-only"] },

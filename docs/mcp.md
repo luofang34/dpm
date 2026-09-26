@@ -18,6 +18,8 @@ which the store still checks atomically. Presentation text is not the API contra
 | export | export_plan | Authoritative snapshot for proposals |
 | plan diff FILE | propose_change | Validate a candidate and inspect entity/field differences |
 | plan apply FILE --reason TEXT | apply_change | Human/service applies an observed-revision proposal atomically |
+| plan import-mspdi FILE --project-key KEY | import_mspdi | [MSPDI](#microsoft-project-xml-interchange) candidate, preview and per-item report; no state change |
+| plan export-mspdi --project-key KEY | export_mspdi | One project's work as MSPDI with a report of omitted data |
 | history --after-sequence N --limit N | history | Chronological operation pages with actor, time, reason and command |
 | status | project_status | Counts and optional Monte Carlo forecast |
 | next --project-key KEY --resource-key KEY | next_work | Full-graph ranking, then [scope](#scoped-next) and limit; outside-scope work stays visible |
@@ -108,6 +110,71 @@ rewrite one; record it with `link_external`.
 `history` returns entries in append order with a `next_after_sequence` cursor (default limit 100,
 capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export
 is not an operation backup; retain consistent SQLite backups for recovery.
+
+## Microsoft Project XML interchange
+
+The supported external format is the documented Microsoft Project XML schema (MSPDI), which
+Microsoft Project, ProjectLibre, OmniPlan and MPXJ read and write. Binary `.mpp` and Primavera
+files are not supported; convert them to MSPDI with another tool first. `dpm-interchange` parses
+and writes the subset without network access and never touches the store.
+
+`plan import-mspdi FILE --project-key KEY [--key-prefix P] [--candidate OUT.json]` and
+`import_mspdi` (`xml`, `project_key`, optional `key_prefix`) return `{report, preview, candidate}`.
+`candidate` is a full plan at the observed revision, `preview` is its `propose_change` result, and
+`--candidate` also writes it to a file. Importing is a query: nothing is persisted until a human or
+service applies the candidate with `plan apply` / `apply_change`, which re-validates it against
+the current revision. A malformed document, an unknown project or a stale candidate leaves the
+revision and operation history unchanged.
+
+| MSPDI | DPM candidate |
+| --- | --- |
+| Task `GUID` | Work identity. Without one, an identity derived from the project `GUID` and task `UID`; neither skips the task |
+| `OutlineLevel` order | `parent`; a summary task (or any task with children) becomes a WorkPackage |
+| `Milestone=1` | Milestone; a nonzero source duration is dropped and reported |
+| other tasks | Task, `Proposed`, empty acceptance: never executable until ratified |
+| `Name`, `Notes` | `title`, `objective` (absent notes keep the local objective) |
+| `Priority` 0..1000 | P0 ≥800, P1 ≥600, P2 ≥400, P3 ≥200, else P4; export writes 900/700/500/300/100 |
+| `Duration` `PTnHnMnS` | Single-point estimate O=M=P in hours; zero means unestimated |
+| `PredecessorLink` `Type` 0/1/2/3 | FF/FS/SF/SS dependency |
+| `LinkLag` | `lag_hours = LinkLag / 600` (tenths of a minute) |
+
+DPM schedules elapsed hours. Elapsed duration/lag formats (`em`, `eh`, `ed`, `ew`, `emo`) convert
+exactly. Working-time formats (`m`, `h`, `d`, `w`, `mo`) keep their hour value but lose the
+calendar: 1 working day (`LinkLag` 4800 on an 8-hour calendar) becomes 8 elapsed hours, not a
+calendar day. The report marks those values as approximations. Percentage lags, unknown formats,
+and nonzero lags without `LagFormat` are rejected with the link rather than guessed. Durations
+with day, week or month designators are rejected. Cross-project links are rejected.
+
+Work packages cannot be dependency endpoints. A summary finishes with its last child and starts
+with its first, so a summary predecessor of an FS or FF link and a summary successor of an FS or
+SS link expand exactly into one edge per task/milestone descendant. The other combinations, links
+between a summary and its own descendant, and summaries without imported descendants are rejected.
+Relations that expand onto the same pair and kind merge, keeping the larger lag.
+
+`report.items` has one entry per source task with `outcome` (`Created`, `Updated`, `Unchanged`,
+`Skipped`), the mapped `work`, and `preserved`, `approximated` and `rejected` findings;
+`report.links` has one entry per `PredecessorLink` with `outcome` (`Preserved`, `Approximated`,
+`Rejected`), notes and the resulting dependency IDs. Rejected data includes constraints,
+deadlines, calendars, resources and assignments, baselines, custom fields and outline codes,
+manual scheduling, recurrence, cost, timephased data, and percent complete or actuals. Source
+progress never submits, verifies or completes local work. Inactive, blank, external and subproject
+tasks are skipped with a reason; `report.rejected` covers document-level data and
+`report.retained` lists local work in the project that the document does not name.
+
+Re-importing updates work with the same identity and never duplicates it. Keys, lifecycle,
+ownership, progress, evidence and acceptance stay local. The document owns only the dependencies
+between work it imports; other edges are kept. An unchanged source duration or lag (compared in the
+exported encoding) keeps the richer local three-point estimate, exact lag, policy, rationale and
+waiver. Local work the document omits is retained, not deleted. Changes that touch protected
+(started) work are refused by `propose_change` as with any reviewed change.
+
+`plan export-mspdi --project-key KEY [--output FILE]` and `export_mspdi` (`project_key`) return
+`{xml, report}`; without `--json` the CLI prints the document itself. Output is deterministic:
+siblings follow key order, `UID`s number that order (they are local to the file), and `GUID`s are
+the stable project and work identities. Tasks carry the PERT expectation in elapsed hours, and
+links carry elapsed-hour lags. The report lists per-item omissions (acceptance, instructions,
+lifecycle, owner, requirements, evidence, resources) and project-level data outside the subset.
+Exporting a project and importing the document into the same workspace yields no changes.
 
 ## Dependency policies, waivers and links
 
@@ -262,6 +329,7 @@ Specification:
 - https://modelcontextprotocol.io/specification/2025-11-25/server/tools
 
 `python3 scripts/smoke_tracking.py` covers external links through both adapters.
+`python3 scripts/smoke_interchange.py` covers MSPDI import/export parity, refused applies and round trips.
 `python3 scripts/smoke_agent.py` verifies real-process CLI/MCP query equality and shared execution,
 progress reporting, revision conflict, evidence, blocker, decision and independent-verification behavior.
 

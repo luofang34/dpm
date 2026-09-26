@@ -1,0 +1,23 @@
+[package]
+name = "dpm-interchange"
+description = "Bounded project-file interchange for reviewed DPM plan proposals"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+dpm-model = { path = "../dpm-model", version = "0.1.0" }
+roxmltree.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+chrono.workspace = true
+dpm-engine = { path = "../dpm-engine", version = "0.1.0" }
+serde_json.workspace = true
+
+[lints]
+workspace = true

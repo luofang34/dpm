@@ -26,6 +26,14 @@ pub(crate) fn text_blocking(text: &str) -> Result<(), CliError> {
     Ok(())
 }
 
+/// Write a complete document exactly, without an added line break.
+pub(crate) fn raw_blocking(text: &str) -> Result<(), CliError> {
+    io::stdout()
+        .lock()
+        .write_all(text.as_bytes())
+        .map_err(io_error("write output", "stdout"))
+}
+
 pub(crate) fn next_text_blocking(result: &NextWorkResult) -> Result<(), CliError> {
     if !result.scope.is_unscoped() {
         let keys = |members: Vec<String>| {

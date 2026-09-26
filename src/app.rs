@@ -427,5 +427,8 @@ fn plan_command_blocking(
             })?;
             output::value_blocking(&operation, json)
         }
+        interchange @ (PlanCommand::ImportMspdi { .. } | PlanCommand::ExportMspdi { .. }) => {
+            crate::interchange::plan_command_blocking(app, interchange, json)
+        }
     }
 }

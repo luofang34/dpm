@@ -21,6 +21,9 @@ pub enum AppError {
     /// Query scope names an entity absent from the plan.
     #[error(transparent)]
     Scope(#[from] dpm_engine::ScopeError),
+    /// A project file could not be mapped to or from the supported interchange subset.
+    #[error(transparent)]
+    Interchange(#[from] dpm_interchange::InterchangeError),
     /// Persistence failed.
     #[error(transparent)]
     Store(#[from] dpm_store::StoreError),
@@ -102,6 +105,7 @@ impl AppError {
             ) => "not_found",
             Self::Engine(dpm_engine::EngineError::TrackingOwned { .. }) => "tracking_conflict",
             Self::Engine(_) => "invalid_command",
+            Self::Interchange(error) => error.code(),
             Self::Store(_) => "storage_error",
             Self::Json(_) | Self::InvalidRequest(_) => "invalid_request",
         }

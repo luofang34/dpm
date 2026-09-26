@@ -181,6 +181,15 @@ Resources have stable IDs and explicit task requirements. Device-local workspace
 one store from multiple entry points; locators check its identity before use. Semantic plan editing,
 TOML plan interchange and sync remain task contracts available through `explain`.
 
+## Project-file interchange
+
+`dpm-interchange` maps the documented Microsoft Project XML (MSPDI) subset to and from the plan.
+It sits beside the store, outside model/schedule/engine, and holds no state: an import builds a
+candidate plan and a per-item report, and the candidate enters through the same reviewed
+`propose_change` / `ApplyChange` path as any edited export. Imported tasks are Proposed; source
+progress never completes local work. See [the agent contract](mcp.md#microsoft-project-xml-interchange)
+for the mapping, unit conversions and loss reporting.
+
 ## Git
 
 Git commits and pull requests are artifacts linked to work. Git history is valuable evidence and a

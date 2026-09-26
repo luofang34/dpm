@@ -46,6 +46,21 @@ pub enum Query {
     },
     /// Export a validated authoritative snapshot for plan proposals.
     Export,
+    /// Map a Microsoft Project XML document onto a reviewed plan-change candidate.
+    ImportMspdi {
+        /// Complete MSPDI document text.
+        xml: String,
+        /// Existing project receiving the imported work.
+        project_key: String,
+        /// Prefix for keys of new work; defaults to the project key.
+        #[serde(default)]
+        key_prefix: Option<String>,
+    },
+    /// Write one project's work as the supported Microsoft Project XML subset.
+    ExportMspdi {
+        /// Project whose work is written.
+        project_key: String,
+    },
     /// Execution counts and optional Monte Carlo forecast.
     Status {
         /// Compute seeded uncertainty projections.
@@ -237,6 +252,9 @@ impl Application {
                 serde_json::to_value(dpm_engine::propose_change(&plan, &proposed)?)?
             }
             Query::Export => serde_json::to_value(&plan)?,
+            interchange @ (Query::ImportMspdi { .. } | Query::ExportMspdi { .. }) => {
+                crate::interchange::query(&plan, interchange)?
+            }
             Query::Status { probabilistic } => serde_json::to_value(status(&plan, probabilistic)?)?,
             Query::Next {
                 capabilities,

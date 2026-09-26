@@ -21,3 +21,4 @@ python3 scripts/smoke_projects.py
 python3 scripts/smoke_terminal.py
 python3 scripts/smoke_plans.py
 python3 scripts/smoke_tracking.py
+python3 scripts/smoke_interchange.py
