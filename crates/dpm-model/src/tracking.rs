@@ -50,6 +50,17 @@ impl ExternalProvider {
         )
     }
 
+    /// A Jira key already names its project (`PROJ-1`) and is unique per instance, so a separate
+    /// namespace would let one issue appear under several identities.
+    fn forbids_namespace(&self) -> bool {
+        matches!(self, Self::Jira)
+    }
+
+    /// Jira resolves issue keys case-insensitively and displays them upper-case.
+    fn folds_id_to_upper(&self) -> bool {
+        matches!(self, Self::Jira)
+    }
+
     /// Forges route owner/repository paths case-insensitively, so case must not split identity.
     fn folds_namespace_case(&self) -> bool {
         matches!(
@@ -120,7 +131,12 @@ impl ExternalIdentity {
             .strip_prefix("https://")
             .or_else(|| instance.strip_prefix("http://"))
             .unwrap_or(&instance)
-            .trim_end_matches('/')
+            .trim_end_matches('/');
+        // Default HTTP(S) ports address the same host, so they must not split identity.
+        let instance = instance
+            .strip_suffix(":443")
+            .or_else(|| instance.strip_suffix(":80"))
+            .unwrap_or(instance)
             .to_owned();
         let namespace = self
             .namespace
@@ -139,10 +155,12 @@ impl ExternalIdentity {
             known => known.clone(),
         };
         let external_id = self.external_id.trim();
-        let external_id = external_id
-            .strip_prefix(['#', '!'])
-            .unwrap_or(external_id)
-            .to_owned();
+        let external_id = external_id.strip_prefix(['#', '!']).unwrap_or(external_id);
+        let external_id = if provider.folds_id_to_upper() {
+            external_id.to_uppercase()
+        } else {
+            external_id.to_owned()
+        };
         Self {
             provider,
             instance,
@@ -191,6 +209,9 @@ impl ExternalIdentity {
         match self.namespace.as_deref() {
             None if self.provider.requires_namespace() => {
                 return fail("this provider scopes identifiers by namespace; supply it");
+            }
+            Some(_) if self.provider.forbids_namespace() => {
+                return fail("this provider's keys are unique per instance; omit the namespace");
             }
             Some(namespace) if !valid_namespace(namespace) => {
                 return fail("namespace must be slash-separated segments without credentials");

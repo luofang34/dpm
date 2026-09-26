@@ -285,3 +285,43 @@ fn references_are_additive_and_survive_renames_and_serialization() {
     assert_eq!(loaded, plan);
     assert_eq!(loaded.external_references[&id].tracking_owner(), Some(a));
 }
+
+#[test]
+fn one_jira_issue_has_one_identity_whatever_its_spelling() {
+    let jira = |namespace: Option<&str>, key: &str| ExternalIdentity {
+        provider: ExternalProvider::Jira,
+        instance: "acme.atlassian.net".into(),
+        namespace: namespace.map(Into::into),
+        kind: ExternalObjectKind::Issue,
+        external_id: key.into(),
+    };
+    let canonical = jira(None, "PROJ-1");
+    assert_eq!(jira(None, "proj-1").canonical(), canonical);
+    assert_eq!(jira(None, " Proj-1 ").canonical(), canonical);
+    let mut plan = fixture();
+    let (a, b) = (work(&plan, "TEST-A"), work(&plan, "TEST-B"));
+    insert(&mut plan, reference(canonical, a, ExternalLinkRole::Tracks));
+    plan.validate().expect("canonical Jira identity");
+    let scoped = insert(
+        &mut plan,
+        reference(jira(Some("PROJ"), "PROJ-1"), b, ExternalLinkRole::Tracks),
+    );
+    assert!(reason(&plan).contains("omit the namespace"));
+    plan.external_references.remove(&scoped);
+    insert(
+        &mut plan,
+        reference(jira(None, "proj-1"), b, ExternalLinkRole::Relates),
+    );
+    assert!(reason(&plan).contains("not canonical"));
+}
+
+#[test]
+fn default_ports_do_not_split_an_instance() {
+    let with_port = identity(ExternalProvider::GitHub, "github.com:443", "ops/dpm");
+    let plain = identity(ExternalProvider::GitHub, "github.com", "ops/dpm");
+    assert_eq!(with_port.canonical(), plain);
+    let http = identity(ExternalProvider::Forgejo, "forge.example:80", "ops/dpm");
+    assert_eq!(http.canonical().instance, "forge.example");
+    let custom = identity(ExternalProvider::Forgejo, "forge.example:3000", "ops/dpm");
+    assert_eq!(custom.canonical().instance, "forge.example:3000");
+}

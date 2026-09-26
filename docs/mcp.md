@@ -70,10 +70,11 @@ An external reference records an issue, pull request or other tracker object wit
 state authoritative. Its identity is the tuple provider family (`GitHub`, `GitLab`, `Forgejo`,
 `Gitea`, `Jira`, `Linear` or `{"Other":"name"}`), `instance` (lowercase `host[:port]` of the hosted
 or self-hosted server), `namespace` (owner/repository, group path, tenant or project; required for
-repository forges and Linear), `kind` (`Issue`, `PullRequest` or `{"Other":"name"}`) and
+repository forges and Linear; rejected for Jira, whose keys such as `PROJ-1` are unique per
+instance), `kind` (`Issue`, `PullRequest` or `{"Other":"name"}`) and
 `external_id`. Equal IDs on another instance, namespace or kind are different objects. The label
 and URL are display data. Adapters canonicalize equivalent spellings (host and forge namespace
-case, `https://` prefixes, `#`/`!` ID prefixes) before lookup, and validation rejects any other form.
+case, `https://` prefixes, default ports `:443`/`:80`, `#`/`!` ID prefixes, Jira key case) before lookup, and validation rejects any other form.
 
 `link_external` takes `key`, `identity`, `base_revision` and optional `label`, `url`, `role`
 (`Tracks` by default, or `Relates`) and `observed` (`Open`, `Closed` or `Merged`). The CLI uses

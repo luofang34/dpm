@@ -130,6 +130,27 @@ def review_and_round_trip(database, directory, worker, reviewer):
     return exported
 
 
+def jira_identity(directory):
+    """A Jira key names its project and is unique per instance: no namespace, and case never splits it."""
+    database = directory / 'jira.sqlite'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    worker = Agent(database, 'agent:jira')
+    try:
+        jira = {'provider': 'Jira', 'instance': 'acme.atlassian.net', 'kind': 'Issue', 'external_id': 'PROJ-1'}
+        scoped = {**jira, 'namespace': 'PROJ'}
+        message = refused(database, worker, 'link_external', {'key': 'TEST-D', 'identity': scoped, 'base_revision': 0},
+                          ['link-external', 'TEST-D', *flags(scoped)], 'invalid_command')
+        assert 'omit the namespace' in message, message
+        worker.call('link_external', {'key': 'TEST-D', 'identity': {**jira, 'external_id': 'proj-1'}, 'base_revision': 0})
+        stored = run_cli(database, 'export')['external_references']
+        assert [r['identity']['external_id'] for r in stored.values()] == ['PROJ-1'], stored
+        lower = {**jira, 'external_id': 'proj-1'}
+        refused(database, worker, 'link_external', {'key': 'TEST-E', 'identity': lower, 'base_revision': 1},
+                ['link-external', 'TEST-E', *flags(lower)], 'tracking_conflict')
+    finally:
+        worker.close()
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-tracking-') as temporary:
         directory = Path(temporary)
@@ -143,6 +164,7 @@ if __name__ == '__main__':
             link_and_refuse(database, worker)
             unlink_and_merge(database, worker, reviewer)
             final = review_and_round_trip(database, directory, worker, reviewer)
+            jira_identity(directory)
         finally:
             worker.close()
             reviewer.close()
@@ -151,4 +173,4 @@ if __name__ == '__main__':
             assert reopened.call('export_plan', {})['data'] == final
         finally:
             reopened.close()
-    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, reviewed rename and export/import round trip')
+    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, Jira key normalization, reviewed rename and export/import round trip')
