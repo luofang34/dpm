@@ -15,5 +15,7 @@ jobs:
       - name: Install declared Rust toolchain
         run: rustup show active-toolchain
       - uses: Swatinem/rust-cache@v2
+      - name: Install dependency checker
+        run: cargo install cargo-deny --locked --version 0.19.8
       - name: Full local quality gates
         run: ./ci.sh

@@ -277,3 +277,8 @@ calendar expansion and rich UI. AGPL-3.0-only and the core/store/adapter boundar
 Use `dpm ratify KEY --actor human:reviewer` to approve a Proposed contract.
 Use `dpm reject KEY "unmet acceptance" --actor human:reviewer` to return Submitted work
 to its owner. `show` and `explain` retain the latest rejection across resubmission.
+
+The local quality gate requires `cargo-deny`: install it with
+`cargo install cargo-deny --locked --version 0.19.8`, then run `./ci.sh`.
+License checks use resolved Cargo metadata, including workspace inheritance; security checks
+refresh the advisory database and fail if the check cannot complete.
