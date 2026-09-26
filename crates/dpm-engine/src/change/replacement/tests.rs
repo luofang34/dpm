@@ -207,3 +207,26 @@ fn gate_bypass_rewritten_reasoning_and_unlinked_replacements_fail_atomically() {
     ));
     assert_eq!(plan, before);
 }
+
+#[test]
+fn work_linked_only_to_a_superseded_choice_still_sees_its_replacement() {
+    let (mut plan, old) = fixture();
+    let (proposal, new) = replace(&plan, old);
+    assert!(!new.related_work.contains(&work(&plan, "TEST-C")));
+    apply(&mut plan, proposal).expect("reviewed replacement");
+    let context = explain_work(&plan, work(&plan, "TEST-C"))
+        .expect("explain")
+        .context;
+    let keys: BTreeSet<_> = context.decisions.iter().map(|d| d.key.0.as_str()).collect();
+    assert_eq!(keys, BTreeSet::from(["TEST-CHOICE", "TEST-CHOICE-2"]));
+    assert!(
+        context
+            .decisions
+            .iter()
+            .any(|d| d.id == new.id && d.supersedes == Some(old))
+    );
+    let unrelated = explain_work(&plan, work(&plan, "TEST-B"))
+        .expect("explain")
+        .context;
+    assert!(unrelated.decisions.iter().all(|d| d.id != new.id));
+}

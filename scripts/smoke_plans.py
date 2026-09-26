@@ -135,6 +135,10 @@ def replacement(directory):
         assert decisions['TEST-CHOICE']['status'] == 'Superseded'
         assert decisions['TEST-CHOICE']['rationale'] == 'Existing tooling reads JSON'
         assert decisions['TEST-CHOICE-2']['supersedes'] == choice['id']
+        # TEST-C is linked only to the superseded choice and must still see its replacement.
+        only_old = worker.call('explain_work', {'key': 'TEST-C'})['data']
+        assert only_old == run_cli(database, 'explain', 'TEST-C')
+        assert {d['key'] for d in only_old['context']['decisions']} == {'TEST-CHOICE', 'TEST-CHOICE-2'}
         stale = worker.call('propose_change', {'plan': proposal}, error='revision_conflict')
         assert stale['message'] == run_cli(database, 'plan', 'diff', str(candidate), error='revision_conflict')['error']['message']
     finally:

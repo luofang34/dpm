@@ -1,5 +1,6 @@
 use dpm_model::{
-    Artifact, Decision, Dependency, Plan, Project, Requirement, Risk, WorkItem, WorkItemId,
+    Artifact, Decision, DecisionId, Dependency, Plan, Project, Requirement, Risk, WorkItem,
+    WorkItemId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -43,15 +44,39 @@ pub(crate) fn decision_applies(decision: &Decision, lineage: &BTreeSet<WorkItemI
     !decision.blocks.is_disjoint(lineage) || !decision.related_work.is_disjoint(lineage)
 }
 
+/// Decisions linked to the lineage plus every replacement reachable through `supersedes`.
+///
+/// A replacement need not repeat the old decision's work links, so work that was linked only to a
+/// superseded choice would otherwise lose sight of the choice that now applies to it.
+fn applicable_decisions(plan: &Plan, lineage: &BTreeSet<WorkItemId>) -> BTreeSet<DecisionId> {
+    let mut selected: BTreeSet<_> = plan
+        .decisions
+        .values()
+        .filter(|d| decision_applies(d, lineage))
+        .map(|d| d.id)
+        .collect();
+    loop {
+        let before = selected.len();
+        let replacements: Vec<_> = plan
+            .decisions
+            .values()
+            .filter(|d| d.supersedes.is_some_and(|old| selected.contains(&old)))
+            .map(|d| d.id)
+            .collect();
+        selected.extend(replacements);
+        if selected.len() == before {
+            return selected;
+        }
+    }
+}
+
 pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContext {
     let lineage = lineage(plan, work);
     let ancestors: BTreeSet<_> = lineage.iter().map(|w| w.id).collect();
     let parents: Vec<_> = lineage.iter().skip(1).map(|w| (*w).clone()).collect();
-    let decisions: Vec<_> = plan
-        .decisions
-        .values()
-        .filter(|d| decision_applies(d, &ancestors))
-        .cloned()
+    let decisions: Vec<_> = applicable_decisions(plan, &ancestors)
+        .into_iter()
+        .map(|id| plan.decisions[&id].clone())
         .collect();
     let mut artifact_ids = work.artifact_ids.clone();
     for decision in &decisions {

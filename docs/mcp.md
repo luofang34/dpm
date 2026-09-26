@@ -54,7 +54,9 @@ Git remotes in a shared plan cannot embed `user:password@` credentials. Undo is 
 
 A Decided choice is replaced, never edited: the proposal changes only its `status` to `Superseded`
 and adds one new Decided decision whose `supersedes` names it, with a nonempty `rationale` and no
-`blocks`. The old outcome, rationale and sources stay intact, and `explain` returns both records.
+`blocks`. The old outcome, rationale and sources stay intact. `explain` returns both records for
+every work item linked to either one, following `supersedes` forward, so work linked only to the old
+choice still sees its replacement.
 Open gates are resolved only by `decide`; superseding one, rewriting a prior decision, dangling or
 repeated `supersedes` links, and replacements that add gates are rejected with no state change.
 `affected_work` in the preview lists every work item (key, kind, status) whose context contains either
