@@ -1,10 +1,10 @@
 {
   "workspace": "DPM Alpha — prepared roadmap",
   "revision": 0,
-  "task_count": 24,
-  "work_package_count": 9,
-  "milestone_count": 8,
-  "total_work": 41,
+  "task_count": 31,
+  "work_package_count": 10,
+  "milestone_count": 9,
+  "total_work": 50,
   "ready_keys": [],
   "completed_work": 0,
   "open_decisions": 4,
@@ -19,24 +19,29 @@
     "M4-TUI",
     "M5-ALPHA",
     "M6-COLLAB",
-    "M7-DESIGN"
+    "M7-DESIGN",
+    "M8-SEMANTICS"
   ],
   "context_decisions": {
     "DEC-WORKSPACE": [
       "CORE-10",
       "CORE-20",
+      "EXT-10",
       "QA-10",
+      "RES-10",
       "SYNC-10"
     ],
     "DEC-INTERCHANGE": [
       "CORE-10",
       "CORE-20",
+      "IO-10",
       "QA-10"
     ],
     "DEC-DURABILITY": [
       "CORE-10",
       "CORE-30",
       "SELF-10",
+      "SEM-30",
       "SYNC-10",
       "SYNC-20"
     ],
@@ -49,6 +54,8 @@
     "DEC-WORK-CONTEXT": [
       "CORE-20",
       "CORE-30",
+      "SEM-10",
+      "SEM-40",
       "UI-10"
     ]
   }

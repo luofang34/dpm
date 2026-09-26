@@ -190,3 +190,48 @@ fn every_task_exposes_ordered_steps_boundaries_and_checks_without_mutation() {
     }
     assert_eq!(plan, before);
 }
+
+#[test]
+fn optional_extensions_have_gates_and_cannot_block_mvp_or_alpha() {
+    let plan = fixture();
+    let optional = plan.find_work_by_key("WP-8-SEMANTICS").expect("package").id;
+    let release: BTreeSet<_> = ["M0-MVP", "M5-ALPHA"]
+        .into_iter()
+        .map(|key| plan.find_work_by_key(key).expect("release condition").id)
+        .collect();
+    for work in plan
+        .work_items
+        .values()
+        .filter(|w| w.parent == Some(optional) && w.is_executable())
+    {
+        let detail = explain_work(&plan, work.id).expect("explanation");
+        let gates: BTreeSet<_> = detail
+            .context
+            .decisions
+            .iter()
+            .filter(|d| !d.blocks.is_empty())
+            .map(|d| d.key.0.as_str())
+            .collect();
+        assert!(gates.contains("DEC-EXECUTE") && gates.contains("DEC-EXPAND"));
+        let mut queue = VecDeque::from([work.id]);
+        let mut visited = BTreeSet::new();
+        while let Some(id) = queue.pop_front() {
+            if !visited.insert(id) {
+                continue;
+            }
+            assert!(
+                !release.contains(&id),
+                "{} is an unintended release prerequisite",
+                work.key
+            );
+            queue.extend(
+                plan.dependencies
+                    .iter()
+                    .filter(|d| d.predecessor == id)
+                    .map(|d| d.successor),
+            );
+        }
+        assert!(reaches_milestone(&plan, work.id));
+        assert!(!detail.ready);
+    }
+}

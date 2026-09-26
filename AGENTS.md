@@ -116,7 +116,8 @@ If the plan itself is wrong, propose a plan change; do not route around dependen
 ## Engineering rules
 
 - Prefer small, explicit types over unstructured strings for domain concepts.
-- Keep serialization backwards-compatible once a public format is released.
+- Before publication, move bundled data directly to the selected format; do not add legacy adapters.
+  Reject unsupported versions without replacing live state. Published formats require an explicit migration policy.
 - Validate graph invariants at command/import boundaries.
 - Workspace lints forbid unsafe code and deny missing docs, unwrap/expect/panic, discarded Results,
   discarded futures, and awaiting with a synchronous lock. Tests may allow expect/panic explicitly.
@@ -186,7 +187,7 @@ incompatible source code into this repository.
   the prepared acceptance tasks remain Planned, unowned and at 0% until actually performed.
 - Preserve operational database history. Removing an unwanted demonstration database requires user
   authorization and checking that it has no operations; never silently replace it during startup.
-- Self-host CI uses temporary storage and reads all 24 contracts through CLI/MCP. Lifecycle
+- Self-host CI uses temporary storage and reads every task contract through CLI/MCP. Lifecycle
   regressions import only `tests/support/execution-plan.json`; do not restore retired examples.
 - Keep task steps, expected results, scope boundaries and verification checks concrete. These
   instructions describe work; they never override gates or authorize execution on their own.

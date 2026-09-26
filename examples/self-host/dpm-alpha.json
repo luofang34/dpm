@@ -439,6 +439,9 @@
         },
         {
           "text": "Have a reviewer distinct from the eventual submitter assess the evidence before verification."
+        },
+        {
+          "text": "Open one disposable workspace from two entry points; verify shared ownership and rejection of missing bindings, identity mismatch and stale writes."
         }
       ],
       "status": "Planned",
@@ -595,6 +598,12 @@
         },
         {
           "text": "Document local identity limitations and the difference between reported 100% and verified work."
+        },
+        {
+          "text": "Review structured gate output, human/service contract ratification and independent rejection/resubmission through CLI and MCP."
+        },
+        {
+          "text": "Confirm local binding tools return matching CLI/MCP data without changing project revisions; explicit resource evidence carries the intended resource ID and commit."
         }
       ],
       "status": "Planned",
@@ -637,6 +646,10 @@
           {
             "action": "Record API limitations and explain reported completion versus verification and local actor trust.",
             "expected_result": "The review distinguishes supported commands from future proposals/authentication features."
+          },
+          {
+            "action": "Exercise Proposed -> Planned and Submitted -> InProgress -> Submitted -> Verified on disposable data, including invalid actor, empty reason and stale revision failures.",
+            "expected_result": "The task contract and most recent review are visible after restart; no failed operation changes the plan."
           }
         ],
         "in_scope": [
@@ -895,14 +908,14 @@
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
       "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
       "kind": "Task",
-      "title": "Version plan serialization and migrations",
-      "objective": "Define a compatible versioned plan/snapshot envelope and storage migrations before expanding mutation semantics.",
+      "title": "Validate explicit plan and storage versions",
+      "objective": "Keep one explicit pre-publication format and move bundled plans, locators and adapter contracts to it; unsupported versions fail without touching live state.",
       "acceptance": [
         {
-          "text": "Specify supported versions, defaults and rejection of unsupported versions."
+          "text": "Specify distinct plan, locator, API and database schema versions; reject unsupported versions clearly."
         },
         {
-          "text": "Test old snapshot import and restart, migration failures and unchanged stable IDs."
+          "text": "Move bundled snapshots and locators directly to the supported design; do not maintain legacy-format adapters before publication."
         },
         {
           "text": "Keep AGPL-3.0-only and prevent derived schedule/progress projections from becoming stored truth."
@@ -911,7 +924,7 @@
           "text": "TOML/JSON round trips preserve lifecycle, ownership, contracts, evidence references and stable IDs with deterministic output; unsupported required fields fail explicitly."
         },
         {
-          "text": "Separate format/domain/API/database versions; represent revision tokens without signed-integer truncation and retain compatibility with existing JSON snapshots."
+          "text": "Represent revision tokens without signed-integer truncation. A deliberate pre-publication format break must not silently replace an operational database or erase its history."
         }
       ],
       "status": "Planned",
@@ -944,29 +957,28 @@
       "instructions": {
         "steps": [
           {
-            "action": "Specify a versioned portable TOML/JSON model, distinct locator/storage/API schemas, stable identity rules and supported migrations.",
-            "expected_result": "A reviewed version envelope specifies defaults, stable ID behavior and unsupported-version errors."
+            "action": "Inspect supported plan/locator/API/storage versions and identify inconsistent bundled inputs.",
+            "expected_result": "One current contract is identified without promising legacy compatibility."
           },
           {
-            "action": "Implement explicit version handling and atomic storage migrations through the import/store boundary.",
-            "expected_result": "Valid supported snapshots load consistently; failed migrations leave the original database usable."
+            "action": "Apply approved format changes to code, bundled plan data and adapters together; preserve stable entity IDs.",
+            "expected_result": "Current inputs open identically through CLI and MCP; unsupported formats fail before writes."
           },
           {
-            "action": "Test cross-format semantic round trips, unsupported fields, failed migrations and restart; keep usage examples limited to working commands.",
-            "expected_result": "Compatibility evidence and examples state which persisted inputs are authoritative."
+            "action": "Test semantic round trips, unsupported versions and failures without replacing live databases.",
+            "expected_result": "Evidence covers authoritative values, restart and unchanged operational history on failure."
           }
         ],
         "in_scope": [
-          "Versioned plan/storage formats and compatible migrations.",
-          "Versioned interchange envelope, TOML/JSON codecs and explicit initialization/fork/restore/join identity rules."
+          "One current pre-publication domain format and explicit version rejection.",
+          "Portable interchange and explicit initialization/fork/restore/join identity rules."
         ],
         "out_of_scope": [
           "Change stable IDs, persist derived dates, replace live history or implement plan editing in this task."
         ],
         "verification": [
-          "Run model/store migration tests including failed migration followed by restart.",
-          "./ci.sh; compare IDs and authoritative values before/after every supported migration.",
-          "Round-trip omitted optionals, enum values, timestamps and u64 boundary revisions; reject non-finite schedule inputs and unsupported versions without writes."
+          "Round-trip supported authoritative values and stable IDs; reject unsupported versions without writes.",
+          "Run ./ci.sh; inspect failed opens/imports and revision boundaries against unchanged persisted state."
         ]
       },
       "resources": [
@@ -1705,6 +1717,9 @@
         },
         {
           "text": "Publish a capability/non-goal checklist that does not claim server/auth/native products unless separately accepted."
+        },
+        {
+          "text": "Run the required license and advisory gates across every workspace package and all features; workspace metadata resolves to AGPL-3.0-only and exceptions never permit unrelated third-party crates."
         }
       ],
       "status": "Planned",
@@ -1754,7 +1769,7 @@
         ],
         "verification": [
           "./ci.sh on the declared toolchain; record stable/MSRV and platform results individually.",
-          "Run available cargo audit/deny checks and review license findings; document tools that were unavailable.",
+          "Run required cargo-deny license/advisory gates and inspect their output; unavailable or failed checks are not a clean audit.",
           "Measure representative graph sizes before claiming scale; preserve revision-consistent queries and complete graph validation when optimizing."
         ]
       },
@@ -1785,6 +1800,9 @@
         },
         {
           "text": "Registry/distribution availability is claimed only after verifying the published package, dependency order, release archives, checksums and supported target installation."
+        },
+        {
+          "text": "Describe only published installation paths and tested export guarantees; distinguish supported portable fields, omitted operation history and any loss report. Optional hosting or store packaging is not required for local operation."
         }
       ],
       "status": "Planned",
@@ -2331,6 +2349,600 @@
           "access": "Write"
         }
       ]
+    },
+    "8254702d-7eec-5e3b-b43a-ddb8aac44dee": {
+      "id": "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
+      "key": "WP-8-SEMANTICS",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "a66db805-addb-528b-9fc6-3c96c77dfca9",
+      "kind": "WorkPackage",
+      "title": "Optional execution semantics and integration",
+      "objective": "Group separately authorized semantic extensions; this branch is not a prerequisite of MVP or scoped alpha acceptance.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "resources": []
+    },
+    "38a9835d-52b2-5497-ae3f-69212e23bbe2": {
+      "id": "38a9835d-52b2-5497-ae3f-69212e23bbe2",
+      "key": "M8-SEMANTICS",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
+      "kind": "Milestone",
+      "title": "Optional semantics independently accepted",
+      "objective": "Zero-duration condition: all incoming task/milestone prerequisites independently verified and applicable gates resolved.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "resources": []
+    },
+    "f4b1c0af-11be-5ebd-b6d1-28b8433665f2": {
+      "id": "f4b1c0af-11be-5ebd-b6d1-28b8433665f2",
+      "key": "SEM-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
+      "kind": "Task",
+      "title": "Identify dependency policies and non-gating work links",
+      "objective": "Represent independently addressable temporal constraints and explicit waivers without collapsing multiple constraints between the same tasks.",
+      "acceptance": [
+        {
+          "text": "Preserve simultaneous SS and FF bounds between one task pair; commands identify an edge unambiguously."
+        },
+        {
+          "text": "Only an authorized non-Agent actor may waive/restore a soft constraint with a nonempty reason; hard-edge changes require plan review."
+        },
+        {
+          "text": "RelatesTo/Duplicates/DerivedFrom/Supersedes links do not alter readiness, scheduling or progress."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P3",
+      "estimate": {
+        "optimistic_hours": 4.0,
+        "likely_hours": 8.0,
+        "pessimistic_hours": 20.0
+      },
+      "capabilities": [
+        "agent",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Give each dependency a stable identity and define hard/soft policy changes through reviewed semantic commands.",
+            "expected_result": "SS and FF may coexist between the same ordered task pair and can be edited independently."
+          },
+          {
+            "action": "Implement explicit waiver and restoration for soft edges with authorized actor, time and reason; add typed non-gating work links.",
+            "expected_result": "Hard constraints cannot be waived; waived constraints are excluded consistently from readiness and remaining schedule projections."
+          },
+          {
+            "action": "Expose policy and rationale through shared CLI/MCP queries and test rejected edits atomically.",
+            "expected_result": "Duplicate identities, stale revisions, missing endpoints and cycles fail without partial writes."
+          }
+        ],
+        "in_scope": [
+          "Stable edge identities, explicit policies and reviewed soft waivers/restoration.",
+          "Non-gating contextual links with reference and duplicate validation."
+        ],
+        "out_of_scope": [
+          "Provisional Submitted satisfaction, conditional joins, resource leveling or permissions product."
+        ],
+        "verification": [
+          "Compare CPM/readiness before waiver, after waiver and after restoration.",
+          "Test simultaneous SS+FF edges and CLI/MCP parity, including actor/ref/revision failures; run ./ci.sh."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
+    },
+    "57a54fb3-5649-5b80-ad69-82ca251af63a": {
+      "id": "57a54fb3-5649-5b80-ad69-82ca251af63a",
+      "key": "SEM-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
+      "kind": "Task",
+      "title": "Define actual execution events and enforce elapsed lag",
+      "objective": "Distinguish reserving work from starting it and derive execution gates from explicit authoritative events, without inventing missing timestamps.",
+      "acceptance": [
+        {
+          "text": "A claim alone does not release SS; an explicit start event does. No model/engine wall-clock reads."
+        },
+        {
+          "text": "Test +23h/+24h at a 24h gate and a milestone whose decision resolves later than all predecessor verification events."
+        },
+        {
+          "text": "Unknown required event time blocks with an actionable reason; negative lag affects scheduling only and is explicitly explained."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P3",
+      "estimate": {
+        "optimistic_hours": 4.0,
+        "likely_hours": 8.0,
+        "pessimistic_hours": 20.0
+      },
+      "capabilities": [
+        "agent",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "e1682222-b5c1-5fef-9ccd-81d9e40abde8",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Specify Start, submission and verification events, positive/negative lag policy and gate completion times for milestones.",
+            "expected_result": "Claim remains reservation; a milestone completes at the last prerequisite or decision event required by its condition."
+          },
+          {
+            "action": "Implement relation-specific claim/submit/verify gates with adapter-supplied time and structured unknown-event diagnostics.",
+            "expected_result": "FS/SS govern start and FF/SF govern finish; positive elapsed lag cannot be bypassed when event time is unknown."
+          },
+          {
+            "action": "Test timing boundaries and aggregate conditions through the shared GateReport and all adapters.",
+            "expected_result": "All views and commands agree, including zero-duration milestones and delayed decision approval."
+          }
+        ],
+        "in_scope": [
+          "Authoritative execution-event facts and deterministic elapsed-time gate evaluation.",
+          "Task and milestone endpoints; work packages remain containers, never dependency endpoints."
+        ],
+        "out_of_scope": [
+          "Working-time lag calendars, backdated fabricated starts, operation-log scans during queries or stored derived readiness."
+        ],
+        "verification": [
+          "Cover every dependency kind for claim/submit/verify with injected timestamps.",
+          "Verify event facts and revisions across restart, rejected commands and independent verification; run ./ci.sh."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
+    },
+    "5b81757e-b49d-5ad7-a6a6-33b72ec05a0b": {
+      "id": "5b81757e-b49d-5ad7-a6a6-33b72ec05a0b",
+      "key": "SEM-30",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
+      "kind": "Task",
+      "title": "Preserve provisional submission bases through rework",
+      "objective": "Track the exact submission attempt used by downstream work so rejection cannot be hidden by a later submission.",
+      "acceptance": [
+        {
+          "text": "A1 Submitted -> B starts on A1 -> A1 rejected -> A2 Submitted/Verified leaves B flagged until explicit reviewed revalidation."
+        },
+        {
+          "text": "Submitted results never satisfy final verification gates merely because provisional execution was permitted."
+        },
+        {
+          "text": "Persist attempt and causal facts, not a cached invalidation flag; rejection history remains inspectable."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P3",
+      "estimate": {
+        "optimistic_hours": 4.0,
+        "likely_hours": 8.0,
+        "pessimistic_hours": 20.0
+      },
+      "capabilities": [
+        "agent",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Define stable submission-attempt identities and immutable dependency-basis references captured by affected operations.",
+            "expected_result": "Authoritative facts survive rejection/resubmission; basis-invalidated remains a derived condition."
+          },
+          {
+            "action": "Implement explicit provisional edge policy and independent revalidation of invalidated downstream bases.",
+            "expected_result": "A later upstream submission or verification never silently validates a successor based on a rejected attempt."
+          },
+          {
+            "action": "Test rejection/resubmission/revalidation across restart and concurrent revision conflicts.",
+            "expected_result": "Explain identifies the rejected attempt and affected downstream work without scanning operation history."
+          }
+        ],
+        "in_scope": [
+          "Provisional dependency policies, attempt identity and causal basis evidence."
+        ],
+        "out_of_scope": [
+          "Automatic cascading lifecycle rewrites, silently accepting new results as equivalent, CRDT conflict resolution."
+        ],
+        "verification": [
+          "Compare all intermediate gates after restart, including repeated rejection and resubmission.",
+          "Exercise CLI/MCP parity and stale/rejected revalidation with unchanged state; run ./ci.sh."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
+    },
+    "be8e8ba3-64b5-5843-a26b-f1e1b1624567": {
+      "id": "be8e8ba3-64b5-5843-a26b-f1e1b1624567",
+      "key": "SEM-40",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
+      "kind": "Task",
+      "title": "Make conditional work and join rules explicit",
+      "objective": "Support optional branches without treating skipped work as universally completed evidence.",
+      "acceptance": [
+        {
+          "text": "Supplier A/B merge accepts only the selected verified branch under an explicit active-branch join policy."
+        },
+        {
+          "text": "Conditions on work packages apply to descendant tasks; unrelated downstream work is not released merely by a skipped predecessor."
+        },
+        {
+          "text": "At least one applicable branch is required unless the join explicitly permits an empty result; unknown choices are not completion."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P3",
+      "estimate": {
+        "optimistic_hours": 4.0,
+        "likely_hours": 8.0,
+        "pessimistic_hours": 20.0
+      },
+      "capabilities": [
+        "agent",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "e1682222-b5c1-5fef-9ccd-81d9e40abde8",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Define decision options, applicability inheritance through containers and explicit join policies.",
+            "expected_result": "Normal dependencies and branch joins have distinct semantics; an all-skipped join cannot complete accidentally."
+          },
+          {
+            "action": "Implement derived applicability and consistent readiness/progress/scheduling projections.",
+            "expected_result": "Unselected subtrees cannot be claimed; active join prerequisites must satisfy their declared policy."
+          },
+          {
+            "action": "Test chosen, unknown and all-skipped paths and attempted choice changes after work starts.",
+            "expected_result": "Choice changes affecting in-flight work require reviewed plan change; unresolved alternatives are reported as scenarios rather than unsupported probability claims."
+          }
+        ],
+        "in_scope": [
+          "Decision options, inherited applicability and explicit joins with consistent projections."
+        ],
+        "out_of_scope": [
+          "Unconditional vacuous edge satisfaction, automatic cancellation of in-flight work, mixed-scenario P50 claims without a probability model."
+        ],
+        "verification": [
+          "Exercise empty/all-skipped joins, nested packages and ordinary downstream dependencies as well as the A/B happy path.",
+          "Verify next, progress, CPM and Monte Carlo use the same active graph; run ./ci.sh."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
+    },
+    "baf6189b-1b2c-54df-80aa-58cb78bc415f": {
+      "id": "baf6189b-1b2c-54df-80aa-58cb78bc415f",
+      "key": "RES-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
+      "kind": "Task",
+      "title": "Add explicit workspace query scope without hiding blockers",
+      "objective": "Filter globally ranked work only after full-graph eligibility evaluation, with visible out-of-scope context.",
+      "acceptance": [
+        {
+          "text": "An out-of-scope dependency cannot become satisfied; filtered candidates retain global order."
+        },
+        {
+          "text": "A resource-less non-code task is outside a resource-only scope and appears in outside_scope if eligible."
+        },
+        {
+          "text": "Define higher_ranked_count relative to the highest-ranked in-scope result, or all eligible outside work when none is in scope."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P3",
+      "estimate": {
+        "optimistic_hours": 4.0,
+        "likely_hours": 8.0,
+        "pessimistic_hours": 20.0
+      },
+      "capabilities": [
+        "agent",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "ab68d6d6-0145-554f-980b-c5bb2bd4514b",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Specify membership rules for resource sets, project subtrees, capability sets and work without resources.",
+            "expected_result": "Resource scope requires a positive match; all write requirements must fit; project/resource filters intersect and capability eligibility is distinct."
+          },
+          {
+            "action": "Implement a typed Next result containing applied scope, ranked candidates and outside-scope counts/keys.",
+            "expected_result": "All gates and scores use the full graph; limiting results occurs after scope filtering."
+          },
+          {
+            "action": "Expose distinct CLI project-key filtering and matching MCP inputs; test no-code and multi-repository work.",
+            "expected_result": "--project continues to select a directory; outside_scope highlights eligible higher-ranked work rather than hiding it."
+          }
+        ],
+        "in_scope": [
+          "Visible query-only scope and a versioned structured Next result."
+        ],
+        "out_of_scope": [
+          "Changing claims or graph membership through filters, resource allocation/leveling or filesystem authorization."
+        ],
+        "verification": [
+          "Test empty scopes, zero-resource tasks, read-only requirements, multi-write tasks and limits.",
+          "Compare CLI/MCP result objects and unchanged authoritative state; run ./ci.sh."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
+    },
+    "7ecf321a-a725-5fe1-89b1-0f1ee02fc525": {
+      "id": "7ecf321a-a725-5fe1-89b1-0f1ee02fc525",
+      "key": "EXT-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
+      "kind": "Task",
+      "title": "Add provider-scoped external tracking references",
+      "objective": "Represent tracking context across hosted and self-hosted providers without making external issue states authoritative.",
+      "acceptance": [
+        {
+          "text": "Identity distinguishes provider instance/tenant/project namespace and object kind where required by the provider."
+        },
+        {
+          "text": "A closed issue is only an observation; a merged PR may be an Artifact, never automatic verification."
+        },
+        {
+          "text": "Link/unlink rejects missing references and stale revisions atomically; no credentials enter the plan."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P3",
+      "estimate": {
+        "optimistic_hours": 4.0,
+        "likely_hours": 8.0,
+        "pessimistic_hours": 20.0
+      },
+      "capabilities": [
+        "agent",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Define provider-instance identity, namespace, object kind and stable external ID separately from display labels/URLs.",
+            "expected_result": "Equal numeric IDs from different instances or namespaces do not collide."
+          },
+          {
+            "action": "Implement validated link/unlink commands and per-identity Tracks uniqueness through the shared engine.",
+            "expected_result": "Tracking links preserve local authority and cannot act as evidence or dependency satisfaction."
+          },
+          {
+            "action": "Test namespace collisions, duplicate tracking ownership, rename-safe identity and adapter parity.",
+            "expected_result": "Explain exposes context while next, schedule and verification remain unchanged."
+          }
+        ],
+        "in_scope": [
+          "Offline reference types and semantic link/unlink commands."
+        ],
+        "out_of_scope": [
+          "Live connectors, token storage, automatic assignee writes or imports that bypass review."
+        ],
+        "verification": [
+          "Test identical provider IDs from separate self-hosted instances and link removal without graph changes.",
+          "Compare CLI/MCP and snapshots before/after failed changes; run ./ci.sh."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
+    },
+    "29cb3968-83c3-5658-bc13-c0eaf044f4e8": {
+      "id": "29cb3968-83c3-5658-bc13-c0eaf044f4e8",
+      "key": "IO-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
+      "kind": "Task",
+      "title": "Bound project interchange and connector proposals",
+      "objective": "Implement only an explicitly supported interchange subset with observable losses and semantic review.",
+      "acceptance": [
+        {
+          "text": "Only tested supported formats/fields receive round-trip guarantees; unsupported data has a per-item report."
+        },
+        {
+          "text": "Missing acceptance imports as Proposed; issue closure or source percent-complete cannot verify local tasks."
+        },
+        {
+          "text": "External parsers/connectors do not link incompatible dependencies into shipped binaries or mutate the store directly."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P3",
+      "estimate": {
+        "optimistic_hours": 4.0,
+        "likely_hours": 8.0,
+        "pessimistic_hours": 20.0
+      },
+      "capabilities": [
+        "agent",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "2d5a1316-0b52-5ddc-aecc-23d92a73ec8b",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Select an approved format/subset and establish independently generated import/export fixtures.",
+            "expected_result": "Supported fields and unsupported/lossy mappings are explicit; opaque field retention is not a universal round-trip guarantee."
+          },
+          {
+            "action": "Map imported work to proposed contracts and preserve source identities without bypassing acceptance or verification.",
+            "expected_result": "Summary dependencies use validated task/milestone anchors; imports produce semantic diffs at an observed revision."
+          },
+          {
+            "action": "Test proposal review, identity mappings, unsupported fields and round trips against source fixtures.",
+            "expected_result": "Reports distinguish preserved values, approximations and rejected data; external parsers remain optional isolated adapters."
+          }
+        ],
+        "in_scope": [
+          "Approved interchange subset, mapping tests and reviewed import proposals."
+        ],
+        "out_of_scope": [
+          "Universal lossless MSP/MPP/Primavera conversion, mandated sidecar technology, full resource leveling or remote SaaS dependencies."
+        ],
+        "verification": [
+          "Use external golden fixtures; test source IDs, milestones, constraints and unmapped-field reports.",
+          "Run license/advisory checks and full ./ci.sh; verify failed imports preserve operations and revision."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
     }
   },
   "requirements": {
@@ -2423,7 +3035,7 @@
       "key": "REQ-PORTABLE-001",
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
       "title": "Lossless versioned plan interchange",
-      "statement": "TOML and JSON encode the same versioned interchange model independently of locator, API and storage schemas. Preserve supported authoritative values and IDs; exclude derived views, credentials and local bindings. Import validates and proposes changes at an observed revision without replacing live history or bypassing lifecycle verification."
+      "statement": "TOML and JSON encode the same versioned interchange model independently of locator, API and storage schemas. Preserve supported authoritative values and IDs; exclude derived views, credentials and local bindings. Import validates and proposes changes at an observed revision without replacing live history or bypassing lifecycle verification. Before publication, migrate bundled inputs directly to the selected format rather than retaining legacy adapters; unsupported formats fail explicitly and live databases are never silently replaced."
     },
     "c79a01b2-9102-5dce-9b1b-f67d67972424": {
       "id": "c79a01b2-9102-5dce-9b1b-f67d67972424",
@@ -2661,6 +3273,7 @@
       "blocks": [
         "004053ca-ec68-52d2-9886-a47289a0d592",
         "71bf30b0-6180-5e14-8f72-378c039aee41",
+        "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
         "87eb53a0-5839-51bf-bdb2-47371bf50315",
         "b6805961-ff6d-5d4e-9b95-82a46e79170c",
         "cc81da22-ff27-51ec-811f-7ffdcc4257b2"
@@ -2676,8 +3289,10 @@
       "rationale": "Checkout layout differs between users and must not fragment project dependencies or create independent writable copies of the same workspace.",
       "related_work": [
         "24c9cece-f53f-569e-b653-0d3e583fd858",
+        "7ecf321a-a725-5fe1-89b1-0f1ee02fc525",
         "973bf299-2998-54fa-a1dc-a58d2f66eff8",
         "b56fb8da-2746-5f32-b2d5-c121053aded2",
+        "baf6189b-1b2c-54df-80aa-58cb78bc415f",
         "cd3eed21-6613-5c8e-a874-5d62002f0c9b"
       ],
       "artifact_ids": [
@@ -2695,6 +3310,7 @@
       "rationale": "Reviewable text is useful for sharing, but an edited or stale export cannot safely overwrite lifecycle, independent verification or operation history.",
       "related_work": [
         "24c9cece-f53f-569e-b653-0d3e583fd858",
+        "29cb3968-83c3-5658-bc13-c0eaf044f4e8",
         "b56fb8da-2746-5f32-b2d5-c121053aded2",
         "cd3eed21-6613-5c8e-a874-5d62002f0c9b"
       ],
@@ -2713,6 +3329,7 @@
       "rationale": "The latest committed or unsent actions can exist only in the local store; neither an older text snapshot nor copying a live main database file preserves that record.",
       "related_work": [
         "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
+        "5b81757e-b49d-5ad7-a6a6-33b72ec05a0b",
         "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
         "973bf299-2998-54fa-a1dc-a58d2f66eff8",
         "9d92e316-9dd6-5d1c-8b2e-d876cb24aa1c",
@@ -2753,7 +3370,9 @@
       "related_work": [
         "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
         "24c9cece-f53f-569e-b653-0d3e583fd858",
-        "46190a5d-e9f7-5102-be21-40f587988e97"
+        "46190a5d-e9f7-5102-be21-40f587988e97",
+        "be8e8ba3-64b5-5843-a26b-f1e1b1624567",
+        "f4b1c0af-11be-5ebd-b6d1-28b8433665f2"
       ],
       "artifact_ids": [
         "4b8243e7-0435-52dd-99db-d080846956c6"
@@ -3047,6 +3666,96 @@
     {
       "predecessor": "efdabaef-268c-5e7c-888b-0fee76b7df90",
       "successor": "17391553-5a97-5278-a8b7-472eca8a3992",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "f4b1c0af-11be-5ebd-b6d1-28b8433665f2",
+      "successor": "38a9835d-52b2-5497-ae3f-69212e23bbe2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "24c9cece-f53f-569e-b653-0d3e583fd858",
+      "successor": "f4b1c0af-11be-5ebd-b6d1-28b8433665f2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "57a54fb3-5649-5b80-ad69-82ca251af63a",
+      "successor": "38a9835d-52b2-5497-ae3f-69212e23bbe2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "f4b1c0af-11be-5ebd-b6d1-28b8433665f2",
+      "successor": "57a54fb3-5649-5b80-ad69-82ca251af63a",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "fe5ce0f5-f9c5-5ddf-8a0c-30c2015e2163",
+      "successor": "57a54fb3-5649-5b80-ad69-82ca251af63a",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "5b81757e-b49d-5ad7-a6a6-33b72ec05a0b",
+      "successor": "38a9835d-52b2-5497-ae3f-69212e23bbe2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "57a54fb3-5649-5b80-ad69-82ca251af63a",
+      "successor": "5b81757e-b49d-5ad7-a6a6-33b72ec05a0b",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "be8e8ba3-64b5-5843-a26b-f1e1b1624567",
+      "successor": "38a9835d-52b2-5497-ae3f-69212e23bbe2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "f4b1c0af-11be-5ebd-b6d1-28b8433665f2",
+      "successor": "be8e8ba3-64b5-5843-a26b-f1e1b1624567",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "baf6189b-1b2c-54df-80aa-58cb78bc415f",
+      "successor": "38a9835d-52b2-5497-ae3f-69212e23bbe2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "24c9cece-f53f-569e-b653-0d3e583fd858",
+      "successor": "baf6189b-1b2c-54df-80aa-58cb78bc415f",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "7ecf321a-a725-5fe1-89b1-0f1ee02fc525",
+      "successor": "38a9835d-52b2-5497-ae3f-69212e23bbe2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "24c9cece-f53f-569e-b653-0d3e583fd858",
+      "successor": "7ecf321a-a725-5fe1-89b1-0f1ee02fc525",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "29cb3968-83c3-5658-bc13-c0eaf044f4e8",
+      "successor": "38a9835d-52b2-5497-ae3f-69212e23bbe2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "7ecf321a-a725-5fe1-89b1-0f1ee02fc525",
+      "successor": "29cb3968-83c3-5658-bc13-c0eaf044f4e8",
       "kind": "FinishStart",
       "lag_hours": 0.0
     }

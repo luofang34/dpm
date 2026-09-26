@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check bundled examples, publication hygiene, documentation links, rot-prone text and ExecPlans."""
+"""Check bundled examples, publication hygiene, documentation links and planning boundaries."""
 import re
 import subprocess
 import sys
@@ -8,6 +8,8 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 failures = []
+if (ROOT / 'PLANS.md').exists() or list((ROOT / 'docs/exec').glob('*.md')):
+    failures.append('planning belongs in existing DPM task contracts, not PLANS.md or docs/exec')
 expected_plans = {
     'examples/self-host/dpm-alpha.json',
     'examples/self-host/dpm-alpha.expected.json',
@@ -57,8 +59,6 @@ for path in paths:
         for pattern, reason in ROT_PATTERNS:
             if re.search(pattern, line, re.IGNORECASE):
                 failures.append(f'{relative}:{line_number}: {reason} rots; move it to the commit message')
-    if relative.parent.as_posix() == 'docs/exec' and '- [ ]' not in path.read_text():
-        failures.append(f'{relative}: completed ExecPlan; delete it and record the outcome in the commit')
 
 # Probe Git's actual matching rules, including paths that do not exist yet.
 ignored = [
