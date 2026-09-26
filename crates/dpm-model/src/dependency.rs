@@ -112,12 +112,22 @@ const FNV_OFFSET: u128 = 0x6c62_272e_07bb_0142_62b8_2175_6295_c58d;
 const FNV_PRIME: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013b;
 const IDENTITY_DOMAIN: &[u8] = b"dpm.dependency.v1\0";
 
+/// MurmurHash3's 64-bit finalizer: a bijection in which every input bit affects every output bit.
+fn avalanche(mut value: u64) -> u64 {
+    value ^= value >> 33;
+    value = value.wrapping_mul(0xff51_afd7_ed55_8ccd);
+    value ^= value >> 33;
+    value = value.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
+    value ^ (value >> 33)
+}
+
 impl Dependency {
     /// Deterministic identity for an edge serialized without one.
     ///
     /// Every load of the same stored plan, and every store replaying its operation log, must agree
-    /// on the identity, so it depends only on the ordered endpoints and relation. Validation
-    /// permits one relation of each kind per ordered pair, so valid plans cannot collide here.
+    /// on the identity, so it depends only on the ordered endpoints and relation. Validation allows
+    /// one relation of each kind per ordered pair; a hash collision would surface as a
+    /// duplicate-identity validation error rather than merging two edges.
     #[must_use]
     pub fn derived_id(
         predecessor: WorkItemId,
@@ -134,7 +144,14 @@ impl Dependency {
             hash ^= u128::from(*byte);
             hash = hash.wrapping_mul(FNV_PRIME);
         }
-        DependencyId(uuid::Builder::from_custom_bytes(hash.to_be_bytes()).into_uuid())
+        // FNV alone leaves inputs that differ only near the end sharing most high bits; this
+        // bijective cross-mix of both halves spreads every input byte over the whole identity.
+        let (high, low) = ((hash >> 64) as u64, hash as u64);
+        let high = avalanche(high ^ low.rotate_left(29));
+        let low = avalanche(low ^ high);
+        let high = avalanche(high ^ low);
+        let mixed = (u128::from(high) << 64) | u128::from(low);
+        DependencyId(uuid::Builder::from_custom_bytes(mixed.to_be_bytes()).into_uuid())
     }
 
     /// Hard constraint with a derived identity and no rationale.

@@ -186,3 +186,23 @@ fn work_links_validate_references_self_links_duplicates_and_notes() {
     let serialized = serde_json::to_value(&base).expect("serialize");
     assert!(serialized.get("links").is_none());
 }
+
+/// Stores that have not been rewritten since edge identity was introduced rely on re-deriving the
+/// same identities on every load, so the derivation is pinned to a known vector.
+#[test]
+fn derived_identity_is_pinned_and_spreads_similar_inputs() {
+    let id = |text: &str| WorkItemId(uuid::Uuid::parse_str(text).expect("uuid"));
+    let pinned = Dependency::derived_id(
+        id("b75ac42f-0b89-504f-933a-20175beaf664"),
+        id("ee7071a5-4557-5d2f-8737-d958a34187b8"),
+        DependencyKind::FinishStart,
+    );
+    assert_eq!(pinned.to_string(), "92f552d8-2ee8-8c06-b145-bdcbabd20cbc");
+    let (a, b) = (
+        id("00000007-0000-4000-8000-000000000001"),
+        id("00000007-0000-4000-8000-000000000002"),
+    );
+    let ss = Dependency::derived_id(a, b, DependencyKind::StartStart);
+    let ff = Dependency::derived_id(a, b, DependencyKind::FinishFinish);
+    assert_ne!(ss.0.as_bytes()[..4], ff.0.as_bytes()[..4]);
+}
