@@ -191,46 +191,56 @@ fn every_task_exposes_ordered_steps_boundaries_and_checks_without_mutation() {
     assert_eq!(plan, before);
 }
 
-#[test]
-fn optional_extensions_have_gates_and_cannot_block_mvp_or_alpha() {
-    let plan = fixture();
-    let optional = plan.find_work_by_key("WP-8-SEMANTICS").expect("package").id;
-    let release: BTreeSet<_> = ["M0-MVP", "M5-ALPHA"]
-        .into_iter()
-        .map(|key| plan.find_work_by_key(key).expect("release condition").id)
-        .collect();
-    for work in plan
-        .work_items
-        .values()
-        .filter(|w| w.parent == Some(optional) && w.is_executable())
-    {
-        let detail = explain_work(&plan, work.id).expect("explanation");
-        let gates: BTreeSet<_> = detail
-            .context
-            .decisions
-            .iter()
-            .filter(|d| !d.blocks.is_empty())
-            .map(|d| d.key.0.as_str())
-            .collect();
-        assert!(gates.contains("DEC-EXECUTE") && gates.contains("DEC-EXPAND"));
-        let mut queue = VecDeque::from([work.id]);
-        let mut visited = BTreeSet::new();
-        while let Some(id) = queue.pop_front() {
-            if !visited.insert(id) {
-                continue;
-            }
-            assert!(
-                !release.contains(&id),
-                "{} is an unintended release prerequisite",
-                work.key
-            );
-            queue.extend(
-                plan.dependencies
-                    .iter()
-                    .filter(|d| d.predecessor == id)
-                    .map(|d| d.successor),
-            );
+/// Tasks whose verification the MVP requires; changing this set is a scope decision.
+const MVP_SCOPE: [&str; 13] = [
+    "MVP-10", "MVP-20", "MVP-30", "SELF-10", "CORE-20", "SCH-10", "SEM-10", "SEM-20", "SEM-30",
+    "SEM-40", "RES-10", "EXT-10", "IO-10",
+];
+/// The live self-host cycle runs alongside the MVP without being one of its prerequisites.
+const SELF_HOST_CYCLE: [&str; 2] = ["SELF-20", "SELF-30"];
+const LATER_PHASE_GATES: [&str; 3] = ["DEC-POST-MVP", "DEC-LAYOUT", "DEC-EXPAND"];
+
+fn prerequisite_tasks(plan: &Plan, target: WorkItemId) -> BTreeSet<String> {
+    let mut queue = VecDeque::from([target]);
+    let mut seen = BTreeSet::new();
+    while let Some(id) = queue.pop_front() {
+        if !seen.insert(id) {
+            continue;
         }
+        queue.extend(
+            plan.dependencies
+                .iter()
+                .filter(|d| d.successor == id)
+                .map(|d| d.predecessor),
+        );
+    }
+    seen.into_iter()
+        .map(|id| &plan.work_items[&id])
+        .filter(|w| w.is_executable())
+        .map(|w| w.key.to_string())
+        .collect()
+}
+
+#[test]
+fn mvp_prerequisites_match_the_approved_scope_and_later_work_stays_gated() {
+    let plan = fixture();
+    let mvp = plan.find_work_by_key("M0-MVP").expect("MVP condition").id;
+    let expected: BTreeSet<String> = MVP_SCOPE.iter().map(|k| (*k).to_string()).collect();
+    assert_eq!(prerequisite_tasks(&plan, mvp), expected);
+    for work in plan.work_items.values().filter(|w| w.is_executable()) {
+        let key = work.key.to_string();
+        if expected.contains(&key) || SELF_HOST_CYCLE.contains(&key.as_str()) {
+            continue;
+        }
+        let detail = explain_work(&plan, work.id).expect("explanation");
+        assert!(
+            detail
+                .context
+                .decisions
+                .iter()
+                .any(|d| !d.blocks.is_empty() && LATER_PHASE_GATES.contains(&d.key.0.as_str())),
+            "{key} is outside the MVP but has no later-phase gate"
+        );
         assert!(reaches_milestone(&plan, work.id));
         assert!(!detail.ready);
     }

@@ -2388,8 +2388,8 @@
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
       "parent": "a66db805-addb-528b-9fc6-3c96c77dfca9",
       "kind": "WorkPackage",
-      "title": "Optional execution semantics and integration",
-      "objective": "Group separately authorized semantic extensions; this branch is not a prerequisite of MVP or scoped alpha acceptance.",
+      "title": "Execution semantics and integration",
+      "objective": "Group the execution-semantics and integration contracts that the MVP requires. Not authorization to execute.",
       "acceptance": [],
       "status": "Planned",
       "reported_progress_percent": 0,
@@ -2412,7 +2412,7 @@
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
       "parent": "8254702d-7eec-5e3b-b43a-ddb8aac44dee",
       "kind": "Milestone",
-      "title": "Optional semantics independently accepted",
+      "title": "Execution semantics independently accepted",
       "objective": "Zero-duration condition: all incoming task/milestone prerequisites independently verified and applicable gates resolved.",
       "acceptance": [],
       "status": "Planned",
@@ -3299,7 +3299,7 @@
       "id": "f1751454-e429-554c-add8-96aca3db1998",
       "key": "DEC-EXPAND",
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
-      "question": "Which roadmap phases beyond TUI MVP and agent-understandable/operable work are approved? Core expansion, server/sync/auth/native UI remain deferred.",
+      "question": "Are the execution-semantics contracts (WP-8) and their prerequisites CORE-20 and SCH-10 approved as MVP scope? Later phases stay gated by DEC-POST-MVP; server/sync/auth and native UI remain deferred.",
       "status": "Open",
       "outcome": null,
       "blocks": [
@@ -3410,6 +3410,23 @@
         "4b8243e7-0435-52dd-99db-d080846956c6"
       ],
       "blocks": []
+    },
+    "b95aafa9-a1f7-5544-8087-4922104c74e0": {
+      "id": "b95aafa9-a1f7-5544-8087-4922104c74e0",
+      "key": "DEC-POST-MVP",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "Which phases after M0-MVP acceptance are approved: format/TOML interchange and revert, calendars and milestone risk, alpha qualification, collaboration and projection designs? Nothing beyond the MVP is authorized by this seed.",
+      "status": "Open",
+      "outcome": null,
+      "blocks": [
+        "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
+        "40063ef5-e801-5876-9888-3bff011e437c",
+        "71bf30b0-6180-5e14-8f72-378c039aee41",
+        "87eb53a0-5839-51bf-bdb2-47371bf50315",
+        "b575823c-58ef-54c6-b75d-eb40b760d033",
+        "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+        "cd3eed21-6613-5c8e-a874-5d62002f0c9b"
+      ]
     }
   },
   "risks": {
@@ -3492,12 +3509,6 @@
       "lag_hours": 0.0
     },
     {
-      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
-      "successor": "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
-    },
-    {
       "predecessor": "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
       "successor": "5248ae6e-0412-587d-8820-2a2ad6efbd16",
       "kind": "FinishStart",
@@ -3516,20 +3527,8 @@
       "lag_hours": 0.0
     },
     {
-      "predecessor": "cd3eed21-6613-5c8e-a874-5d62002f0c9b",
-      "successor": "24c9cece-f53f-569e-b653-0d3e583fd858",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
-    },
-    {
       "predecessor": "24c9cece-f53f-569e-b653-0d3e583fd858",
       "successor": "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
-    },
-    {
-      "predecessor": "e2b7c122-effe-5350-b5b1-76b58bf92e51",
-      "successor": "fe5ce0f5-f9c5-5ddf-8a0c-30c2015e2163",
       "kind": "FinishStart",
       "lag_hours": 0.0
     },
@@ -3788,6 +3787,54 @@
     {
       "predecessor": "7ecf321a-a725-5fe1-89b1-0f1ee02fc525",
       "successor": "29cb3968-83c3-5658-bc13-c0eaf044f4e8",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "b75ac42f-0b89-504f-933a-20175beaf664",
+      "successor": "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
+      "successor": "24c9cece-f53f-569e-b653-0d3e583fd858",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
+      "successor": "fe5ce0f5-f9c5-5ddf-8a0c-30c2015e2163",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "38a9835d-52b2-5497-ae3f-69212e23bbe2",
+      "successor": "ee7071a5-4557-5d2f-8737-d958a34187b8",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "38a9835d-52b2-5497-ae3f-69212e23bbe2",
+      "successor": "143875c1-210e-5b64-8a2d-ce1e87e87a08",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "cd3eed21-6613-5c8e-a874-5d62002f0c9b",
+      "successor": "f31377c3-739b-53b1-962c-bdcb9609af27",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "40063ef5-e801-5876-9888-3bff011e437c",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
       "kind": "FinishStart",
       "lag_hours": 0.0
     }

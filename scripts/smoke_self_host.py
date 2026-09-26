@@ -91,7 +91,7 @@ def smoke(directory):
         assert expected['execution_gate'] in {gate['key'] for gate in context['decisions']}
         assert any(expected['execution_gate'] in why for why in detail['why_now'])
         future = run_cli(database, 'explain', 'SERVER-10')
-        assert {'DEC-EXECUTE', 'DEC-EXPAND'} <= {gate['key'] for gate in future['context']['decisions']}
+        assert {'DEC-EXECUTE', 'DEC-EXPAND', 'DEC-POST-MVP'} <= {gate['key'] for gate in future['context']['decisions']}
         for artifact in plan['artifacts'].values():
             if artifact['uri'].startswith('repo:'):
                 path = (ROOT / artifact['uri'][5:]).resolve()

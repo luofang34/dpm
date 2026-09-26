@@ -19,10 +19,12 @@ commands include contract ratification, independent rejection/resubmission, reso
 HEAD evidence and device-local workspace bindings. See [CLI/MCP](../../docs/mcp.md) and
 [project selection](../../docs/projects.md) for the supported interfaces.
 
-`M8-SEMANTICS` groups optional dependency policies, event-based execution lag, provisional submission
-bases, conditional joins, scoped queries, external references and interchange work. Its tasks are
-separately gated and do not become prerequisites of `M0-MVP` or `M5-ALPHA`. Implementation boundaries
-and rejection/edge-case scenarios live in those task contracts.
+`M8-SEMANTICS` groups dependency policies, event-based execution lag, provisional submission bases,
+conditional joins, scoped queries, external references and interchange work. These contracts, with
+their prerequisites `CORE-20` and `SCH-10`, are part of the MVP: `M0-MVP` requires them through the
+`MVP-20`/`MVP-30` reviews. `DEC-EXPAND` approves that scope, and `DEC-POST-MVP` gates every later
+phase. A regression test pins the exact MVP prerequisite set, so changing it is a deliberate plan
+change. Implementation boundaries and edge-case scenarios live in the task contracts.
 
 ## Execution and evidence
 
@@ -48,6 +50,7 @@ Use `dpm validate examples/self-host/dpm-alpha.json --json`; update the expected
 an intentional graph/query change. Operational databases retain their own revision/history and are
 not synchronized by editing this preview file. Reviewed in-place plan changes are tracked by `CORE-20`.
 
-CI validates every contract and reads it through real CLI/MCP processes, checks that optional work
-cannot become a release prerequisite, and asserts revision zero with no operations or claimed work.
+CI validates every contract and reads it through real CLI/MCP processes, checks the exact MVP
+prerequisite set and the gates on later phases, and asserts revision zero with no operations or
+claimed work.
 Execution regressions use disposable synthetic input under `tests/support/`, not self-host tasks.
