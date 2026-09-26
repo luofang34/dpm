@@ -82,6 +82,8 @@ impl Network {
             owner: None,
             block_reason: None,
             events: Default::default(),
+            condition: None,
+            join: dpm_model::JoinPolicy::default(),
             last_rejection: None,
             resources: Vec::new(),
         };

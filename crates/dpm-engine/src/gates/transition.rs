@@ -1,4 +1,4 @@
-use dpm_model::{DependencyKind, DependencyPolicy, Endpoint, Release, WorkStatus};
+use dpm_model::{Applicability, DependencyKind, DependencyPolicy, Endpoint, Release, WorkStatus};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -104,5 +104,36 @@ pub(super) fn describe_release(
             "{key} {event} recorded at {event_at}, but the lag exceeds the supported time range ({edge})"
         ),
         Release::Released { .. } => format!("{key} {event} released ({edge})"),
+        Release::SkippedBranch { .. } => {
+            format!(
+                "{key} was not selected; this active-branch join treats it as an absent branch ({edge})"
+            )
+        }
+        Release::NotSelected => format!(
+            "{key} was not selected, and an ordinary dependency on skipped work never releases ({edge}); declare an active-branch join or change the plan"
+        ),
+    }
+}
+
+pub(super) fn describe_applicability(applicability: &Applicability) -> String {
+    match applicability {
+        Applicability::Applicable => "work is applicable".into(),
+        Applicability::Undecided { decision, option } => {
+            format!("work applies only if {decision} selects {option}, and it is undecided")
+        }
+        Applicability::NotSelected {
+            decision,
+            option,
+            selected,
+        } => format!(
+            "work applies only if {decision} selects {option}, but it selected {selected}; it cannot be claimed or completed"
+        ),
+        Applicability::AwaitingChoice { predecessor } => format!(
+            "prerequisite {predecessor} depends on an undecided choice, so this work is not yet committed"
+        ),
+        Applicability::Stranded { predecessor, .. } => format!(
+            "prerequisite {predecessor} was not selected or can never proceed, and an ordinary dependency never releases from it; only a reviewed plan change that rewires the dependency, or a waiver of a Soft dependency, lets this work proceed"
+        ),
+        Applicability::EmptyJoin => "every branch into this join was not selected, and the join does not permit an empty result".into(),
     }
 }

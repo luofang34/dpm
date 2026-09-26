@@ -3,6 +3,7 @@
 mod console;
 mod detail;
 mod gantt;
+mod open_choices;
 mod text_panel;
 mod view;
 mod work_label;

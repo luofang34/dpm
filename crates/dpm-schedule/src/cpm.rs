@@ -71,9 +71,11 @@ pub fn deterministic(plan: &Plan) -> Result<Schedule, ScheduleError> {
     deterministic_with_durations(plan, &durations)
 }
 
-/// Project outstanding work, treating verified tasks as zero remaining duration.
+/// Project outstanding applicable work, treating verified tasks as zero remaining duration.
 ///
-/// Waived constraints no longer bound outstanding work; the baseline projection keeps them.
+/// Waived constraints no longer bound outstanding work; the baseline projection keeps them. Work
+/// that is not applicable (not selected, undecided, awaiting a choice, stranded or an empty join)
+/// is absent from the result, so the projection covers the same active graph as execution gates.
 /// `now` is the adapter's clock reading, used only to decide which milestones are reached.
 pub fn deterministic_remaining(
     plan: &Plan,
@@ -81,7 +83,7 @@ pub fn deterministic_remaining(
 ) -> Result<Schedule, ScheduleError> {
     plan.validate()?;
     let remaining = remaining_plan(plan, now);
-    let plan = &remaining;
+    let plan = &remaining.plan;
     let durations = plan
         .work_items
         .iter()
@@ -96,7 +98,22 @@ pub fn deterministic_remaining(
             )
         })
         .collect();
-    deterministic_with_durations(plan, &durations)
+    let mut schedule = deterministic_with_durations(plan, &durations)?;
+    schedule
+        .activities
+        .retain(|id, _| !remaining.excluded.contains(id));
+    schedule
+        .critical_activities
+        .retain(|id| !remaining.excluded.contains(id));
+    Ok(schedule)
+}
+
+/// Outstanding constraints of the active graph, and the work excluded from it.
+pub(crate) struct Remaining {
+    /// Plan whose excluded work has no duration and no constraints.
+    pub(crate) plan: Plan,
+    /// Work that is not applicable and must not appear in any remaining projection.
+    pub(crate) excluded: BTreeSet<WorkItemId>,
 }
 
 /// Outstanding constraints measured from `now` as the projection origin.
@@ -105,24 +122,41 @@ pub fn deterministic_remaining(
 /// work keeps only the part of its lag the shared gate evaluator still reports as elapsing, so the
 /// forecast waits exactly as long as execution will; a lag whose event time was never recorded is
 /// kept whole rather than assumed to have elapsed. The completed predecessor projects at the origin
-/// with zero duration, so the kept lag is measured from `now`.
-pub(crate) fn remaining_plan(plan: &Plan, now: chrono::DateTime<chrono::Utc>) -> Plan {
+/// with zero duration, so the kept lag is measured from `now`. Work the shared evaluator reports
+/// as not applicable keeps no duration and no edge, so it cannot move applicable work.
+pub(crate) fn remaining_plan(plan: &Plan, now: chrono::DateTime<chrono::Utc>) -> Remaining {
     let mut remaining = plan.clone();
     let timeline = dpm_model::Timeline::at(plan, now);
     let completed = timeline.completed();
+    let excluded: BTreeSet<_> = plan
+        .work_items
+        .keys()
+        .filter(|id| !timeline.applicability(**id).is_applicable())
+        .copied()
+        .collect();
+    for id in &excluded {
+        if let Some(work) = remaining.work_items.get_mut(id) {
+            work.estimate = None;
+        }
+    }
     remaining.dependencies = plan
         .enforced_dependencies()
+        .filter(|d| !excluded.contains(&d.predecessor) && !excluded.contains(&d.successor))
         .filter(|d| !completed.contains(&d.successor))
         .filter_map(|d| {
             if !completed.contains(&d.predecessor) {
                 return Some(d.clone());
             }
             let lag_hours = match timeline.edge(plan, d) {
-                Release::Released { .. } | Release::AwaitingEvent => return None,
+                Release::Released { .. }
+                | Release::SkippedBranch { .. }
+                | Release::AwaitingEvent => return None,
                 Release::Elapsing { opens_at, .. } => {
                     (opens_at - now).num_milliseconds() as f64 / 3_600_000.0
                 }
-                Release::UnrecordedEventTime | Release::LagOutOfRange { .. } => d.lag_hours,
+                Release::UnrecordedEventTime
+                | Release::LagOutOfRange { .. }
+                | Release::NotSelected => d.lag_hours,
             };
             Some(Dependency {
                 lag_hours,
@@ -130,7 +164,10 @@ pub(crate) fn remaining_plan(plan: &Plan, now: chrono::DateTime<chrono::Utc>) ->
             })
         })
         .collect();
-    remaining
+    Remaining {
+        plan: remaining,
+        excluded,
+    }
 }
 
 /// Project a validated graph with an explicit finite, non-negative duration for every activity.

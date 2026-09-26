@@ -142,7 +142,7 @@ pub(crate) enum Commands {
         #[arg(long, default_value = "human:local")]
         actor: String,
     },
-    /// Resolve an open human/organizational decision gate.
+    /// Resolve an open decision; a decision with options takes exactly one option key as outcome.
     Decide {
         key: String,
         outcome: String,

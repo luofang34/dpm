@@ -44,9 +44,21 @@ pub(crate) fn lineage<'a>(plan: &'a Plan, work: &'a WorkItem) -> Vec<&'a WorkIte
     items
 }
 
-/// Whether a decision belongs to the context of work with these lineage IDs.
-pub(crate) fn decision_applies(decision: &Decision, lineage: &BTreeSet<WorkItemId>) -> bool {
-    !decision.blocks.is_disjoint(lineage) || !decision.related_work.is_disjoint(lineage)
+/// Whether a decision belongs to the context of work with these lineage IDs: it gates, relates
+/// to, or decides the applicability of the work or a containing package.
+pub(crate) fn decision_applies(
+    plan: &Plan,
+    decision: &Decision,
+    lineage: &BTreeSet<WorkItemId>,
+) -> bool {
+    !decision.blocks.is_disjoint(lineage)
+        || !decision.related_work.is_disjoint(lineage)
+        || lineage.iter().any(|id| {
+            plan.work_items
+                .get(id)
+                .and_then(|w| w.condition.as_ref())
+                .is_some_and(|c| c.decision == decision.id)
+        })
 }
 
 /// Decisions linked to the lineage plus every replacement reachable through `supersedes`.
@@ -60,7 +72,7 @@ pub(crate) fn applicable_decisions(
     let mut selected: BTreeSet<_> = plan
         .decisions
         .values()
-        .filter(|d| decision_applies(d, lineage))
+        .filter(|d| decision_applies(plan, d, lineage))
         .map(|d| d.id)
         .collect();
     loop {

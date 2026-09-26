@@ -29,11 +29,12 @@ screens.
 ## Authoritative vs derived
 
 Authoritative inputs include work lifecycle, objective, acceptance criteria, dependency identity,
-type, lag, policy and waivers, non-gating work links, duration estimates, requirements, decision outcomes, risks, ownership, artifacts, actors, and
+type, lag, policy and waivers, non-gating work links, duration estimates, requirements, decision
+options and outcomes, work conditions and join policies, risks, ownership, artifacts, actors, and
 commands.
 
-Derived values include readiness, earliest/latest start/finish, float, critical activities,
-completion percentiles, criticality, `next` scores, and UI layout. Derived values are recomputed and
+Derived values include readiness, applicability, earliest/latest start/finish, float, critical
+activities, completion percentiles, criticality, `next` scores, and UI layout. Derived values are recomputed and
 must not become synchronized truth.
 
 ## Scheduling model
@@ -212,6 +213,43 @@ reload agrees. Such edges are `Hard`. Serialization always writes the identity a
 exist and differ, and one pair of work items carries at most one link of each kind in either
 direction. Links never affect readiness, scheduling, ranking or progress; `explain` returns them as
 context.
+
+### Conditional work and joins
+
+A decision may offer structured `options`; a decided outcome is exactly one option key. Work may
+carry a `condition` naming a decision and option; a condition on a work package applies to all its
+descendants, and every condition in a work item's containment chain must hold. Conditions follow a
+decision's `supersedes` chain, so a reviewed replacement (with the same option keys) is how a made
+choice changes. A task or milestone may declare an explicit `join` policy for its incoming edges.
+
+`dpm_model::Timeline` derives each work item's applicability once, from decisions, conditions,
+join policies and unwaived edges in dependency order, and every projection reads that result:
+
+| Situation | Rule |
+|-----------|------|
+| Condition's decision is open | `undecided`: no transition; not counted in progress; not complete |
+| Decision selected another option | `not_selected`: no transition; excluded from progress, CPM and Monte Carlo; verified work stops counting as completion |
+| Ordinary edge (`all_predecessors`) from not-selected work | never released (`release = not_selected`); the successor is `stranded` |
+| Edge from stranded work, or from an empty join | never released; the successor is `stranded` |
+| Edge from undecided or awaiting work | the successor is `awaiting_choice`: not committed until the choice is made |
+| `active_branches` join, edge from not-selected work | a skipped branch, released at the choice's `resolved_at` |
+| `active_branches` join, every branch skipped | `empty_join` unless `allow_empty`; with it, reached at the latest choice time |
+| Work package | complete when every child a choice did not exclude is complete, and at least one is |
+
+Only `applicable` work passes any lifecycle gate (`UnmetGate::Applicability` otherwise), is
+recommended by `next`, or enters the remaining projections; excluded activities are absent from
+`deterministic_remaining` and `simulate_remaining` output. Stranded and awaiting work stays
+outstanding in progress, so a plan that can no longer finish never reports completion. A milestone
+or package time includes the resolution times of the choices that selected it or skipped its
+branches; a replacement created by a plan change has no recorded resolution time, so a completion
+that depends on it has an unrecorded time.
+
+While open decisions condition work, `status` reports one forecast per option combination instead
+of a single percentile: with no probability model, blending mutually exclusive branches would be a
+false claim. The headline forecast then covers committed work only. `decide` refuses a choice that
+would exclude claimed or started work; a reviewed replacement may do so, keeps that work's
+lifecycle and evidence, reports it in the preview, and the work then takes no transition until the
+plan changes. Automatic cancellation is not part of this model.
 
 ### Uncertain durations
 

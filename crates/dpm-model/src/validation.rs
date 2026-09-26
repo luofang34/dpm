@@ -1,6 +1,7 @@
 use crate::Plan;
 use thiserror::Error;
 
+mod conditions;
 mod dependency;
 mod entities;
 mod events;
@@ -73,6 +74,7 @@ impl Plan {
         entities::validate(self)?;
         crate::tracking::validate(self)?;
         graph::validate(self)?;
+        conditions::validate(self)?;
         dependency::validate(self)
     }
 }

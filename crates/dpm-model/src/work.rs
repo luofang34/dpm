@@ -174,6 +174,12 @@ pub struct WorkItem {
     pub last_rejection: Option<ReviewRejection>,
     /// Non-empty reason while the task is blocked.
     pub block_reason: Option<String>,
+    /// Decision option this work and its descendants apply to; absent means unconditional.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<crate::WorkCondition>,
+    /// How a task or milestone treats incoming constraints from work a choice excluded.
+    #[serde(default, skip_serializing_if = "crate::JoinPolicy::is_default")]
+    pub join: crate::JoinPolicy,
 }
 
 /// Independent review explaining why submitted work needs another attempt.

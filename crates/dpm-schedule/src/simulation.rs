@@ -96,14 +96,21 @@ pub fn simulate(plan: &Plan, config: SimulationConfig) -> Result<SimulationSumma
     simulate_inner(plan, config, false)
 }
 
-/// Monte Carlo projection of remaining work from the execution state at an adapter clock reading.
+/// Monte Carlo projection of remaining applicable work from the execution state at a clock reading.
+///
+/// It samples the same active graph as `deterministic_remaining`; excluded work has no criticality.
 pub fn simulate_remaining(
     plan: &Plan,
     config: SimulationConfig,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<SimulationSummary, ScheduleError> {
     plan.validate()?;
-    simulate_inner(&crate::cpm::remaining_plan(plan, now), config, true)
+    let remaining = crate::cpm::remaining_plan(plan, now);
+    let mut summary = simulate_inner(&remaining.plan, config, true)?;
+    summary
+        .criticality
+        .retain(|id, _| !remaining.excluded.contains(id));
+    Ok(summary)
 }
 
 fn simulate_inner(

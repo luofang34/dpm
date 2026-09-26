@@ -38,6 +38,7 @@ fn fixture() -> (Plan, DecisionId) {
         artifact_ids: BTreeSet::from([source.id]),
         blocks: BTreeSet::new(),
         supersedes: None,
+        options: Vec::new(),
     };
     plan.artifacts.insert(source.id, source);
     let id = choice.id;

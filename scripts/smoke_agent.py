@@ -408,7 +408,11 @@ if __name__ == '__main__':
         scope_smoke(Path(directory))
         dependency_smoke(Path(directory))
         timing_smoke(Path(directory))
+        # Conditional-work parity lives in its own module, which reuses this module's helpers.
+        from smoke_conditional import smoke as conditional_smoke
+        conditional_smoke(directory)
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')
     print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')
     print('PASS: CLI/MCP dependency identity, soft-edge waiver/restore, refusals and non-gating links')
     print('PASS: CLI/MCP start events, elapsed-lag gates, unknown legacy event times and lead explanations')
+    print('PASS: CLI/MCP conditional work: options, applicability gates, branch joins, scenarios and reviewed choice changes')

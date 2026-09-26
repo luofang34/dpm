@@ -247,6 +247,7 @@ fn applied_fixture_reimports_and_exports_without_semantic_changes() {
 fn dpm_plans_export_and_reimport_unchanged() {
     for source in [
         include_str!("../../../tests/support/execution-plan.json"),
+        include_str!("../../../tests/support/conditional-plan.json"),
         include_str!("../../../examples/self-host/dpm-alpha.json"),
     ] {
         let plan: Plan = serde_json::from_str(source).expect("plan");
@@ -262,4 +263,45 @@ fn dpm_plans_export_and_reimport_unchanged() {
             assert!(preview.changes.is_empty(), "{}", project.key);
         }
     }
+}
+
+#[test]
+fn conditional_work_is_written_unconditionally_and_reported_never_dropped() {
+    let mut plan: Plan =
+        serde_json::from_str(include_str!("../../../tests/support/conditional-plan.json"))
+            .expect("plan");
+    let decision = plan
+        .find_decision_by_key("DEC-SUPPLIER")
+        .expect("decision")
+        .id;
+    let command = Command::Decide {
+        decision,
+        outcome: "B".into(),
+    };
+    apply_command(&mut plan, ActorId::human("lead"), command, Utc::now()).expect("decide");
+    let exported = export_mspdi(&plan, "SUP").expect("export");
+    assert_eq!(exported.report.items.len(), plan.work_items.len());
+    let item = |key: &str| {
+        exported
+            .report
+            .items
+            .iter()
+            .find(|i| i.key.0 == key)
+            .expect("reported")
+    };
+    let fields = |key: &str| -> BTreeSet<String> {
+        item(key).omitted.iter().map(|f| f.field.clone()).collect()
+    };
+    assert!(fields("SUP-PKG-A").contains("condition"));
+    assert!(fields("SUP-A-QUOTE").contains("applicability"));
+    assert!(fields("SUP-MERGE").contains("join"));
+    assert!(fields("SUP-A-AUDIT").contains("applicability"));
+    assert!(exported.xml.contains("Obtain supplier A quote"));
+    assert!(
+        exported
+            .report
+            .dependencies
+            .iter()
+            .any(|d| d.notes.iter().any(|n| n.contains("not selected")))
+    );
 }

@@ -285,6 +285,8 @@ fn new_work(id: WorkItemId, key: Key, kind: WorkKind, project: ProjectId) -> Wor
         last_rejection: None,
         block_reason: None,
         events: Default::default(),
+        condition: None,
+        join: dpm_model::JoinPolicy::default(),
     }
 }
 

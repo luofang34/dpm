@@ -1,10 +1,14 @@
 use crate::{EngineError, Transition, gates};
 use chrono::{DateTime, Utc};
-use dpm_model::{DecisionStatus, Plan, Priority, Timeline, WorkItem, WorkItemId, WorkStatus};
+use dpm_model::{
+    Applicability, DecisionStatus, Plan, Priority, Timeline, WorkItem, WorkItemId, WorkStatus,
+};
 use dpm_schedule::{SimulationConfig, deterministic_remaining, simulate_remaining};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+mod choices;
+pub use choices::{InapplicableWork, MAX_SCENARIOS, OpenChoices, ScenarioForecast};
 mod explain;
 pub use explain::{WorkExplanation, explain_work};
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,14 +34,21 @@ pub struct StatusSummary {
     pub complete: usize,
     /// Number of unresolved decisions, whether contextual or blocking.
     pub open_decisions: usize,
-    /// Deterministic remaining project duration in elapsed hours.
+    /// Deterministic remaining duration of the active graph in elapsed hours; while choices are
+    /// open it covers committed work only, and `open_choices` forecasts each scenario.
     pub expected_finish_hours: f64,
-    /// Median sampled completion time in elapsed hours.
+    /// Median sampled completion time in elapsed hours; withheld while choices are open.
     pub p50_finish_hours: Option<f64>,
-    /// 80th percentile sampled completion time in elapsed hours.
+    /// 80th percentile sampled completion time in elapsed hours; withheld while choices are open.
     pub p80_finish_hours: Option<f64>,
-    /// 95th percentile sampled completion time in elapsed hours.
+    /// 95th percentile sampled completion time in elapsed hours; withheld while choices are open.
     pub p95_finish_hours: Option<f64>,
+    /// Work outside the active graph, with the reason; it is in no forecast and never ready.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub not_applicable: Vec<InapplicableWork>,
+    /// Open decisions that condition work, with one forecast per option combination.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_choices: Option<OpenChoices>,
 }
 
 pub(crate) fn simulation_config() -> SimulationConfig {
@@ -65,7 +76,12 @@ pub fn status(
     plan.validate()?;
     let timeline = Timeline::at(plan, now);
     let schedule = deterministic_remaining(plan, now)?;
-    let simulation = if probabilistic && plan.work_items.values().any(|w| w.estimate.is_some()) {
+    let open_choices = choices::open_choices(plan, probabilistic, now)?;
+    // Mutually exclusive branches have no probability model, so no single percentile is given.
+    let simulation = if probabilistic
+        && open_choices.is_none()
+        && plan.work_items.values().any(|w| w.estimate.is_some())
+    {
         Some(simulate_remaining(plan, simulation_config(), now)?)
     } else {
         None
@@ -103,12 +119,23 @@ pub fn status(
         p50_finish_hours: simulation.as_ref().map(|s| s.p50_finish_hours),
         p80_finish_hours: simulation.as_ref().map(|s| s.p80_finish_hours),
         p95_finish_hours: simulation.as_ref().map(|s| s.p95_finish_hours),
+        not_applicable: choices::not_applicable(plan, &timeline),
+        open_choices,
     })
 }
 
-fn downstream_counts(plan: &Plan) -> BTreeMap<WorkItemId, usize> {
+/// Transitive successors that completing work could still release; excluded or stranded work
+/// is not counted because no completion releases it.
+fn downstream_counts(plan: &Plan, timeline: &Timeline) -> BTreeMap<WorkItemId, usize> {
     let mut outgoing = BTreeMap::<WorkItemId, Vec<WorkItemId>>::new();
-    for dep in &plan.dependencies {
+    for dep in plan.dependencies.iter().filter(|d| {
+        !matches!(
+            timeline.applicability(d.successor),
+            Applicability::NotSelected { .. }
+                | Applicability::Stranded { .. }
+                | Applicability::EmptyJoin
+        )
+    }) {
         outgoing
             .entry(dep.predecessor)
             .or_default()
@@ -181,7 +208,7 @@ pub fn next_work(
     plan.validate()?;
     let timeline = Timeline::at(plan, now);
     let schedule = deterministic_remaining(plan, now)?;
-    let downstream = downstream_counts(plan);
+    let downstream = downstream_counts(plan, &timeline);
     let simulation = if query.use_probabilistic_criticality
         && plan.work_items.values().any(|w| w.estimate.is_some())
     {
@@ -198,16 +225,18 @@ pub fn next_work(
         .filter(|work| {
             query.capabilities.is_empty() || work.capabilities.is_subset(&query.capabilities)
         })
-        .map(|work| {
+        // Claimable work is applicable, so the active-graph schedule always covers it.
+        .filter_map(|work| {
             let finish = gates::evaluate(plan, work, Transition::Submit, &timeline);
-            candidate(
+            let activity = schedule.activities.get(&work.id)?;
+            Some(candidate(
                 work,
                 query,
                 &finish,
-                &schedule.activities[&work.id],
+                activity,
                 &downstream,
                 simulation.as_ref(),
-            )
+            ))
         })
         .collect::<Vec<_>>();
 

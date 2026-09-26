@@ -343,3 +343,40 @@ fn detail_shows_recorded_events_and_every_transition_gate() {
         "{detail}"
     );
 }
+
+#[test]
+fn conditional_work_shows_scenarios_exclusions_and_the_stranded_reason() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/conditional-plan.json"
+    ))
+    .expect("fixture");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
+    let now = render(&mut view);
+    assert!(now.contains("Open choices DEC-SUPPLIER"), "{now}");
+    assert!(now.contains("DEC-SUPPLIER=A") && now.contains("DEC-SUPPLIER=B"));
+    assert!(
+        !now.contains("P50"),
+        "no blended percentile while a choice is open"
+    );
+
+    let decision = plan.decisions.keys().next().copied().expect("decision");
+    dpm_engine::apply_command(
+        &mut plan,
+        dpm_model::ActorId::human("lead"),
+        dpm_engine::Command::Decide {
+            decision,
+            outcome: "B".into(),
+        },
+        chrono::Utc::now(),
+    )
+    .expect("decide");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
+    view.page = Page::Work;
+    assert!(render(&mut view).contains("[not selected]"));
+    view.page = Page::Gantt;
+    assert!(render(&mut view).contains("outside the active graph"));
+    let audit = plan.find_work_by_key("SUP-A-AUDIT").expect("work").id;
+    let explanation = dpm_engine::explain_work(&plan, audit, chrono::Utc::now()).expect("explain");
+    let detail = crate::detail::text(&plan, &explanation);
+    assert!(detail.contains("never releases from it"), "{detail}");
+}
