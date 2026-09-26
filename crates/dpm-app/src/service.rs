@@ -1,7 +1,8 @@
 use crate::AppError;
 use chrono::Utc;
 use dpm_engine::{
-    Command, NextWorkQuery, Operation, apply_command, explain_work, next_work, show_work, status,
+    Command, NextWorkQuery, Operation, WorkScope, apply_command, explain_work, next_in_scope,
+    show_work, status,
 };
 use dpm_model::{ActorId, DecisionId, Plan, WorkItemId};
 use dpm_store::SqliteStore;
@@ -50,14 +51,20 @@ pub enum Query {
         /// Compute seeded uncertainty projections.
         probabilistic: bool,
     },
-    /// Ranked executable leaf tasks with their ranking reasons.
+    /// Globally ranked executable leaf tasks, narrowed to a visible query-only scope.
     Next {
         /// Requested capabilities; empty preserves the engine's unfiltered operator view.
         capabilities: BTreeSet<String>,
         /// Include seeded probabilistic criticality.
         probabilistic: bool,
-        /// Maximum number of results.
+        /// Maximum number of in-scope results, applied after scope filtering.
         limit: usize,
+        /// Project keys whose subtrees form the project scope; empty does not filter.
+        #[serde(default)]
+        project_keys: BTreeSet<String>,
+        /// Resource keys that returned work must fit; empty does not filter.
+        #[serde(default)]
+        resource_keys: BTreeSet<String>,
     },
     /// Work contract with projected container/milestone status.
     Show {
@@ -225,16 +232,19 @@ impl Application {
                 capabilities,
                 probabilistic,
                 limit,
+                project_keys,
+                resource_keys,
             } => {
-                let mut candidates = next_work(
+                let scope = WorkScope::resolve(
                     &plan,
-                    &NextWorkQuery {
-                        capabilities,
-                        use_probabilistic_criticality: probabilistic,
-                    },
+                    project_keys.iter().map(String::as_str),
+                    resource_keys.iter().map(String::as_str),
                 )?;
-                candidates.truncate(limit);
-                serde_json::to_value(candidates)?
+                let query = NextWorkQuery {
+                    capabilities,
+                    use_probabilistic_criticality: probabilistic,
+                };
+                serde_json::to_value(next_in_scope(&plan, &query, &scope, limit)?)?
             }
             Query::Show { key } => {
                 let work = plan

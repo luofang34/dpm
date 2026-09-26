@@ -85,7 +85,7 @@ The console labels it `PREVIEW read-only`. `cargo run tui` also works; root pack
 the CLI, while `cargo run -p dpm-mcp -- --actor agent:reader` starts the MCP adapter.
 
 The preview contains task contracts, milestones, requirements, open decision gates, risks and
-source context. `next` deliberately returns `[]`: **DEC-EXECUTE** gates the entire roadmap. All
+source context. `next` deliberately returns no candidates: **DEC-EXECUTE** gates the entire roadmap. All
 contracts remain unowned at zero progress, and no execution is authorized by this example.
 See [the self-host guide](examples/self-host/README.md) for scope and acceptance details.
 
@@ -111,8 +111,10 @@ documents nested projects, cloned configurations and existing databases.
 A workspace may span several Git repositories and non-code projects. Use explicit project/database
 selection for a central local plan; automatic discovery remains conservative at Git boundaries.
 SQLite holds durable runtime state. Plan interchange uses JSON; TOML configures project locators.
-Inspect `CORE-20`, `RES-10` and `SYNC-10` with `explain` for semantic plan editing, scoped queries
-and sync requirements. Current resource identities and local bindings are described in the project-selection guide.
+`dpm next --project-key KEY --resource-key KEY` narrows globally ranked work to a project subtree or
+resources without hiding eligible work elsewhere; see the [agent contract](docs/mcp.md#scoped-next).
+Inspect `CORE-20` and `SYNC-10` with `explain` for semantic plan editing and sync requirements.
+Current resource identities and local bindings are described in the project-selection guide.
 
 Self-host is the only bundled example. `demo` explicitly initializes a copy in another project or
 an explicit database; it never overwrites existing state. Each task includes ordered actions and

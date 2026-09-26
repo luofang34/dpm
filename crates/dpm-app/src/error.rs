@@ -18,6 +18,9 @@ pub enum AppError {
     /// Domain query or command rejected.
     #[error(transparent)]
     Engine(#[from] dpm_engine::EngineError),
+    /// Query scope names an entity absent from the plan.
+    #[error(transparent)]
+    Scope(#[from] dpm_engine::ScopeError),
     /// Persistence failed.
     #[error(transparent)]
     Store(#[from] dpm_store::StoreError),
@@ -82,7 +85,7 @@ impl AppError {
             | Self::Store(dpm_store::StoreError::RevisionConflict { .. }) => "revision_conflict",
             Self::GitIo(_) | Self::Git { .. } | Self::GitEncoding(_) => "git_error",
             Self::NotInitialized => "not_initialized",
-            Self::UnknownWork(_) | Self::UnknownDecision(_) => "not_found",
+            Self::UnknownWork(_) | Self::UnknownDecision(_) | Self::Scope(_) => "not_found",
             Self::Engine(_) => "invalid_command",
             Self::Store(_) => "storage_error",
             Self::Json(_) | Self::InvalidRequest(_) => "invalid_request",

@@ -64,6 +64,12 @@ pub(crate) enum Commands {
     Next {
         #[arg(long = "capability")]
         capabilities: Vec<String>,
+        /// Limit results to this project key's subtree; repeatable. Unlike --project, not a directory.
+        #[arg(long = "project-key")]
+        project_keys: Vec<String>,
+        /// Limit results to work fitting these resource keys; repeatable.
+        #[arg(long = "resource-key")]
+        resource_keys: Vec<String>,
         #[arg(long, default_value_t = 5)]
         limit: usize,
         #[arg(long)]

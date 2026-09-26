@@ -50,3 +50,54 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
         "Verified"
     );
 }
+
+fn next_query(project_keys: &[&str], resource_keys: &[&str], limit: usize) -> Query {
+    Query::Next {
+        capabilities: BTreeSet::new(),
+        probabilistic: false,
+        limit,
+        project_keys: project_keys.iter().map(|k| k.to_string()).collect(),
+        resource_keys: resource_keys.iter().map(|k| k.to_string()).collect(),
+    }
+}
+
+#[test]
+fn scoped_next_is_versioned_rejects_unknown_keys_and_leaves_state_unchanged() {
+    let plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let app = Application::in_memory_blocking(&plan).expect("app");
+    let before = app.query_blocking(Query::Export).expect("export").data;
+    let scoped = app
+        .query_blocking(next_query(&["TEST"], &["TEST-REPO"], 5))
+        .expect("scoped")
+        .data;
+    assert_eq!(scoped["result_version"], dpm_engine::NEXT_RESULT_VERSION);
+    assert_eq!(scoped["scope"]["projects"][0]["key"], "TEST");
+    assert_eq!(scoped["candidates"][0]["work"]["key"], "TEST-A");
+    assert_eq!(scoped["candidates"][0]["global_rank"], 1);
+    assert_eq!(scoped["outside_scope"]["count"], 0);
+    for query in [
+        next_query(&["MISSING"], &[], 5),
+        next_query(&[], &["MISSING"], 5),
+    ] {
+        let error = app.query_blocking(query).expect_err("unknown key");
+        assert_eq!(error.code(), "not_found");
+    }
+    let after = app.query_blocking(Query::Export).expect("export").data;
+    assert_eq!(after, before);
+}
+
+#[test]
+fn next_requests_without_scope_fields_remain_accepted() {
+    let query: Query = serde_json::from_value(serde_json::json!(
+        {"query": "next", "capabilities": [], "probabilistic": false, "limit": 1}
+    ))
+    .expect("request without scope");
+    assert!(matches!(
+        query,
+        Query::Next { ref project_keys, ref resource_keys, .. }
+            if project_keys.is_empty() && resource_keys.is_empty()
+    ));
+}

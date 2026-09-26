@@ -20,7 +20,7 @@ which the store still checks atomically. Presentation text is not the API contra
 | plan apply FILE --reason TEXT | apply_change | Human/service applies an observed-revision proposal atomically |
 | history --after-sequence N --limit N | history | Chronological operation pages with actor, time, reason and command |
 | status | project_status | Counts and optional Monte Carlo forecast |
-| next | next_work | Eligible leaf tasks, deterministic ranking and reasons |
+| next --project-key KEY --resource-key KEY | next_work | Full-graph ranking, then [scope](#scoped-next) and limit; outside-scope work stays visible |
 | show KEY | get_work | Objective, steps/results, scope, acceptance/checks and derived status |
 | explain KEY | explain_work | Readiness, dependencies, resolved requirements/gates/risks/evidence |
 | ratify KEY | ratify_contract | Human/service approves a complete Proposed contract |
@@ -69,7 +69,7 @@ is not an operation backup; retain consistent SQLite backups for recovery.
 ## Prepared self-host example
 
 The default `demo` is the [dpm roadmap](../examples/self-host/README.md), with open execution
-and phase gates. Its `next_work` result is intentionally empty. Query its contracts freely, but do
+and phase gates. Its `next_work` result intentionally has no candidates. Query its contracts freely, but do
 not call mutation tools on it until the user separately authorizes beginning the self-host work.
 The workflow below applies to an authorized execution workspace; tool availability is not approval.
 
@@ -86,9 +86,44 @@ The workflow below applies to an authorized execution workspace; tool availabili
 6. Call report_blocker when blocked; do not silently ignore dependencies or change lifecycle fields.
 
 `probabilistic:false` matches CLI `status --no-simulation` or `next --deterministic-only`.
-Capabilities and limit map to repeated `--capability` and `--limit`. Work identifiers in tool arguments
+Capabilities and limit map to repeated `--capability` and `--limit`; `project_keys` and `resource_keys`
+map to repeated `--project-key` and `--resource-key`. Work identifiers in tool arguments
 are human keys; returned records also include stable UUIDs. Domain errors use stable `code` plus
 human-readable `message`; CLI wraps this in `error`, MCP uses `isError:true` and structuredContent.
+
+## Scoped next
+
+`next`/`next_work` returns one object with `result_version: 1`. Evaluation order is fixed: gates,
+readiness and scores use the full workspace graph; capability eligibility then selects the eligible
+set; scope partitions it; `limit` truncates only the in-scope list. Scope is query-only: it never
+changes claims, graph membership, readiness or scores, and it grants no filesystem authorization.
+
+| Field | Meaning |
+| --- | --- |
+| result_version | Shape version of this object, independent of `api_version` |
+| scope.projects[] / scope.resources[] | Resolved `{id, key}` entries actually applied; both empty means unscoped |
+| capabilities | Capabilities used for eligibility; not a scope axis |
+| limit | Maximum in-scope candidates returned |
+| eligible_count | Ready, capability-eligible work in the whole workspace |
+| in_scope_count | Eligible work inside the scope, before `limit` |
+| candidates[] | In-scope work in global rank order; each is a ranked candidate plus `global_rank` (1-based among all eligible work) |
+| outside_scope.count | Eligible work excluded by scope |
+| outside_scope.higher_ranked_count | Outside work ranked above the best in-scope eligible work (before `limit`), or all outside work when none is in scope |
+| outside_scope.keys[] | Keys of eligible outside work in global rank order; the first `higher_ranked_count` rank higher |
+
+Membership, applied to eligible work; each empty axis does not filter and non-empty axes intersect:
+
+- **Project** (`--project-key`, `project_keys`): the work's project is a listed project or a descendant.
+  `--project DIR` still selects a project directory; the key filter is a separate option.
+- **Resource** (`--resource-key`, `resource_keys`): the work names at least one listed resource, and every
+  resource it writes is listed. Reads of unlisted resources are allowed. Work naming no resources
+  (for example non-code work) never matches a resource scope; if eligible it is in `outside_scope`.
+- **Capability** (`--capability`, `capabilities`): eligibility, not scope. Work the caller cannot
+  perform is neither a candidate nor counted in `outside_scope`.
+
+Unknown project or resource keys fail with `not_found` instead of matching nothing. A dependency
+outside the scope is evaluated like any other: in-scope work waiting on it stays unready, and the
+blocking work appears in `outside_scope` when it is itself eligible.
 
 ## Task instructions
 

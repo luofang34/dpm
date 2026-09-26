@@ -3,6 +3,7 @@
 import json
 import subprocess
 import tempfile
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -113,17 +114,17 @@ def smoke(database):
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
         worker.call('attach_git_head', {'key': 'TEST-A', 'resource': 'TEST-REPO', 'base_revision': 3})
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')
-        assert worker.call('next_work', {})['data'] == []
+        assert worker.call('next_work', {})['data']['candidates'] == []
         worker.call('unblock_work', {'key': 'TEST-A', 'base_revision': 5})
         worker.call('submit_work', {'key': 'TEST-A', 'base_revision': 6, 'note': 'Acceptance evidence reviewed'})
         worker.call('verify_work', {'key': 'TEST-A', 'base_revision': 7}, error='invalid_command')
         run_cli(database, 'verify', 'TEST-A', '--actor', 'agent:parity', error='invalid_command')
         reviewer.call('verify_work', {'key': 'TEST-A', 'base_revision': 7})
-        assert worker.call('next_work', {})['data'] == []
+        assert worker.call('next_work', {})['data']['candidates'] == []
         reviewer.call('decide_gate', {'decision': 'TEST-GATE', 'outcome': 'Accept the verified input', 'base_revision': 8})
         next_work = worker.call('next_work', {})['data']
         assert next_work == run_cli(database, 'next')
-        assert {candidate['work']['key'] for candidate in next_work} == {'TEST-B', 'TEST-D'}
+        assert {candidate['work']['key'] for candidate in next_work['candidates']} == {'TEST-B', 'TEST-D'}
         assert worker.call('project_status', {})['data']['revision'] == 9
     finally:
         worker.close()
@@ -157,7 +158,7 @@ def review_smoke(directory):
         assert detail == run_cli(database, 'explain', 'TEST-A')
         assert detail['work']['status'] == 'InProgress'
         assert detail['work']['last_rejection']['reason'] == 'Missing acceptance evidence'
-        assert worker.call('next_work', {})['data'] == []
+        assert worker.call('next_work', {})['data']['candidates'] == []
         run_cli(database, 'submit', 'TEST-A', '--actor', 'agent:worker')
         run_cli(database, 'reject', 'TEST-A', 'Still missing evidence', '--actor', 'human:reviewer')
         assert worker.call('get_work', {'key': 'TEST-A'})['data'] == run_cli(database, 'show', 'TEST-A')
@@ -171,8 +172,91 @@ def review_smoke(directory):
     assert 'RatifyContract' in result['command'] and result['resulting_revision'] == 1
 
 
+def scoped_plan():
+    """Ready tasks across a project subtree, two repositories and a resource-less task."""
+    plan = json.loads((ROOT / 'tests/support/execution-plan.json').read_text())
+    template = next(w for w in plan['work_items'].values() if w['key'] == 'TEST-A')
+    edge = plan['dependencies'][0]
+    root = next(iter(plan['projects']))
+    repo_a = next(iter(plan['resources']))
+    sub, other, repo_b = (str(uuid.uuid4()) for _ in range(3))
+    plan['projects'][sub] = {**plan['projects'][root], 'id': sub, 'key': 'SUB', 'parent': root}
+    plan['projects'][other] = {**plan['projects'][root], 'id': other, 'key': 'OTHER'}
+    plan['resources'][repo_b] = {**plan['resources'][repo_a], 'id': repo_b, 'key': 'REPO-B'}
+    plan['decisions'], plan['risks'], plan['work_items'], plan['dependencies'] = {}, {}, {}, []
+    tasks = [
+        ('W-A', root, [(repo_a, 'Write')], 'P2'), ('W-B', other, [(repo_b, 'Write')], 'P0'),
+        ('W-AB', sub, [(repo_a, 'Write'), (repo_b, 'Write')], 'P2'), ('R-A', sub, [(repo_a, 'Read')], 'P3'),
+        ('NOCODE', other, [], 'P1'), ('DEP', root, [(repo_a, 'Write')], 'P0'),
+    ]
+    ids = {}
+    for key, project, needs, priority in tasks:
+        ids[key] = str(uuid.uuid4())
+        plan['work_items'][ids[key]] = {
+            **template, 'id': ids[key], 'key': key, 'project': project, 'priority': priority,
+            'resources': [{'resource': r, 'access': a} for r, a in needs],
+        }
+    plan['dependencies'].append({**edge, 'predecessor': ids['W-B'], 'successor': ids['DEP']})
+    return plan
+
+
+def scope_smoke(directory):
+    fixture = directory / 'scoped.json'
+    fixture.write_text(json.dumps(scoped_plan()))
+    database = directory / 'scoped.sqlite'
+    run_cli(database, 'import', str(fixture))
+    before = run_cli(database, 'export')
+    agent = Agent(database, 'agent:scope')
+    try:
+        results = {}
+        for name, arguments, flags in [
+            ('all', {}, ()),
+            ('repo-a', {'resource_keys': ['TEST-REPO']}, ('--resource-key', 'TEST-REPO')),
+            ('both', {'resource_keys': ['TEST-REPO', 'REPO-B']}, ('--resource-key', 'TEST-REPO', '--resource-key', 'REPO-B')),
+            ('subtree', {'project_keys': ['TEST']}, ('--project-key', 'TEST')),
+            ('other', {'project_keys': ['OTHER']}, ('--project-key', 'OTHER')),
+            ('intersect', {'project_keys': ['OTHER'], 'resource_keys': ['TEST-REPO']}, ('--project-key', 'OTHER', '--resource-key', 'TEST-REPO')),
+            ('limited', {'project_keys': ['TEST'], 'limit': 1}, ('--project-key', 'TEST', '--limit', '1')),
+        ]:
+            remote = agent.call('next_work', {'probabilistic': False, **arguments})['data']
+            assert remote == run_cli(database, 'next', '--deterministic-only', *flags), name
+            assert remote['result_version'] == 1
+            results[name] = remote
+        keys = lambda r: sorted(c['work']['key'] for c in r['candidates'])
+        order = [c['work']['key'] for c in results['all']['candidates']]
+        assert results['all']['outside_scope'] == {'count': 0, 'higher_ranked_count': 0, 'keys': []}
+        assert keys(results['repo-a']) == ['R-A', 'W-A'] and 'NOCODE' in results['repo-a']['outside_scope']['keys']
+        assert keys(results['both']) == ['R-A', 'W-A', 'W-AB', 'W-B']
+        assert results['both']['outside_scope']['keys'] == ['NOCODE']
+        assert keys(results['subtree']) == ['R-A', 'W-A', 'W-AB'] and keys(results['other']) == ['NOCODE', 'W-B']
+        assert results['intersect']['candidates'] == []
+        assert results['intersect']['outside_scope']['higher_ranked_count'] == results['intersect']['eligible_count']
+        assert 'DEP' not in order
+        for result in results.values():
+            ranks = [c['global_rank'] for c in result['candidates']]
+            assert ranks == sorted(ranks) and all(order[r - 1] == c['work']['key'] for r, c in zip(ranks, result['candidates']))
+            best = ranks[0] if ranks else None
+            higher = result['outside_scope']['keys'][:result['outside_scope']['higher_ranked_count']]
+            assert higher == [k for k in order if best is None or order.index(k) < best - 1]
+        assert results['repo-a']['outside_scope']['keys'][0] == 'W-B'
+        limited = results['limited']
+        assert len(limited['candidates']) == 1 and limited['in_scope_count'] == 3
+        assert limited['outside_scope'] == results['subtree']['outside_scope']
+        for arguments, flags in [({'project_keys': ['MISSING']}, ('--project-key', 'MISSING')),
+                                 ({'resource_keys': ['MISSING']}, ('--resource-key', 'MISSING'))]:
+            remote = agent.call('next_work', arguments, error='not_found')
+            assert remote['message'] == run_cli(database, 'next', *flags, error='not_found')['error']['message']
+        agent.call('next_work', {'project': 'TEST'}, error='invalid_request')
+    finally:
+        agent.close()
+    assert run_cli(database, 'export') == before
+    assert run_cli(database, 'history')['entries'] == []
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-agent-') as directory:
         smoke(Path(directory) / 'plan.sqlite')
         review_smoke(Path(directory))
+        scope_smoke(Path(directory))
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')
+    print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')

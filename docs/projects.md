@@ -71,7 +71,8 @@ Copying SQLite to another device is not collaboration; do not use live database 
 A plan's `resources` map gives repositories, folders, document collections and other resources stable
 IDs. Tasks may name zero, one or several read/write requirements. Keys, labels and remotes do not
 replace resource identity. These requirements describe work scope, not filesystem permissions.
-All readiness and ranking queries still consider the full workspace graph.
+All readiness and ranking queries still consider the full workspace graph; `next --resource-key KEY`
+only narrows the returned list after that and reports eligible work outside it ([scoped next](mcp.md#scoped-next)).
 
 `attach-git-head KEY` uses the selected locator's repository and resource. When selecting a bare
 database, run in the desired checkout and supply `--resource RESOURCE-KEY`. MCP `attach_git_head`

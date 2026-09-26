@@ -26,7 +26,7 @@ def preview(directory):
     runtime = {p.name for p in (ROOT / '.dpm').iterdir()}
     nested = ROOT / 'crates/dpm-model/src'
     assert cli(nested, 'status', '--no-simulation')['revision'] == 0
-    assert cli(nested, 'next', '--deterministic-only') == []
+    assert cli(nested, 'next', '--deterministic-only')['candidates'] == []
     assert cli(directory, '--project', ROOT, 'export') == json.loads(before)
     assert cli(nested)['ready'] == 0
     actor = Agent(None, 'agent:preview', cwd=nested)

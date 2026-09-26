@@ -29,7 +29,7 @@ def smoke(binary, directory):
         return json.loads(result.stdout) if structured else result.stdout
 
     def ready():
-        return {item['work']['key'] for item in run('next', structured=True)}
+        return {item['work']['key'] for item in run('next', structured=True)['candidates']}
 
     def finish(key):
         run('claim', key, '--actor', 'agent:smoke')
@@ -38,8 +38,9 @@ def smoke(binary, directory):
 
     assert run('import', str(ROOT / 'tests/support/execution-plan.json'), structured=True)['revision'] == 0
     assert ready() == {'TEST-A'}
-    assert run('next', '--capability', 'unrelated', structured=True) == []
-    assert run('next', '--limit', '0', structured=True) == []
+    assert run('next', '--capability', 'unrelated', structured=True)['candidates'] == []
+    limited = run('next', '--limit', '0', structured=True)
+    assert limited['candidates'] == [] and limited['in_scope_count'] == limited['eligible_count'] == 1
     initial = run('status', structured=True)
     assert initial['revision'] == 0 and initial['ready'] == 1
     assert initial['p50_finish_hours'] <= initial['p80_finish_hours'] <= initial['p95_finish_hours']
@@ -104,7 +105,7 @@ def smoke(binary, directory):
     assert not database.exists()
     run('init', 'Empty', structured=True)
     assert run('status', '--no-simulation', structured=True)['total_work'] == 0
-    assert run('next', structured=True) == []
+    assert run('next', structured=True)['candidates'] == []
     return {'passed': len(checks), 'operations': count, 'final_status': final, 'checks': checks}
 
 

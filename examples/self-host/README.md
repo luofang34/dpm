@@ -29,7 +29,7 @@ change. Implementation boundaries and edge-case scenarios live in the task contr
 ## Execution and evidence
 
 The prepared tasks remain Planned, unowned and at zero reported progress. All authorization gates
-remain open, so `next` is empty. These acceptance tasks have not been independently performed merely
+remain open, so `next` returns no candidates. These acceptance tasks have not been independently performed merely
 because related implementation exists. The console labels the source `PREVIEW read-only`; CLI/MCP
 execution commands return `read_only_project` and create no SQLite state.
 

@@ -33,7 +33,7 @@ def smoke(directory):
         assert refused['message'] == run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'self-approve', '--actor', 'agent:planner', error='invalid_command')['error']['message']
         approved = run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'Prepare contracts for review', '--actor', 'human:reviewer')
         assert approved['resulting_revision'] == 1
-        assert worker.call('next_work', {})['data'] == []
+        assert worker.call('next_work', {})['data']['candidates'] == []
         reviewer.call('ratify_contract', {'key': 'TEST-A', 'base_revision': 1})
         worker.call('claim_work', {'key': 'TEST-A', 'base_revision': 2})
         changed = worker.call('export_plan', {})['data']

@@ -33,7 +33,7 @@ const NAMES: &[(&str, &str)] = &[
     ),
     (
         "next_work",
-        "Rank executable leaf tasks using explicit capabilities",
+        "Rank executable leaf tasks on the full graph, then apply capability eligibility, optional project/resource scope and limit; eligible work outside scope stays listed",
     ),
     (
         "get_work",
@@ -91,7 +91,9 @@ pub(crate) fn definitions() -> Vec<Value> {
             "history" => { properties.insert("after_sequence".into(),json!({"type":"integer","minimum":0,"default":0})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"maximum":1000,"default":100})); },
             "workspace_register" => { properties.insert("database".into(),json!({"type":"string"})); properties.insert("replace".into(),json!({"type":"boolean","default":false})); required.push("database"); },
             "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); },
-            "next_work" => { properties.insert("capabilities".into(),json!({"type":"array","items":{"type":"string"}})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"default":5})); properties.insert("probabilistic".into(),json!({"type":"boolean","default":true})); },
+            "next_work" => { properties.insert("capabilities".into(),json!({"type":"array","items":{"type":"string"}})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"default":5})); properties.insert("probabilistic".into(),json!({"type":"boolean","default":true}));
+                properties.insert("project_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"Project keys whose subtrees form a query-only scope; not a directory"}));
+                properties.insert("resource_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"Resource keys returned work must fit: at least one named, every write listed"})); },
             "reject_work" => { properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.push("reason"); },
             "report_blocker" => { properties.insert("blocker".into(),json!({"type":"string","minLength":1})); required.push("blocker"); },
             "report_progress" => {
@@ -123,6 +125,10 @@ struct Arguments {
     base_revision: Option<u64>,
     #[serde(default)]
     capabilities: BTreeSet<String>,
+    #[serde(default)]
+    project_keys: BTreeSet<String>,
+    #[serde(default)]
+    resource_keys: BTreeSet<String>,
     #[serde(default = "default_true")]
     probabilistic: bool,
     #[serde(default = "default_limit")]
@@ -176,6 +182,8 @@ pub(crate) fn call_tool_blocking(
             capabilities: args.capabilities.clone(),
             probabilistic: args.probabilistic,
             limit: args.limit,
+            project_keys: args.project_keys.clone(),
+            resource_keys: args.resource_keys.clone(),
         }),
         "get_work" => Some(Query::Show {
             key: required(args.key.clone(), "key")?,

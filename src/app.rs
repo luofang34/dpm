@@ -6,7 +6,7 @@ use crate::{
 use dpm_app::{
     Application, CommandRequest, Query, initialize_project_blocking, open_workspace_blocking,
 };
-use dpm_engine::{Command, NextWorkCandidate};
+use dpm_engine::{Command, NextWorkResult};
 use dpm_model::{ActorId, ActorKind, Plan};
 use std::{fs, path::Path};
 
@@ -82,6 +82,8 @@ fn run_open_blocking(
         ),
         Commands::Next {
             capabilities,
+            project_keys,
+            resource_keys,
             limit,
             deterministic_only,
         } => {
@@ -89,9 +91,14 @@ fn run_open_blocking(
                 capabilities: capabilities.into_iter().collect(),
                 limit,
                 probabilistic: !deterministic_only,
+                project_keys: project_keys.into_iter().collect(),
+                resource_keys: resource_keys.into_iter().collect(),
             })?;
-            let candidates: Vec<NextWorkCandidate> = serde_json::from_value(response.data)?;
-            output::candidates_blocking(&candidates, json)
+            if json {
+                return output::json_blocking(&response.data);
+            }
+            let result: NextWorkResult = serde_json::from_value(response.data)?;
+            output::next_text_blocking(&result)
         }
         Commands::Show { key } => query_blocking(app, Query::Show { key }, json),
         Commands::Explain { key } => query_blocking(app, Query::Explain { key }, json),

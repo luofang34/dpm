@@ -10,6 +10,11 @@ pub use gates::{GateReport, UnmetGate, gate_report};
 mod progress;
 mod query;
 mod readiness;
+mod scope;
+pub use scope::{
+    NEXT_RESULT_VERSION, NextWorkResult, OutsideScope, ScopeError, ScopeMember, ScopedCandidate,
+    WorkScope, next_in_scope,
+};
 
 pub use command::{Command, EngineError, Operation};
 pub use execution::apply_command;

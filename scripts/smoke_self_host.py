@@ -83,7 +83,7 @@ def smoke(directory):
         assert summary['complete'] == expected['completed_work']
         assert summary['open_decisions'] == expected['open_decisions']
         assert summary['progress'] == {'percent_complete': 0.0, 'verified': False}
-        assert run_cli(database, 'next', '--deterministic-only') == expected['ready_keys']
+        assert [c['work']['key'] for c in run_cli(database, 'next', '--deterministic-only')['candidates']] == expected['ready_keys']
         detail = run_cli(database, 'explain', expected['first_contract'])
         assert not detail['ready'] and len(detail['work']['acceptance']) >= 3
         context = detail['context']
