@@ -1,6 +1,9 @@
 # Agent tools and CLI contract
 
-Run `dpm-mcp --db .dpm/dpm.sqlite --actor agent:coder` as a stdio subprocess.
+Run `dpm-mcp --actor agent:coder` as a stdio subprocess inside a configured project.
+Use `--project DIR` for an exact project, or `--database PATH` (`--db` alias) for a SQLite file.
+The same [project discovery](projects.md) rules apply to CLI and MCP; the repository preview rejects
+mutations with `read_only_project` and never creates a database.
 The configured actor is the local principal for every mutation. A separate verifier process uses
 `--actor human:reviewer` or a service actor. This is a trusted local workspace, not remote authentication.
 

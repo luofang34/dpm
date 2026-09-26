@@ -4,15 +4,15 @@ DPM — DAG Project Manager targets the public repository `luofang34/dpm`. This 
 local source readiness from registry/distribution availability. The self-host plan remains prepared,
 gated and unstarted; implementing DPM does not complete its acceptance contracts automatically.
 
-## Current work
+## Source layout
 
-The [active plan](exec/0001-dpm-projects.md) covers code naming, project discovery and the explicitly
+The [completed plan](exec/0001-dpm-projects.md) covers code naming, project discovery and the explicitly
 authorized replacement of local source history. Root package `dpm` owns the executable and bundled
 self-host seed; `dpm-sdk` is the library facade. Internal path dependencies carry version requirements.
 
 ## Before source publication
 
-- Complete the active plan and full local verification, including CLI/MCP project-discovery parity.
+- Review the two local source commits and repeat full verification if source or dependencies change.
 - Keep the reviewed source history free of retired samples and local data. Recovery archives stay
   outside the repository. Preserve local SQLite snapshots and operation history during the rename.
 - Create the public `luofang34/dpm` repository and push reviewed commits only when requested.
@@ -43,5 +43,17 @@ See [Homebrew naming](https://docs.brew.sh/Taps) and
 
 ## Verification evidence
 
-Pending completion of the active plan. Do not treat older test results as validation of the rename
-or project-discovery changes.
+Local validation on macOS arm64 with the pinned Rust 1.98.1 toolchain passed:
+
+- Full `./ci.sh`: format, repository/source guards, strict Clippy, 76 Rust tests, strict API docs,
+  release build, 24 self-host contract checks and synthetic CLI/MCP lifecycle/discovery checks.
+- Bare `cargo run` and the locally installed `dpm` opened the preview in actual terminals, including
+  from a nested source directory. Gantt left/right navigation, inspector/help and terminal cleanup
+  passed, with preview files and local state unchanged.
+- `cargo install --path .` into a temporary prefix and source package inventory passed. Local SQLite
+  state is excluded. Registry installation and downloadable release archives remain unverified.
+- `cargo audit` reported zero vulnerabilities and no warnings for the checked lockfile.
+- The local history has two clean source commits; the external recovery bundle/source archive and
+  consistent SQLite backups preserve the pre-rewrite checkout. Self-host remains unstarted.
+
+No hosted CI run, remote push, crates.io publication or package-manager integration is claimed.

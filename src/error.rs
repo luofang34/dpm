@@ -6,8 +6,6 @@ pub(crate) enum CliError {
     #[error(transparent)]
     Application(#[from] dpm_app::AppError),
     #[error(transparent)]
-    Store(#[from] dpm_store::StoreError),
-    #[error(transparent)]
     Engine(#[from] dpm_engine::EngineError),
     #[error(transparent)]
     Validation(#[from] dpm_model::ValidationError),
@@ -42,7 +40,7 @@ impl CliError {
     pub(crate) fn code(&self) -> &'static str {
         match self {
             Self::Application(error) => error.code(),
-            Self::Store(_) | Self::Io { .. } => "storage_error",
+            Self::Io { .. } => "storage_error",
             Self::Engine(_) => "invalid_command",
             Self::Validation(_) => "invalid_plan",
             Self::Terminal(_) => "terminal_error",

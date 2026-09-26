@@ -45,7 +45,7 @@ for manifest in [ROOT / 'Cargo.toml', *sorted((ROOT / 'crates').glob('*/Cargo.to
                 failures.append(f'{manifest.relative_to(ROOT)}: outward dependency {dependency}')
 
 for path in ROOT.rglob('*'):
-    if any(part in {'.git', 'target', '.dpm'} for part in path.relative_to(ROOT).parts):
+    if any(part in {'.git', 'target', '.dagplan', '.dpm'} for part in path.relative_to(ROOT).parts):
         continue
     if path.is_file() and (path.name.lower() == 'agent.md' or path.name.endswith(('.bak', ' 2.rs'))):
         failures.append(f'{path.relative_to(ROOT)}: obsolete instruction or leftover file')

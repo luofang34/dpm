@@ -26,8 +26,10 @@ listed = subprocess.run(
 paths = [ROOT / name for name in set(listed) if name and (ROOT / name).is_file()]
 for path in paths:
     relative = path.relative_to(ROOT)
-    if any(part in {'.dpm', '.dpm', 'target', '__pycache__'} for part in relative.parts):
+    if any(part in {'.dagplan', 'target', '__pycache__'} for part in relative.parts):
         failures.append(f'{relative}: local/build data in publication set')
+    if '.dpm' in relative.parts and path.name not in {'project.toml', '.gitignore'}:
+        failures.append(f'{relative}: runtime project data in publication set')
     if re.search(r'\.sqlite3?(?:-(?:wal|shm|journal))?$', path.name):
         failures.append(f'{relative}: database in publication set')
     if path.name in {'.env', 'credentials.toml'} or path.name.endswith(('.pem', '.key', '.pyc')):

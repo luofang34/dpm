@@ -6,4 +6,4 @@ mod text_panel;
 mod view;
 mod work_label;
 
-pub use console::{TuiError, run_blocking};
+pub use console::{TuiError, run_blocking, run_preview_blocking};

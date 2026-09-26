@@ -35,6 +35,7 @@ impl Page {
 
 pub(crate) struct View<'a> {
     plan: &'a Plan,
+    pub(crate) preview: bool,
     pub(crate) page: Page,
     work: Vec<WorkItem>,
     state: ListState,
@@ -70,6 +71,7 @@ impl<'a> View<'a> {
         }
         Ok(Self {
             plan,
+            preview: false,
             page: Page::Now,
             work,
             state,
@@ -151,8 +153,13 @@ impl<'a> View<'a> {
             Layout::vertical([Constraint::Length(3), Constraint::Min(1)]).split(frame.area());
         frame.render_widget(
             Paragraph::new(format!(
-                "DPM · {} · snapshot revision {}  [1–5] Pages [↑↓/jk] Navigate [q] Quit",
+                "DPM · {} · {} revision {}  [1–5] Pages [↑↓/jk] Navigate [q] Quit",
                 self.page.title(),
+                if self.preview {
+                    "PREVIEW read-only"
+                } else {
+                    "snapshot"
+                },
                 self.plan.revision
             ))
             .block(Block::bordered()),

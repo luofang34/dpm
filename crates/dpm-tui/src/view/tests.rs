@@ -213,3 +213,13 @@ fn work_list_marks_milestone_kind_without_inferring_it_from_the_key() {
     assert!(screen.contains("◇[M] RELEASE"));
     assert!(!screen.contains("[M] M-TASK"));
 }
+
+#[test]
+fn file_preview_is_labeled_separately_from_database_snapshot() {
+    let plan = fixture();
+    let mut view = View::new(&plan).expect("view");
+    view.preview = true;
+    assert!(render(&mut view).contains("PREVIEW read-only revision 0"));
+    view.preview = false;
+    assert!(render(&mut view).contains("snapshot revision 0"));
+}

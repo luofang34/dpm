@@ -1,18 +1,33 @@
-use crate::AppError;
+use crate::{AppError, Application};
 use chrono::Utc;
 use dpm_model::{ActorId, Artifact, ArtifactId, ArtifactKind};
-use std::{collections::BTreeMap, process::Command};
+use std::{collections::BTreeMap, path::Path, process::Command};
 
 /// Capture immutable HEAD evidence in the current repository without changing Git.
 pub fn git_head_artifact_blocking(actor: ActorId) -> Result<Artifact, AppError> {
-    let sha = git_output_blocking(["rev-parse", "HEAD"])?;
-    let remote = git_output_blocking(["config", "--get", "remote.origin.url"]).ok();
+    git_head_at_blocking(actor, Path::new("."))
+}
+
+impl Application {
+    /// Capture evidence from the selected project, or the current directory for an explicit DB.
+    pub fn git_head_artifact_blocking(&self, actor: ActorId) -> Result<Artifact, AppError> {
+        self.ensure_writable()?;
+        git_head_at_blocking(
+            actor,
+            self.project_root.as_deref().unwrap_or(Path::new(".")),
+        )
+    }
+}
+
+fn git_head_at_blocking(actor: ActorId, root: &Path) -> Result<Artifact, AppError> {
+    let sha = git_output_blocking(root, ["rev-parse", "HEAD"])?;
+    let remote = git_output_blocking(root, ["config", "--get", "remote.origin.url"]).ok();
     let uri = match remote {
         Some(remote) if !remote.is_empty() => format!("git:{remote}@{sha}"),
         _ => format!("git:local@{sha}"),
     };
     let mut metadata = BTreeMap::from([("commit".into(), sha.clone())]);
-    if let Ok(branch) = git_output_blocking(["branch", "--show-current"]) {
+    if let Ok(branch) = git_output_blocking(root, ["branch", "--show-current"]) {
         metadata.insert("branch".into(), branch);
     }
     Ok(Artifact {
@@ -26,8 +41,9 @@ pub fn git_head_artifact_blocking(actor: ActorId) -> Result<Artifact, AppError> 
     })
 }
 
-fn git_output_blocking<const N: usize>(args: [&str; N]) -> Result<String, AppError> {
+fn git_output_blocking<const N: usize>(root: &Path, args: [&str; N]) -> Result<String, AppError> {
     let output = Command::new("git")
+        .current_dir(root)
         .args(args)
         .output()
         .map_err(AppError::GitIo)?;

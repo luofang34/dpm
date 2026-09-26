@@ -4,6 +4,14 @@ use thiserror::Error;
 /// Shared application failures, preserving the original engine or storage cause.
 #[derive(Debug, Error)]
 pub enum AppError {
+    /// Invalid or missing project locator.
+    #[error(transparent)]
+    Project(#[from] crate::ProjectError),
+    /// Preview sources do not authorize persistence or task operations.
+    #[error(
+        "project is a read-only preview; import the plan into a separate workspace before operating on it"
+    )]
+    ReadOnlyProject,
     /// Domain query or command rejected.
     #[error(transparent)]
     Engine(#[from] dpm_engine::EngineError),
@@ -63,6 +71,8 @@ impl AppError {
     /// Stable category for coding agents.
     pub fn code(&self) -> &'static str {
         match self {
+            Self::Project(error) => error.code(),
+            Self::ReadOnlyProject => "read_only_project",
             Self::Conflict { .. } | Self::Store(dpm_store::StoreError::RevisionConflict { .. }) => {
                 "revision_conflict"
             }

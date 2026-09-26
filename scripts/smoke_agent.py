@@ -11,10 +11,13 @@ MCP = ROOT / 'target/release/dpm-mcp'
 
 
 class Agent:
-    def __init__(self, database, actor):
+    def __init__(self, database, actor, *, cwd=ROOT, project=None):
+        selection = ['--db', str(database)] if database is not None else []
+        if project is not None:
+            selection = ['--project', str(project)]
         self.process = subprocess.Popen(
-            [str(MCP), '--db', str(database), '--actor', actor],
-            cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            [str(MCP), *selection, '--actor', actor],
+            cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True,
         )
         self.sequence = 0

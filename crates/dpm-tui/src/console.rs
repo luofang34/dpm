@@ -36,7 +36,17 @@ impl Drop for TerminalGuard {
 
 /// Open a read-only snapshot console until the operator quits.
 pub fn run_blocking(plan: &Plan) -> Result<(), TuiError> {
+    run_source_blocking(plan, false)
+}
+
+/// Open a plan-file preview whose source also rejects operations through other adapters.
+pub fn run_preview_blocking(plan: &Plan) -> Result<(), TuiError> {
+    run_source_blocking(plan, true)
+}
+
+fn run_source_blocking(plan: &Plan, preview: bool) -> Result<(), TuiError> {
     let mut view = View::new(plan)?;
+    view.preview = preview;
     view.set_colors(std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()));
     enable_raw_mode()?;
     let guard = TerminalGuard;

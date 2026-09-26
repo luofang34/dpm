@@ -198,3 +198,13 @@ use compatible licenses, but do not copy incompatible source code into this repo
 - Status colors and relation colors have separate roles (bars versus labels); pair every color with
   text/symbols, retain NO_COLOR support and test precedence on blocked/reviewed critical tasks.
 - Restore mouse capture/raw mode on exit and errors. Do not route mouse events into domain commands.
+
+## Project discovery
+
+- CLI and MCP share `dpm-app` project resolution. Prefer `.dpm/project.toml`, never special-case
+  a checkout name or silently initialize a sample when no project exists.
+- The nearest locator wins; malformed/missing local configuration must not fall through to a
+  parent project. Stop discovery at Git boundaries. Explicit database/project options override it.
+- Normal projects keep SQLite and operations local; only locator/ignore rules belong in Git.
+- This repository's locator selects an in-memory read-only preview. All adapters reject mutations
+  on it; do not convert the preview to a live workspace merely to obtain executable tasks.

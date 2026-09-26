@@ -41,8 +41,8 @@ application service, including agent calls.
 
 - [x] Inspect current state and create verified external recovery backups.
 - [x] Rename the MVP and verify its clean root baseline (full CI passed: 67 Rust tests).
-- [ ] Implement and test discovery/initialization/preview behavior.
-- [ ] Update usage, verify final state and complete local history rewrite.
+- [x] Implement and test discovery/initialization/preview behavior.
+- [x] Update usage, verify final state and complete local history rewrite.
 
 ## Decision log
 
@@ -60,4 +60,19 @@ The facade/CLI package collision and external embedded seed must be fixed togeth
 
 ## Outcome / remaining work
 
-Implementation in progress. No remote repository or package publication is part of this work.
+The local source history contains a fresh DPM MVP root and a separate project-discovery change.
+The recovery bundle/source archive and consistent SQLite backups remain outside the repository.
+Both local snapshot hashes and zero-operation histories are preserved; all self-host tasks remain
+Planned, unowned and at zero progress.
+
+Validation on macOS arm64 with Rust 1.98.1:
+
+- Full `./ci.sh`: format, structural/repository guards, strict Clippy, 76 Rust tests, strict API docs,
+  release build, self-host contract checks, synthetic lifecycle and CLI/MCP discovery parity passed.
+- Real terminal: bare `cargo run` at the root and installed `dpm` from a nested source directory
+  opened the preview; Gantt panning, inspector focus/help and terminal cleanup passed without writes.
+- Local installation into a temporary prefix and source package inventory passed; no SQLite state
+  enters the source package. `cargo audit` reported zero vulnerabilities and no warnings.
+
+No remote repository, package publication or self-host task execution is part of this work.
+See [publication readiness](../release-readiness.md) for remaining distribution checks.

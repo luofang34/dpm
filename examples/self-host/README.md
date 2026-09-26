@@ -26,34 +26,21 @@ workspace to simulate an in-place plan edit.
 
 ## Preview only
 
-From the repository root, `cargo run` selects the CLI by default and uses
-`.dpm/dpm.sqlite`. On a fresh checkout initialize it once, then use read-only queries:
+From the repository root, `cargo run` selects the CLI and opens the committed
+`.dpm/project.toml` preview locator:
 
 ```sh
-cargo run -- validate examples/self-host/dpm-alpha.json --json
-cargo run -- demo
 cargo run -- status --json
 cargo run -- next --json
 cargo run -- explain MVP-10 --json
-cargo run -- tui
+cargo run tui
 ```
 
-Run `demo` only once for that path; an initialized self-host workspace can be opened directly with
-`cargo run tui`. `import examples/self-host/dpm-alpha.json` initializes the same graph. Neither
-command overwrites existing workspaces; use `--database PATH` for a separate workspace. Seed edits
-do not silently update operational databases.
-
-Expected results: revision 0, 41 work items, 0 ready, 0 complete, 4 open decisions, no owners and
-an empty operation log. `next` returns `[]` deliberately. `explain MVP-10` resolves the root
-`DEC-EXECUTE` gate, acceptance conditions, source context, requirements and risks.
-
-Press `5`/`g` for Gantt, arrows to select/pan, `+/-` to zoom, `f` to fit, Enter for details, and `q`
-to exit. Hover or select a task to read its full title and predecessor/successor list below the chart.
-Click selects; `Tab` focuses the inspector, `↑/↓` or `PgUp/PgDn` scrolls long titles and relationships.
-`?` explains status colors, relation markers and keyboard/mouse controls. Colors always have textual
-or symbolic counterparts; `NO_COLOR=1 cargo run tui` disables color. The chart is the prospective remaining roadmap, not a history of finished implementation.
-Its 0% indicates these contracts have not been performed or independently accepted. It does not
-mean the current code has no functionality. Dates, floats and projections are never seed state.
+The built/installed `dpm` command also discovers this preview from subdirectories.
+No initialization is needed for this checkout. The preview creates no database and rejects
+mutations. CLI and MCP discover the same plan from subdirectories. Elsewhere, explicitly use
+`demo` or import `examples/self-host/dpm-alpha.json` into a separate authorized workspace;
+existing state is never overwritten. See [project discovery](../../docs/projects.md).
 
 ## Milestones and contracts
 

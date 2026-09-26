@@ -469,7 +469,7 @@
           "Assess the existing model, engine and store; produce a baseline and evidence report."
         ],
         "out_of_scope": [
-          "Rebuild the domain model, implement roadmap extensions, or treat bootstrap HEAD as evidence for uncommitted code."
+          "Rebuild the domain model, implement roadmap extensions, or treat an unrelated Git revision as evidence for the selected source."
         ],
         "verification": [
           "./ci.sh completes and its actual output is retained.",
@@ -632,13 +632,13 @@
       "objective": "After authorization, select the actual repository/database/reviewer and pin an immutable source baseline for the first real self-host cycle. Preserve uncommitted work and existing operation history.",
       "acceptance": [
         {
-          "text": "Record a real Git commit covering the intended code; do not label the bootstrap commit as current MVP evidence."
+          "text": "Record a real immutable Git commit covering the exact source under review."
         },
         {
           "text": "Identify the approved task scope, owning actor, independent reviewer and non-overwriting workspace location."
         },
         {
-          "text": "Resolve the GitButler/publication prerequisites with evidence before any release claim."
+          "text": "Verify local commits, remote publication and hosted checks before any release claim."
         }
       ],
       "status": "Planned",
@@ -672,7 +672,7 @@
             "expected_result": "The execution workspace, task owner and distinct verifier are named and authorized."
           },
           {
-            "action": "Inspect Git status/history and GitButler publication prerequisites; establish a real immutable commit for the selected source.",
+            "action": "Inspect Git status/history and publication prerequisites; establish a real immutable commit for the selected source.",
             "expected_result": "The baseline artifact points to the actual reviewed code and identifies any remaining dirty changes."
           },
           {
@@ -2402,7 +2402,7 @@
         "004053ca-ec68-52d2-9886-a47289a0d592",
         "e29488e1-8b04-5081-8ff7-430f183fbf95"
       ],
-      "mitigation": "Keep this seed reviewable. Do not overwrite live SQLite; use separately approved validated copies for bootstrap authoring until CORE-20/30 are accepted."
+      "mitigation": "Keep this seed reviewable. Do not overwrite live SQLite; use separately approved validated copies for plan authoring until CORE-20/30 are accepted."
     },
     "56dcce46-6933-5a78-ab22-618ae1133687": {
       "id": "56dcce46-6933-5a78-ab22-618ae1133687",

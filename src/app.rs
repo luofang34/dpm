@@ -3,72 +3,109 @@ use crate::{
     error::{CliError, io_error},
     output,
 };
-use dpm_app::{Application, CommandRequest, Query, git_head_artifact_blocking};
+use dpm_app::{
+    Application, CommandRequest, Query, initialize_project_blocking, open_workspace_blocking,
+};
 use dpm_engine::{Command, NextWorkCandidate};
 use dpm_model::{ActorId, ActorKind, Plan};
-use dpm_store::SqliteStore;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
 pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
-    let database = cli
-        .database
-        .unwrap_or_else(|| PathBuf::from(".dpm/dpm.sqlite"));
-    let command = cli.command.unwrap_or(Commands::Tui);
+    let Cli {
+        database,
+        project,
+        json,
+        base_revision,
+        command,
+    } = cli;
+    let cwd = std::env::current_dir().map_err(io_error("read current directory", "."))?;
+    let command = command.unwrap_or(if json {
+        Commands::Status {
+            no_simulation: false,
+        }
+    } else {
+        Commands::Tui
+    });
+    let root = project.as_deref().unwrap_or(&cwd);
     match command {
-        Commands::Init { name } => initialize_blocking(&database, Plan::empty(name), cli.json),
+        Commands::Init { name } => {
+            initialize_blocking(root, database.as_deref(), Plan::empty(name), json)
+        }
         Commands::Demo => initialize_blocking(
-            &database,
+            root,
+            database.as_deref(),
             serde_json::from_str(include_str!("../examples/self-host/dpm-alpha.json"))?,
-            cli.json,
+            json,
         ),
         Commands::Import { file } => {
-            initialize_blocking(&database, read_plan_blocking(&file)?, cli.json)
+            initialize_blocking(root, database.as_deref(), read_plan_blocking(&file)?, json)
         }
         Commands::Validate { file } => {
             read_plan_blocking(&file)?;
-            output::value_blocking(&serde_json::json!({"valid": true, "file": file}), cli.json)
+            output::value_blocking(&serde_json::json!({"valid": true, "file": file}), json)
         }
+        command => {
+            let mut app = open_workspace_blocking(&cwd, project.as_deref(), database.as_deref())?;
+            run_open_blocking(&mut app, command, json, base_revision)
+        }
+    }
+}
+
+fn run_open_blocking(
+    app: &mut Application,
+    command: Commands,
+    json: bool,
+    base_revision: Option<u64>,
+) -> Result<(), CliError> {
+    match command {
         Commands::Status { no_simulation } => query_blocking(
-            &database,
+            app,
             Query::Status {
                 probabilistic: !no_simulation,
             },
-            cli.json,
+            json,
         ),
         Commands::Next {
             capabilities,
             limit,
             deterministic_only,
         } => {
-            let response = Application::open_blocking(&database)?.query_blocking(Query::Next {
+            let response = app.query_blocking(Query::Next {
                 capabilities: capabilities.into_iter().collect(),
                 limit,
                 probabilistic: !deterministic_only,
             })?;
             let candidates: Vec<NextWorkCandidate> = serde_json::from_value(response.data)?;
-            output::candidates_blocking(&candidates, cli.json)
+            output::candidates_blocking(&candidates, json)
         }
-        Commands::Show { key } => query_blocking(&database, Query::Show { key }, cli.json),
-        Commands::Explain { key } => query_blocking(&database, Query::Explain { key }, cli.json),
-        Commands::Export => output::json_blocking(&load_plan_blocking(&database)?),
+        Commands::Show { key } => query_blocking(app, Query::Show { key }, json),
+        Commands::Explain { key } => query_blocking(app, Query::Explain { key }, json),
+        Commands::Export => output::json_blocking(&app.plan_blocking()?),
         Commands::Tui => {
-            dpm_tui::run_blocking(&load_plan_blocking(&database)?)?;
+            let plan = app.plan_blocking()?;
+            if app.is_read_only() {
+                dpm_tui::run_preview_blocking(&plan)?;
+            } else {
+                dpm_tui::run_blocking(&plan)?;
+            }
             Ok(())
         }
-        mutation => mutate_blocking(&database, mutation, cli.json, cli.base_revision),
+        mutation => mutate_blocking(app, mutation, json, base_revision),
     }
 }
 
-fn initialize_blocking(database: &Path, plan: Plan, json: bool) -> Result<(), CliError> {
-    plan.validate()?;
-    if let Some(parent) = database.parent().filter(|p| !p.as_os_str().is_empty()) {
-        fs::create_dir_all(parent).map_err(io_error("create database directory", parent))?;
-    }
-    let mut store = SqliteStore::open_blocking(database)?;
-    store.initialize_blocking(&plan)?;
+fn initialize_blocking(
+    root: &Path,
+    database: Option<&Path>,
+    plan: Plan,
+    json: bool,
+) -> Result<(), CliError> {
+    let database = if let Some(path) = database {
+        Application::initialize_blocking(path, &plan)?;
+        path.to_path_buf()
+    } else {
+        initialize_project_blocking(root, &plan)?
+    };
     output::value_blocking(
         &serde_json::json!({"database": database, "revision": plan.revision, "workspace": plan.workspace.name}),
         json,
@@ -80,17 +117,6 @@ fn read_plan_blocking(path: &Path) -> Result<Plan, CliError> {
     let plan: Plan = serde_json::from_str(&text)?;
     plan.validate()?;
     Ok(plan)
-}
-
-fn load_plan_blocking(database: &Path) -> Result<Plan, CliError> {
-    SqliteStore::open_existing_blocking(database)?
-        .load_blocking()?
-        .ok_or_else(|| {
-            CliError::Input(format!(
-                "workspace is not initialized at {}; run dpm init or demo",
-                database.display()
-            ))
-        })
 }
 
 fn actor(value: &str) -> Result<ActorId, CliError> {
@@ -112,8 +138,8 @@ fn actor(value: &str) -> Result<ActorId, CliError> {
     })
 }
 
-fn query_blocking(database: &Path, query: Query, json: bool) -> Result<(), CliError> {
-    let response = Application::open_blocking(database)?.query_blocking(query)?;
+fn query_blocking(app: &Application, query: Query, json: bool) -> Result<(), CliError> {
+    let response = app.query_blocking(query)?;
     if json {
         output::json_blocking(&response.data)
     } else {
@@ -122,14 +148,14 @@ fn query_blocking(database: &Path, query: Query, json: bool) -> Result<(), CliEr
 }
 
 fn mutate_blocking(
-    database: &Path,
+    app: &mut Application,
     command: Commands,
     json: bool,
     base_revision: Option<u64>,
 ) -> Result<(), CliError> {
-    let mut app = Application::open_blocking(database)?;
+    app.ensure_writable()?;
     let plan = app.plan_blocking()?;
-    let (actor, command) = mutation_blocking(&app, command)?;
+    let (actor, command) = mutation_blocking(app, command)?;
     let operation = app.execute_blocking(CommandRequest {
         actor,
         base_revision: base_revision.unwrap_or(plan.revision),
@@ -237,7 +263,7 @@ fn artifact_mutation_blocking(
         }
         Commands::AttachGitHead { key, actor: who } => {
             let principal = actor(&who)?;
-            let artifact = git_head_artifact_blocking(principal.clone())?;
+            let artifact = app.git_head_artifact_blocking(principal.clone())?;
             Ok((
                 principal,
                 Command::AttachArtifact {

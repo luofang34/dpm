@@ -3,9 +3,13 @@ use std::path::PathBuf;
 #[derive(Debug, Parser)]
 #[command(name = "dpm", version, about = "Agent-first execution planning")]
 pub(crate) struct Cli {
-    /// SQLite database path. Defaults to .dpm/dpm.sqlite.
-    #[arg(long, global = true)]
+    /// Explicit SQLite path, overriding project discovery.
+    #[arg(long, alias = "db", global = true, conflicts_with = "project")]
     pub(crate) database: Option<PathBuf>,
+
+    /// Exact project directory containing .dpm/project.toml; init creates a project here.
+    #[arg(long, global = true, conflicts_with = "database")]
+    pub(crate) project: Option<PathBuf>,
 
     /// Emit machine-readable JSON where supported.
     #[arg(long, global = true)]
@@ -21,7 +25,7 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
-    /// Create an empty local workspace.
+    /// Create .dpm/project.toml and an empty local database in the chosen directory.
     Init {
         #[arg(default_value = "DPM workspace")]
         name: String,

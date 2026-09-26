@@ -59,50 +59,61 @@ crates/
   dpm-store/     SQLite persistence + operation log
   dpm-app/       shared query/command application service
   dpm-mcp/       principal-bound stdio agent tools
-src/                `dpm` CLI adapter
   dpm-tui/       Ratatui operator console
-examples/self-host/  prepared dpm roadmap (default demo)
+src/                `dpm` CLI adapter
+.dpm/project.toml   committed read-only preview locator
+examples/self-host/  prepared DPM roadmap
 tests/support/      minimal synthetic input for isolated regression tests
 ```
 
 See [`AGENTS.md`](AGENTS.md) for architectural invariants and [`docs/architecture.md`](docs/architecture.md)
 for the data-flow model.
 
-## Self-host roadmap preview
+## Run a project or preview this repository
 
-The default demo is **DPM Alpha**, a prepared roadmap for developing the project with itself.
-It contains 24 task contracts, 8 milestones, requirements, open decision gates, risks and source
-context. The current implemented scope remains **TUI MVP plus agent task understanding/operations**.
-The roadmap is not authorization to implement the later phases.
-
-Install the pinned Rust **1.98.1** toolchain (`rust-toolchain.toml`). From the repository root,
-`cargo run` defaults to the `dpm` CLI; `cargo run tui` and `cargo run -- tui` both open the
-console with `.dpm/dpm.sqlite`. Use `-p dpm-mcp` explicitly for the MCP server.
-Workspace-wide development checks still require `--workspace` (or run `./ci.sh`).
-
-Self-host is the only bundled example. Initialize the default database once in a fresh checkout:
+Install the pinned Rust **1.98.1** toolchain (`rust-toolchain.toml`). From this repository:
 
 ```sh
-cargo run -- demo
+cargo run
 cargo run -- status --json
 cargo run -- next --json
 cargo run -- explain MVP-10 --json
-cargo run -- tui
 ```
 
-Run `demo` only once; if the self-host database is already initialized, open it with `cargo run tui`.
-Use an explicit `--database PATH` only when a separate workspace is wanted.
+The committed `.dpm/project.toml` points to the **DPM Alpha** self-host JSON plan. Opening it reads
+an in-memory preview, creates no database, and rejects modifications through both CLI and MCP.
+The console labels it `PREVIEW read-only`. `cargo run tui` also works; root package `dpm` owns
+the CLI, while `cargo run -p dpm-mcp -- --actor agent:reader` starts the MCP adapter.
 
-`next` deliberately returns `[]`: **DEC-EXECUTE** gates the entire prepared roadmap. All contracts
-are unowned and at zero progress; no tasks have been claimed, submitted or verified. Do not resolve
-gates or execute these tasks until the user separately authorizes starting. Existing code is source
-context, not fabricated acceptance history. Existing databases are never overwritten by `demo`.
+The preview contains 24 task contracts, 8 milestones, requirements, open decision gates, risks and
+source context. `next` deliberately returns `[]`: **DEC-EXECUTE** gates the entire roadmap. All
+contracts remain unowned at zero progress, and no execution is authorized by this example.
+See [the self-host guide](examples/self-host/README.md) for scope and acceptance details.
 
-See [the self-host guide](examples/self-host/README.md) for milestone scope, limitations and expected
-queries. Each task includes ordered actions and expected results, scope boundaries, acceptance
-criteria and verification checks. `show/get_work` exposes the contract; `explain/explain_work` also
-resolves requirements, decision gates, risks, dependencies and evidence. Internal mutation tests use
-a minimal synthetic graph, keeping the prepared roadmap unstarted.
+After building/installing the CLI, ordinary projects use:
+
+```sh
+dpm init "My project"
+dpm status --json
+dpm
+```
+
+`dpm` searches the current directory and its parents for `.dpm/project.toml`, stopping at a Git
+boundary. Subdirectories open the closest project. No project means an initialization hint, not
+an automatic demo. `--project DIR` selects an exact project; `--database PATH` opens a specific
+SQLite file. The two overrides are mutually exclusive. `dpm --json` without a subcommand returns
+status rather than opening a terminal.
+
+Normal projects store their plan and operations in ignored `.dpm/state.sqlite`. Commit the locator,
+not the database. Preview and database sources share the same query/command boundary; preview
+sources additionally reject every mutation. [Project discovery and initialization](docs/projects.md)
+documents nested projects, cloned configurations and existing databases.
+
+Self-host is the only bundled example. `demo` explicitly initializes a copy in another project or
+an explicit database; it never overwrites existing state. Each task includes ordered actions and
+expected results, scope boundaries, acceptance criteria and verification checks. `show/get_work`
+exposes the contract; `explain/explain_work` also resolves requirements, decisions, risks,
+dependencies and evidence. Internal mutation tests use a minimal synthetic graph.
 
 Add `--json` to queries and mutations for agent consumption. Mutation responses contain the
 persisted operation and revision. Operational errors return a JSON error object and a nonzero exit
@@ -111,8 +122,9 @@ should consume structured JSON or the [MCP adapter](docs/mcp.md) over the same a
 
 ## Local plans and execution rules
 
-`init`, `demo`, and `import` only initialize a new database. They refuse to replace existing data.
-Choose another `--database` path to start another workspace. Queries never create a missing database.
+`init`, `demo`, and `import` explicitly initialize local project state. They refuse to replace an
+existing database or preview. Queries never create a missing database. Use `--database PATH`
+for a separate disposable copy, or initialize a different project directory.
 
 ```sh
 cargo run -p dpm -- validate examples/self-host/dpm-alpha.json --json
@@ -161,7 +173,7 @@ The declared minimum and CI toolchain are **Rust 1.98.1**, using Rust edition 20
 ```
 
 The quality gate checks formatting, source limits, repository hygiene, Clippy, all targets, API documentation,
-release compilation, and a disposable-database CLI workflow.
+release compilation, and a disposable-database CLI workflow and project-discovery/preview parity.
 
 The self-host integration checks are read-only and require revision 0 with an empty operation log.
 The internal synthetic graph exercises the agent/human mutation loop, gates and downstream work.
@@ -241,7 +253,7 @@ query `project_status`, `next_work`, `get_work` and `explain_work` through MCP; 
 execution merely because mutation tools are available.
 
 ```sh
-cargo run -p dpm-mcp -- --db .dpm/dpm.sqlite --actor agent:reader
+cargo run -p dpm-mcp -- --actor agent:reader
 ```
 
 The MCP command is a stdio server launched by an MCP client. [Agent/CLI contract](docs/mcp.md)

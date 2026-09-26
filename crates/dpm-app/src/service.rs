@@ -7,7 +7,10 @@ use dpm_model::{ActorId, DecisionId, Plan, WorkItemId};
 use dpm_store::SqliteStore;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeSet, path::Path};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+};
 
 /// Application wire contract version, independent of terminal display text.
 pub const API_VERSION: u32 = 1;
@@ -67,24 +70,74 @@ pub struct QueryResponse {
 
 /// Shared application service; adapters have no writable store access.
 pub struct Application {
-    store: SqliteStore,
+    backing: Backing,
+    pub(crate) project_root: Option<PathBuf>,
 }
+enum Backing {
+    Database(SqliteStore),
+    Preview(Box<Plan>),
+}
+
 impl Application {
+    /// Construct a validated read-only preview without opening a database.
+    pub fn preview(plan: Plan) -> Result<Self, AppError> {
+        plan.validate().map_err(dpm_store::StoreError::from)?;
+        Ok(Self {
+            project_root: None,
+            backing: Backing::Preview(Box::new(plan)),
+        })
+    }
+    /// Whether this source refuses every state-changing operation.
+    pub fn is_read_only(&self) -> bool {
+        matches!(self.backing, Backing::Preview(_))
+    }
+    /// Reject operations on preview sources before adapter preparation or persistence.
+    pub fn ensure_writable(&self) -> Result<(), AppError> {
+        if self.is_read_only() {
+            Err(AppError::ReadOnlyProject)
+        } else {
+            Ok(())
+        }
+    }
+    /// Initialize local authoritative state through the shared application boundary.
+    pub fn initialize_blocking(path: &Path, plan: &Plan) -> Result<Self, AppError> {
+        plan.validate().map_err(dpm_store::StoreError::from)?;
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent).map_err(|source| crate::ProjectError::Io {
+                action: "create database directory",
+                path: parent.into(),
+                source,
+            })?;
+        }
+        let mut store = SqliteStore::open_blocking(path)?;
+        store.initialize_blocking(plan)?;
+        Ok(Self {
+            project_root: None,
+            backing: Backing::Database(store),
+        })
+    }
     /// Open an existing database without accidentally creating a workspace on a read request.
     pub fn open_blocking(path: impl AsRef<Path>) -> Result<Self, AppError> {
         Ok(Self {
-            store: SqliteStore::open_existing_blocking(path)?,
+            project_root: None,
+            backing: Backing::Database(SqliteStore::open_existing_blocking(path)?),
         })
     }
     /// Create a disposable workspace for tests or embedded clients.
     pub fn in_memory_blocking(plan: &Plan) -> Result<Self, AppError> {
         let mut store = SqliteStore::in_memory_blocking()?;
         store.initialize_blocking(plan)?;
-        Ok(Self { store })
+        Ok(Self {
+            project_root: None,
+            backing: Backing::Database(store),
+        })
     }
     /// Load a validated read-only snapshot; edits to this copy cannot change persistence.
     pub fn plan_blocking(&self) -> Result<Plan, AppError> {
-        self.store.load_blocking()?.ok_or(AppError::NotInitialized)
+        match &self.backing {
+            Backing::Database(store) => store.load_blocking()?.ok_or(AppError::NotInitialized),
+            Backing::Preview(plan) => Ok(plan.as_ref().clone()),
+        }
     }
     /// Resolve a work key to its stable UUID.
     pub fn work_id_blocking(&self, key: &str) -> Result<WorkItemId, AppError> {
@@ -144,6 +197,7 @@ impl Application {
     }
     /// Apply and atomically persist one command. Any failure leaves the database unchanged.
     pub fn execute_blocking(&mut self, request: CommandRequest) -> Result<Operation, AppError> {
+        self.ensure_writable()?;
         let mut plan = self.plan_blocking()?;
         if request.base_revision != plan.revision {
             return Err(AppError::Conflict {
@@ -152,7 +206,9 @@ impl Application {
             });
         }
         let operation = apply_command(&mut plan, request.actor, request.command, Utc::now())?;
-        self.store.persist_blocking(&plan, &operation)?;
+        if let Backing::Database(store) = &mut self.backing {
+            store.persist_blocking(&plan, &operation)?;
+        }
         Ok(operation)
     }
 }

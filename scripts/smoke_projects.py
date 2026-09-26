@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Exercise project discovery, file previews and normal SQLite projects through real adapters."""
+import json
+import sqlite3
+import subprocess
+import tempfile
+from pathlib import Path
+
+from smoke_agent import Agent, CLI, ROOT
+
+
+def cli(cwd, *arguments, error=None):
+    result = subprocess.run([str(CLI), '--json', *map(str, arguments)], cwd=cwd,
+                            capture_output=True, text=True, timeout=30)
+    value = json.loads(result.stdout)
+    if error:
+        assert result.returncode != 0 and value['error']['code'] == error, (arguments, value, result.stderr)
+    else:
+        assert result.returncode == 0, (arguments, value, result.stderr)
+    return value
+
+
+def preview(directory):
+    before = (ROOT / 'examples/self-host/dpm-alpha.json').read_bytes()
+    runtime = {p.name for p in (ROOT / '.dpm').iterdir()}
+    nested = ROOT / 'crates/dpm-model/src'
+    assert cli(nested, 'status', '--no-simulation')['revision'] == 0
+    assert cli(nested, 'next', '--deterministic-only') == []
+    assert cli(directory, '--project', ROOT, 'export') == json.loads(before)
+    assert cli(nested)['ready'] == 0
+    actor = Agent(None, 'agent:preview', cwd=nested)
+    try:
+        assert actor.call('get_work', {'key': 'MVP-10'})['data'] == cli(nested, 'show', 'MVP-10')
+        for tool, args, command in [
+            ('claim_work', {'key': 'MVP-10'}, ('claim', 'MVP-10')),
+            ('decide_gate', {'decision': 'DEC-EXECUTE', 'outcome': 'start'}, ('decide', 'DEC-EXECUTE', 'start')),
+            ('attach_git_head', {'key': 'MVP-10'}, ('attach-git-head', 'MVP-10')),
+        ]:
+            remote = actor.call(tool, {**args, 'base_revision': 0}, error='read_only_project')
+            local = cli(nested, *command, error='read_only_project')['error']
+            assert remote['message'] == local['message']
+    finally:
+        actor.close()
+    assert (ROOT / 'examples/self-host/dpm-alpha.json').read_bytes() == before
+    assert {p.name for p in (ROOT / '.dpm').iterdir()} == runtime
+
+
+def normal(directory):
+    root = directory / 'normal'
+    root.mkdir()
+    cli(root, 'status', error='project_not_found')
+    assert not (root / '.dpm').exists()
+    # Synthetic execution input is independent of the unstarted self-host roadmap.
+    initialized = cli(root, 'import', ROOT / 'tests/support/execution-plan.json')
+    database = root / '.dpm/state.sqlite'
+    assert Path(initialized['database']).resolve() == database.resolve()
+    child = root / 'src/nested'
+    child.mkdir(parents=True)
+    actor = Agent(None, 'agent:discovery', cwd=child)
+    try:
+        assert actor.call('project_status', {'probabilistic': False})['data'] == cli(child, 'status', '--no-simulation')
+        actor.call('claim_work', {'key': 'TEST-A', 'base_revision': 0})
+        cli(child, 'submit', 'TEST-A', '--actor', 'agent:discovery')
+        cli(child, 'verify', 'TEST-A', '--actor', 'human:reviewer')
+        assert actor.call('get_work', {'key': 'TEST-A'})['data']['status'] == 'Verified'
+    finally:
+        actor.close()
+    cli(root, 'init', error='project_exists')
+    with sqlite3.connect(database) as connection:
+        assert connection.execute('select count(*) from operations').fetchone()[0] == 3
+    malformed = child / '.dpm'
+    malformed.mkdir()
+    (malformed / 'project.toml').write_text('version = 99\ndatabase = "missing.sqlite"\n')
+    cli(child, 'status', error='project_configuration')
+    assert cli(child, '--database', database, 'status', '--no-simulation')['revision'] == 3
+    assert cli(child, '--project', root, 'status', '--no-simulation')['revision'] == 3
+    foreign = root / 'separate-git'
+    foreign.mkdir()
+    (foreign / '.git').write_text('gitdir: elsewhere\n')
+    cli(foreign, 'status', error='project_not_found')
+    empty = directory / 'empty'
+    empty.mkdir()
+    cli(directory, '--project', empty, 'init', 'My project')
+    assert cli(empty, 'status', '--no-simulation')['total_work'] == 0
+
+
+def git_evidence(directory):
+    root = directory / 'evidence'
+    root.mkdir()
+    def git(*args):
+        return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
+    git('init', '--quiet')
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '--allow-empty', '-m', 'test evidence')
+    head = git('rev-parse', 'HEAD')
+    cli(root, 'import', ROOT / 'tests/support/execution-plan.json')
+    cli(directory, '--project', root, 'attach-git-head', 'TEST-A')
+    actor = Agent(None, 'agent:evidence', cwd=directory, project=root)
+    try:
+        actor.call('attach_git_head', {'key': 'TEST-A', 'base_revision': 1})
+    finally:
+        actor.close()
+    exported = cli(root, 'export')
+    assert len(exported['artifacts']) == 2
+    assert all(a['metadata']['commit'] == head for a in exported['artifacts'].values())
+
+
+if __name__ == '__main__':
+    with tempfile.TemporaryDirectory(prefix='dpm-projects-') as temporary:
+        directory = Path(temporary)
+        preview(directory)
+        normal(directory)
+        git_evidence(directory)
+    print('PASS: project discovery/overrides, Git boundaries, read-only preview, CLI/MCP parity, durable operations and scoped Git evidence')

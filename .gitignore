@@ -4,7 +4,9 @@
 
 # Local planning state
 /.dagplan/
-/.dpm/
+/.dpm/*
+!/.dpm/project.toml
+!/.dpm/.gitignore
 *.sqlite
 *.sqlite3
 *.sqlite-shm

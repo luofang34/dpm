@@ -147,6 +147,7 @@ fn mutation_blocking(
     name: &str,
     args: Arguments,
 ) -> Result<Command, AppError> {
+    app.ensure_writable()?;
     if name == "decide_gate" {
         let key = required(args.decision, "decision")?;
         let decision = app.decision_id_blocking(&key)?;
@@ -160,7 +161,7 @@ fn mutation_blocking(
     match name {
         "attach_git_head" => Ok(Command::AttachArtifact {
             work,
-            artifact: dpm_app::git_head_artifact_blocking(actor.clone())?,
+            artifact: app.git_head_artifact_blocking(actor.clone())?,
         }),
         "claim_work" => Ok(Command::Claim { work }),
         "report_blocker" => Ok(Command::Block {
