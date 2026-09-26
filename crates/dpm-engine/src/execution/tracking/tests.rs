@@ -71,7 +71,10 @@ fn equal_ids_from_separate_self_hosted_instances_are_tracked_independently() {
     );
     let alpha = forgejo("git.alpha.example", ExternalObjectKind::Issue);
     let beta = forgejo("git.beta.example", ExternalObjectKind::Issue);
-    let merge = forgejo("git.alpha.example", ExternalObjectKind::PullRequest);
+    let merge = ExternalIdentity {
+        external_id: "43".into(),
+        ..forgejo("git.alpha.example", ExternalObjectKind::PullRequest)
+    };
     run(
         &mut plan,
         "linker",
@@ -96,6 +99,16 @@ fn equal_ids_from_separate_self_hosted_instances_are_tracked_independently() {
         |i: &ExternalIdentity| plan.external_references[&reference_of(&plan, i)].tracking_owner();
     assert_eq!(owner(&alpha), Some(a));
     assert_eq!(owner(&beta), Some(b));
+    // Forgejo numbers issues and pull requests together, so PR #42 is issue #42.
+    let same_number = forgejo("git.alpha.example", ExternalObjectKind::PullRequest);
+    let before = plan.clone();
+    run(
+        &mut plan,
+        "linker",
+        request(c, same_number, ExternalLinkRole::Tracks),
+    )
+    .expect_err("one object, one reference");
+    assert_eq!(plan, before);
 }
 
 #[test]
@@ -259,7 +272,10 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
     let submitted = projections(&plan);
     let Command::LinkExternal(mut merged) = request(
         a,
-        forgejo("git.alpha.example", ExternalObjectKind::PullRequest),
+        ExternalIdentity {
+            external_id: "7".into(),
+            ..forgejo("git.alpha.example", ExternalObjectKind::PullRequest)
+        },
         ExternalLinkRole::Tracks,
     ) else {
         panic!("link request");

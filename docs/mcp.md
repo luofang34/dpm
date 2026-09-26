@@ -74,9 +74,13 @@ state authoritative. Its identity is the tuple provider family (`GitHub`, `GitLa
 or self-hosted server), `namespace` (owner/repository, group path, tenant or project; required for
 repository forges and Linear; rejected for Jira, whose keys such as `PROJ-1` are unique per
 instance), `kind` (`Issue`, `PullRequest` or `{"Other":"name"}`) and
-`external_id`. Equal IDs on another instance, namespace or kind are different objects. The label
+`external_id`. Equal IDs on another instance or namespace are different objects. Kind separates
+objects only where the provider numbers them separately (GitLab issues and merge requests); GitHub,
+Forgejo and Gitea number issues and pull requests together, so `#5` is one object whichever kind is
+named, and the first recorded kind is kept. The label
 and URL are display data. Adapters canonicalize equivalent spellings (host and forge namespace
-case, `https://` prefixes, default ports `:443`/`:80`, `#`/`!` ID prefixes, Jira key case) before lookup, and validation rejects any other form.
+case, `https://` prefixes, default ports `:443`/`:80`, `#`/`!` ID prefixes, a `.git` repository suffix, leading zeros in forge
+numbers, Jira and Linear key and Linear workspace case) before lookup, and validation rejects any other form.
 
 `link_external` takes `key`, `identity`, `base_revision` and optional `label`, `url`, `role`
 (`Tracks` by default, or `Relates`) and `observed` (`Open`, `Closed` or `Merged`). The CLI uses

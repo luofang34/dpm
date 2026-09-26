@@ -56,17 +56,34 @@ impl ExternalProvider {
         matches!(self, Self::Jira)
     }
 
-    /// Jira resolves issue keys case-insensitively and displays them upper-case.
+    /// Jira and Linear resolve issue keys (`PROJ-1`, `ENG-1`) case-insensitively and display them
+    /// upper-case.
     fn folds_id_to_upper(&self) -> bool {
-        matches!(self, Self::Jira)
+        matches!(self, Self::Jira | Self::Linear)
     }
 
-    /// Forges route owner/repository paths case-insensitively, so case must not split identity.
+    /// Forges route owner/repository paths and Linear routes workspace slugs case-insensitively,
+    /// so case must not split identity.
     fn folds_namespace_case(&self) -> bool {
+        matches!(
+            self,
+            Self::GitHub | Self::GitLab | Self::Forgejo | Self::Gitea | Self::Linear
+        )
+    }
+
+    /// Repository forges whose objects carry plain numbers, where leading zeros and a `.git`
+    /// repository suffix address the same object.
+    fn numbers_repository_objects(&self) -> bool {
         matches!(
             self,
             Self::GitHub | Self::GitLab | Self::Forgejo | Self::Gitea
         )
+    }
+
+    /// These forges number issues and pull requests in one sequence, so `#5` is one object
+    /// whichever kind a caller names; GitLab numbers merge requests separately.
+    fn shares_issue_and_review_numbers(&self) -> bool {
+        matches!(self, Self::GitHub | Self::Forgejo | Self::Gitea)
     }
 
     fn hosts_code_review(&self) -> bool {
@@ -91,8 +108,9 @@ impl ExternalObjectKind {
         let name = name.trim().to_lowercase();
         match name.as_str() {
             "issue" => Self::Issue,
-            "pullrequest" | "pull_request" | "pull-request" | "pr" | "merge_request"
-            | "merge-request" | "mr" => Self::PullRequest,
+            "issues" => Self::Issue,
+            "pullrequest" | "pull_request" | "pull-request" | "pull" | "pulls" | "pr"
+            | "merge_request" | "merge_requests" | "merge-request" | "mr" => Self::PullRequest,
             _ => Self::Other(name),
         }
     }
@@ -144,6 +162,11 @@ impl ExternalIdentity {
             .map(|n| n.trim().trim_matches('/'))
             .filter(|n| !n.is_empty())
             .map(|n| {
+                let n = if provider.numbers_repository_objects() {
+                    n.strip_suffix(".git").unwrap_or(n)
+                } else {
+                    n
+                };
                 if provider.folds_namespace_case() {
                     n.to_lowercase()
                 } else {
@@ -158,6 +181,12 @@ impl ExternalIdentity {
         let external_id = external_id.strip_prefix(['#', '!']).unwrap_or(external_id);
         let external_id = if provider.folds_id_to_upper() {
             external_id.to_uppercase()
+        } else if provider.numbers_repository_objects()
+            && !external_id.is_empty()
+            && external_id.chars().all(|c| c.is_ascii_digit())
+        {
+            let trimmed = external_id.trim_start_matches('0');
+            if trimmed.is_empty() { "0" } else { trimmed }.to_owned()
         } else {
             external_id.to_owned()
         };
@@ -168,6 +197,21 @@ impl ExternalIdentity {
             kind,
             external_id,
         }
+    }
+
+    /// The part of a canonical identity that decides whether two records name one object.
+    ///
+    /// The recorded kind stays authoritative for kind-specific rules such as `Merged`; only
+    /// the collision check ignores it where issues and pull requests share numbers.
+    #[must_use]
+    pub fn object_key(&self) -> Self {
+        let mut key = self.clone();
+        if self.provider.shares_issue_and_review_numbers()
+            && key.kind == ExternalObjectKind::PullRequest
+        {
+            key.kind = ExternalObjectKind::Issue;
+        }
+        key
     }
 
     fn validate(&self, id: ExternalReferenceId) -> Result<(), ValidationError> {

@@ -58,7 +58,8 @@ fn equal_numbers_from_separate_instances_namespaces_and_kinds_do_not_collide() {
         "ops/dpm",
     );
     let c = identity(ExternalProvider::Forgejo, "git.alpha.example", "ops/other");
-    let mut d = a.clone();
+    // GitLab numbers merge requests separately from issues, so kind separates them there.
+    let mut d = identity(ExternalProvider::GitLab, "gitlab.example", "ops/dpm");
     d.kind = ExternalObjectKind::PullRequest;
     for (identity, work) in [a, b, c, d].into_iter().zip(ids) {
         insert(
@@ -324,4 +325,60 @@ fn default_ports_do_not_split_an_instance() {
     assert_eq!(http.canonical().instance, "forge.example");
     let custom = identity(ExternalProvider::Forgejo, "forge.example:3000", "ops/dpm");
     assert_eq!(custom.canonical().instance, "forge.example:3000");
+}
+
+#[test]
+fn forges_sharing_issue_and_review_numbers_have_one_object_per_number() {
+    let mut plan = fixture();
+    let (a, b) = (work(&plan, "TEST-A"), work(&plan, "TEST-B"));
+    for provider in [
+        ExternalProvider::GitHub,
+        ExternalProvider::Forgejo,
+        ExternalProvider::Gitea,
+    ] {
+        let issue = identity(provider.clone(), "forge.example", "ops/dpm");
+        let mut pull = issue.clone();
+        pull.kind = ExternalObjectKind::PullRequest;
+        assert_eq!(issue.object_key(), pull.object_key());
+        let first = insert(&mut plan, reference(issue, a, ExternalLinkRole::Tracks));
+        let second = insert(&mut plan, reference(pull, b, ExternalLinkRole::Tracks));
+        assert!(reason(&plan).contains("already recorded"), "{provider:?}");
+        plan.external_references.remove(&first);
+        plan.external_references.remove(&second);
+    }
+    assert_eq!(
+        ExternalObjectKind::parse("pulls"),
+        ExternalObjectKind::PullRequest
+    );
+    assert_eq!(
+        ExternalObjectKind::parse("Pull"),
+        ExternalObjectKind::PullRequest
+    );
+}
+
+#[test]
+fn linear_keys_workspaces_and_forge_spellings_collapse() {
+    let linear = |namespace: &str, key: &str| ExternalIdentity {
+        provider: ExternalProvider::Linear,
+        instance: "linear.app".into(),
+        namespace: Some(namespace.into()),
+        kind: ExternalObjectKind::Issue,
+        external_id: key.into(),
+    };
+    let canonical = linear("acme", "ENG-1");
+    assert_eq!(linear("Acme", "eng-1").canonical(), canonical);
+    assert_eq!(linear("acme", "Eng-1").canonical(), canonical);
+    let mut forge = identity(ExternalProvider::GitHub, "github.com", "Ops/DPM.git");
+    forge.external_id = "0042".into();
+    let canonical = forge.canonical();
+    assert_eq!(canonical.namespace.as_deref(), Some("ops/dpm"));
+    assert_eq!(canonical.external_id, "42");
+    let mut jira = linear("acme", "ENG-0042");
+    jira.provider = ExternalProvider::Jira;
+    jira.namespace = None;
+    assert_eq!(
+        jira.canonical().external_id,
+        "ENG-0042",
+        "keys are not numbers"
+    );
 }

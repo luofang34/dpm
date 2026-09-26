@@ -13,7 +13,7 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), ValidationError> {
             ));
         }
         reference.identity.validate(*id)?;
-        if let Some(previous) = identities.insert(&reference.identity, id) {
+        if let Some(previous) = identities.insert(reference.identity.object_key(), id) {
             return Err(invalid(
                 "external reference",
                 id,

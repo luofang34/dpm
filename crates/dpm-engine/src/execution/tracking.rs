@@ -69,7 +69,7 @@ fn resolve_identity(plan: &Plan, request: &ExternalLinkRequest) -> Result<(), En
     let recorded = plan
         .external_references
         .values()
-        .find(|r| r.identity == request.identity);
+        .find(|r| r.identity.object_key() == request.identity.object_key());
     match (recorded, plan.external_references.get(&request.reference)) {
         (Some(existing), _) if existing.id != request.reference => {
             Err(EngineError::InvalidCommand {

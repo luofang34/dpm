@@ -77,7 +77,7 @@ fn work_id(plan: &Plan, key: &str) -> Result<dpm_model::WorkItemId, AppError> {
 fn recorded<'a>(plan: &'a Plan, identity: &ExternalIdentity) -> Option<&'a ExternalReference> {
     plan.external_references
         .values()
-        .find(|r| r.identity == *identity)
+        .find(|r| r.identity.object_key() == identity.object_key())
 }
 
 #[cfg(test)]

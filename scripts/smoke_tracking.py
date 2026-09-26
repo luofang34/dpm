@@ -147,6 +147,18 @@ def jira_identity(directory):
         lower = {**jira, 'external_id': 'proj-1'}
         refused(database, worker, 'link_external', {'key': 'TEST-E', 'identity': lower, 'base_revision': 1},
                 ['link-external', 'TEST-E', *flags(lower)], 'tracking_conflict')
+        # Linear folds key and workspace case; GitHub/Forgejo issues and pull requests share numbers.
+        linear = {'provider': 'Linear', 'instance': 'linear.app', 'namespace': 'acme', 'kind': 'Issue', 'external_id': 'ENG-1'}
+        worker.call('link_external', {'key': 'TEST-A', 'identity': linear, 'base_revision': 1})
+        variant = {**linear, 'namespace': 'Acme', 'external_id': 'eng-1'}
+        refused(database, worker, 'link_external', {'key': 'TEST-B', 'identity': variant, 'base_revision': 2},
+                ['link-external', 'TEST-B', *flags(variant)], 'tracking_conflict')
+        issue = {'provider': 'GitHub', 'instance': 'github.com', 'namespace': 'o/r', 'kind': 'Issue', 'external_id': '5'}
+        worker.call('link_external', {'key': 'TEST-A', 'identity': issue, 'base_revision': 2})
+        pull = {**issue, 'kind': 'pulls', 'namespace': 'O/R.git', 'external_id': '005'}
+        refused(database, worker, 'link_external', {'key': 'TEST-C', 'identity': {**pull, 'kind': 'PullRequest'}, 'base_revision': 3},
+                ['link-external', 'TEST-C', *flags(pull)], 'tracking_conflict')
+        assert len(run_cli(database, 'export')['external_references']) == 3
     finally:
         worker.close()
 
@@ -173,4 +185,4 @@ if __name__ == '__main__':
             assert reopened.call('export_plan', {})['data'] == final
         finally:
             reopened.close()
-    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, Jira key normalization, reviewed rename and export/import round trip')
+    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, reviewed rename and export/import round trip')
