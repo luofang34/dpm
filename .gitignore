@@ -1,0 +1,36 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Local planning state
+/.dagplan/
+/.dpm/
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+*.sqlite3-shm
+*.sqlite3-wal
+*.sqlite3-journal
+
+# Python verification scripts
+__pycache__/
+*.pyc
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Coverage / profiling
+coverage/
+*.profraw
+*.profdata
+
+# Local environment
+.env
+.env.*
+!.env.example

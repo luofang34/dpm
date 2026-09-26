@@ -1,0 +1,119 @@
+use crate::*;
+
+fn fixture() -> Plan {
+    serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture")
+}
+
+#[test]
+fn fixture_and_empty_workspace_are_valid() {
+    fixture().validate().expect("valid fixture");
+    Plan::empty("empty")
+        .validate()
+        .expect("valid empty workspace");
+}
+
+#[test]
+fn malformed_graphs_and_contracts_are_rejected() {
+    let cases: Vec<fn(&mut Plan)> = vec![
+        |p| p.workspace.name.clear(),
+        |p| p.work_items.values_mut().next().expect("work").id = WorkItemId::new(),
+        |p| p.work_items.values_mut().next().expect("work").project = ProjectId::new(),
+        |p| {
+            p.work_items
+                .values_mut()
+                .for_each(|w| w.key = Key::new("duplicate"))
+        },
+        |p| {
+            p.find_work_by_key_mut("TEST-A")
+                .expect("task")
+                .objective
+                .clear()
+        },
+        |p| {
+            p.find_work_by_key_mut("TEST-A")
+                .expect("task")
+                .acceptance
+                .clear()
+        },
+        |p| p.find_work_by_key_mut("TEST-A").expect("task").acceptance[0].text = " ".into(),
+        |p| p.find_work_by_key_mut("TEST-A").expect("task").owner = Some(ActorId::agent("owner")),
+        |p| p.find_work_by_key_mut("TEST-A").expect("task").status = WorkStatus::Claimed,
+        |p| {
+            p.find_work_by_key_mut("TEST-A")
+                .expect("task")
+                .artifact_ids
+                .insert(ArtifactId::new());
+        },
+        |p| {
+            p.decisions
+                .values_mut()
+                .next()
+                .expect("gate")
+                .blocks
+                .insert(WorkItemId::new());
+        },
+        |p| p.dependencies[0].predecessor = WorkItemId::new(),
+        |p| p.dependencies[0].lag_hours = f64::NAN,
+        |p| p.dependencies[0].successor = p.dependencies[0].predecessor,
+        |p| {
+            let project = p.projects.values_mut().next().expect("project");
+            project.parent = Some(project.id);
+        },
+        |p| {
+            let task = p.find_work_by_key_mut("TEST-A").expect("task");
+            task.parent = Some(task.id);
+        },
+    ];
+    for (index, mutate) in cases.into_iter().enumerate() {
+        let mut plan = fixture();
+        mutate(&mut plan);
+        assert!(plan.validate().is_err(), "invalid case {index} accepted");
+    }
+}
+
+#[test]
+fn estimates_reject_nonfinite_negative_and_unordered_bounds() {
+    for estimate in [
+        ThreePointEstimate {
+            optimistic_hours: f64::NAN,
+            likely_hours: 1.0,
+            pessimistic_hours: 2.0,
+        },
+        ThreePointEstimate {
+            optimistic_hours: -1.0,
+            likely_hours: 1.0,
+            pessimistic_hours: 2.0,
+        },
+        ThreePointEstimate {
+            optimistic_hours: 2.0,
+            likely_hours: 1.0,
+            pessimistic_hours: 3.0,
+        },
+        ThreePointEstimate {
+            optimistic_hours: 1.0,
+            likely_hours: 2.0,
+            pessimistic_hours: f64::INFINITY,
+        },
+    ] {
+        let mut plan = fixture();
+        plan.find_work_by_key_mut("TEST-A").expect("task").estimate = Some(estimate);
+        assert!(matches!(
+            plan.validate(),
+            Err(ValidationError::Estimate { .. })
+        ));
+    }
+}
+
+#[test]
+fn large_finite_estimates_do_not_overflow_the_weighted_mean() {
+    let estimate = ThreePointEstimate {
+        optimistic_hours: f64::MAX,
+        likely_hours: f64::MAX,
+        pessimistic_hours: f64::MAX,
+    };
+    estimate.validate().expect("finite ordered bounds");
+    assert!(estimate.pert_expected_hours().is_finite());
+}

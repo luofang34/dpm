@@ -1,0 +1,83 @@
+[package]
+name = "dpm"
+description = "DAG Project Manager: execution planning for humans and agents"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "dpm"
+path = "src/main.rs"
+doc = false
+
+[dependencies]
+dpm-app = { path = "crates/dpm-app", version = "0.1.0" }
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+chrono.workspace = true
+clap.workspace = true
+dpm-engine = { path = "crates/dpm-engine", version = "0.1.0" }
+dpm-model = { path = "crates/dpm-model", version = "0.1.0" }
+dpm-store = { path = "crates/dpm-store", version = "0.1.0" }
+dpm-tui = { path = "crates/dpm-tui", version = "0.1.0" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+[workspace]
+resolver = "3"
+default-members = ["."]
+members = [
+    "crates/dpm-sdk",
+    "crates/dpm-model",
+    "crates/dpm-schedule",
+    "crates/dpm-engine",
+    "crates/dpm-store",
+    ".",
+    "crates/dpm-tui",
+    "crates/dpm-app",
+    "crates/dpm-mcp",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98.1"
+license = "AGPL-3.0-only"
+repository = "https://github.com/luofang34/dpm"
+homepage = "https://github.com/luofang34/dpm"
+keywords = ["project-management", "planning", "scheduling", "agents", "cpm"]
+categories = ["command-line-utilities"]
+
+[workspace.dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.5", features = ["derive"] }
+crossterm = "0.29"
+ratatui = "0.30"
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+let_underscore_must_use = "deny"
+let_underscore_future = "deny"
+await_holding_lock = "deny"
+disallowed_types = "deny"
+too_many_lines = "deny"

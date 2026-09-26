@@ -1,0 +1,24 @@
+{
+  "workspace": "DPM Alpha — prepared roadmap",
+  "revision": 0,
+  "task_count": 24,
+  "work_package_count": 9,
+  "milestone_count": 8,
+  "total_work": 41,
+  "ready_keys": [],
+  "completed_work": 0,
+  "open_decisions": 4,
+  "operations": 0,
+  "first_contract": "MVP-10",
+  "execution_gate": "DEC-EXECUTE",
+  "milestones": [
+    "M0-MVP",
+    "M1-SELF",
+    "M2-CORE",
+    "M3-SCHEDULE",
+    "M4-TUI",
+    "M5-ALPHA",
+    "M6-COLLAB",
+    "M7-DESIGN"
+  ]
+}

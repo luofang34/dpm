@@ -1,0 +1,22 @@
+[package]
+name = "dpm-tui"
+description = "Ratatui operator console for DPM"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+crossterm.workspace = true
+dpm-engine = { path = "../dpm-engine", version = "0.1.0" }
+dpm-model = { path = "../dpm-model", version = "0.1.0" }
+dpm-schedule = { path = "../dpm-schedule", version = "0.1.0" }
+ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

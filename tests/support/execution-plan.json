@@ -1,0 +1,310 @@
+{
+  "workspace": {
+    "id": "00000008-0000-4000-8000-000000000001",
+    "name": "Execution contract test"
+  },
+  "revision": 0,
+  "projects": {
+    "00000009-0000-4000-8000-000000000001": {
+      "id": "00000009-0000-4000-8000-000000000001",
+      "key": "TEST",
+      "parent": null,
+      "title": "Synthetic execution graph",
+      "objective": "Exercise shared command/query invariants."
+    }
+  },
+  "work_items": {
+    "00000007-0000-4000-8000-000000000001": {
+      "id": "00000007-0000-4000-8000-000000000001",
+      "key": "TEST-A",
+      "project": "00000009-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Contract A",
+      "objective": "Produce observable result A for the test graph.",
+      "acceptance": [
+        {
+          "text": "Result A passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P0",
+      "estimate": {
+        "optimistic_hours": 2.0,
+        "likely_hours": 4,
+        "pessimistic_hours": 6.0
+      },
+      "capabilities": [
+        "rust",
+        "testing"
+      ],
+      "requirement_ids": [
+        "0000000a-0000-4000-8000-000000000001"
+      ],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null
+    },
+    "00000007-0000-4000-8000-000000000002": {
+      "id": "00000007-0000-4000-8000-000000000002",
+      "key": "TEST-B",
+      "project": "00000009-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Contract B",
+      "objective": "Produce observable result B for the test graph.",
+      "acceptance": [
+        {
+          "text": "Result B passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 10.0,
+        "likely_hours": 20,
+        "pessimistic_hours": 30.0
+      },
+      "capabilities": [
+        "rust"
+      ],
+      "requirement_ids": [
+        "0000000a-0000-4000-8000-000000000001"
+      ],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null
+    },
+    "00000007-0000-4000-8000-000000000003": {
+      "id": "00000007-0000-4000-8000-000000000003",
+      "key": "TEST-C",
+      "project": "00000009-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Contract C",
+      "objective": "Produce observable result C for the test graph.",
+      "acceptance": [
+        {
+          "text": "Result C passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 20.0,
+        "likely_hours": 40,
+        "pessimistic_hours": 60.0
+      },
+      "capabilities": [
+        "testing"
+      ],
+      "requirement_ids": [
+        "0000000a-0000-4000-8000-000000000001"
+      ],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null
+    },
+    "00000007-0000-4000-8000-000000000004": {
+      "id": "00000007-0000-4000-8000-000000000004",
+      "key": "TEST-D",
+      "project": "00000009-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Contract D",
+      "objective": "Produce observable result D for the test graph.",
+      "acceptance": [
+        {
+          "text": "Result D passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 16.0,
+        "likely_hours": 32,
+        "pessimistic_hours": 48.0
+      },
+      "capabilities": [
+        "rust"
+      ],
+      "requirement_ids": [
+        "0000000a-0000-4000-8000-000000000001"
+      ],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null
+    },
+    "00000007-0000-4000-8000-000000000005": {
+      "id": "00000007-0000-4000-8000-000000000005",
+      "key": "TEST-E",
+      "project": "00000009-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Contract E",
+      "objective": "Produce observable result E for the test graph.",
+      "acceptance": [
+        {
+          "text": "Result E passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 4.0,
+        "likely_hours": 8,
+        "pessimistic_hours": 12.0
+      },
+      "capabilities": [
+        "testing"
+      ],
+      "requirement_ids": [
+        "0000000a-0000-4000-8000-000000000001"
+      ],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null
+    },
+    "00000007-0000-4000-8000-000000000006": {
+      "id": "00000007-0000-4000-8000-000000000006",
+      "key": "TEST-F",
+      "project": "00000009-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Contract F",
+      "objective": "Produce observable result F for the test graph.",
+      "acceptance": [
+        {
+          "text": "Result F passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P0",
+      "estimate": {
+        "optimistic_hours": 2.0,
+        "likely_hours": 4,
+        "pessimistic_hours": 6.0
+      },
+      "capabilities": [
+        "review"
+      ],
+      "requirement_ids": [
+        "0000000a-0000-4000-8000-000000000001"
+      ],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null
+    },
+    "00000007-0000-4000-8000-000000000007": {
+      "id": "00000007-0000-4000-8000-000000000007",
+      "key": "TEST-M1",
+      "project": "00000009-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Milestone",
+      "title": "Verified join",
+      "objective": "Check the verified dependency condition.",
+      "acceptance": [
+        {
+          "text": "All prerequisites are verified."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P0",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null
+    }
+  },
+  "requirements": {
+    "0000000a-0000-4000-8000-000000000001": {
+      "id": "0000000a-0000-4000-8000-000000000001",
+      "key": "TEST-REQ",
+      "project": "00000009-0000-4000-8000-000000000001",
+      "title": "Observable acceptance",
+      "statement": "Dependent work requires verified results and resolved gates."
+    }
+  },
+  "artifacts": {},
+  "decisions": {
+    "0000000b-0000-4000-8000-000000000001": {
+      "id": "0000000b-0000-4000-8000-000000000001",
+      "key": "TEST-GATE",
+      "project": "00000009-0000-4000-8000-000000000001",
+      "question": "Is the verified input accepted for both branches?",
+      "status": "Open",
+      "outcome": null,
+      "blocks": [
+        "00000007-0000-4000-8000-000000000002",
+        "00000007-0000-4000-8000-000000000004"
+      ]
+    }
+  },
+  "risks": {
+    "0000000c-0000-4000-8000-000000000001": {
+      "id": "0000000c-0000-4000-8000-000000000001",
+      "key": "TEST-RISK",
+      "project": "00000009-0000-4000-8000-000000000001",
+      "description": "A test branch may require additional validation.",
+      "probability": 0.25,
+      "impact": "High",
+      "related_work": [
+        "00000007-0000-4000-8000-000000000003"
+      ],
+      "mitigation": "Retain diagnostic evidence for review."
+    }
+  },
+  "dependencies": [
+    {
+      "predecessor": "00000007-0000-4000-8000-000000000001",
+      "successor": "00000007-0000-4000-8000-000000000002",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "00000007-0000-4000-8000-000000000001",
+      "successor": "00000007-0000-4000-8000-000000000004",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "00000007-0000-4000-8000-000000000002",
+      "successor": "00000007-0000-4000-8000-000000000003",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "00000007-0000-4000-8000-000000000003",
+      "successor": "00000007-0000-4000-8000-000000000005",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "00000007-0000-4000-8000-000000000004",
+      "successor": "00000007-0000-4000-8000-000000000005",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "00000007-0000-4000-8000-000000000005",
+      "successor": "00000007-0000-4000-8000-000000000006",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "00000007-0000-4000-8000-000000000006",
+      "successor": "00000007-0000-4000-8000-000000000007",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    }
+  ]
+}

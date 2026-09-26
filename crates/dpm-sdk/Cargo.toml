@@ -1,0 +1,19 @@
+[package]
+name = "dpm-sdk"
+description = "Agent-first execution planning primitives for humans and machines"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+dpm-engine = { path = "../dpm-engine", version = "0.1.0" }
+dpm-model = { path = "../dpm-model", version = "0.1.0" }
+dpm-schedule = { path = "../dpm-schedule", version = "0.1.0" }
+
+[lints]
+workspace = true

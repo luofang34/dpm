@@ -1,0 +1,2657 @@
+{
+  "workspace": {
+    "id": "40600f85-eaac-57e8-925a-4e07f6ae5af4",
+    "name": "DPM Alpha — prepared roadmap"
+  },
+  "revision": 0,
+  "projects": {
+    "1a5cf818-0bb0-576f-9d50-3654f1524970": {
+      "id": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "key": "DPM",
+      "parent": null,
+      "title": "DPM Alpha",
+      "objective": "Prepare and eventually verify dpm developing itself. Current implementation scope is TUI MVP plus agent task understanding and operations; this roadmap grants no execution permission."
+    }
+  },
+  "work_items": {
+    "a66db805-addb-528b-9fc6-3c96c77dfca9": {
+      "id": "a66db805-addb-528b-9fc6-3c96c77dfca9",
+      "key": "WP-DPM",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": null,
+      "kind": "WorkPackage",
+      "title": "DPM prepared roadmap",
+      "objective": "Prepared contracts only; DEC-EXECUTE is unresolved and forbids starting work.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "0e1c21d5-d38c-5576-85fa-f3fbd89b5be3": {
+      "id": "0e1c21d5-d38c-5576-85fa-f3fbd89b5be3",
+      "key": "WP-0-MVP",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "a66db805-addb-528b-9fc6-3c96c77dfca9",
+      "kind": "WorkPackage",
+      "title": "Current MVP independent acceptance",
+      "objective": "Group the current mvp independent acceptance contracts. Not authorization to execute.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "4a93dad1-0e4b-5683-902b-3dc7dff3d586": {
+      "id": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "key": "M0-MVP",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "0e1c21d5-d38c-5576-85fa-f3fbd89b5be3",
+      "kind": "Milestone",
+      "title": "TUI and agent MVP accepted",
+      "objective": "Zero-duration condition: all incoming task/milestone prerequisites independently verified and applicable gates resolved.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "e29488e1-8b04-5081-8ff7-430f183fbf95": {
+      "id": "e29488e1-8b04-5081-8ff7-430f183fbf95",
+      "key": "WP-1-SELF",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "a66db805-addb-528b-9fc6-3c96c77dfca9",
+      "kind": "WorkPackage",
+      "title": "First actual self-host cycle",
+      "objective": "Group the first actual self-host cycle contracts. Not authorization to execute.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "e2b7c122-effe-5350-b5b1-76b58bf92e51": {
+      "id": "e2b7c122-effe-5350-b5b1-76b58bf92e51",
+      "key": "M1-SELF",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "e29488e1-8b04-5081-8ff7-430f183fbf95",
+      "kind": "Milestone",
+      "title": "Self-host cycle evidenced",
+      "objective": "Zero-duration condition: all incoming task/milestone prerequisites independently verified and applicable gates resolved.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "004053ca-ec68-52d2-9886-a47289a0d592": {
+      "id": "004053ca-ec68-52d2-9886-a47289a0d592",
+      "key": "WP-2-CORE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "a66db805-addb-528b-9fc6-3c96c77dfca9",
+      "kind": "WorkPackage",
+      "title": "Safe plan evolution",
+      "objective": "Group the safe plan evolution contracts. Not authorization to execute.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "f31377c3-739b-53b1-962c-bdcb9609af27": {
+      "id": "f31377c3-739b-53b1-962c-bdcb9609af27",
+      "key": "M2-CORE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
+      "kind": "Milestone",
+      "title": "Versioned plan operations accepted",
+      "objective": "Zero-duration condition: all incoming task/milestone prerequisites independently verified and applicable gates resolved.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "cc81da22-ff27-51ec-811f-7ffdcc4257b2": {
+      "id": "cc81da22-ff27-51ec-811f-7ffdcc4257b2",
+      "key": "WP-3-SCHEDULE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "a66db805-addb-528b-9fc6-3c96c77dfca9",
+      "kind": "WorkPackage",
+      "title": "Scheduling refinement",
+      "objective": "Group the scheduling refinement contracts. Not authorization to execute.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "9ab51dd2-5003-5c85-8466-7f6b12355441": {
+      "id": "9ab51dd2-5003-5c85-8466-7f6b12355441",
+      "key": "M3-SCHEDULE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "cc81da22-ff27-51ec-811f-7ffdcc4257b2",
+      "kind": "Milestone",
+      "title": "Scheduling contract accepted",
+      "objective": "Zero-duration condition: all incoming task/milestone prerequisites independently verified and applicable gates resolved.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "78f49d1a-1063-5f29-acf7-e1f53f0d2c8e": {
+      "id": "78f49d1a-1063-5f29-acf7-e1f53f0d2c8e",
+      "key": "WP-4-LAYOUT",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "a66db805-addb-528b-9fc6-3c96c77dfca9",
+      "kind": "WorkPackage",
+      "title": "Later terminal layout",
+      "objective": "Group the later terminal layout contracts. Not authorization to execute.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "8bd46d2b-5faa-56a6-985b-fb08b41075af": {
+      "id": "8bd46d2b-5faa-56a6-985b-fb08b41075af",
+      "key": "M4-TUI",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "78f49d1a-1063-5f29-acf7-e1f53f0d2c8e",
+      "kind": "Milestone",
+      "title": "Approved terminal layout accepted",
+      "objective": "Zero-duration condition: all incoming task/milestone prerequisites independently verified and applicable gates resolved.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "87eb53a0-5839-51bf-bdb2-47371bf50315": {
+      "id": "87eb53a0-5839-51bf-bdb2-47371bf50315",
+      "key": "WP-5-QUALITY",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "a66db805-addb-528b-9fc6-3c96c77dfca9",
+      "kind": "WorkPackage",
+      "title": "Local alpha qualification",
+      "objective": "Group the local alpha qualification contracts. Not authorization to execute.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "93fd3281-1b7c-5ef5-a379-39ffc39e9843": {
+      "id": "93fd3281-1b7c-5ef5-a379-39ffc39e9843",
+      "key": "M5-ALPHA",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "87eb53a0-5839-51bf-bdb2-47371bf50315",
+      "kind": "Milestone",
+      "title": "Scoped alpha qualification accepted",
+      "objective": "Zero-duration condition: all incoming task/milestone prerequisites independently verified and applicable gates resolved.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "71bf30b0-6180-5e14-8f72-378c039aee41": {
+      "id": "71bf30b0-6180-5e14-8f72-378c039aee41",
+      "key": "WP-6-COLLAB",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "a66db805-addb-528b-9fc6-3c96c77dfca9",
+      "kind": "WorkPackage",
+      "title": "Optional collaboration foundation",
+      "objective": "Group the optional collaboration foundation contracts. Not authorization to execute.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "a642e2f8-d47a-5163-b6ee-daa4e692923f": {
+      "id": "a642e2f8-d47a-5163-b6ee-daa4e692923f",
+      "key": "M6-COLLAB",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "71bf30b0-6180-5e14-8f72-378c039aee41",
+      "kind": "Milestone",
+      "title": "Optional server/sync contract accepted",
+      "objective": "Zero-duration condition: all incoming task/milestone prerequisites independently verified and applicable gates resolved.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "b6805961-ff6d-5d4e-9b95-82a46e79170c": {
+      "id": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "key": "WP-7-HUMAN",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "a66db805-addb-528b-9fc6-3c96c77dfca9",
+      "kind": "WorkPackage",
+      "title": "Future projection designs",
+      "objective": "Group the future projection designs contracts. Not authorization to execute.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "17391553-5a97-5278-a8b7-472eca8a3992": {
+      "id": "17391553-5a97-5278-a8b7-472eca8a3992",
+      "key": "M7-DESIGN",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Milestone",
+      "title": "Future projection boundaries reviewed",
+      "objective": "Zero-duration condition: all incoming task/milestone prerequisites independently verified and applicable gates resolved.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null
+    },
+    "b75ac42f-0b89-504f-933a-20175beaf664": {
+      "id": "b75ac42f-0b89-504f-933a-20175beaf664",
+      "key": "MVP-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "0e1c21d5-d38c-5576-85fa-f3fbd89b5be3",
+      "kind": "Task",
+      "title": "Review current graph and storage baseline",
+      "objective": "Independently assess the existing local MVP rather than rebuilding it. Identify whether validation, revisions and task-only claims support a trustworthy self-host seed.",
+      "acceptance": [
+        {
+          "text": "Record the checked repository revision/working-tree state and full local CI result as actual evidence."
+        },
+        {
+          "text": "Confirm malformed references/cycles, aggregate claims and stale revisions are rejected without partial writes; document observed limitations."
+        },
+        {
+          "text": "Have a reviewer distinct from the eventual submitter assess the evidence before verification."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 1,
+        "likely_hours": 3,
+        "pessimistic_hours": 6
+      },
+      "capabilities": [
+        "review",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "2e7768c2-5844-53f4-9e45-3387c2eb79e5",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "c28035da-dc5a-5058-a8fb-bd375aa71bda",
+        "d13caef3-2df2-5630-9ac8-083b37f85063",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Read AGENTS.md, docs/architecture.md and the current Git status/revision; inventory graph/store behavior.",
+            "expected_result": "A baseline record names the actual commit and uncommitted changes under review."
+          },
+          {
+            "action": "Run ./ci.sh and inspect graph validation, task-only claims and SQLite revision/atomic-write regression results.",
+            "expected_result": "Captured command outputs distinguish passing checks, failures and implementation limitations."
+          },
+          {
+            "action": "Link the baseline record and test outputs for an independent reviewer; record gaps as follow-up scope.",
+            "expected_result": "Reviewable evidence covers each acceptance criterion without claiming unperformed verification."
+          }
+        ],
+        "in_scope": [
+          "Assess the existing model, engine and store; produce a baseline and evidence report."
+        ],
+        "out_of_scope": [
+          "Rebuild the domain model, implement roadmap extensions, or treat bootstrap HEAD as evidence for uncommitted code."
+        ],
+        "verification": [
+          "./ci.sh completes and its actual output is retained.",
+          "Check rejected cycles, dangling references, aggregate claims and stale writes against regression results; obtain a distinct reviewer."
+        ]
+      }
+    },
+    "ee7071a5-4557-5d2f-8737-d958a34187b8": {
+      "id": "ee7071a5-4557-5d2f-8737-d958a34187b8",
+      "key": "MVP-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "0e1c21d5-d38c-5576-85fa-f3fbd89b5be3",
+      "kind": "Task",
+      "title": "Review TUI milestone and Gantt preview",
+      "objective": "Verify the currently implemented terminal preview: hierarchy, milestone states, FS/SS/FF/SF lag, progress and horizontal navigation. Do not redesign layout in this acceptance task.",
+      "acceptance": [
+        {
+          "text": "Demonstrate 5/g, arrows, +/- zoom, Home/End, f and Enter on a disposable preview."
+        },
+        {
+          "text": "Check pending/reached milestones, partial progress and clipped bars at normal/narrow/Unicode terminal sizes."
+        },
+        {
+          "text": "Capture TestBackend and manual results and show that navigation leaves revision and plan unchanged."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 1,
+        "likely_hours": 3,
+        "pessimistic_hours": 6
+      },
+      "capabilities": [
+        "review",
+        "rust",
+        "tui"
+      ],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "bf2a0e85-cd71-5fff-87ad-f66a8591a269",
+        "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
+      ],
+      "artifact_ids": [
+        "2e7768c2-5844-53f4-9e45-3387c2eb79e5",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "f66992ca-ebd4-5494-a931-8a414a4aa19a",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Read Gantt/navigation contracts and create a disposable synthetic snapshot with partial tasks and pending/reached milestones.",
+            "expected_result": "The snapshot and expected temporal/progress indications are recorded without modifying the self-host workspace."
+          },
+          {
+            "action": "Exercise 5/g, arrow selection/panning, +/-, Home/End, f, Enter and quit at normal and narrow sizes.",
+            "expected_result": "A keyboard checklist records clipping, fixed labels, selected-task details and any observed limitations."
+          },
+          {
+            "action": "Run TUI TestBackend coverage and compare snapshot/revision before and after navigation.",
+            "expected_result": "Automated and manual evidence demonstrates unchanged authoritative state."
+          }
+        ],
+        "in_scope": [
+          "Review existing milestone, dependency, percentage and horizontal Gantt behavior."
+        ],
+        "out_of_scope": [
+          "Layout redesign, styling work, schedule editing or treating progress as verification."
+        ],
+        "verification": [
+          "cargo test -p dpm-tui --all-targets",
+          "Compare exported snapshots before/after manual navigation; exercise Unicode and FS/SS/FF/SF signed lag."
+        ]
+      }
+    },
+    "143875c1-210e-5b64-8a2d-ce1e87e87a08": {
+      "id": "143875c1-210e-5b64-8a2d-ce1e87e87a08",
+      "key": "MVP-30",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "0e1c21d5-d38c-5576-85fa-f3fbd89b5be3",
+      "kind": "Task",
+      "title": "Review agent context and operation parity",
+      "objective": "Confirm an agent can understand and operate tasks using existing CLI/MCP contracts, without inventing unsupported APIs.",
+      "acceptance": [
+        {
+          "text": "Compare status/next/show/explain output across real CLI and MCP processes, including requirement, gate, risk and artifact context."
+        },
+        {
+          "text": "On disposable regression data, check claim/progress/block/unblock/submit/artifact/verify, stale revisions and self-verification rejection."
+        },
+        {
+          "text": "Document local identity limitations and the difference between reported 100% and verified work."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 2,
+        "likely_hours": 4,
+        "pessimistic_hours": 8
+      },
+      "capabilities": [
+        "agent",
+        "review",
+        "rust"
+      ],
+      "requirement_ids": [
+        "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+        "50625c7b-d065-5188-a522-bb9fb78eb203",
+        "6138f172-2971-5cd1-8515-520f6b61be0a",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "2e7768c2-5844-53f4-9e45-3387c2eb79e5",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Read docs/mcp.md and inspect all self-host contracts through show/get_work and explain/explain_work.",
+            "expected_result": "Matching task steps, scope, acceptance and resolved context are available through both adapters."
+          },
+          {
+            "action": "Run scripts/smoke_agent.py on its disposable synthetic database after building the workspace.",
+            "expected_result": "Real-process evidence covers shared mutations, revision conflicts, blockers, artifacts and independent verification."
+          },
+          {
+            "action": "Record API limitations and explain reported completion versus verification and local actor trust.",
+            "expected_result": "The review distinguishes supported commands from future proposals/authentication features."
+          }
+        ],
+        "in_scope": [
+          "Audit shared CLI/MCP behavior and task comprehension; use disposable data for mutation checks."
+        ],
+        "out_of_scope": [
+          "Start roadmap tasks, implement unadvertised tools or claim local actor names provide authentication."
+        ],
+        "verification": [
+          "cargo build --workspace --release && python3 scripts/smoke_agent.py",
+          "python3 scripts/smoke_self_host.py; every contract must survive both adapters unchanged."
+        ]
+      }
+    },
+    "66b7742d-feb9-57cd-9886-0f4fc9e755c0": {
+      "id": "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
+      "key": "SELF-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "e29488e1-8b04-5081-8ff7-430f183fbf95",
+      "kind": "Task",
+      "title": "Establish the approved self-host execution baseline",
+      "objective": "After authorization, select the actual repository/database/reviewer and pin an immutable source baseline for the first real self-host cycle. Preserve uncommitted work and existing operation history.",
+      "acceptance": [
+        {
+          "text": "Record a real Git commit covering the intended code; do not label the bootstrap commit as current MVP evidence."
+        },
+        {
+          "text": "Identify the approved task scope, owning actor, independent reviewer and non-overwriting workspace location."
+        },
+        {
+          "text": "Resolve the GitButler/publication prerequisites with evidence before any release claim."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 1,
+        "likely_hours": 2,
+        "pessimistic_hours": 5
+      },
+      "capabilities": [
+        "git",
+        "review"
+      ],
+      "requirement_ids": [
+        "56af87d0-71ea-5575-bc04-f070a8e9191e",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "217b89c7-a7bc-5fc7-9278-212b3febf70b",
+        "2e7768c2-5844-53f4-9e45-3387c2eb79e5",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Read DEC-EXECUTE/DEC-BASELINE outcomes and record the separately authorized maintenance scope and reviewers.",
+            "expected_result": "The execution workspace, task owner and distinct verifier are named and authorized."
+          },
+          {
+            "action": "Inspect Git status/history and GitButler publication prerequisites; establish a real immutable commit for the selected source.",
+            "expected_result": "The baseline artifact points to the actual reviewed code and identifies any remaining dirty changes."
+          },
+          {
+            "action": "Record the workspace path/revision and evidence links without replacing operational history.",
+            "expected_result": "A reproducible start record allows a later reviewer to identify exactly what was tracked."
+          }
+        ],
+        "in_scope": [
+          "Pin the approved repository, execution database, actor identities and source baseline."
+        ],
+        "out_of_scope": [
+          "Discard uncommitted work, overwrite operational history, publish an unreviewed release or expand maintenance scope."
+        ],
+        "verification": [
+          "Read Git status/log and compare the recorded commit with its source tree.",
+          "Read status/export and persisted operation metadata; confirm no history was reset and reviewers differ."
+        ]
+      }
+    },
+    "5248ae6e-0412-587d-8820-2a2ad6efbd16": {
+      "id": "5248ae6e-0412-587d-8820-2a2ad6efbd16",
+      "key": "SELF-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "e29488e1-8b04-5081-8ff7-430f183fbf95",
+      "kind": "Task",
+      "title": "Perform one authorized self-host maintenance task",
+      "objective": "Use dpm to track one explicitly approved, bounded documentation or regression improvement. This is the later live dogfooding acceptance task, not permission to implement the whole roadmap.",
+      "acceptance": [
+        {
+          "text": "Use next/explain and record why the selected contract is eligible before claiming it."
+        },
+        {
+          "text": "Complete only the separately approved small change, run its checks, and attach its real commit/test evidence to this task."
+        },
+        {
+          "text": "Report blockers/progress as needed and submit with an evidence summary; do not self-verify."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 1,
+        "likely_hours": 3,
+        "pessimistic_hours": 6
+      },
+      "capabilities": [
+        "agent",
+        "rust"
+      ],
+      "requirement_ids": [
+        "50625c7b-d065-5188-a522-bb9fb78eb203",
+        "56af87d0-71ea-5575-bc04-f070a8e9191e",
+        "6138f172-2971-5cd1-8515-520f6b61be0a",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "c28035da-dc5a-5058-a8fb-bd375aa71bda",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Read next/explain and the authorization record to select the approved small maintenance change; claim only if eligible.",
+            "expected_result": "Selection reasons, task contract and starting revision are recorded."
+          },
+          {
+            "action": "Perform the bounded documentation or regression change, report real blockers/progress and run its acceptance checks.",
+            "expected_result": "Only approved files/behavior change; actual check output and remaining issues are captured."
+          },
+          {
+            "action": "Attach the actual commit/test artifacts and submit a criterion-by-criterion evidence summary.",
+            "expected_result": "A distinct reviewer can evaluate the submitted change without reconstructing hidden context."
+          }
+        ],
+        "in_scope": [
+          "One separately approved documentation or regression improvement tracked end to end."
+        ],
+        "out_of_scope": [
+          "Implement other roadmap tasks, resolve unrelated gates, self-verify or fabricate a successful live cycle."
+        ],
+        "verification": [
+          "Run the approved change-specific checks and ./ci.sh before publication.",
+          "Compare submitted artifact references to the actual commit and operation trace; verification must use a different actor."
+        ]
+      }
+    },
+    "87c561b2-f168-5598-8c68-6a862a6d12e6": {
+      "id": "87c561b2-f168-5598-8c68-6a862a6d12e6",
+      "key": "SELF-30",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "e29488e1-8b04-5081-8ff7-430f183fbf95",
+      "kind": "Task",
+      "title": "Audit the first self-host trace independently",
+      "objective": "Assess the real maintenance-task evidence and confirm causality from selection through acceptance, including persisted revisions and downstream readiness.",
+      "acceptance": [
+        {
+          "text": "Inspect the first task operation log and Git/test artifacts without fabricating a replay or test result."
+        },
+        {
+          "text": "Confirm its verification actor differs from its owner and rejected commands did not create successful operations."
+        },
+        {
+          "text": "Record remaining context/selection problems as follow-up contracts; only verified evidence may satisfy M1-SELF."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 1,
+        "likely_hours": 3,
+        "pessimistic_hours": 6
+      },
+      "capabilities": [
+        "agent",
+        "review"
+      ],
+      "requirement_ids": [
+        "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+        "56af87d0-71ea-5575-bc04-f070a8e9191e",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "d13caef3-2df2-5630-9ac8-083b37f85063",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Identify the real SELF-20 operation sequence, source commit and acceptance evidence.",
+            "expected_result": "The review links selection, claim, execution, submission and stored revisions to real records."
+          },
+          {
+            "action": "Independently compare the result with the approved scope and inspect rejection/verification behavior.",
+            "expected_result": "A reviewer records whether every acceptance condition holds and whether rejected commands left no successful operations."
+          },
+          {
+            "action": "Record the review and context/selection gaps; verify only on adequate evidence using the approved distinct actor.",
+            "expected_result": "The real trace has an independent verdict and follow-up contracts rather than invented completion."
+          }
+        ],
+        "in_scope": [
+          "Independent audit of the first authorized live self-host cycle."
+        ],
+        "out_of_scope": [
+          "Replay fake history, substitute synthetic test success for live evidence or broaden the implemented task."
+        ],
+        "verification": [
+          "Inspect persisted operations read-only and confirm revision continuity and actor attribution.",
+          "Match every SELF-20 criterion to evidence and check milestone readiness follows actual verified work."
+        ]
+      }
+    },
+    "cd3eed21-6613-5c8e-a874-5d62002f0c9b": {
+      "id": "cd3eed21-6613-5c8e-a874-5d62002f0c9b",
+      "key": "CORE-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
+      "kind": "Task",
+      "title": "Version plan serialization and migrations",
+      "objective": "Define a compatible versioned plan/snapshot envelope and storage migrations before expanding mutation semantics.",
+      "acceptance": [
+        {
+          "text": "Specify supported versions, defaults and rejection of unsupported versions."
+        },
+        {
+          "text": "Test old snapshot import and restart, migration failures and unchanged stable IDs."
+        },
+        {
+          "text": "Keep AGPL-3.0-only and prevent derived schedule/progress projections from becoming stored truth."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 3,
+        "likely_hours": 6,
+        "pessimistic_hours": 12
+      },
+      "capabilities": [
+        "rust",
+        "storage"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "d13caef3-2df2-5630-9ac8-083b37f85063",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Inventory plan/snapshot serialization and enumerate supported input versions and compatibility rules.",
+            "expected_result": "A reviewed version envelope specifies defaults, stable ID behavior and unsupported-version errors."
+          },
+          {
+            "action": "Implement explicit version handling and atomic storage migrations through the import/store boundary.",
+            "expected_result": "Valid supported snapshots load consistently; failed migrations leave the original database usable."
+          },
+          {
+            "action": "Add old-snapshot, restart, failure and unsupported-version regressions and update format documentation.",
+            "expected_result": "Compatibility evidence and examples state which persisted inputs are authoritative."
+          }
+        ],
+        "in_scope": [
+          "Versioned plan/storage formats and compatible migrations."
+        ],
+        "out_of_scope": [
+          "Change stable IDs, persist derived dates, replace live history or implement plan editing in this task."
+        ],
+        "verification": [
+          "Run model/store migration tests including failed migration followed by restart.",
+          "./ci.sh; compare IDs and authoritative values before/after every supported migration."
+        ]
+      }
+    },
+    "24c9cece-f53f-569e-b653-0d3e583fd858": {
+      "id": "24c9cece-f53f-569e-b653-0d3e583fd858",
+      "key": "CORE-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
+      "kind": "Task",
+      "title": "Add reviewed semantic plan changes",
+      "objective": "Provide a shared proposal/validation/application contract for editing tasks, dependencies and gates without replacing a live database.",
+      "acceptance": [
+        {
+          "text": "Preview the semantic diff and reject cycles, dangling references and illegal milestones before mutation."
+        },
+        {
+          "text": "Apply an accepted change atomically against its observed revision with actor and reason."
+        },
+        {
+          "text": "Expose matching CLI/MCP behavior and regression coverage; do not advertise an API before it works."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 4,
+        "likely_hours": 8,
+        "pessimistic_hours": 16
+      },
+      "capabilities": [
+        "agent",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Specify reviewable proposals and semantic diffs for task, dependency and gate edits against an observed revision.",
+            "expected_result": "The contract defines validation, actor/reason attribution and review/apply boundaries."
+          },
+          {
+            "action": "Implement proposal validation and atomic accepted-change application in shared engine/store services.",
+            "expected_result": "Cycles, missing references and illegal milestone edits fail before any persisted change."
+          },
+          {
+            "action": "Expose the working contract through matching CLI/MCP adapters and document real supported operations.",
+            "expected_result": "Adapter parity and restart tests demonstrate identical accepted/rejected outcomes."
+          }
+        ],
+        "in_scope": [
+          "Reviewed semantic edits to tasks, dependency edges and gates with revision preconditions."
+        ],
+        "out_of_scope": [
+          "Replace live databases, merge raw Git state as truth, or add UI-specific mutation rules."
+        ],
+        "verification": [
+          "Test valid edits, cyclic/dangling edits, stale revisions and atomic failure across restart.",
+          "Compare CLI/MCP proposal and application data; run ./ci.sh."
+        ]
+      }
+    },
+    "07c8d04f-2f86-5d5d-87f6-dfe7de919f20": {
+      "id": "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
+      "key": "CORE-30",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
+      "kind": "Task",
+      "title": "Expose history, semantic diff and append-only revert",
+      "objective": "Make operation/revision inspection and inverse changes understandable without destructive rollback.",
+      "acceptance": [
+        {
+          "text": "Inspect historical revisions and describe semantic changes with original actor/context."
+        },
+        {
+          "text": "Revert by appending a new validated operation; reject an inverse that violates the current graph."
+        },
+        {
+          "text": "Test stale-revision conflicts, failures and CLI/MCP consistency through restart."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 4,
+        "likely_hours": 8,
+        "pessimistic_hours": 20
+      },
+      "capabilities": [
+        "rust",
+        "storage"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "d13caef3-2df2-5630-9ac8-083b37f85063",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Define historical revision queries and semantic diff output with original actors and reasons.",
+            "expected_result": "A documented query contract distinguishes snapshots, operations and their derived diffs."
+          },
+          {
+            "action": "Implement inverse changes as new validated operations against current state.",
+            "expected_result": "Reverts preserve history and reject inverses that violate current invariants or revisions."
+          },
+          {
+            "action": "Add shared CLI/MCP access and restart/conflict tests with evidence-linked examples.",
+            "expected_result": "Users can inspect and explain changes and safe inverses through either adapter."
+          }
+        ],
+        "in_scope": [
+          "History queries, semantic diffs and append-only revert through the shared engine."
+        ],
+        "out_of_scope": [
+          "Destructive rollback, rewriting operation records or bypassing validation to force an inverse."
+        ],
+        "verification": [
+          "Test historical reads and inverse application after intervening valid/conflicting changes.",
+          "Assert operation count grows on revert and failed inverses leave storage unchanged; run ./ci.sh."
+        ]
+      }
+    },
+    "fe5ce0f5-f9c5-5ddf-8a0c-30c2015e2163": {
+      "id": "fe5ce0f5-f9c5-5ddf-8a0c-30c2015e2163",
+      "key": "SCH-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "cc81da22-ff27-51ec-811f-7ffdcc4257b2",
+      "kind": "Task",
+      "title": "Complete temporal-constraint scheduling contract",
+      "objective": "Review and extend deterministic FS/SS/FF/SF+lag projections, including free float, before adding calendar interpretation.",
+      "acceptance": [
+        {
+          "text": "Specify ES/EF/LS/LF, total/free float and numerical tolerances for all relationship kinds."
+        },
+        {
+          "text": "Use deterministic/property tests for lag, parallel branches, zero-duration milestones and invalid cycles."
+        },
+        {
+          "text": "Keep conservative execution readiness explicitly separate from temporal start/finish bounds."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 2,
+        "likely_hours": 5,
+        "pessimistic_hours": 10
+      },
+      "capabilities": [
+        "rust",
+        "scheduling"
+      ],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Derive the common temporal bounds for FS/SS/FF/SF with signed lag and define float tolerances.",
+            "expected_result": "Worked examples specify ES/EF/LS/LF, free/total float and criticality for each relationship."
+          },
+          {
+            "action": "Implement the missing deterministic outputs in the pure scheduling projection.",
+            "expected_result": "Repeatable output handles parallel branches and zero-duration milestones without modifying the plan."
+          },
+          {
+            "action": "Add property and example tests and document conservative execution-readiness semantics.",
+            "expected_result": "Temporal overlap bounds are never mistaken for permission to claim unverified successor work."
+          }
+        ],
+        "in_scope": [
+          "Temporal constraints, deterministic CPM outputs and numerical invariants."
+        ],
+        "out_of_scope": [
+          "Resource leveling, calendars, wall-clock execution timers or stored derived schedules."
+        ],
+        "verification": [
+          "cargo test -p dpm-schedule --all-targets; include signed lag, zero duration and invalid cycles.",
+          "Compare repeated schedules and pre/post plans; check worked examples against independent calculations."
+        ]
+      }
+    },
+    "40063ef5-e801-5876-9888-3bff011e437c": {
+      "id": "40063ef5-e801-5876-9888-3bff011e437c",
+      "key": "SCH-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "cc81da22-ff27-51ec-811f-7ffdcc4257b2",
+      "kind": "Task",
+      "title": "Introduce working-calendar inputs",
+      "objective": "Add a calendar abstraction without embedding dates into authoritative derived schedules or attempting resource leveling.",
+      "acceptance": [
+        {
+          "text": "Define elapsed-hour and weekday/exception mappings with explicit origin/timezone rules."
+        },
+        {
+          "text": "Test boundaries, non-working periods and positive/negative lag semantics."
+        },
+        {
+          "text": "Preserve existing elapsed-hour outputs and document how calendar projections differ."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 4,
+        "likely_hours": 10,
+        "pessimistic_hours": 20
+      },
+      "capabilities": [
+        "rust",
+        "scheduling"
+      ],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Specify calendar origin, timezone, working periods, exceptions and lag interpretation.",
+            "expected_result": "Examples distinguish elapsed-hour durations from calendar placements and boundary rules."
+          },
+          {
+            "action": "Implement calendar inputs and mapping as scheduling projections preserving the elapsed-hours mode.",
+            "expected_result": "The same authoritative graph can produce either documented calendar or elapsed-hour views."
+          },
+          {
+            "action": "Test nonworking periods, exception boundaries and signed lag and document limitations.",
+            "expected_result": "Boundary cases have deterministic expected results and do not become stored derived dates."
+          }
+        ],
+        "in_scope": [
+          "Working-calendar abstraction and elapsed-to-calendar projection."
+        ],
+        "out_of_scope": [
+          "Global resource allocation, payroll/time accounting or platform-specific calendar UI."
+        ],
+        "verification": [
+          "Check weekend/exception crossings, timezones and positive/negative lag with fixed expected dates.",
+          "Run schedule tests and ./ci.sh; compare existing elapsed-hour outputs unchanged."
+        ]
+      }
+    },
+    "b575823c-58ef-54c6-b75d-eb40b760d033": {
+      "id": "b575823c-58ef-54c6-b75d-eb40b760d033",
+      "key": "SCH-30",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "cc81da22-ff27-51ec-811f-7ffdcc4257b2",
+      "kind": "Task",
+      "title": "Refine Monte Carlo milestone risk reporting",
+      "objective": "Expose useful milestone percentiles and interpretable task risk contributions using seeded simulations over explicit duration inputs.",
+      "acceptance": [
+        {
+          "text": "Test reproducible P50/P80/P95 ordering and milestone zero-duration treatment."
+        },
+        {
+          "text": "Distinguish priority, critical path, criticality and risk contribution in structured fields."
+        },
+        {
+          "text": "Document distribution and correlation limitations; PERT estimates remain uncertainty inputs."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 3,
+        "likely_hours": 8,
+        "pessimistic_hours": 16
+      },
+      "capabilities": [
+        "rust",
+        "scheduling"
+      ],
+      "requirement_ids": [
+        "50625c7b-d065-5188-a522-bb9fb78eb203",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Specify sampled O/M/P distributions, seed behavior and milestone percentile/risk fields.",
+            "expected_result": "The model documents assumptions about correlation and the meaning of each risk contribution."
+          },
+          {
+            "action": "Implement milestone P50/P80/P95 and interpretable task contribution outputs in pure simulation.",
+            "expected_result": "Outputs separate priority, deterministic critical path, sampled criticality and risk contribution."
+          },
+          {
+            "action": "Test reproducibility, percentile ordering and zero-duration milestones; document uncertainty limitations.",
+            "expected_result": "Repeated seeded runs agree and all results remain derived query data."
+          }
+        ],
+        "in_scope": [
+          "Monte Carlo milestone uncertainty and explainable task risk outputs."
+        ],
+        "out_of_scope": [
+          "Treat PERT means as a risk forecast, invent event correlations or add resource leveling."
+        ],
+        "verification": [
+          "Compare fixed-seed runs and deterministic-duration controls; check P50 <= P80 <= P95.",
+          "Test zero-duration milestones and plan immutability; run schedule tests and ./ci.sh."
+        ]
+      }
+    },
+    "758c1c34-82d6-5345-b025-821ec2c83aa8": {
+      "id": "758c1c34-82d6-5345-b025-821ec2c83aa8",
+      "key": "TUI-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "78f49d1a-1063-5f29-acf7-e1f53f0d2c8e",
+      "kind": "Task",
+      "title": "Approve a focused terminal layout plan",
+      "objective": "After the current MVP is accepted, define operator layout goals from actual usability findings rather than adding decorative UI.",
+      "acceptance": [
+        {
+          "text": "Review Now/Work/Network/Detail/Gantt at small and normal terminal sizes."
+        },
+        {
+          "text": "Specify focus, scrolling, visible gate/risk/review context and keyboard behavior with reviewable sketches."
+        },
+        {
+          "text": "Keep state changes behind existing command/query APIs and obtain explicit layout-scope approval."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 1,
+        "likely_hours": 3,
+        "pessimistic_hours": 6
+      },
+      "capabilities": [
+        "review",
+        "tui"
+      ],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "bf2a0e85-cd71-5fff-87ad-f66a8591a269"
+      ],
+      "artifact_ids": [
+        "2e7768c2-5844-53f4-9e45-3387c2eb79e5",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "f66992ca-ebd4-5494-a931-8a414a4aa19a",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Review existing Now/Work/Network/Detail/Gantt screens at small and normal sizes using actual task contracts.",
+            "expected_result": "A bounded usability report identifies missing information and navigation problems."
+          },
+          {
+            "action": "Sketch focus, scrolling, keyboard help and placement of blocked/gate/risk/review information.",
+            "expected_result": "Reviewable layouts specify screen sizes and key behavior with no speculative command semantics."
+          },
+          {
+            "action": "Record the accepted layout scope and map each proposed interaction to existing queries/commands.",
+            "expected_result": "A concrete approved layout contract is available before implementation."
+          }
+        ],
+        "in_scope": [
+          "Layout design and review based on observed MVP usability."
+        ],
+        "out_of_scope": [
+          "Implement the layout before approval, add styling-only expansion or new domain mutation semantics."
+        ],
+        "verification": [
+          "Walk through all five screens against the sketches with keyboard-only navigation scenarios.",
+          "Verify each planned interaction maps to a supported API and approval is recorded."
+        ]
+      }
+    },
+    "8cc282fe-10c5-5c57-baf2-0fcc8573153d": {
+      "id": "8cc282fe-10c5-5c57-baf2-0fcc8573153d",
+      "key": "TUI-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "78f49d1a-1063-5f29-acf7-e1f53f0d2c8e",
+      "kind": "Task",
+      "title": "Implement the approved terminal layout",
+      "objective": "Implement only the accepted layout contract while preserving Gantt panning and agent/API semantics.",
+      "acceptance": [
+        {
+          "text": "Show the approved information at the documented sizes without hiding required controls."
+        },
+        {
+          "text": "Preserve selection/focus across navigation and keep projections read-only unless a separate action is approved."
+        },
+        {
+          "text": "Add TestBackend coverage for layout, Unicode and scrolling boundaries."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 3,
+        "likely_hours": 6,
+        "pessimistic_hours": 12
+      },
+      "capabilities": [
+        "rust",
+        "tui"
+      ],
+      "requirement_ids": [
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "bf2a0e85-cd71-5fff-87ad-f66a8591a269"
+      ],
+      "artifact_ids": [
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "f66992ca-ebd4-5494-a931-8a414a4aa19a",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Read the approved TUI-10 contract and map its screen/focus requirements to console components.",
+            "expected_result": "Implementation scope and acceptance cases match the reviewed layout."
+          },
+          {
+            "action": "Implement the approved layout and navigation using shared queries while preserving Gantt pan/zoom.",
+            "expected_result": "Required information and controls remain visible at the agreed terminal sizes."
+          },
+          {
+            "action": "Add TestBackend navigation, Unicode and scrolling coverage and compare authoritative snapshots.",
+            "expected_result": "The approved layout works without losing selection or mutating state during preview."
+          }
+        ],
+        "in_scope": [
+          "Approved terminal layout, focus and scrolling implementation."
+        ],
+        "out_of_scope": [
+          "Unapproved mutation shortcuts, graph editing, new product features or changes to CLI/MCP behavior."
+        ],
+        "verification": [
+          "cargo test -p dpm-tui --all-targets; cover small/normal screens and scroll boundaries.",
+          "Manual keyboard comparison with TUI-10; assert snapshot/revision unchanged by navigation."
+        ]
+      }
+    },
+    "de87c1f0-1af4-5c96-8121-f48aff8d1edb": {
+      "id": "de87c1f0-1af4-5c96-8121-f48aff8d1edb",
+      "key": "TUI-30",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "78f49d1a-1063-5f29-acf7-e1f53f0d2c8e",
+      "kind": "Task",
+      "title": "Review terminal usability and accessibility",
+      "objective": "Independently verify the accepted layout with keyboard-only use and clear text indications.",
+      "acceptance": [
+        {
+          "text": "Check that state is understandable without relying solely on color."
+        },
+        {
+          "text": "Exercise small-terminal, long-contract and Unicode cases and attach results."
+        },
+        {
+          "text": "Document known navigation limitations and confirm no plan mutation during preview."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 1,
+        "likely_hours": 3,
+        "pessimistic_hours": 6
+      },
+      "capabilities": [
+        "review",
+        "tui"
+      ],
+      "requirement_ids": [
+        "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "bf2a0e85-cd71-5fff-87ad-f66a8591a269"
+      ],
+      "artifact_ids": [
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "f66992ca-ebd4-5494-a931-8a414a4aa19a",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Read the approved layout and prepare small-terminal, long-contract and Unicode review cases.",
+            "expected_result": "A reproducible keyboard-only review matrix covers all supported views."
+          },
+          {
+            "action": "Exercise focus, selection, scrolling, Gantt navigation and state indications without relying on color.",
+            "expected_result": "Evidence records where controls and lifecycle/gate/review status are understandable or fail."
+          },
+          {
+            "action": "Compare snapshots and record acceptance findings and known limitations for independent review.",
+            "expected_result": "The usability verdict is linked to actual behavior and no preview mutations are hidden."
+          }
+        ],
+        "in_scope": [
+          "Independent accessibility and usability review of the accepted terminal layout."
+        ],
+        "out_of_scope": [
+          "Redesign the layout in the review task or silently waive failed acceptance checks."
+        ],
+        "verification": [
+          "Run TUI TestBackend coverage and the documented keyboard review matrix.",
+          "Compare exported plan/revision before and after; attach findings for every acceptance criterion."
+        ]
+      }
+    },
+    "b56fb8da-2746-5f32-b2d5-c121053aded2": {
+      "id": "b56fb8da-2746-5f32-b2d5-c121053aded2",
+      "key": "QA-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "87eb53a0-5839-51bf-bdb2-47371bf50315",
+      "kind": "Task",
+      "title": "Validate cross-domain internal test scenarios",
+      "objective": "Use self-hosting and physical/procurement scenarios to ensure the engine is not accidentally restricted to software tickets.",
+      "acceptance": [
+        {
+          "text": "Add bounded internal software and procurement/manufacturing test scenarios with evidence and decision gates; keep self-host as the sole user-facing example."
+        },
+        {
+          "text": "Check next/explain, milestone completion, calendar/uncertainty interpretation and independent verification."
+        },
+        {
+          "text": "Mark all simulated fixtures as such; never treat fixture success as real project delivery."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 2,
+        "likely_hours": 4,
+        "pessimistic_hours": 8
+      },
+      "capabilities": [
+        "rust",
+        "testing"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
+      ],
+      "artifact_ids": [
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "c28035da-dc5a-5058-a8fb-bd375aa71bda",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Specify bounded synthetic software and procurement/manufacturing scenarios from cross-domain invariants.",
+            "expected_result": "Each scenario names actors, evidence, dependencies, milestones and decision gates without copying a retired demo."
+          },
+          {
+            "action": "Create internal test inputs and exercise shared next/explain and verification workflows on disposable storage.",
+            "expected_result": "Both scenarios demonstrate the same engine semantics and label all data as simulated."
+          },
+          {
+            "action": "Review calendar/uncertainty assumptions and record differences from real project delivery.",
+            "expected_result": "Tests and documentation explain what the simulated scenarios establish and what they cannot prove."
+          }
+        ],
+        "in_scope": [
+          "Internal cross-domain test inputs and integration coverage."
+        ],
+        "out_of_scope": [
+          "Restore retired user-facing samples, build procurement-specific UI or claim synthetic work is real delivery."
+        ],
+        "verification": [
+          "Run both scenarios through gate, blocker, submit/independent-verify and milestone checks.",
+          "Validate all test plans and run ./ci.sh; self-host remains the sole user-facing example."
+        ]
+      }
+    },
+    "fe0878f6-959c-5f45-8e79-eafc7c516999": {
+      "id": "fe0878f6-959c-5f45-8e79-eafc7c516999",
+      "key": "QA-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "87eb53a0-5839-51bf-bdb2-47371bf50315",
+      "kind": "Task",
+      "title": "Qualify the scoped alpha build",
+      "objective": "Collect reproducible local and hosted quality evidence for the explicitly accepted alpha scope.",
+      "acceptance": [
+        {
+          "text": "Run formatting, Clippy, tests, strict docs and release build on the supported stable/MSRV platform matrix."
+        },
+        {
+          "text": "Review available dependency audit/license results and record unresolved findings accurately."
+        },
+        {
+          "text": "Publish a capability/non-goal checklist that does not claim server/auth/native products unless separately accepted."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 2,
+        "likely_hours": 4,
+        "pessimistic_hours": 8
+      },
+      "capabilities": [
+        "ci",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "2e7768c2-5844-53f4-9e45-3387c2eb79e5",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "c28035da-dc5a-5058-a8fb-bd375aa71bda",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Freeze the accepted alpha capability/non-goal checklist and supported toolchain/platform matrix.",
+            "expected_result": "The qualification scope excludes deferred products and names reproducible build inputs."
+          },
+          {
+            "action": "Run local and approved hosted formatting, lint, test, strict-doc and release gates.",
+            "expected_result": "Actual logs identify each passing/failing platform and toolchain without implied coverage."
+          },
+          {
+            "action": "Review available dependency audit/license reports and publish unresolved findings with evidence.",
+            "expected_result": "A qualification record traces each claim to a check or explicitly documented limitation."
+          }
+        ],
+        "in_scope": [
+          "Quality evidence for the approved alpha scope and supported platforms."
+        ],
+        "out_of_scope": [
+          "Claim unrun platforms passed, add hosted services or treat unavailable audit tools as a clean audit."
+        ],
+        "verification": [
+          "./ci.sh on the declared toolchain; record stable/MSRV and platform results individually.",
+          "Run available cargo audit/deny checks and review license findings; document tools that were unavailable."
+        ]
+      }
+    },
+    "1a7d5082-3223-5175-9f43-2534fc761577": {
+      "id": "1a7d5082-3223-5175-9f43-2534fc761577",
+      "key": "QA-30",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "87eb53a0-5839-51bf-bdb2-47371bf50315",
+      "kind": "Task",
+      "title": "Prepare the public alpha release evidence",
+      "objective": "After acceptance, prepare reviewable versioning, changelog and public-repository artifacts with real commit/CI links.",
+      "acceptance": [
+        {
+          "text": "Verify luofang34/dpm is public and references the intended reviewed commits before claiming publication."
+        },
+        {
+          "text": "Preserve AGPL-3.0-only, document usage and limitations, and attach actual release evidence."
+        },
+        {
+          "text": "Respect repository permissions and explicit requirements for shared-history/tag actions; record any blocker rather than inventing success."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 1,
+        "likely_hours": 2,
+        "pessimistic_hours": 5
+      },
+      "capabilities": [
+        "git",
+        "release"
+      ],
+      "requirement_ids": [
+        "56af87d0-71ea-5575-bc04-f070a8e9191e",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "217b89c7-a7bc-5fc7-9278-212b3febf70b",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "c28035da-dc5a-5058-a8fb-bd375aa71bda",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Inspect accepted qualification evidence, actual reviewed commits and public repository status.",
+            "expected_result": "Release prerequisites and blockers are explicit before publication claims."
+          },
+          {
+            "action": "Prepare alpha version/changelog, demo commands and AGPL-3.0-only notices for the reviewed scope.",
+            "expected_result": "Reviewable release material accurately describes functionality, limitations and source provenance."
+          },
+          {
+            "action": "Publish only through authorized repository actions and attach real public commit/CI/release links.",
+            "expected_result": "The public luofang34/dpm evidence identifies the intended source; blocked steps remain reported as blocked."
+          }
+        ],
+        "in_scope": [
+          "Scoped public alpha preparation and authorized publication evidence."
+        ],
+        "out_of_scope": [
+          "Change the license, make the target repository private, force shared history or create tags without required authorization."
+        ],
+        "verification": [
+          "Check public repository visibility and resolve every linked artifact to the intended reviewed commit.",
+          "Re-run documented demo commands and applicable quality gates before publication."
+        ]
+      }
+    },
+    "973bf299-2998-54fa-a1dc-a58d2f66eff8": {
+      "id": "973bf299-2998-54fa-a1dc-a58d2f66eff8",
+      "key": "SYNC-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "71bf30b0-6180-5e14-8f72-378c039aee41",
+      "kind": "Task",
+      "title": "Specify operation/revision exchange",
+      "objective": "Define a minimal local/network sync boundary over semantic operations, with no CRDT bypass of domain invariants.",
+      "acceptance": [
+        {
+          "text": "Specify revision preconditions, identities, deduplication, conflict outcomes and validation order."
+        },
+        {
+          "text": "Describe LocalOnly behavior and an exchange contract suitable for a later server."
+        },
+        {
+          "text": "Test protocol examples without introducing a SaaS dependency."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 3,
+        "likely_hours": 8,
+        "pessimistic_hours": 16
+      },
+      "capabilities": [
+        "rust",
+        "sync"
+      ],
+      "requirement_ids": [
+        "430279b8-809d-5dbf-9795-4b698c09aa6e",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Specify semantic operation envelopes, base revisions, actor attribution and deduplication keys.",
+            "expected_result": "Protocol examples define accepted, duplicate, stale and invalid operation outcomes."
+          },
+          {
+            "action": "Implement the reviewed local backend boundary and validation/conflict interfaces.",
+            "expected_result": "LocalOnly behavior exercises the same invariants expected from a later network adapter."
+          },
+          {
+            "action": "Test exchange examples and document ordering, retry and failure semantics.",
+            "expected_result": "A server implementer can follow the contract without inferring raw Git or CRDT synchronization rules."
+          }
+        ],
+        "in_scope": [
+          "Minimal operation/revision exchange contract and LocalOnly boundary."
+        ],
+        "out_of_scope": [
+          "SaaS dependencies, full collaboration transport or CRDT writes bypassing domain validation."
+        ],
+        "verification": [
+          "Test accepted/duplicate/stale/invalid exchange examples and deterministic conflict responses.",
+          "Run ./ci.sh and compare resulting operations to engine validation outcomes."
+        ]
+      }
+    },
+    "0752410b-cd82-5af0-b289-e88a6138c82e": {
+      "id": "0752410b-cd82-5af0-b289-e88a6138c82e",
+      "key": "AUTH-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "71bf30b0-6180-5e14-8f72-378c039aee41",
+      "kind": "Task",
+      "title": "Separate principals from credentials",
+      "objective": "Prepare the server identity boundary for humans, agents and services with local/device/service credentials and future passkey/OIDC/Apple adapters.",
+      "acceptance": [
+        {
+          "text": "Keep vendor credentials separate from actor/domain identity."
+        },
+        {
+          "text": "Specify authorization of workspace operations and independent verification policy."
+        },
+        {
+          "text": "Test local credential rejection and principal attribution without building an account product."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 3,
+        "likely_hours": 8,
+        "pessimistic_hours": 16
+      },
+      "capabilities": [
+        "rust",
+        "security"
+      ],
+      "requirement_ids": [
+        "430279b8-809d-5dbf-9795-4b698c09aa6e",
+        "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Separate actor/principal identity from credential providers and document workspace authorization rules.",
+            "expected_result": "The contract accommodates human, agent and service actors without vendor-specific user identity."
+          },
+          {
+            "action": "Implement the approved local/device/service credential boundary for the optional server.",
+            "expected_result": "Valid credentials attribute commands to the intended principal and invalid credentials fail closed."
+          },
+          {
+            "action": "Test authorization and independent-verifier policy and document future provider extension points.",
+            "expected_result": "Passkey/OIDC/Apple remain adapters to a stable principal model, not implemented account products."
+          }
+        ],
+        "in_scope": [
+          "Principal/credential abstraction and minimum approved server credential checks."
+        ],
+        "out_of_scope": [
+          "Full account registration, production passkey/OIDC/Apple enrollment or identity derived from untrusted actor strings."
+        ],
+        "verification": [
+          "Test absent/invalid credentials, wrong workspace permission and attributable accepted operations.",
+          "Check self-verification rejection under principal mapping; run ./ci.sh."
+        ]
+      }
+    },
+    "7b02eb97-e80f-56ee-a52c-33f492517ffa": {
+      "id": "7b02eb97-e80f-56ee-a52c-33f492517ffa",
+      "key": "SERVER-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "71bf30b0-6180-5e14-8f72-378c039aee41",
+      "kind": "Task",
+      "title": "Implement an approved minimal sync server",
+      "objective": "Implement the smallest approved HTTP query/operation adapter, reusing engine/store logic and the reviewed identity boundary.",
+      "acceptance": [
+        {
+          "text": "Support authenticated query and operation exchange with revision checks and typed conflict responses."
+        },
+        {
+          "text": "Demonstrate atomic validated persistence and clean shutdown on disposable storage."
+        },
+        {
+          "text": "Keep the storage/transport boundary explicit and avoid unimplemented collaboration promises."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 4,
+        "likely_hours": 12,
+        "pessimistic_hours": 24
+      },
+      "capabilities": [
+        "rust",
+        "server"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "430279b8-809d-5dbf-9795-4b698c09aa6e",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "d13caef3-2df2-5630-9ac8-083b37f85063",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Read accepted SYNC-10/AUTH-10 contracts and define the smallest query/operation HTTP surface.",
+            "expected_result": "Each endpoint maps to an existing engine/service operation with explicit auth and revision errors."
+          },
+          {
+            "action": "Implement the approved transport adapter and atomic persistence using shared services.",
+            "expected_result": "Authenticated operations preserve the same domain validation and revision outcomes as local clients."
+          },
+          {
+            "action": "Run disposable-storage request/restart/shutdown tests and publish the working API contract.",
+            "expected_result": "Evidence demonstrates clean shutdown, typed conflicts and no partially persisted operations."
+          }
+        ],
+        "in_scope": [
+          "Approved minimal authenticated HTTP query and operation exchange server."
+        ],
+        "out_of_scope": [
+          "Full SaaS product, richer collaboration promises, business logic duplicated in handlers or platform UI."
+        ],
+        "verification": [
+          "Use ephemeral 127.0.0.1:0 listeners to test valid/invalid auth, stale operations and restart persistence.",
+          "Exercise graceful shutdown and atomic failure; run ./ci.sh and shared adapter checks."
+        ]
+      }
+    },
+    "9d92e316-9dd6-5d1c-8b2e-d876cb24aa1c": {
+      "id": "9d92e316-9dd6-5d1c-8b2e-d876cb24aa1c",
+      "key": "SYNC-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "71bf30b0-6180-5e14-8f72-378c039aee41",
+      "kind": "Task",
+      "title": "Verify multi-client collaboration invariants",
+      "objective": "Independently test the optional server with competing agents before considering richer collaboration.",
+      "acceptance": [
+        {
+          "text": "Exercise simultaneous/stale operations, duplicates, authorization failures and invalid graph changes."
+        },
+        {
+          "text": "Verify no operation is silently lost or accepted without its domain/revision checks."
+        },
+        {
+          "text": "Attach reproducible integration evidence and document transport limitations."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 3,
+        "likely_hours": 8,
+        "pessimistic_hours": 16
+      },
+      "capabilities": [
+        "review",
+        "rust",
+        "testing"
+      ],
+      "requirement_ids": [
+        "430279b8-809d-5dbf-9795-4b698c09aa6e",
+        "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "c28035da-dc5a-5058-a8fb-bd375aa71bda",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Build independent clients against the optional server with controlled revisions and credentials.",
+            "expected_result": "The test harness coordinates concurrent events without fixed ports or sleep-based races."
+          },
+          {
+            "action": "Exercise competing writes, retries/duplicates, stale revisions and invalid/unauthorized operations.",
+            "expected_result": "Every operation is accepted once or returns an explicit reproducible conflict/rejection."
+          },
+          {
+            "action": "Inspect final state/history and attach integration evidence with remaining transport limitations.",
+            "expected_result": "No successful operation is silently lost and authoritative invariants survive concurrency."
+          }
+        ],
+        "in_scope": [
+          "Independent multi-client correctness tests for the approved server."
+        ],
+        "out_of_scope": [
+          "Build rich comments/presence, new transports or bypass checks to simplify concurrent tests."
+        ],
+        "verification": [
+          "Use event synchronization and ephemeral ports; verify revision continuity and operation deduplication.",
+          "Test restarts and rejected invalid changes leave state intact; run ./ci.sh."
+        ]
+      }
+    },
+    "46190a5d-e9f7-5102-be21-40f587988e97": {
+      "id": "46190a5d-e9f7-5102-be21-40f587988e97",
+      "key": "UI-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Task",
+      "title": "Specify native/Web projection contracts",
+      "objective": "Design stable query/view-model contracts suitable for SwiftUI, Web and Compose; do not build all platform products in this task.",
+      "acceptance": [
+        {
+          "text": "Map Today/Work/Network/Detail to existing query/command semantics and identity boundaries."
+        },
+        {
+          "text": "Document platform-specific UI freedom and optional Rust FFI boundaries."
+        },
+        {
+          "text": "Require separate implementation scope before selecting or building a production UI stack."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 2,
+        "likely_hours": 5,
+        "pessimistic_hours": 10
+      },
+      "capabilities": [
+        "api",
+        "ui"
+      ],
+      "requirement_ids": [
+        "430279b8-809d-5dbf-9795-4b698c09aa6e",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+        "bf2a0e85-cd71-5fff-87ad-f66a8591a269"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Map Today/Work/Network/Detail user needs to current queries, commands and principal boundaries.",
+            "expected_result": "A platform-neutral field/interaction matrix identifies reusable data and unsupported requests."
+          },
+          {
+            "action": "Specify versioned view models and optional Rust FFI/HTTP boundaries with error and revision handling.",
+            "expected_result": "SwiftUI/Web/Compose clients can interpret the same contracts without owning business rules."
+          },
+          {
+            "action": "Review sample payloads and document native UI freedom and separate implementation decisions.",
+            "expected_result": "A reviewable API design exists without committing to or claiming a platform product."
+          }
+        ],
+        "in_scope": [
+          "Native/Web projection contract design and sample payload review."
+        ],
+        "out_of_scope": [
+          "Build multiple platform apps, select a production framework without scope approval or move authoritative state into UI."
+        ],
+        "verification": [
+          "Compare sample payloads to engine queries and command/revision errors.",
+          "Walk through selection, detail, blocked work and independent-review scenarios using the proposed fields."
+        ]
+      }
+    },
+    "efdabaef-268c-5e7c-888b-0fee76b7df90": {
+      "id": "efdabaef-268c-5e7c-888b-0fee76b7df90",
+      "key": "COLLAB-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Task",
+      "title": "Bound rich text and CloudKit collaboration designs",
+      "objective": "Document optional comments/presence/CRDT and CloudKit integration points while preserving strongly validated execution state.",
+      "acceptance": [
+        {
+          "text": "Separate text/presence data from lifecycle, gates, dependencies and permissions."
+        },
+        {
+          "text": "Document offline/revision conflicts and native-platform constraints without claiming a transport implementation."
+        },
+        {
+          "text": "List resource/cost/portfolio/procurement extensions as future scope, not giant speculative enums."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 2,
+        "likely_hours": 4,
+        "pessimistic_hours": 8
+      },
+      "capabilities": [
+        "architecture",
+        "sync"
+      ],
+      "requirement_ids": [
+        "430279b8-809d-5dbf-9795-4b698c09aa6e",
+        "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "fcdcae00-adad-5569-b4fb-926602835c87"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Identify which comments/presence data may merge independently and which execution fields require validation.",
+            "expected_result": "A boundary table excludes lifecycle, gates, dependencies and permissions from unrestricted CRDT updates."
+          },
+          {
+            "action": "Describe offline operation exchange and CloudKit/native adapter constraints using the reviewed revision protocol.",
+            "expected_result": "Conflict examples preserve domain checks and distinguish optional transport from local authority."
+          },
+          {
+            "action": "Document deferred resource/cost/portfolio/procurement extension points and separate implementation milestones.",
+            "expected_result": "A bounded design records non-goals without adding speculative domain enums or unfinished services."
+          }
+        ],
+        "in_scope": [
+          "Design boundaries for optional rich text/presence and CloudKit integration."
+        ],
+        "out_of_scope": [
+          "Implement CRDT/CloudKit transport, relax execution invariants or expand into full enterprise portfolio/resource management."
+        ],
+        "verification": [
+          "Review offline/conflict examples against semantic operation and authorization contracts.",
+          "Check that each proposed field has a clear owner and no text merge can change validated execution state."
+        ]
+      }
+    }
+  },
+  "requirements": {
+    "6138f172-2971-5cd1-8515-520f6b61be0a": {
+      "id": "6138f172-2971-5cd1-8515-520f6b61be0a",
+      "key": "REQ-SELF-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Explainable work selection",
+      "statement": "An agent discovers eligible leaf tasks from next with reproducible ranking, capability constraints and explicit gates."
+    },
+    "50625c7b-d065-5188-a522-bb9fb78eb203": {
+      "id": "50625c7b-d065-5188-a522-bb9fb78eb203",
+      "key": "REQ-SELF-002",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Executable task context",
+      "statement": "An agent reads objectives, observable acceptance, requirements, dependencies, risks and source context from explain without guessing references."
+    },
+    "56af87d0-71ea-5575-bc04-f070a8e9191e": {
+      "id": "56af87d0-71ea-5575-bc04-f070a8e9191e",
+      "key": "REQ-SELF-003",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Immutable development evidence",
+      "statement": "A real implementation commit and its relevant test/review evidence can be attached to the matching task; an uncommitted working tree is not represented as a finished commit."
+    },
+    "4d0b0655-1b34-5b15-b7c7-eb4748c998f7": {
+      "id": "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+      "key": "REQ-SELF-004",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Independent acceptance",
+      "statement": "Submission is distinct from verification; only a different authorized reviewer can accept a result and unlock its downstream tasks."
+    },
+    "bf2a0e85-cd71-5fff-87ad-f66a8591a269": {
+      "id": "bf2a0e85-cd71-5fff-87ad-f66a8591a269",
+      "key": "REQ-TUI-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Terminal projection",
+      "statement": "The operator can inspect task hierarchy, remaining Gantt hours, milestones, dependency types and progress, and navigate without modifying the execution graph."
+    },
+    "087248db-f9e4-5c27-968d-c2b539178037": {
+      "id": "087248db-f9e4-5c27-968d-c2b539178037",
+      "key": "REQ-CORE-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Graph and persistence correctness",
+      "statement": "Commands preserve validation, stable IDs, revision checks and atomic operation/snapshot persistence; UI and agent adapters own no domain rules."
+    },
+    "f334b834-595d-5136-af46-0b308c643c81": {
+      "id": "f334b834-595d-5136-af46-0b308c643c81",
+      "key": "REQ-PLAN-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Safe plan evolution",
+      "statement": "Versioned semantic proposals, history/diff and append-only revert enable roadmap changes without database replacement or raw Git merges."
+    },
+    "e1682222-b5c1-5fef-9ccd-81d9e40abde8": {
+      "id": "e1682222-b5c1-5fef-9ccd-81d9e40abde8",
+      "key": "REQ-SCHEDULE-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Honest scheduling",
+      "statement": "Temporal constraints, calendars and uncertainty remain explicit inputs; CPM, Monte Carlo and percent-complete projections never become authoritative schedule state."
+    },
+    "430279b8-809d-5dbf-9795-4b698c09aa6e": {
+      "id": "430279b8-809d-5dbf-9795-4b698c09aa6e",
+      "key": "REQ-SYNC-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Validated collaboration",
+      "statement": "Any later network or credential adapter authenticates principals, checks revisions and routes operations through domain validation."
+    },
+    "bd186e65-ccd7-5720-abd2-1c75c67da7f6": {
+      "id": "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+      "key": "REQ-SCOPE-001",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "title": "Explicit stage authorization",
+      "statement": "This seed is planning only. Broad roadmap entries, provisional estimates and existing source references are not execution authorization, completed work or release evidence."
+    }
+  },
+  "artifacts": {
+    "7973b4e3-8557-5f76-866a-df2a4b8fef50": {
+      "id": "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+      "kind": "File",
+      "uri": "repo:AGENTS.md",
+      "label": "Architecture and agent workflow",
+      "metadata": {
+        "path": "AGENTS.md",
+        "purpose": "source context, not task-completion evidence",
+        "availability": "local working tree"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "roadmap-curator"
+      },
+      "created_at": "2026-09-26T06:32:05.434178Z"
+    },
+    "1b4b0027-f6cf-57b4-817a-b2502bbc1aab": {
+      "id": "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+      "kind": "File",
+      "uri": "repo:docs/architecture.md",
+      "label": "Domain, scheduler and application boundaries",
+      "metadata": {
+        "path": "docs/architecture.md",
+        "purpose": "source context, not task-completion evidence",
+        "availability": "local working tree"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "roadmap-curator"
+      },
+      "created_at": "2026-09-26T06:32:05.434178Z"
+    },
+    "2e7768c2-5844-53f4-9e45-3387c2eb79e5": {
+      "id": "2e7768c2-5844-53f4-9e45-3387c2eb79e5",
+      "kind": "File",
+      "uri": "repo:docs/architecture.md",
+      "label": "Local MVP capability and validation report; not independent acceptance",
+      "metadata": {
+        "path": "docs/architecture.md",
+        "purpose": "source context, not task-completion evidence",
+        "availability": "local working tree"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "roadmap-curator"
+      },
+      "created_at": "2026-09-26T06:32:05.434178Z"
+    },
+    "873be17d-6408-5485-8230-5972d5698e89": {
+      "id": "873be17d-6408-5485-8230-5972d5698e89",
+      "kind": "File",
+      "uri": "repo:docs/mcp.md",
+      "label": "Existing CLI/MCP commands and structured query contract",
+      "metadata": {
+        "path": "docs/mcp.md",
+        "purpose": "source context, not task-completion evidence",
+        "availability": "local working tree"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "roadmap-curator"
+      },
+      "created_at": "2026-09-26T06:32:05.434178Z"
+    },
+    "fcdcae00-adad-5569-b4fb-926602835c87": {
+      "id": "fcdcae00-adad-5569-b4fb-926602835c87",
+      "kind": "File",
+      "uri": "repo:examples/self-host/README.md",
+      "label": "Prepared-only self-host scope and milestone guide",
+      "metadata": {
+        "path": "examples/self-host/README.md",
+        "purpose": "source context, not task-completion evidence",
+        "availability": "local working tree"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "roadmap-curator"
+      },
+      "created_at": "2026-09-26T06:32:05.434178Z"
+    },
+    "c28035da-dc5a-5058-a8fb-bd375aa71bda": {
+      "id": "c28035da-dc5a-5058-a8fb-bd375aa71bda",
+      "kind": "File",
+      "uri": "repo:ci.sh",
+      "label": "Local verification pipeline",
+      "metadata": {
+        "path": "ci.sh",
+        "purpose": "source context, not task-completion evidence",
+        "availability": "local working tree"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "roadmap-curator"
+      },
+      "created_at": "2026-09-26T06:32:05.434178Z"
+    },
+    "f66992ca-ebd4-5494-a931-8a414a4aa19a": {
+      "id": "f66992ca-ebd4-5494-a931-8a414a4aa19a",
+      "kind": "File",
+      "uri": "repo:crates/dpm-tui/src/gantt.rs",
+      "label": "Gantt projection implementation",
+      "metadata": {
+        "path": "crates/dpm-tui/src/gantt.rs",
+        "purpose": "source context, not task-completion evidence",
+        "availability": "local working tree"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "roadmap-curator"
+      },
+      "created_at": "2026-09-26T06:32:05.434178Z"
+    },
+    "d13caef3-2df2-5630-9ac8-083b37f85063": {
+      "id": "d13caef3-2df2-5630-9ac8-083b37f85063",
+      "kind": "File",
+      "uri": "repo:crates/dpm-store/src/sqlite.rs",
+      "label": "Atomic SQLite store implementation",
+      "metadata": {
+        "path": "crates/dpm-store/src/sqlite.rs",
+        "purpose": "source context, not task-completion evidence",
+        "availability": "local working tree"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "roadmap-curator"
+      },
+      "created_at": "2026-09-26T06:32:05.434178Z"
+    },
+    "217b89c7-a7bc-5fc7-9278-212b3febf70b": {
+      "id": "217b89c7-a7bc-5fc7-9278-212b3febf70b",
+      "kind": "File",
+      "uri": "repo:README.md",
+      "label": "Source overview; no execution evidence",
+      "metadata": {
+        "path": "README.md"
+      },
+      "created_by": {
+        "kind": "Service",
+        "name": "roadmap-curator"
+      },
+      "created_at": "2026-09-26T06:32:05.434178Z"
+    }
+  },
+  "decisions": {
+    "c49ffca1-1b01-5e2b-9954-18971c07312e": {
+      "id": "c49ffca1-1b01-5e2b-9954-18971c07312e",
+      "key": "DEC-EXECUTE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "When has the user explicitly authorized starting the self-host tasks? This prepared seed must remain query-only until that separate instruction.",
+      "status": "Open",
+      "outcome": null,
+      "blocks": [
+        "a66db805-addb-528b-9fc6-3c96c77dfca9"
+      ]
+    },
+    "a7fb9363-39af-5e46-a1a1-2b05baa9fff4": {
+      "id": "a7fb9363-39af-5e46-a1a1-2b05baa9fff4",
+      "key": "DEC-BASELINE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "Which real source commit, local database and independent reviewer are approved for live self-hosting and publication evidence? The current MVP is not yet a committed/released baseline.",
+      "status": "Open",
+      "outcome": null,
+      "blocks": [
+        "1a7d5082-3223-5175-9f43-2534fc761577",
+        "66b7742d-feb9-57cd-9886-0f4fc9e755c0"
+      ]
+    },
+    "a62796ee-1095-5fea-b048-0335309c39b5": {
+      "id": "a62796ee-1095-5fea-b048-0335309c39b5",
+      "key": "DEC-LAYOUT",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "Which later terminal layout scope is explicitly accepted after the MVP review? No layout work is authorized by this seed.",
+      "status": "Open",
+      "outcome": null,
+      "blocks": [
+        "78f49d1a-1063-5f29-acf7-e1f53f0d2c8e"
+      ]
+    },
+    "f1751454-e429-554c-add8-96aca3db1998": {
+      "id": "f1751454-e429-554c-add8-96aca3db1998",
+      "key": "DEC-EXPAND",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "Which roadmap phases beyond TUI MVP and agent-understandable/operable work are approved? Core expansion, server/sync/auth/native UI remain deferred.",
+      "status": "Open",
+      "outcome": null,
+      "blocks": [
+        "004053ca-ec68-52d2-9886-a47289a0d592",
+        "71bf30b0-6180-5e14-8f72-378c039aee41",
+        "87eb53a0-5839-51bf-bdb2-47371bf50315",
+        "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+        "cc81da22-ff27-51ec-811f-7ffdcc4257b2"
+      ]
+    }
+  },
+  "risks": {
+    "6ef69bbe-d99a-52fb-a141-c459bd0c3e8e": {
+      "id": "6ef69bbe-d99a-52fb-a141-c459bd0c3e8e",
+      "key": "RISK-SCOPE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "description": "A broad reference roadmap may be mistaken for permission to implement deferred features.",
+      "probability": 0.5,
+      "impact": "High",
+      "related_work": [
+        "a66db805-addb-528b-9fc6-3c96c77dfca9"
+      ],
+      "mitigation": "Keep DEC-EXECUTE and phase gates open; do not interpret planning data or estimates as authorization."
+    },
+    "b683bb26-0d39-52e9-a283-6b2c93dcc082": {
+      "id": "b683bb26-0d39-52e9-a283-6b2c93dcc082",
+      "key": "RISK-EVIDENCE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "description": "Uncommitted MVP source or local check reports may be misrepresented as independently verified/public release evidence.",
+      "probability": 0.5,
+      "impact": "High",
+      "related_work": [
+        "0e1c21d5-d38c-5576-85fa-f3fbd89b5be3",
+        "87eb53a0-5839-51bf-bdb2-47371bf50315",
+        "e29488e1-8b04-5081-8ff7-430f183fbf95"
+      ],
+      "mitigation": "Distinguish contextual source artifacts from acceptance evidence; establish a real commit and independent review."
+    },
+    "cf654136-d86c-5ad9-99e2-2dd5b817fe88": {
+      "id": "cf654136-d86c-5ad9-99e2-2dd5b817fe88",
+      "key": "RISK-PLAN-EDIT",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "description": "The MVP cannot yet apply semantic task/dependency edits in place or expose full history/revert.",
+      "probability": 0.7,
+      "impact": "Medium",
+      "related_work": [
+        "004053ca-ec68-52d2-9886-a47289a0d592",
+        "e29488e1-8b04-5081-8ff7-430f183fbf95"
+      ],
+      "mitigation": "Keep this seed reviewable. Do not overwrite live SQLite; use separately approved validated copies for bootstrap authoring until CORE-20/30 are accepted."
+    },
+    "56dcce46-6933-5a78-ab22-618ae1133687": {
+      "id": "56dcce46-6933-5a78-ab22-618ae1133687",
+      "key": "RISK-SCHEDULE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "description": "Provisional O/M/P values and elapsed-hour projections may be mistaken for calendar commitments or resource-leveled dates.",
+      "probability": 0.6,
+      "impact": "Medium",
+      "related_work": [
+        "a66db805-addb-528b-9fc6-3c96c77dfca9"
+      ],
+      "mitigation": "Re-estimate before execution; show units and uncertainty. No capacity, calendar or delivery promise is implied."
+    },
+    "ad10cfce-3f4f-5646-8cd5-c1c1369eb84f": {
+      "id": "ad10cfce-3f4f-5646-8cd5-c1c1369eb84f",
+      "key": "RISK-IDENTITY",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "description": "Local actor names can be impersonated and do not provide authenticated independent review.",
+      "probability": 0.5,
+      "impact": "High",
+      "related_work": [
+        "71bf30b0-6180-5e14-8f72-378c039aee41",
+        "e29488e1-8b04-5081-8ff7-430f183fbf95"
+      ],
+      "mitigation": "Use trusted separate reviewer processes now; add explicit credential/authorization boundaries only in the approved later scope."
+    }
+  },
+  "dependencies": [
+    {
+      "predecessor": "b75ac42f-0b89-504f-933a-20175beaf664",
+      "successor": "ee7071a5-4557-5d2f-8737-d958a34187b8",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "b75ac42f-0b89-504f-933a-20175beaf664",
+      "successor": "143875c1-210e-5b64-8a2d-ce1e87e87a08",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
+      "successor": "5248ae6e-0412-587d-8820-2a2ad6efbd16",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "5248ae6e-0412-587d-8820-2a2ad6efbd16",
+      "successor": "87c561b2-f168-5598-8c68-6a862a6d12e6",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "e2b7c122-effe-5350-b5b1-76b58bf92e51",
+      "successor": "cd3eed21-6613-5c8e-a874-5d62002f0c9b",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "cd3eed21-6613-5c8e-a874-5d62002f0c9b",
+      "successor": "24c9cece-f53f-569e-b653-0d3e583fd858",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "24c9cece-f53f-569e-b653-0d3e583fd858",
+      "successor": "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "e2b7c122-effe-5350-b5b1-76b58bf92e51",
+      "successor": "fe5ce0f5-f9c5-5ddf-8a0c-30c2015e2163",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "fe5ce0f5-f9c5-5ddf-8a0c-30c2015e2163",
+      "successor": "40063ef5-e801-5876-9888-3bff011e437c",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "40063ef5-e801-5876-9888-3bff011e437c",
+      "successor": "b575823c-58ef-54c6-b75d-eb40b760d033",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "758c1c34-82d6-5345-b025-821ec2c83aa8",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "758c1c34-82d6-5345-b025-821ec2c83aa8",
+      "successor": "8cc282fe-10c5-5c57-baf2-0fcc8573153d",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "8cc282fe-10c5-5c57-baf2-0fcc8573153d",
+      "successor": "de87c1f0-1af4-5c96-8121-f48aff8d1edb",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "f31377c3-739b-53b1-962c-bdcb9609af27",
+      "successor": "b56fb8da-2746-5f32-b2d5-c121053aded2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "9ab51dd2-5003-5c85-8466-7f6b12355441",
+      "successor": "b56fb8da-2746-5f32-b2d5-c121053aded2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "b56fb8da-2746-5f32-b2d5-c121053aded2",
+      "successor": "fe0878f6-959c-5f45-8e79-eafc7c516999",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "e2b7c122-effe-5350-b5b1-76b58bf92e51",
+      "successor": "fe0878f6-959c-5f45-8e79-eafc7c516999",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "fe0878f6-959c-5f45-8e79-eafc7c516999",
+      "successor": "1a7d5082-3223-5175-9f43-2534fc761577",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "66b7742d-feb9-57cd-9886-0f4fc9e755c0",
+      "successor": "1a7d5082-3223-5175-9f43-2534fc761577",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "f31377c3-739b-53b1-962c-bdcb9609af27",
+      "successor": "973bf299-2998-54fa-a1dc-a58d2f66eff8",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "973bf299-2998-54fa-a1dc-a58d2f66eff8",
+      "successor": "0752410b-cd82-5af0-b289-e88a6138c82e",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "0752410b-cd82-5af0-b289-e88a6138c82e",
+      "successor": "7b02eb97-e80f-56ee-a52c-33f492517ffa",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "7b02eb97-e80f-56ee-a52c-33f492517ffa",
+      "successor": "9d92e316-9dd6-5d1c-8b2e-d876cb24aa1c",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "a642e2f8-d47a-5163-b6ee-daa4e692923f",
+      "successor": "46190a5d-e9f7-5102-be21-40f587988e97",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "8bd46d2b-5faa-56a6-985b-fb08b41075af",
+      "successor": "46190a5d-e9f7-5102-be21-40f587988e97",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "a642e2f8-d47a-5163-b6ee-daa4e692923f",
+      "successor": "efdabaef-268c-5e7c-888b-0fee76b7df90",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "ee7071a5-4557-5d2f-8737-d958a34187b8",
+      "successor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "143875c1-210e-5b64-8a2d-ce1e87e87a08",
+      "successor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "87c561b2-f168-5598-8c68-6a862a6d12e6",
+      "successor": "e2b7c122-effe-5350-b5b1-76b58bf92e51",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
+      "successor": "f31377c3-739b-53b1-962c-bdcb9609af27",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "b575823c-58ef-54c6-b75d-eb40b760d033",
+      "successor": "9ab51dd2-5003-5c85-8466-7f6b12355441",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "de87c1f0-1af4-5c96-8121-f48aff8d1edb",
+      "successor": "8bd46d2b-5faa-56a6-985b-fb08b41075af",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "1a7d5082-3223-5175-9f43-2534fc761577",
+      "successor": "93fd3281-1b7c-5ef5-a379-39ffc39e9843",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "9d92e316-9dd6-5d1c-8b2e-d876cb24aa1c",
+      "successor": "a642e2f8-d47a-5163-b6ee-daa4e692923f",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "46190a5d-e9f7-5102-be21-40f587988e97",
+      "successor": "17391553-5a97-5278-a8b7-472eca8a3992",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "efdabaef-268c-5e7c-888b-0fee76b7df90",
+      "successor": "17391553-5a97-5278-a8b7-472eca8a3992",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    }
+  ]
+}
