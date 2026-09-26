@@ -77,9 +77,9 @@ impl AppError {
             Self::Project(error) => error.code(),
             Self::Registry(error) => error.code(),
             Self::ReadOnlyProject => "read_only_project",
-            Self::Conflict { .. } | Self::Store(dpm_store::StoreError::RevisionConflict { .. }) => {
-                "revision_conflict"
-            }
+            Self::Conflict { .. }
+            | Self::Engine(dpm_engine::EngineError::RevisionConflict { .. })
+            | Self::Store(dpm_store::StoreError::RevisionConflict { .. }) => "revision_conflict",
             Self::GitIo(_) | Self::Git { .. } | Self::GitEncoding(_) => "git_error",
             Self::NotInitialized => "not_initialized",
             Self::UnknownWork(_) | Self::UnknownDecision(_) => "not_found",

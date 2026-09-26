@@ -1,5 +1,5 @@
 use crate::{
-    args::{Cli, Commands, WorkspaceCommand},
+    args::{Cli, Commands, PlanCommand, WorkspaceCommand},
     error::{CliError, io_error},
     output,
 };
@@ -61,6 +61,18 @@ fn run_open_blocking(
     base_revision: Option<u64>,
 ) -> Result<(), CliError> {
     match command {
+        Commands::Plan { command } => plan_command_blocking(app, command, json, base_revision),
+        Commands::History {
+            after_sequence,
+            limit,
+        } => query_blocking(
+            app,
+            Query::History {
+                after_sequence,
+                limit,
+            },
+            json,
+        ),
         Commands::Status { no_simulation } => query_blocking(
             app,
             Query::Status {
@@ -83,7 +95,7 @@ fn run_open_blocking(
         }
         Commands::Show { key } => query_blocking(app, Query::Show { key }, json),
         Commands::Explain { key } => query_blocking(app, Query::Explain { key }, json),
-        Commands::Export => output::json_blocking(&app.plan_blocking()?),
+        Commands::Export => query_blocking(app, Query::Export, true),
         Commands::Tui => {
             let plan = app.plan_blocking()?;
             dpm_tui::run_reloading_blocking(&plan, app.is_read_only(), || {
@@ -114,10 +126,14 @@ fn initialize_blocking(
 }
 
 fn read_plan_blocking(path: &Path) -> Result<Plan, CliError> {
-    let text = fs::read_to_string(path).map_err(io_error("read plan", path))?;
-    let plan: Plan = serde_json::from_str(&text)?;
+    let plan = read_candidate_blocking(path)?;
     plan.validate()?;
     Ok(plan)
+}
+
+fn read_candidate_blocking(path: &Path) -> Result<Plan, CliError> {
+    let text = fs::read_to_string(path).map_err(io_error("read plan", path))?;
+    Ok(serde_json::from_str(&text)?)
 }
 
 fn actor(value: &str) -> Result<ActorId, CliError> {
@@ -333,5 +349,39 @@ fn workspace_command_blocking(
             &registry.list_blocking().map_err(dpm_app::AppError::from)?,
             json,
         ),
+    }
+}
+
+fn plan_command_blocking(
+    app: &mut Application,
+    command: PlanCommand,
+    json: bool,
+    base_revision: Option<u64>,
+) -> Result<(), CliError> {
+    match command {
+        PlanCommand::Diff { file } => query_blocking(
+            app,
+            Query::ProposeChange {
+                plan: Box::new(read_candidate_blocking(&file)?),
+            },
+            json,
+        ),
+        PlanCommand::Apply {
+            file,
+            reason,
+            actor: who,
+        } => {
+            app.ensure_writable()?;
+            let plan = read_candidate_blocking(&file)?;
+            let operation = app.execute_blocking(CommandRequest {
+                actor: actor(&who)?,
+                base_revision: base_revision.unwrap_or(plan.revision),
+                command: Command::ApplyChange {
+                    plan: Box::new(plan),
+                    reason,
+                },
+            })?;
+            output::value_blocking(&operation, json)
+        }
     }
 }

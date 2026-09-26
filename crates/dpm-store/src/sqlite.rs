@@ -7,6 +7,8 @@ use std::{
     time::Duration,
 };
 
+mod history;
+pub use history::{HistoryEntry, HistoryPage};
 mod snapshot;
 use snapshot::{load_blocking, revision_to_sql};
 

@@ -111,7 +111,10 @@ When operating on a real DPM workspace, prefer the machine interface:
 8. a separate human/service verifier runs `dpm verify <KEY> ...`.
 
 If work cannot proceed, use `block` with a concrete reason instead of silently switching scope.
-If the plan itself is wrong, propose a plan change; do not route around dependencies in code.
+If the plan itself is wrong, export it and use `plan diff` / `propose_change`; do not route around
+dependencies in code. A human/service applies the reviewed candidate with a reason. New tasks are
+Proposed and require ratification. Execution and its prerequisite/context basis remain protected.
+Use `history` to inspect the operations; a plan export is not a backup of operation history.
 
 ## Engineering rules
 

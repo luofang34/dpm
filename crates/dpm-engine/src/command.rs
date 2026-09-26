@@ -9,6 +9,13 @@ use thiserror::Error;
 /// A semantic state change; adapters must use the engine to apply it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Command {
+    /// Apply a reviewed plan proposal without bypassing execution history.
+    ApplyChange {
+        /// Full proposed graph at the observed revision, validated against protected state.
+        plan: Box<dpm_model::Plan>,
+        /// Human-readable purpose of the accepted scope change.
+        reason: String,
+    },
     /// Approve a proposed execution contract as a human or service.
     RatifyContract {
         /// Proposed task with a complete objective and acceptance criteria.
@@ -97,6 +104,17 @@ pub struct Operation {
 /// A rejected command or failed execution projection.
 #[derive(Debug, Error)]
 pub enum EngineError {
+    /// A plan proposal no longer refers to the current revision.
+    #[error("revision conflict: expected {expected}, current {actual}")]
+    RevisionConflict {
+        /// Revision the caller observed.
+        expected: u64,
+        /// Current revision.
+        actual: u64,
+    },
+    /// A semantic difference could not be serialized.
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
     /// Local principal policy refuses this action.
     #[error("actor {actor} is not permitted to {action}")]
     ActorNotAllowed {

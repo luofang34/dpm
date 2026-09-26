@@ -25,6 +25,18 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
+    /// Preview or apply reviewed plan changes without replacing live state.
+    Plan {
+        #[command(subcommand)]
+        command: PlanCommand,
+    },
+    /// Read append-only semantic operations in chronological pages.
+    History {
+        #[arg(long, default_value_t = 0)]
+        after_sequence: u64,
+        #[arg(long, default_value_t = 100)]
+        limit: u16,
+    },
     /// Manage device-local bindings to existing workspaces.
     Workspace {
         #[command(subcommand)]
@@ -155,4 +167,18 @@ pub(crate) enum WorkspaceCommand {
     },
     /// List registered workspace identities and device-local store locations.
     List,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum PlanCommand {
+    /// Validate a candidate exported plan and inspect its semantic differences.
+    Diff { file: PathBuf },
+    /// Apply a reviewed candidate with a reason, preserving execution and evidence.
+    Apply {
+        file: PathBuf,
+        #[arg(long)]
+        reason: String,
+        #[arg(long, default_value = "human:local")]
+        actor: String,
+    },
 }

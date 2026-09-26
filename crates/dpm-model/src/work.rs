@@ -79,6 +79,7 @@ impl WorkStatus {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Observable evidence required for submitted work.
+#[serde(deny_unknown_fields)]
 pub struct AcceptanceCriterion {
     /// Concrete acceptance condition.
     pub text: String,
@@ -86,6 +87,7 @@ pub struct AcceptanceCriterion {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 /// Ordered non-negative duration estimates in elapsed hours.
+#[serde(deny_unknown_fields)]
 pub struct ThreePointEstimate {
     /// Optimistic duration in elapsed hours.
     pub optimistic_hours: f64,
@@ -124,6 +126,7 @@ impl ThreePointEstimate {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Execution contract and authoritative lifecycle for a unit of work.
+#[serde(deny_unknown_fields)]
 pub struct WorkItem {
     /// Stable entity identity; it must match its containing map key.
     pub id: WorkItemId,
@@ -172,6 +175,7 @@ pub struct WorkItem {
 
 /// Independent review explaining why submitted work needs another attempt.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ReviewRejection {
     /// Principal who rejected the result.
     pub actor: ActorId,

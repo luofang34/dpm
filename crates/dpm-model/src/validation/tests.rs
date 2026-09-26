@@ -154,3 +154,26 @@ fn large_finite_estimates_do_not_overflow_the_weighted_mean() {
     estimate.validate().expect("finite ordered bounds");
     assert!(estimate.pert_expected_hours().is_finite());
 }
+
+#[test]
+fn unknown_plan_fields_are_rejected_instead_of_dropping_proposed_edits() {
+    let source = serde_json::to_value(fixture()).expect("serialize");
+    let work = fixture().find_work_by_key("TEST-A").expect("task").id;
+    for path in [
+        String::new(),
+        "/workspace".into(),
+        format!("/work_items/{work}"),
+        format!("/work_items/{work}/acceptance/0"),
+    ] {
+        let mut value = source.clone();
+        value
+            .pointer_mut(&path)
+            .expect("object")
+            .as_object_mut()
+            .expect("map")
+            .insert("unrecognized_edit".into(), serde_json::json!(true));
+        let error =
+            serde_json::from_value::<Plan>(value).expect_err("unknown edit must not disappear");
+        assert!(error.to_string().contains("unknown field"));
+    }
+}

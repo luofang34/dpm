@@ -15,6 +15,10 @@ which the store still checks atomically. Presentation text is not the API contra
 
 | CLI | MCP tool | Shared behavior |
 | --- | --- | --- |
+| export | export_plan | Authoritative snapshot for proposals |
+| plan diff FILE | propose_change | Validate a candidate and inspect entity/field differences |
+| plan apply FILE --reason TEXT | apply_change | Human/service applies an observed-revision proposal atomically |
+| history --after-sequence N --limit N | history | Chronological operation pages with actor, time, reason and command |
 | status | project_status | Counts and optional Monte Carlo forecast |
 | next | next_work | Eligible leaf tasks, deterministic ranking and reasons |
 | show KEY | get_work | Objective, steps/results, scope, acceptance/checks and derived status |
@@ -33,9 +37,22 @@ which the store still checks atomically. Presentation text is not the API contra
 | workspace list | workspace_list | List device-local bindings without changing the plan |
 | workspace register --database PATH | workspace_register | Register an existing store; explicit replace redirects a local binding |
 
-Project initialization/import/export and opening the TUI are local CLI administration, not agent execution
-operations. Plan proposals and edits beyond these commands remain future work; no unsupported tool
-is advertised. The same SQLite schema, engine and stable IDs remain available for future adapters.
+Project initialization/import and opening the TUI are local CLI administration. `export_plan` supplies
+the full candidate shape for `propose_change` and `apply_change` (argument `plan`). Preserve its
+workspace identity and revision; plan apply defaults to the file's revision, never a silently refreshed
+one. Diff entries contain collection, stable ID, changed fields and full before/after values; null
+means addition/deletion. Preview has no side effects. Applying requires a nonempty reason and a
+human/service actor. Agents draft scope; they do not approve their own expansion.
+
+New tasks must be Proposed, without execution/evidence. Existing work keys/kinds, lifecycle, owners,
+progress, reviews, artifacts and decisions cannot be changed through this route. Started work and
+its prerequisite/containment/context basis are protected; add follow-up work instead. Unstarted
+contracts, dependencies, projects, requirements, resources and risks can be maintained after review.
+Decision amendments and undo remain separate future contracts.
+
+`history` returns entries in append order with a `next_after_sequence` cursor (default limit 100,
+capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export
+is not an operation backup; retain consistent SQLite backups for recovery.
 
 ## Prepared self-host example
 

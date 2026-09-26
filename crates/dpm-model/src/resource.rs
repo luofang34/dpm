@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 
 /// Shared resource identity independent of local paths and remote addresses.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Resource {
     /// Stable identity matching its map key.
     pub id: ResourceId,
@@ -42,6 +43,7 @@ pub enum ResourceAccess {
 
 /// One explicit resource needed to perform a task.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ResourceRequirement {
     /// Resource in the workspace registry.
     pub resource: ResourceId,

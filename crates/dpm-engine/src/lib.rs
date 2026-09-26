@@ -1,5 +1,7 @@
 //! Validated commands and consistent execution projections for humans and agents.
 
+mod change;
+pub use change::{ChangePreview, EntityChange, propose_change};
 mod command;
 mod context;
 mod execution;

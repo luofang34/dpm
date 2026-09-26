@@ -12,6 +12,7 @@ pub enum ActorKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Local principal identity; kind and name jointly distinguish actors.
+#[serde(deny_unknown_fields)]
 pub struct ActorId {
     /// Domain category of this value.
     pub kind: ActorKind,

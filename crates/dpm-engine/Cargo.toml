@@ -14,7 +14,6 @@ dpm-schedule = { path = "../dpm-schedule", version = "0.1.0" }
 serde.workspace = true
 thiserror.workspace = true
 
-[dev-dependencies]
 serde_json.workspace = true
 
 [lints]

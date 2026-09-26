@@ -618,6 +618,15 @@
         },
         {
           "text": "Confirm local binding tools return matching CLI/MCP data without changing project revisions; explicit resource evidence carries the intended resource ID and commit."
+        },
+        {
+          "text": "Initialize an empty disposable workspace, propose a task/dependency graph, inspect semantic additions/edits/deletions, and apply reviewed changes with identical CLI/MCP behavior."
+        },
+        {
+          "text": "New tasks remain Proposed until ratification. Reject agent scope approval, stale proposals, cycles and attempts to alter execution/evidence/decisions or the prerequisite and context basis of started work."
+        },
+        {
+          "text": "Read chronological history pages through both adapters; reopening preserves actor, time, reason, command and revision. Snapshot exports are not history backups."
         }
       ],
       "status": "Planned",
@@ -664,6 +673,10 @@
           {
             "action": "Exercise Proposed -> Planned and Submitted -> InProgress -> Submitted -> Verified on disposable data, including invalid actor, empty reason and stale revision failures.",
             "expected_result": "The task contract and most recent review are visible after restart; no failed operation changes the plan."
+          },
+          {
+            "action": "Use export_plan, propose_change and a human/service apply_change on disposable state, then ratify and claim a new task. Inspect history and try invalid/stale proposals.",
+            "expected_result": "The plan can evolve through reviewed operations; agent execution stays separate from scope approval, invalid writes are atomic and history survives restart."
           }
         ],
         "in_scope": [
@@ -674,7 +687,8 @@
         ],
         "verification": [
           "cargo build --workspace --release && python3 scripts/smoke_agent.py",
-          "python3 scripts/smoke_self_host.py; every contract must survive both adapters unchanged."
+          "python3 scripts/smoke_self_host.py; every contract must survive both adapters unchanged.",
+          "Run python3 scripts/smoke_plans.py against release binaries; compare all proposal/application/history responses with CLI JSON."
         ]
       },
       "resources": [

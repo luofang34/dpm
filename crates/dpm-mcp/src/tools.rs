@@ -6,6 +6,22 @@ use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
 const NAMES: &[(&str, &str)] = &[
+    (
+        "export_plan",
+        "Get the full authoritative plan for a reviewed proposal",
+    ),
+    (
+        "propose_change",
+        "Validate an edited export and preview semantic differences without changing state; new tasks must be Proposed",
+    ),
+    (
+        "apply_change",
+        "Apply a reviewed proposal as a human or service with a reason; execution and evidence remain protected",
+    ),
+    (
+        "history",
+        "Read append-only semantic operations in chronological pages",
+    ),
     ("workspace_list", "List device-local workspace bindings"),
     (
         "workspace_register",
@@ -57,7 +73,7 @@ const NAMES: &[(&str, &str)] = &[
 
 pub(crate) fn definitions() -> Vec<Value> {
     NAMES.iter().map(|(name,description)| {
-        let read = matches!(*name, "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
+        let read = matches!(*name, "export_plan" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
         if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head") {
@@ -68,6 +84,11 @@ pub(crate) fn definitions() -> Vec<Value> {
             required.push("base_revision");
         }
         match *name {
+            "propose_change"|"apply_change" => {
+                properties.insert("plan".into(), json!({"type":"object","description":"Full export_plan data with the same workspace identity and observed revision; preserve execution/evidence fields. Omitted entities are reviewed deletions."})); required.push("plan");
+                if *name == "apply_change" { properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.push("reason"); }
+            },
+            "history" => { properties.insert("after_sequence".into(),json!({"type":"integer","minimum":0,"default":0})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"maximum":1000,"default":100})); },
             "workspace_register" => { properties.insert("database".into(),json!({"type":"string"})); properties.insert("replace".into(),json!({"type":"boolean","default":false})); required.push("database"); },
             "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); },
             "next_work" => { properties.insert("capabilities".into(),json!({"type":"array","items":{"type":"string"}})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"default":5})); properties.insert("probabilistic".into(),json!({"type":"boolean","default":true})); },
@@ -92,6 +113,9 @@ pub(crate) fn definitions() -> Vec<Value> {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct Arguments {
+    plan: Option<Box<dpm_model::Plan>>,
+    #[serde(default)]
+    after_sequence: u64,
     key: Option<String>,
     database: Option<String>,
     #[serde(default)]
@@ -131,11 +155,20 @@ pub(crate) fn call_tool_blocking(
     value: Value,
 ) -> Result<Value, AppError> {
     validate_argument_names(name, &value)?;
+    let history_limit = value.get("limit").cloned().unwrap_or(json!(100));
     let args: Arguments = serde_json::from_value(value)?;
     if matches!(name, "workspace_list" | "workspace_register") {
         return registry_tool_blocking(name, args);
     }
     let query = match name {
+        "export_plan" => Some(Query::Export),
+        "propose_change" => Some(Query::ProposeChange {
+            plan: required(args.plan.clone(), "plan")?,
+        }),
+        "history" => Some(Query::History {
+            after_sequence: args.after_sequence,
+            limit: serde_json::from_value(history_limit)?,
+        }),
         "project_status" => Some(Query::Status {
             probabilistic: args.probabilistic,
         }),
@@ -174,6 +207,12 @@ fn mutation_blocking(
     args: Arguments,
 ) -> Result<Command, AppError> {
     app.ensure_writable()?;
+    if name == "apply_change" {
+        return Ok(Command::ApplyChange {
+            plan: required(args.plan, "plan")?,
+            reason: required(args.reason, "reason")?,
+        });
+    }
     if name == "decide_gate" {
         let key = required(args.decision, "decision")?;
         let decision = app.decision_id_blocking(&key)?;

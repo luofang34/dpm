@@ -19,3 +19,4 @@ python3 scripts/smoke_mvp.py
 python3 scripts/smoke_agent.py
 python3 scripts/smoke_projects.py
 python3 scripts/smoke_terminal.py
+python3 scripts/smoke_plans.py

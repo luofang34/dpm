@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Traceable motivation for one or more work items.
+#[serde(deny_unknown_fields)]
 pub struct Requirement {
     /// Stable entity identity; it must match its containing map key.
     pub id: RequirementId,
@@ -46,6 +47,7 @@ pub enum ArtifactKind {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Reference to evidence with its creating principal and timestamp.
+#[serde(deny_unknown_fields)]
 pub struct Artifact {
     /// Stable entity identity; it must match its containing map key.
     pub id: ArtifactId,
@@ -76,6 +78,7 @@ pub enum DecisionStatus {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// A question or choice included in work context, optionally blocking execution.
+#[serde(deny_unknown_fields)]
 pub struct Decision {
     /// Stable entity identity; it must match its containing map key.
     pub id: DecisionId,
@@ -117,6 +120,7 @@ pub enum RiskImpact {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Identified uncertainty with probability and related work.
+#[serde(deny_unknown_fields)]
 pub struct Risk {
     /// Stable entity identity; it must match its containing map key.
     pub id: RiskId,

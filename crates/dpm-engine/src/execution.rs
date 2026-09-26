@@ -40,6 +40,27 @@ fn execute(
     at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     match command {
+        Command::ApplyChange {
+            plan: proposed,
+            reason,
+        } => {
+            nonempty("plan change", "reason", reason)?;
+            if actor.kind == dpm_model::ActorKind::Agent {
+                return Err(EngineError::ActorNotAllowed {
+                    actor: actor.clone(),
+                    action: "approve plan scope",
+                });
+            }
+            let preview = crate::propose_change(plan, proposed)?;
+            if preview.changes.is_empty() {
+                return Err(EngineError::InvalidCommand {
+                    entity: "plan".into(),
+                    reason: "proposal has no semantic changes".into(),
+                });
+            }
+            *plan = proposed.as_ref().clone();
+            Ok(())
+        }
         Command::RatifyContract { work } => review::ratify(plan, actor, *work),
         Command::Reject { work, reason } => review::reject(plan, actor, *work, reason, at),
         Command::Claim { work } => claim(plan, actor, *work),

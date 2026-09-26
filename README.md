@@ -139,8 +139,11 @@ cargo run -p dpm -- --database ./example.sqlite export > example.json
 
 Imported plans are checked for unique keys, valid references, containment/dependency cycles, finite
 ordered estimates, acceptance contracts, and consistent lifecycle/ownership. Import/export operate
-on authoritative snapshots; export does not include the operation history. Plan editing is through
-JSON import into a new workspace in this MVP. The console is a read-only snapshot: use `1`–`5` to
+on authoritative snapshots; export does not include the operation history. To edit a live workspace,
+export a candidate, inspect `dpm plan diff candidate.json`, then apply it with
+`dpm plan apply candidate.json --reason "Clarify scope" --actor human:planner`.
+New tasks enter as Proposed; `ratify` approves complete contracts. Plan changes preserve execution,
+evidence and existing decisions. Read the append-only audit with `dpm history --json`. The console is a read-only snapshot: use `1`–`5` to
 switch views (`5` or `g` opens Gantt), arrows or `j`/`k` to select work, Enter for details, and `q` to
 quit. Press `r` to reload agent changes while retaining the selected work and Gantt viewport.
 Detail shows the full steps, scope, acceptance, review and linked context; scroll to read long contracts.
@@ -273,7 +276,7 @@ The MCP command is a stdio server launched by an MCP client. [Agent/CLI contract
 documents supported tool names, revision checks and independent verification. `explain` resolves
 requirements, decision gates, risks and predecessor evidence so agents can inspect each contract.
 
-This increment deliberately defers server/sync, auth enrollment, history/undo, resource leveling,
+This increment deliberately defers server/sync, auth enrollment, undo, resource leveling,
 calendar expansion and rich UI. AGPL-3.0-only and the core/store/adapter boundaries are unchanged.
 
 Use `dpm ratify KEY --actor human:reviewer` to approve a Proposed contract.

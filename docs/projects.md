@@ -29,7 +29,9 @@ unsupported formats fail explicitly. A portable plan contains no device bindings
 
 `import PLAN.json` initializes an absent store from a validated plan; it never replaces live state.
 An existing locator requires the imported workspace identity to match. `export` produces a snapshot,
-not a backup of operation history. Keep consistent database backups for recovery.
+not a backup of operation history. Edit that export and use `plan diff` / `plan apply --reason`
+to maintain live state through reviewed commands; the file revision is an atomic precondition.
+`history` reads committed operations. Keep consistent database backups for recovery.
 
 ## One workspace, several entry points
 

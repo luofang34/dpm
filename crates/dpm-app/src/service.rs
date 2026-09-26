@@ -31,6 +31,20 @@ pub struct CommandRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "query", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Query {
+    /// Validate and inspect a proposed plan without changing state.
+    ProposeChange {
+        /// Full candidate snapshot retaining the observed revision.
+        plan: Box<Plan>,
+    },
+    /// Read append-only semantic operations in local sequence order.
+    History {
+        /// Exclusive local operation cursor; zero starts from the beginning.
+        after_sequence: u64,
+        /// Maximum number of entries, capped at 1000.
+        limit: u16,
+    },
+    /// Export a validated authoritative snapshot for plan proposals.
+    Export,
     /// Execution counts and optional Monte Carlo forecast.
     Status {
         /// Compute seeded uncertainty projections.
@@ -176,8 +190,36 @@ impl Application {
     }
     /// Compute one query from a consistent snapshot.
     pub fn query_blocking(&self, query: Query) -> Result<QueryResponse, AppError> {
+        if let Query::History {
+            after_sequence,
+            limit,
+        } = query
+        {
+            let page = match &self.backing {
+                Backing::Database(store) => store.history_blocking(after_sequence, limit)?,
+                Backing::Preview(plan) => dpm_store::HistoryPage {
+                    revision: plan.revision,
+                    entries: Vec::new(),
+                    next_after_sequence: after_sequence,
+                },
+            };
+            return Ok(QueryResponse {
+                api_version: API_VERSION,
+                revision: page.revision,
+                data: serde_json::to_value(page)?,
+            });
+        }
         let plan = self.plan_blocking()?;
         let data = match query {
+            Query::History { .. } => {
+                return Err(AppError::InvalidRequest(
+                    "history requires its consistent transaction".into(),
+                ));
+            }
+            Query::ProposeChange { plan: proposed } => {
+                serde_json::to_value(dpm_engine::propose_change(&plan, &proposed)?)?
+            }
+            Query::Export => serde_json::to_value(&plan)?,
             Query::Status { probabilistic } => serde_json::to_value(status(&plan, probabilistic)?)?,
             Query::Next {
                 capabilities,

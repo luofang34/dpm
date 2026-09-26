@@ -2,6 +2,7 @@ use crate::{Key, ProjectId, WorkspaceId};
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Top-level namespace for a plan.
+#[serde(deny_unknown_fields)]
 pub struct Workspace {
     /// Stable entity identity; it must match its containing map key.
     pub id: WorkspaceId,
@@ -11,6 +12,7 @@ pub struct Workspace {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Project objective, optionally nested under another project.
+#[serde(deny_unknown_fields)]
 pub struct Project {
     /// Stable entity identity; it must match its containing map key.
     pub id: ProjectId,

@@ -16,6 +16,7 @@ pub enum DependencyKind {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Temporal constraint between two work items.
+#[serde(deny_unknown_fields)]
 pub struct Dependency {
     /// Activity providing the constrained start or finish.
     pub predecessor: WorkItemId,
@@ -29,6 +30,7 @@ pub struct Dependency {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Authoritative graph and revision; scheduling and completion views are derived.
+#[serde(deny_unknown_fields)]
 pub struct Plan {
     /// Portable domain format version; unsupported formats are rejected.
     pub format_version: u32,

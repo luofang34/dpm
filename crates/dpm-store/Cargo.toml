@@ -12,6 +12,7 @@ dpm-engine = { path = "../dpm-engine", version = "0.1.0" }
 dpm-model = { path = "../dpm-model", version = "0.1.0" }
 rusqlite.workspace = true
 serde_json.workspace = true
+serde.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

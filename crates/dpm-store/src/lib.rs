@@ -4,4 +4,4 @@ mod error;
 mod sqlite;
 
 pub use error::StoreError;
-pub use sqlite::SqliteStore;
+pub use sqlite::{HistoryEntry, HistoryPage, SqliteStore};
