@@ -8,7 +8,7 @@ The configured actor is the local principal for every project mutation. A separa
 `--actor human:reviewer` or a service actor. This is a trusted local workspace, not remote authentication.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
-The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:5`
+The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:6`
 and the observed `revision`, so an agent can send `base_revision` with its next mutation. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
 which the store still checks atomically. Presentation text is not the API contract.
