@@ -43,6 +43,7 @@ which the store still checks atomically. Presentation text is not the API contra
 | workspace register --database PATH | workspace_register | Register an existing store; explicit replace redirects a local binding |
 | waive-dependency ID --reason TEXT | waive_dependency | Human/service stops enforcing a Soft edge; Hard edges need plan review |
 | restore-dependency ID --reason TEXT | restore_dependency | Human/service enforces a waived Soft edge again |
+| revalidate-basis KEY --dependency ID --attempt N --reason TEXT | revalidate_basis | Independent human/service re-bases started work after the attempt it relied on was rejected |
 
 Project initialization/import and opening the TUI are local CLI administration. `export_plan` supplies
 the full candidate shape for `propose_change` and `apply_change` (argument `plan`). Preserve its
@@ -263,6 +264,42 @@ releases, positive lag reports `release.state: unrecorded_event_time` with an ac
 `gates` (the claim report). A milestone's `progress.completed_at` is the latest release among its
 incoming edges and gating decisions, so a decision resolved after every prerequisite sets it;
 `{"recorded": TIME}` or `"unrecorded"`.
+
+## Provisional submission bases
+
+Each `submit_work` appends a submission attempt to `work.attempts`: a 1-based `number`, its
+`submitted_at` and an `outcome` whose `state` is `pending`, `rejected` (with reviewer, time and
+reason) or `verified` (with verifier and time). Reviews close attempts but never remove or renumber
+them, so rejection history stays in the snapshot. Submissions recorded before attempts existed have
+no attempt record and remain valid.
+
+A finish-to-start edge between two tasks may carry `start_basis: "Provisional"`, set or cleared
+only through reviewed `apply_change` like `policy` (and, like every edge into started work, frozen
+once its successor is claimed). For the successor's `claim` and `start` gates it releases on the
+predecessor's pending attempt plus positive lag; `gates.provisional[]` names each edge released
+this way with the `attempt` relied on, and `next_work` reasons say so. A legacy submission without
+an attempt record does not release it. `submit`, `verify`, milestone completion, progress and the
+remaining forecast still wait for the predecessor's verified finish: in `transitions.verify` the
+edge appears with `start_basis: "Provisional"` and no `accepts_submission`.
+
+`start_work` records the attempt each provisional edge was released on as an immutable entry in
+`work.basis` (`dependency`, `predecessor`, `attempt`, `recorded_at`, `source.kind: "start"`). Claims
+record nothing because they only reserve work. Whether a basis is invalidated is derived, never
+stored: when the relied-on attempt is rejected, `transitions.submit` and `transitions.verify` report
+`type: "basis_invalidated"` with the edge, `attempt`, the rejection in `state` and the
+predecessor's `current_attempt`, and `project_status.basis_invalidated` counts such work. A later
+submission or verification of the predecessor never clears it. `explain_work.basis.relies_on` lists
+the work's own effective bases and `basis.relied_on_by` the downstream work relying on its attempts,
+including the rejected ones, read from the snapshot rather than from history. A waived edge's basis
+is reported with `enforced: false` and gates nothing.
+
+`revalidate_basis` (`key`, `dependency`, `attempt`, nonempty `reason`, `base_revision`) appends a
+new basis with `source.kind: "revalidation"`, actor and reason. It is refused with no change unless
+the actor is a human or service that owns neither task (accepting work built on a rejected result is
+an accountable judgement, like a waiver, and neither owner may certify its own work), the effective
+basis on that edge is invalidated, and `attempt` is the predecessor's current pending or verified
+attempt. Revalidating onto a pending attempt relies on it again: if it is also rejected, the work is
+flagged again. Nothing rewrites lifecycles in cascade; the successor keeps its state throughout.
 
 ## Scoped next
 

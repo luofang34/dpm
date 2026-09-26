@@ -260,9 +260,9 @@ fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, C
         external @ (Commands::LinkExternal { .. } | Commands::UnlinkExternal { .. }) => {
             crate::tracking::mutation_blocking(app, external)?
         }
-        waiver @ (Commands::WaiveDependency { .. } | Commands::RestoreDependency { .. }) => {
-            waiver_mutation_blocking(app, waiver)?
-        }
+        waiver @ (Commands::WaiveDependency { .. }
+        | Commands::RestoreDependency { .. }
+        | Commands::RevalidateBasis { .. }) => waiver_mutation_blocking(app, waiver)?,
         _ => return Err(CliError::Input("expected a state-changing command".into())),
     };
     Ok(pair)
@@ -339,7 +339,22 @@ fn waiver_mutation_blocking(
                 reason,
             },
         ),
-        _ => return Err(CliError::Input("expected dependency waiver command".into())),
+        Commands::RevalidateBasis {
+            key,
+            dependency,
+            attempt,
+            reason,
+            actor: who,
+        } => (
+            actor(&who)?,
+            Command::RevalidateBasis {
+                work: app.work_id_blocking(&key)?,
+                dependency: app.dependency_id_blocking(&dependency)?,
+                attempt,
+                reason,
+            },
+        ),
+        _ => return Err(CliError::Input("expected dependency command".into())),
     })
 }
 

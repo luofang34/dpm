@@ -172,6 +172,12 @@ pub struct WorkItem {
     /// Most recent independent rejection; retained across resubmission as review context.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_rejection: Option<ReviewRejection>,
+    /// Every submission in order; reviews close attempts but never remove or renumber them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attempts: Vec<crate::SubmissionAttempt>,
+    /// Predecessor attempts this task's execution relies on; append-only, latest per edge applies.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub basis: Vec<crate::DependencyBasis>,
     /// Non-empty reason while the task is blocked.
     pub block_reason: Option<String>,
 }

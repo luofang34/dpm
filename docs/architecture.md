@@ -29,10 +29,11 @@ screens.
 ## Authoritative vs derived
 
 Authoritative inputs include work lifecycle, objective, acceptance criteria, dependency identity,
-type, lag, policy and waivers, non-gating work links, duration estimates, requirements, decision outcomes, risks, ownership, artifacts, actors, and
+type, lag, policy, provisional start basis and waivers, submission attempts and recorded dependency
+bases, non-gating work links, duration estimates, requirements, decision outcomes, risks, ownership, artifacts, actors, and
 commands.
 
-Derived values include readiness, earliest/latest start/finish, float, critical activities,
+Derived values include readiness, basis invalidation, earliest/latest start/finish, float, critical activities,
 completion percentiles, criticality, `next` scores, and UI layout. Derived values are recomputed and
 must not become synchronized truth.
 
@@ -160,8 +161,27 @@ the operation log, and readiness is never stored.
 Verification re-checks every unwaived relation of all four kinds and every decision, so a restored
 waiver applies again before acceptance and a finish is never accepted on an unverified FF
 predecessor. Only verification counts as a predecessor's finish; a submitted predecessor has not
-finished for gating (provisional submission bases are a separate contract). Claim and start share
-the start gates, so only claimable work is recommended by `next`.
+finished for gating, except that a provisional edge (below) may release a successor's start. Claim
+and start share the start gates, so only claimable work is recommended by `next`.
+
+#### Provisional submission bases
+
+Each submission appends a `SubmissionAttempt` with a deterministic per-task ordinal; rejection and
+verification close it in place, so attempts are never removed or renumbered. A finish-to-start edge
+between tasks may declare `start_basis = Provisional`, an authoritative policy changed only by
+reviewed plan change. `Timeline::start_edge` releases such an edge for the successor's claim and
+start on the predecessor's pending attempt plus positive lag; every other evaluation, including the
+successor's submission and verification, milestone reach, progress and the remaining forecast, uses
+`Timeline::edge`, so a submission never counts as a finish. A submission recorded before attempts
+existed has no identity to rely on and does not release the edge.
+
+The start command records the attempts the shared evaluator released it on as immutable
+`DependencyBasis` entries on the successor. Basis state is derived from the predecessor's attempt
+record, never cached: a basis on a rejected attempt adds `UnmetGate::BasisInvalidated` to the
+successor's submission and verification gates until `RevalidateBasis` appends a basis on the
+predecessor's current pending or verified attempt. Only a human or service that owns neither task may
+revalidate, and a stale or unrejected request changes nothing. Later upstream submissions and
+verifications never re-base a successor, and no command rewrites downstream lifecycles.
 
 A milestone has zero duration: its start and finish are one reach event, and all four relation kinds
 into it gate that event. It is reached when every unwaived incoming edge is released and every

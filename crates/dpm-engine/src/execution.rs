@@ -78,6 +78,12 @@ fn execute(
         Command::RestoreDependency { dependency, reason } => {
             waiver::restore(plan, actor, *dependency, reason)
         }
+        Command::RevalidateBasis {
+            work,
+            dependency,
+            attempt,
+            reason,
+        } => revalidation::revalidate(plan, actor, *work, *dependency, *attempt, reason, at),
         Command::Decide { decision, outcome } => {
             nonempty(&decision.to_string(), "outcome", outcome)?;
             let gate = plan
@@ -158,6 +164,7 @@ fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
 }
 
 mod lifecycle;
+mod revalidation;
 mod review;
 mod tracking;
 mod waiver;

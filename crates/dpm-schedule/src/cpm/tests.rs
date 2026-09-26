@@ -43,6 +43,8 @@ fn task(project: ProjectId, key: &str, hours: f64) -> WorkItem {
         block_reason: None,
         events: Default::default(),
         last_rejection: None,
+        attempts: Vec::new(),
+        basis: Vec::new(),
         resources: Vec::new(),
     }
 }

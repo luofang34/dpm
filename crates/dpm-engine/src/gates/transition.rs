@@ -55,6 +55,20 @@ impl Transition {
         }
     }
 
+    /// Whether this transition is gated as the successor's start, where a provisional edge may
+    /// accept a pending predecessor attempt.
+    #[must_use]
+    pub fn starts(self) -> bool {
+        matches!(self, Self::Claim | Self::Start)
+    }
+
+    /// Whether a basis on a rejected predecessor attempt prevents this transition: finishing work
+    /// built on a rejected result would hide the rejection.
+    #[must_use]
+    pub fn checks_basis(self) -> bool {
+        matches!(self, Self::Submit | Self::Verify)
+    }
+
     /// Whether open decisions on the work or its containers prevent this transition.
     #[must_use]
     pub fn checks_decisions(self) -> bool {

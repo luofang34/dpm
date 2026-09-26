@@ -96,6 +96,18 @@ pub enum Command {
         /// Non-empty justification.
         reason: String,
     },
+    /// Record, as an independent human or service, that started work built on a rejected
+    /// predecessor attempt remains valid on the predecessor's current attempt.
+    RevalidateBasis {
+        /// Successor whose basis on the edge was invalidated.
+        work: WorkItemId,
+        /// Provisional edge carrying the invalidated basis.
+        dependency: DependencyId,
+        /// Predecessor attempt the reviewer checked; it must still be current and not rejected.
+        attempt: u32,
+        /// Non-empty justification of the review.
+        reason: String,
+    },
     /// Resolve an open gate.
     Decide {
         /// Gate to resolve.
@@ -246,6 +258,21 @@ pub enum EngineError {
     /// Verification must be independent of the owner.
     #[error("the submitting actor cannot verify its own work {0}")]
     SelfVerification(WorkItemId),
+    /// A revalidation names a predecessor attempt that is not its current pending or verified one.
+    #[error(
+        "cannot revalidate {work} on dependency {dependency} against attempt #{requested}: the predecessor's current unrejected attempt is {}",
+        .current.map_or_else(|| "none".to_string(), |n| format!("#{n}"))
+    )]
+    StaleAttempt {
+        /// Successor named by the request.
+        work: WorkItemId,
+        /// Provisional edge named by the request.
+        dependency: DependencyId,
+        /// Attempt the reviewer checked.
+        requested: u32,
+        /// Predecessor's latest attempt if it is pending or verified.
+        current: Option<u32>,
+    },
     /// A resolved gate cannot be resolved again.
     #[error("decision {0} is not open")]
     DecisionNotOpen(DecisionId),

@@ -3,7 +3,9 @@
 mod actor;
 mod events;
 pub use events::*;
+mod provisional;
 mod timeline;
+pub use provisional::*;
 pub use timeline::{Timeline, completion};
 mod context;
 mod dependency;

@@ -6,7 +6,7 @@ mod command;
 mod context;
 mod execution;
 mod gates;
-pub use gates::{GateReport, Transition, UnmetGate, gate_report};
+pub use gates::{GateReport, ProvisionalRelease, Transition, UnmetGate, gate_report};
 mod progress;
 mod query;
 mod readiness;
@@ -19,8 +19,8 @@ pub use scope::{
 pub use command::{Command, EngineError, ExternalLinkRequest, Operation};
 pub use execution::apply_command;
 pub use query::{
-    NextWorkCandidate, NextWorkQuery, StatusSummary, WorkExplanation, explain_work, next_work,
-    status,
+    BasisReport, NextWorkCandidate, NextWorkQuery, StatusSummary, WorkExplanation, explain_work,
+    next_work, status,
 };
 pub use readiness::{completion, is_ready, show_work};
 

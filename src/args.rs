@@ -213,6 +213,21 @@ pub(crate) enum Commands {
         #[arg(long, default_value = "human:local")]
         actor: String,
     },
+    /// Re-base started work on a predecessor's current attempt after the relied-on one was rejected.
+    RevalidateBasis {
+        /// Successor whose provisional basis was invalidated.
+        key: String,
+        /// Stable identity of the provisional edge, as shown by explain.
+        #[arg(long)]
+        dependency: String,
+        /// Predecessor attempt the reviewer checked; must be its current pending or verified one.
+        #[arg(long)]
+        attempt: u32,
+        #[arg(long)]
+        reason: String,
+        #[arg(long, default_value = "human:local")]
+        actor: String,
+    },
 }
 
 /// Provider-scoped identity of an external object, independent of labels and URLs.

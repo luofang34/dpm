@@ -6,6 +6,7 @@ mod entities;
 mod events;
 mod graph;
 mod instructions;
+mod provisional;
 
 /// Invalid duration uncertainty supplied by a plan author.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
@@ -73,7 +74,8 @@ impl Plan {
         entities::validate(self)?;
         crate::tracking::validate(self)?;
         graph::validate(self)?;
-        dependency::validate(self)
+        dependency::validate(self)?;
+        provisional::validate(self)
     }
 }
 

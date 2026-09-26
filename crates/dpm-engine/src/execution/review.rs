@@ -1,7 +1,9 @@
 use super::{nonempty, task_mut};
 use crate::EngineError;
 use chrono::{DateTime, Utc};
-use dpm_model::{ActorId, ActorKind, Plan, ReviewRejection, WorkItemId, WorkStatus};
+use dpm_model::{
+    ActorId, ActorKind, AttemptOutcome, Plan, ReviewRejection, WorkItemId, WorkStatus,
+};
 
 pub(super) fn ratify(
     plan: &mut Plan,
@@ -50,6 +52,18 @@ pub(super) fn reject(
     item.status = WorkStatus::InProgress;
     // The rejected submission is no longer a finish claim; resubmission records a new time.
     item.events.submitted_at = None;
+    // The attempt stays in history so bases that relied on it remain visibly invalidated.
+    if let Some(attempt) = item
+        .attempts
+        .last_mut()
+        .filter(|a| a.outcome == AttemptOutcome::Pending)
+    {
+        attempt.outcome = AttemptOutcome::Rejected {
+            actor: actor.clone(),
+            at,
+            reason: reason.into(),
+        };
+    }
     item.last_rejection = Some(ReviewRejection {
         actor: actor.clone(),
         at,

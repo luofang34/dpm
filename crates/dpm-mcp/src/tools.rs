@@ -103,6 +103,10 @@ const NAMES: &[(&str, &str)] = &[
         "restore_dependency",
         "Enforce a waived soft dependency again as a human or service with a reason",
     ),
+    (
+        "revalidate_basis",
+        "Re-base started work on the predecessor's current attempt after the attempt it relied on was rejected; an independent human or service only",
+    ),
 ];
 
 pub(crate) fn definitions() -> Vec<Value> {
@@ -110,7 +114,7 @@ pub(crate) fn definitions() -> Vec<Value> {
         let read = matches!(*name, "export_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
-        if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"start_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external") {
+        if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"start_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external"|"revalidate_basis") {
             properties.insert("key".into(),json!({"type":"string"})); required.push("key");
         }
         if !read && *name != "workspace_register" {
@@ -150,6 +154,11 @@ pub(crate) fn definitions() -> Vec<Value> {
             "waive_dependency"|"restore_dependency" => {
                 properties.insert("dependency".into(),json!({"type":"string","format":"uuid","description":"Stable dependency id from explain_work context.dependencies or export_plan"}));
                 properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.extend(["dependency","reason"]);
+            },
+            "revalidate_basis" => {
+                properties.insert("dependency".into(),json!({"type":"string","format":"uuid","description":"Provisional edge id from explain_work basis.relies_on or gates"}));
+                properties.insert("attempt".into(),json!({"type":"integer","minimum":1,"description":"Predecessor attempt the reviewer checked; must be its current pending or verified attempt"}));
+                properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.extend(["dependency","attempt","reason"]);
             },
             "decide_gate" => {
                 properties.insert("decision".into(),json!({"type":"string"})); properties.insert("outcome".into(),json!({"type":"string","minLength":1})); required.extend(["decision","outcome"]);
@@ -195,6 +204,7 @@ struct Arguments {
     role: Option<ExternalLinkRole>,
     observed: Option<ExternalState>,
     dependency: Option<String>,
+    attempt: Option<u32>,
     xml: Option<String>,
     project_key: Option<String>,
     key_prefix: Option<String>,
@@ -287,14 +297,11 @@ fn mutation_blocking(
             outcome: required(args.outcome, "outcome")?,
         });
     }
-    if matches!(name, "waive_dependency" | "restore_dependency") {
-        let dependency = app.dependency_id_blocking(&required(args.dependency, "dependency")?)?;
-        let reason = required(args.reason, "reason")?;
-        return Ok(if name == "waive_dependency" {
-            Command::WaiveDependency { dependency, reason }
-        } else {
-            Command::RestoreDependency { dependency, reason }
-        });
+    if matches!(
+        name,
+        "waive_dependency" | "restore_dependency" | "revalidate_basis"
+    ) {
+        return dependency_command(app, name, args);
     }
     let key = required(args.key, "key")?;
     if name == "link_external" {
@@ -351,6 +358,27 @@ fn mutation_blocking(
         }),
         _ => Err(AppError::InvalidRequest(format!("unknown tool {name}"))),
     }
+}
+
+/// Commands naming a dependency edge by its stable identity.
+fn dependency_command(app: &Application, name: &str, args: Arguments) -> Result<Command, AppError> {
+    // The CLI resolves the work key before the edge; the same order yields the same error.
+    let work = match name {
+        "revalidate_basis" => Some(app.work_id_blocking(&required(args.key, "key")?)?),
+        _ => None,
+    };
+    let dependency = app.dependency_id_blocking(&required(args.dependency, "dependency")?)?;
+    let reason = required(args.reason, "reason")?;
+    Ok(match (name, work) {
+        ("waive_dependency", _) => Command::WaiveDependency { dependency, reason },
+        ("restore_dependency", _) => Command::RestoreDependency { dependency, reason },
+        (_, work) => Command::RevalidateBasis {
+            work: required(work, "key")?,
+            dependency,
+            attempt: required(args.attempt, "attempt")?,
+            reason,
+        },
+    })
 }
 
 fn validate_argument_names(name: &str, value: &Value) -> Result<(), AppError> {

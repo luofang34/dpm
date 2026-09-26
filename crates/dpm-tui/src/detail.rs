@@ -182,6 +182,48 @@ fn execution(lines: &mut Vec<String>, detail: &WorkExplanation) {
             }
         }),
     );
+    section(
+        lines,
+        "Provisional basis",
+        detail
+            .basis
+            .relies_on
+            .iter()
+            .map(|s| {
+                format!(
+                    "relies on {} attempt #{}: {}",
+                    s.predecessor_key,
+                    s.basis.attempt,
+                    basis_state(s)
+                )
+            })
+            .chain(detail.basis.relied_on_by.iter().map(|s| {
+                format!(
+                    "{} relies on attempt #{}: {}",
+                    s.successor_key,
+                    s.basis.attempt,
+                    basis_state(s)
+                )
+            })),
+    );
+}
+
+/// The same derived basis state `explain` returns, including who rejected the attempt.
+fn basis_state(status: &dpm_model::BasisStatus) -> String {
+    let state = match &status.state {
+        dpm_model::BasisState::Pending => "pending review".to_string(),
+        dpm_model::BasisState::Verified => "verified".to_string(),
+        dpm_model::BasisState::Invalidated {
+            rejected_by,
+            reason,
+            ..
+        } => format!("invalidated, rejected by {rejected_by}: {reason}"),
+    };
+    if status.enforced {
+        state
+    } else {
+        format!("{state} (edge waived)")
+    }
 }
 
 fn section(lines: &mut Vec<String>, title: &str, values: impl IntoIterator<Item = String>) {
@@ -191,3 +233,7 @@ fn section(lines: &mut Vec<String>, title: &str, values: impl IntoIterator<Item 
         lines.extend(values);
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic)]
+mod tests;

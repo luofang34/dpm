@@ -1,7 +1,9 @@
 use super::{downstream_counts, simulation_config};
 use crate::{EngineError, GateReport, Transition, gates, readiness::show_with};
 use chrono::{DateTime, Utc};
-use dpm_model::{Plan, Timeline, WorkItem, WorkItemId};
+use dpm_model::{
+    BasisStatus, Plan, Timeline, WorkItem, WorkItemId, basis_dependents, basis_status,
+};
 use dpm_schedule::{deterministic_remaining, simulate_remaining};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -32,6 +34,18 @@ pub struct WorkExplanation {
     pub criticality: Option<f64>,
     /// Readiness, blocker, gate, lifecycle, lag and schedule explanations.
     pub why_now: Vec<String>,
+    /// Provisional bases this work relies on, and other work relying on its submission attempts.
+    #[serde(default)]
+    pub basis: BasisReport,
+}
+
+/// Derived validity of recorded provisional bases, read from the snapshot's attempt records.
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BasisReport {
+    /// Effective basis of this work on each provisional edge into it.
+    pub relies_on: Vec<BasisStatus>,
+    /// Effective bases of downstream work on this work's attempts, including rejected ones.
+    pub relied_on_by: Vec<BasisStatus>,
 }
 
 /// Explain a validated work item at an adapter-supplied time, including derived completion.
@@ -87,6 +101,10 @@ pub fn explain_work(
         schedule: schedule.activities.get(&work).cloned(),
         criticality,
         why_now,
+        basis: BasisReport {
+            relies_on: basis_status(plan, authoritative),
+            relied_on_by: basis_dependents(plan, work),
+        },
     })
 }
 

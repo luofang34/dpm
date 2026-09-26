@@ -83,6 +83,8 @@ impl Network {
             block_reason: None,
             events: Default::default(),
             last_rejection: None,
+            attempts: Vec::new(),
+            basis: Vec::new(),
             resources: Vec::new(),
         };
         self.plan.work_items.insert(id, work);

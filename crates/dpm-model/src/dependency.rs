@@ -55,6 +55,28 @@ pub enum DependencyPolicy {
     Soft,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Which predecessor result releases a finish-to-start edge for the successor's start.
+///
+/// Only the start gates (claim and start) differ: the successor's verification, milestone reach
+/// and the remaining forecast always wait for the predecessor's verified finish.
+pub enum StartBasis {
+    /// The successor starts only after the predecessor is verified.
+    #[default]
+    Verified,
+    /// The successor may start on the predecessor's pending submission attempt, and its start
+    /// records that attempt as its basis; a rejection of the attempt invalidates the basis.
+    Provisional,
+}
+
+impl StartBasis {
+    /// Whether this is the default verified-finish basis, which serialization omits.
+    #[must_use]
+    pub fn is_verified(&self) -> bool {
+        *self == Self::Verified
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Recorded decision to stop enforcing a soft constraint.
 #[serde(deny_unknown_fields)]
@@ -83,6 +105,9 @@ pub struct Dependency {
     pub lag_hours: f64,
     /// Whether the constraint may be waived.
     pub policy: DependencyPolicy,
+    /// Predecessor result that releases the successor's start; changed only by reviewed plan change.
+    #[serde(default, skip_serializing_if = "StartBasis::is_verified")]
+    pub start_basis: StartBasis,
     /// Optional author explanation of why the constraint and its policy exist.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rationale: Option<String>,
@@ -104,6 +129,8 @@ struct DependencyRecord {
     #[serde(default)]
     policy: DependencyPolicy,
     #[serde(default)]
+    start_basis: StartBasis,
+    #[serde(default)]
     rationale: Option<String>,
     #[serde(default)]
     waiver: Option<DependencyWaiver>,
@@ -120,6 +147,7 @@ impl From<DependencyRecord> for Dependency {
             kind: record.kind,
             lag_hours: record.lag_hours,
             policy: record.policy,
+            start_basis: record.start_basis,
             rationale: record.rationale,
             waiver: record.waiver,
         }
@@ -187,6 +215,7 @@ impl Dependency {
             kind,
             lag_hours,
             policy: DependencyPolicy::Hard,
+            start_basis: StartBasis::Verified,
             rationale: None,
             waiver: None,
         }

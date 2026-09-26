@@ -283,6 +283,8 @@ fn new_work(id: WorkItemId, key: Key, kind: WorkKind, project: ProjectId) -> Wor
         owner: None,
         resources: Vec::new(),
         last_rejection: None,
+        attempts: Vec::new(),
+        basis: Vec::new(),
         block_reason: None,
         events: Default::default(),
     }

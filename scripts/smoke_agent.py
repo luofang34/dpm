@@ -71,7 +71,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'report_blocker', 'report_progress', 'restore_dependency', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register'} == names
+        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),
@@ -408,6 +408,8 @@ if __name__ == '__main__':
         scope_smoke(Path(directory))
         dependency_smoke(Path(directory))
         timing_smoke(Path(directory))
+        from smoke_provisional import provisional_smoke
+        provisional_smoke(Path(directory))
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')
     print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')
     print('PASS: CLI/MCP dependency identity, soft-edge waiver/restore, refusals and non-gating links')

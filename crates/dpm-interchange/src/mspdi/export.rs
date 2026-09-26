@@ -332,6 +332,12 @@ fn dependency_reports(
             if edge.policy == dpm_model::DependencyPolicy::Soft {
                 notes.push("Soft policy is not represented; MSPDI links always apply".into());
             }
+            if edge.start_basis == dpm_model::StartBasis::Provisional {
+                notes.push(
+                    "provisional start basis is not represented; MSPDI links wait for the finish"
+                        .into(),
+                );
+            }
             if edge.rationale.is_some() {
                 notes.push("rationale is not represented".into());
             }

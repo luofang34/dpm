@@ -1,12 +1,15 @@
 use crate::{EngineError, Transition, gates};
 use chrono::{DateTime, Utc};
-use dpm_model::{DecisionStatus, Plan, Priority, Timeline, WorkItem, WorkItemId, WorkStatus};
+use dpm_model::{
+    BasisStatus, DecisionStatus, Plan, Priority, Timeline, WorkItem, WorkItemId, WorkStatus,
+    basis_status,
+};
 use dpm_schedule::{SimulationConfig, deterministic_remaining, simulate_remaining};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 mod explain;
-pub use explain::{WorkExplanation, explain_work};
+pub use explain::{BasisReport, WorkExplanation, explain_work};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Execution counts and remaining schedule projections.
 pub struct StatusSummary {
@@ -26,6 +29,9 @@ pub struct StatusSummary {
     pub in_flight: usize,
     /// Number of tasks awaiting independent verification.
     pub awaiting_verification: usize,
+    /// Number of tasks whose enforced provisional basis rests on a rejected predecessor attempt.
+    #[serde(default)]
+    pub basis_invalidated: usize,
     /// Count of completed tasks and derived aggregate completions.
     pub complete: usize,
     /// Number of unresolved decisions, whether contextual or blocking.
@@ -92,6 +98,11 @@ pub fn status(
             .work_items
             .values()
             .filter(|w| w.status == WorkStatus::Submitted)
+            .count(),
+        basis_invalidated: plan
+            .work_items
+            .values()
+            .filter(|w| basis_status(plan, w).iter().any(BasisStatus::gates))
             .count(),
         complete: timeline.completed().len(),
         open_decisions: plan
@@ -194,16 +205,16 @@ pub fn next_work(
     let mut candidates = plan
         .work_items
         .values()
-        .filter(|work| reports.get(&work.id).is_some_and(|r| r.ready))
-        .filter(|work| {
+        .filter_map(|work| reports.get(&work.id).filter(|r| r.ready).map(|r| (work, r)))
+        .filter(|(work, _)| {
             query.capabilities.is_empty() || work.capabilities.is_subset(&query.capabilities)
         })
-        .map(|work| {
+        .map(|(work, claim)| {
             let finish = gates::evaluate(plan, work, Transition::Submit, &timeline);
             candidate(
                 work,
                 query,
-                &finish,
+                (claim, &finish),
                 &schedule.activities[&work.id],
                 &downstream,
                 simulation.as_ref(),
@@ -222,7 +233,7 @@ pub fn next_work(
 fn candidate(
     work: &WorkItem,
     query: &NextWorkQuery,
-    finish: &crate::GateReport,
+    (claim, finish): (&crate::GateReport, &crate::GateReport),
     activity: &dpm_schedule::ActivitySchedule,
     downstream: &BTreeMap<WorkItemId, usize>,
     simulation: Option<&dpm_schedule::SimulationSummary>,
@@ -250,6 +261,12 @@ fn candidate(
         "start gates are satisfied: every FS/SS predecessor event and positive lag has elapsed"
             .into(),
     );
+    for release in &claim.provisional {
+        reasons.push(format!(
+            "provisional: {} attempt #{} is only submitted; a start relies on it, and verification still requires its verified finish",
+            release.key, release.attempt
+        ));
+    }
     let pending_finish = finish
         .unmet
         .iter()

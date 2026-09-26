@@ -2,9 +2,12 @@
 //! operation's own timestamp and records that timestamp as the transition's event.
 
 use super::{nonempty, owns, task_mut};
-use crate::{EngineError, Transition, gates};
+use crate::{EngineError, GateReport, Transition, gates};
 use chrono::{DateTime, Utc};
-use dpm_model::{ActorId, Plan, Timeline, WorkItemId, WorkStatus};
+use dpm_model::{
+    ActorId, AttemptOutcome, BasisSource, DependencyBasis, Plan, SubmissionAttempt, Timeline,
+    WorkItemId, WorkStatus,
+};
 
 /// Reject the transition unless every gate the query views report for it is satisfied at `at`.
 fn permit(
@@ -12,14 +15,14 @@ fn permit(
     work: WorkItemId,
     transition: Transition,
     at: DateTime<Utc>,
-) -> Result<(), EngineError> {
+) -> Result<GateReport, EngineError> {
     let item = plan
         .work_items
         .get(&work)
         .ok_or(EngineError::MissingWorkItem(work))?;
     let report = gates::evaluate(plan, item, transition, &Timeline::at(plan, at));
     if report.ready {
-        return Ok(());
+        return Ok(report);
     }
     if let Some(reason) = &item.block_reason {
         return Err(EngineError::Blocked {
@@ -77,10 +80,23 @@ pub(super) fn start(
     at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     require_status(plan, actor, work, WorkStatus::Claimed)?;
-    permit(plan, work, Transition::Start, at)?;
+    let report = permit(plan, work, Transition::Start, at)?;
     let item = task_mut(plan, work)?;
     item.status = WorkStatus::InProgress;
     item.events.started_at = Some(at);
+    // The start relies on exactly the attempts the shared evaluator released it on.
+    item.basis.extend(
+        report
+            .provisional
+            .into_iter()
+            .map(|release| DependencyBasis {
+                dependency: release.dependency,
+                predecessor: release.predecessor,
+                attempt: release.attempt,
+                recorded_at: at,
+                source: BasisSource::Start,
+            }),
+    );
     Ok(())
 }
 
@@ -172,6 +188,12 @@ pub(super) fn submit(
     let item = task_mut(plan, work)?;
     item.status = WorkStatus::Submitted;
     item.events.submitted_at = Some(at);
+    let number = item.attempts.last().map_or(1, |a| a.number.wrapping_add(1));
+    item.attempts.push(SubmissionAttempt {
+        number,
+        submitted_at: at,
+        outcome: AttemptOutcome::Pending,
+    });
     Ok(())
 }
 
@@ -192,6 +214,17 @@ pub(super) fn verify(
     let item = task_mut(plan, work)?;
     item.status = WorkStatus::Verified;
     item.events.verified_at = Some(at);
+    // A legacy submission has no attempt record to close.
+    if let Some(attempt) = item
+        .attempts
+        .last_mut()
+        .filter(|a| a.outcome == AttemptOutcome::Pending)
+    {
+        attempt.outcome = AttemptOutcome::Verified {
+            actor: actor.clone(),
+            at,
+        };
+    }
     Ok(())
 }
 
