@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Provisional submission bases read and change identically through the CLI and MCP adapters."""
 import json
+import tempfile
+from pathlib import Path
 
 from smoke_agent import ROOT, Agent, run_cli
 
@@ -96,3 +98,8 @@ def provisional_smoke(directory):
         for agent in (author, builder, reviewer):
             agent.close()
     print('PASS: CLI/MCP provisional starts, rejected-attempt invalidation, stale/unauthorized revalidation and reviewed re-basing')
+
+
+if __name__ == '__main__':
+    with tempfile.TemporaryDirectory(prefix='dpm-provisional-') as directory:
+        provisional_smoke(Path(directory))
