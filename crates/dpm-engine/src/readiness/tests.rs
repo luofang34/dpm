@@ -1,7 +1,7 @@
 use super::*;
 use crate::{Command, apply_command, explain_work};
 use chrono::Utc;
-use dpm_model::{ActorId, Key};
+use dpm_model::{ActorId, Key, WorkKind};
 
 fn nested_plan() -> (Plan, WorkItemId, WorkItemId) {
     let mut plan: Plan = serde_json::from_str(include_str!(

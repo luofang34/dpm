@@ -47,7 +47,10 @@ successor start:
 - SF: `S_b >= S_a - d_b + lag`
 
 The dependency graph must be acyclic. v0.1 uses elapsed hours; working calendars are a future input
-adapter and must not change dependency semantics.
+adapter and must not change dependency semantics. Total float permits delay without moving project
+completion; free float also preserves every direct successor's earliest start under its relation
+and lag. Remaining forecasts remove historical constraints touching completed tasks or reached
+milestones, using the same completion and decision-gate projection as execution queries.
 
 For uncertain work, DPM stores optimistic / most-likely / pessimistic durations. Simulation
 samples triangular distributions, recomputes the network, and reports completion percentiles and

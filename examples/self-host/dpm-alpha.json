@@ -529,6 +529,9 @@
         },
         {
           "text": "Exercise a real controlling terminal: navigation and refresh append no domain operations; q and Ctrl-C restore raw mode, mouse capture and the alternate screen."
+        },
+        {
+          "text": "Cross-check remaining forecasts against reached/pending milestones: completed conditions do not reintroduce historical lag. Inspect P50/P80/P95 and distinguish free float from total float under FS/SS/FF/SF."
         }
       ],
       "status": "Planned",
@@ -585,7 +588,8 @@
         "verification": [
           "cargo test -p dpm-tui --all-targets",
           "Compare exported snapshots before/after manual navigation; exercise Unicode and FS/SS/FF/SF signed lag.",
-          "Run python3 scripts/smoke_terminal.py against release binaries and inspect TestBackend refresh/contract coverage."
+          "Run python3 scripts/smoke_terminal.py against release binaries and inspect TestBackend refresh/contract coverage.",
+          "Run schedule regressions for reached milestones, seeded remaining forecasts and relation-specific free float; verify status and explain expose matching projections through CLI/MCP."
         ]
       },
       "resources": [

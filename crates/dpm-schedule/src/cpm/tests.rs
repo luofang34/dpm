@@ -221,3 +221,119 @@ fn completed_dependencies_do_not_reintroduce_historical_lag() {
         16.0
     );
 }
+
+#[test]
+fn free_float_distinguishes_successor_delay_from_project_delay_for_all_relations() {
+    for kind in [
+        DependencyKind::FinishStart,
+        DependencyKind::StartStart,
+        DependencyKind::FinishFinish,
+        DependencyKind::StartFinish,
+    ] {
+        for lag in [-5.0, 0.0, 3.0] {
+            let (mut plan, a, b) = pair(10.0, 4.0);
+            let c = task(plan.work_items[&a].project, "C", 30.0);
+            plan.work_items.insert(c.id, c);
+            plan.dependencies.push(Dependency {
+                predecessor: a,
+                successor: b,
+                kind,
+                lag_hours: lag,
+            });
+            let original = plan.clone();
+            let schedule = deterministic(&plan).expect("schedule");
+            let left = &schedule.activities[&a];
+            let right = &schedule.activities[&b];
+            assert!(left.free_float_hours <= left.total_float_hours + EPSILON);
+            assert!(left.free_float_hours >= 0.0);
+            let shifted = left.earliest_start_hours + left.free_float_hours;
+            let weight = relation_weight(kind, 10.0, 4.0, lag);
+            assert!(shifted + weight <= right.earliest_start_hours + EPSILON);
+            assert!(shifted + 10.0 <= schedule.project_finish_hours + EPSILON);
+            assert!(
+                shifted + 0.1 + weight > right.earliest_start_hours
+                    || shifted + 0.1 + 10.0 > schedule.project_finish_hours
+            );
+            assert_eq!(plan, original);
+        }
+    }
+    let (mut plan, a, b) = pair(10.0, 4.0);
+    let c = task(plan.work_items[&a].project, "C", 20.0);
+    plan.work_items.insert(c.id, c);
+    plan.dependencies.push(Dependency {
+        predecessor: a,
+        successor: b,
+        kind: DependencyKind::FinishStart,
+        lag_hours: 0.0,
+    });
+    let schedule = deterministic(&plan).expect("schedule");
+    assert_eq!(schedule.activities[&a].free_float_hours, 0.0);
+    assert_eq!(schedule.activities[&a].total_float_hours, 6.0);
+    assert_eq!(schedule.activities[&b].free_float_hours, 6.0);
+}
+
+#[test]
+fn reached_milestones_do_not_reintroduce_historical_lag_in_remaining_forecasts() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let milestone = plan.find_work_by_key("TEST-M1").expect("milestone").id;
+    let successor = plan.find_work_by_key("TEST-F").expect("successor").id;
+    for task in plan
+        .work_items
+        .values_mut()
+        .filter(|w| w.is_executable() && w.id != successor)
+    {
+        task.status = WorkStatus::Verified;
+        task.owner = Some(dpm_model::ActorId::agent("worker"));
+    }
+    // The gate keeps an otherwise completed milestone pending until the choice is made.
+    let decision = plan.decisions.values_mut().next().expect("gate");
+    decision.blocks.insert(milestone);
+    plan.dependencies
+        .iter_mut()
+        .find(|d| d.successor == successor)
+        .expect("incoming edge")
+        .successor = milestone;
+    let outgoing = plan
+        .dependencies
+        .iter_mut()
+        .find(|d| d.predecessor == successor)
+        .expect("outgoing edge");
+    outgoing.predecessor = milestone;
+    outgoing.successor = successor;
+    outgoing.lag_hours = 24.0;
+    let duration = plan.work_items[&successor].expected_duration_hours();
+    assert_eq!(
+        deterministic_remaining(&plan)
+            .expect("pending")
+            .project_finish_hours,
+        duration + 24.0
+    );
+    let decision = plan.decisions.values_mut().next().expect("gate");
+    decision.status = dpm_model::DecisionStatus::Decided;
+    decision.outcome = Some("Acceptance condition met".into());
+    let original = plan.clone();
+    assert!(dpm_model::completion(&plan).contains(&milestone));
+    assert_eq!(
+        deterministic_remaining(&plan)
+            .expect("remaining")
+            .project_finish_hours,
+        duration
+    );
+    let risk = crate::simulate_remaining(
+        &plan,
+        crate::SimulationConfig {
+            iterations: 32,
+            seed: 9,
+        },
+    )
+    .expect("simulation");
+    let estimate = plan.work_items[&successor].estimate.expect("estimate");
+    assert!(risk.p50_finish_hours >= estimate.optimistic_hours);
+    assert!(risk.p50_finish_hours <= risk.p80_finish_hours);
+    assert!(risk.p80_finish_hours <= risk.p95_finish_hours);
+    assert!(risk.p95_finish_hours <= estimate.pessimistic_hours);
+    assert_eq!(plan, original);
+}

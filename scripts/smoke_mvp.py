@@ -42,7 +42,7 @@ def smoke(binary, directory):
     assert run('next', '--limit', '0', structured=True) == []
     initial = run('status', structured=True)
     assert initial['revision'] == 0 and initial['ready'] == 1
-    assert initial['p50_finish_hours'] <= initial['p80_finish_hours']
+    assert initial['p50_finish_hours'] <= initial['p80_finish_hours'] <= initial['p95_finish_hours']
     run('demo', error='workspace already exists')
     run('claim', 'TEST-B', '--actor', 'agent:smoke', error='not ready')
     run('claim', 'TEST-A', '--actor', 'agent:', error='actor name must not be empty', structured=True)
@@ -74,7 +74,7 @@ def smoke(binary, directory):
     final = run('status', structured=True)
     assert final['complete'] == 7 and final['total_work'] == 7
     assert final['expected_finish_hours'] == 0
-    assert final['p50_finish_hours'] == 0 and final['p80_finish_hours'] == 0
+    assert final['p50_finish_hours'] == final['p80_finish_hours'] == final['p95_finish_hours'] == 0
     assert run('show', 'TEST-M1', structured=True)['status'] == 'Verified'
     run('claim', 'TEST-M1', '--actor', 'agent:smoke', error='not ready')
     with sqlite3.connect(database) as connection:

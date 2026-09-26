@@ -64,6 +64,7 @@ pub(crate) fn text(plan: &Plan, detail: &WorkExplanation) -> String {
             instructions.verification.iter().cloned(),
         );
     }
+    append_schedule(&mut lines, detail);
     append_context(&mut lines, detail);
     section(
         &mut lines,
@@ -72,6 +73,31 @@ pub(crate) fn text(plan: &Plan, detail: &WorkExplanation) -> String {
     );
     lines.push(dependencies::LEGEND.into());
     lines.join("\n")
+}
+
+fn append_schedule(lines: &mut Vec<String>, detail: &WorkExplanation) {
+    if detail.work.kind == dpm_model::WorkKind::WorkPackage {
+        return;
+    }
+    if let Some(schedule) = &detail.schedule {
+        section(
+            lines,
+            "Remaining schedule (elapsed hours)",
+            [
+                format!(
+                    "Earliest start {:.1} / finish {:.1}; latest start {:.1} / finish {:.1}",
+                    schedule.earliest_start_hours,
+                    schedule.earliest_finish_hours,
+                    schedule.latest_start_hours,
+                    schedule.latest_finish_hours
+                ),
+                format!(
+                    "Free float {:.1} / total float {:.1}; critical={}",
+                    schedule.free_float_hours, schedule.total_float_hours, schedule.critical
+                ),
+            ],
+        );
+    }
 }
 
 fn append_context(lines: &mut Vec<String>, detail: &WorkExplanation) {

@@ -33,6 +33,8 @@ pub struct StatusSummary {
     pub p50_finish_hours: Option<f64>,
     /// 80th percentile sampled completion time in elapsed hours.
     pub p80_finish_hours: Option<f64>,
+    /// 95th percentile sampled completion time in elapsed hours.
+    pub p95_finish_hours: Option<f64>,
 }
 
 /// Project validated lifecycle counts and remaining duration.
@@ -91,6 +93,7 @@ pub fn status(plan: &Plan, probabilistic: bool) -> Result<StatusSummary, EngineE
         expected_finish_hours: schedule.project_finish_hours,
         p50_finish_hours: simulation.as_ref().map(|s| s.p50_finish_hours),
         p80_finish_hours: simulation.as_ref().map(|s| s.p80_finish_hours),
+        p95_finish_hours: simulation.as_ref().map(|s| s.p95_finish_hours),
     })
 }
 

@@ -90,12 +90,10 @@ pub fn deterministic_remaining(plan: &Plan) -> Result<Schedule, ScheduleError> {
 
 pub(crate) fn remaining_plan(plan: &Plan) -> Plan {
     let mut remaining = plan.clone();
-    remaining.dependencies.retain(|d| {
-        !plan.work_items[&d.predecessor]
-            .status
-            .satisfies_dependency()
-            && !plan.work_items[&d.successor].status.satisfies_dependency()
-    });
+    let completed = dpm_model::completion(plan);
+    remaining
+        .dependencies
+        .retain(|d| !completed.contains(&d.predecessor) && !completed.contains(&d.successor));
     remaining
 }
 
@@ -138,6 +136,7 @@ pub fn deterministic_with_durations(
                 latest_start_hours: latest[&id],
                 latest_finish_hours: finite(id, latest[&id] + durations[&id])?,
                 total_float_hours: total_float,
+                free_float_hours: free_float(plan, durations, &earliest, id, finish)?,
                 critical,
             },
         );
@@ -147,6 +146,27 @@ pub fn deterministic_with_durations(
         activities,
         critical_activities,
     })
+}
+
+fn free_float(
+    plan: &Plan,
+    durations: &Times,
+    earliest: &Times,
+    id: WorkItemId,
+    finish: f64,
+) -> Result<f64, ScheduleError> {
+    let mut available = finite(id, finish - earliest[&id] - durations[&id])?;
+    for edge in plan.dependencies.iter().filter(|d| d.predecessor == id) {
+        let weight = relation_weight(
+            edge.kind,
+            durations[&id],
+            durations[&edge.successor],
+            edge.lag_hours,
+        );
+        let slack = finite(id, earliest[&edge.successor] - earliest[&id] - weight)?;
+        available = available.min(slack);
+    }
+    Ok(available.max(0.0))
 }
 
 fn earliest_times(

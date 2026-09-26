@@ -290,6 +290,9 @@ fn now_text(plan: &Plan, summary: &StatusSummary, candidates: Vec<NextWorkCandid
     if let (Some(p50), Some(p80)) = (summary.p50_finish_hours, summary.p80_finish_hours) {
         now.push_str(&format!(" · P50 {p50:.1}h · P80 {p80:.1}h"));
     }
+    if let Some(p95) = summary.p95_finish_hours {
+        now.push_str(&format!(" · P95 {p95:.1}h"));
+    }
     now.push_str("\n\nNeeds decision:\n");
     for decision in plan
         .decisions

@@ -14,6 +14,8 @@ pub struct ActivitySchedule {
     pub latest_finish_hours: f64,
     /// Delay available without postponing project completion.
     pub total_float_hours: f64,
+    /// Delay available without moving any direct successor's earliest start or project completion.
+    pub free_float_hours: f64,
     /// Whether total float is within numerical tolerance of zero.
     pub critical: bool,
 }

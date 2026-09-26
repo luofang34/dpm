@@ -295,3 +295,17 @@ fn refresh_preserves_selection_and_viewport_and_rejects_source_switches_atomical
     view.refresh(&plan).expect("retry");
     assert!(view.notice.is_none());
 }
+
+#[test]
+fn now_exposes_all_completion_percentiles_and_detail_separates_float() {
+    let plan = fixture();
+    let mut view = View::new(&plan).expect("view");
+    let now = render(&mut view);
+    for marker in ["P50", "P80", "P95"] {
+        assert!(now.contains(marker));
+    }
+    let work = plan.find_work_by_key("TEST-A").expect("work");
+    let explanation = dpm_engine::explain_work(&plan, work.id).expect("explain");
+    let detail = crate::detail::text(&plan, &explanation);
+    assert!(detail.contains("Free float") && detail.contains("total float"));
+}
