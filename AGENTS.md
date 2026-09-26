@@ -7,8 +7,8 @@ under `docs/exec/`.
 ## Mission
 
 The public identity is **DPM — DAG Project Manager**, targeting `luofang34/dpm`.
-Use [publication readiness](docs/release-readiness.md) for current validation and remaining release
-work. Never advertise an unpublished package as installable.
+Never advertise an unpublished package as installable. Verification evidence belongs in commit
+messages and hand-offs, not in tracked status documents.
 
 DPM is a Rust execution-planning engine for humans and software agents. Its authoritative
 model is a semantic execution graph: objectives, acceptance criteria, work, dependencies,

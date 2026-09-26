@@ -79,8 +79,8 @@ checks. Every self-host task supplies all fields. Instructions are author-writte
 runner, execution authorization or automatically verified evidence. If instructions are missing or
 contradict gates/acceptance, report the gap instead of guessing permission or completion.
 
-`python3 scripts/smoke_self_host.py` imports the prepared plan into temporary storage, compares all
-24 task contracts through real CLI/MCP processes and confirms no operations or revision changes.
+`python3 scripts/smoke_self_host.py` imports the prepared plan into temporary storage, compares every
+task contract through real CLI/MCP processes and confirms no operations or revision changes.
 
 ## Progress and schedule indications
 

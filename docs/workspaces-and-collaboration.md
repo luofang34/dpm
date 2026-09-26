@@ -1,8 +1,7 @@
 # Workspaces, portable plans and collaboration
 
 Design direction for subsequent milestones. The capability table below separates implemented
-behavior from planned contracts. This document does not activate the self-host roadmap or add a
-sync server, plan-format parser, repository registry or new locator fields.
+behavior from planned contracts; keep it accurate whenever a capability lands.
 
 ## Decisions
 

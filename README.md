@@ -19,7 +19,6 @@ domain model and agent execution loop before building broad collaboration/UI fea
 
 The repository and command name is `dpm`; the formal title is **DPM — DAG Project Manager**.
 This source checkout is pre-alpha. No registry or package-manager release is advertised as available.
-See [publication readiness](docs/release-readiness.md) for the remaining distribution checks.
 
 ## Gantt is a projection
 
@@ -192,7 +191,8 @@ Complex changes should use an ExecPlan as described in [`PLANS.md`](PLANS.md).
 The formal name is **DPM — DAG Project Manager**; the intended GitHub repository is
 `luofang34/dpm`, and the intended CLI is `dpm`. The execution graph remains the core; Gantt and
 agent tools are projections. Naming and package-manager distribution are separate steps: a short
-GitHub name does not reserve an upstream package name. See the [release checklist](docs/release-readiness.md).
+GitHub name does not reserve an upstream package name. Release qualification is tracked as work in
+the [self-host roadmap](examples/self-host/README.md), not as a status document.
 
 ## License
 

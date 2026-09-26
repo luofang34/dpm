@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check bundled examples, publication file hygiene and local documentation links."""
+"""Check bundled examples, publication hygiene, documentation links, rot-prone text and ExecPlans."""
 import re
 import subprocess
 import sys
@@ -17,6 +17,14 @@ if plans != expected_plans:
     failures.append(f'bundled plans differ from self-host inventory: {sorted(plans ^ expected_plans)}')
 if (ROOT / 'fixtures').exists():
     failures.append('fixtures/: user-facing examples belong only in examples/self-host/')
+
+# Statements whose truth depends on history or on the current size of the repository.
+ROT_PATTERNS = [
+    (r'\bPR #\d+', 'PR number reference'),
+    (r'(?<![\w.])\d+ (?:rust |unit |integration )?tests\b', 'absolute test count'),
+    (r'\b(?:one|two|three|four|five|(?<![\w.])\d+) (?:clean |local )?(?:source )?commits\b', 'commit count'),
+    (r'\b(?:migrated from|previously)\b', 'refactor history'),
+]
 
 # The publication set includes uncommitted additions but excludes ignored build/local data.
 listed = subprocess.run(
@@ -45,6 +53,12 @@ for path in paths:
         destination = (path.parent / unquote(link.path)).resolve()
         if not destination.is_relative_to(ROOT) or not destination.exists():
             failures.append(f'{relative}: invalid local documentation link {target}')
+    for line_number, line in enumerate(path.read_text().splitlines(), 1):
+        for pattern, reason in ROT_PATTERNS:
+            if re.search(pattern, line, re.IGNORECASE):
+                failures.append(f'{relative}:{line_number}: {reason} rots; move it to the commit message')
+    if relative.parent.as_posix() == 'docs/exec' and '- [ ]' not in path.read_text():
+        failures.append(f'{relative}: completed ExecPlan; delete it and record the outcome in the commit')
 
 # Probe Git's actual matching rules, including paths that do not exist yet.
 ignored = [

@@ -3,6 +3,11 @@
 Use an ExecPlan for substantial features, cross-crate refactors, migrations, synchronization work,
 or changes that alter domain semantics. Store active plans under `docs/exec/`.
 
+`docs/exec/` holds only unfinished plans. When the last Progress checkbox is checked, delete the plan
+in that final commit and move its Outcome / remaining work and verification evidence into the commit
+message and hand-off. `scripts/check_repository.py` rejects a plan with no unchecked item. Remaining
+work that outlives the plan becomes a work item or design contract, not a leftover status file.
+
 An ExecPlan is a living implementation contract. A fresh agent with only the repository checkout
 must be able to execute it without relying on hidden conversation context.
 
