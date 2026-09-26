@@ -52,8 +52,11 @@ resource = "SOURCE-REPO"
 
 Omit `resource` for an entry point that does not represent a specific resource. With neither
 `database` nor `preview`, the locator resolves the workspace through the device registry.
-Missing bindings return `workspace_not_bound`; changed store identities are rejected. Redirecting
-an existing binding requires `workspace register --replace --database PATH`.
+Missing bindings return `workspace_not_bound` with the workspace UUID and the register command; an
+MCP process started on such a locator exits before serving and prints the same code and message.
+Changed store identities are rejected. Redirecting an existing binding requires
+`workspace register --replace --database PATH`. Because a locator names the workspace and resource,
+not a path, moving or renaming a checkout directory keeps its bindings and every stable ID.
 
 Bindings live in `DPM_CONFIG_DIR`, otherwise `XDG_CONFIG_HOME/dpm`, otherwise `HOME/.config/dpm`.
 These directories must be absolute. `workspace_list` and `workspace_register` expose identical data

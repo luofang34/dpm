@@ -114,3 +114,72 @@ fn replacement_is_explicit_and_mismatched_store_identity_is_rejected() {
         .expect("different identity");
     assert!(location.open_with_registry_blocking(&registry).is_err());
 }
+
+fn identities(app: &Application) -> (WorkspaceId, Vec<dpm_model::WorkItemId>, Vec<String>) {
+    let plan = app.plan_blocking().expect("plan");
+    (
+        plan.workspace.id,
+        plan.work_items.keys().copied().collect(),
+        plan.resources.keys().map(ToString::to_string).collect(),
+    )
+}
+
+#[test]
+fn moving_a_checkout_or_renaming_its_repository_keeps_every_identity() {
+    let temp = TempDir::new().expect("temp");
+    let registry = WorkspaceRegistry::at(temp.path().join("bindings.sqlite"));
+    let plan = fixture();
+    let database = temp.path().join("shared.sqlite");
+    Application::initialize_blocking(&database, &plan).expect("store");
+    registry
+        .register_blocking(&database, false)
+        .expect("register");
+    let checkout = temp.path().join("checkout");
+    fs::create_dir_all(checkout.join(".dpm")).expect("directory");
+    fs::write(
+        checkout.join(".dpm/project.toml"),
+        format!(
+            "version = 2\nworkspace = '{}'\nresource = 'TEST-REPO'\n",
+            plan.workspace.id
+        ),
+    )
+    .expect("locator");
+    let mut app = ProjectLocation::at_blocking(&checkout)
+        .expect("location")
+        .open_with_registry_blocking(&registry)
+        .expect("open");
+    let resource = app.project_resource.expect("bound resource");
+    let before = identities(&app);
+    let mut renamed = app.plan_blocking().expect("plan");
+    if let Some(repository) = renamed.resources.get_mut(&resource) {
+        repository.label = "Renamed repository".into();
+        repository.kind = dpm_model::ResourceKind::GitRepository {
+            remotes: vec!["https://example.invalid/renamed.git".into()],
+        };
+    }
+    app.execute_blocking(CommandRequest {
+        actor: ActorId::human("maintainer"),
+        base_revision: 0,
+        command: Command::ApplyChange {
+            plan: Box::new(renamed),
+            reason: "repository renamed upstream".into(),
+        },
+    })
+    .expect("reviewed rename");
+    let moved = temp.path().join("elsewhere/moved-checkout");
+    fs::create_dir_all(moved.parent().expect("parent")).expect("parent");
+    fs::rename(&checkout, &moved).expect("move checkout");
+    assert!(ProjectLocation::at_blocking(&checkout).is_err());
+    let reopened = ProjectLocation::at_blocking(&moved)
+        .expect("moved location")
+        .open_with_registry_blocking(&registry)
+        .expect("reopen");
+    assert_eq!(identities(&reopened), before);
+    assert_eq!(reopened.project_resource, Some(resource));
+    assert_eq!(reopened.plan_blocking().expect("plan").revision, 1);
+    assert_eq!(
+        registry.list_blocking().expect("bindings").len(),
+        1,
+        "moving a checkout must not create another workspace binding"
+    );
+}

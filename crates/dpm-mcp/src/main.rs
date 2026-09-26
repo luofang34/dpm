@@ -30,12 +30,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "service" => ActorId::service(name),
         _ => return Err("unknown actor kind".into()),
     };
+    // A startup failure has no JSON-RPC channel yet; name the stable code and remedy, as the CLI does.
     let app = open_workspace_blocking(
         &std::env::current_dir()?,
         args.project.as_deref(),
         args.database.as_deref(),
-    )?;
-    app.plan_blocking()?;
+    )
+    .and_then(|app| app.plan_blocking().map(|_| app))
+    .map_err(|error| format!("{}: {error}", error.code()))?;
     let mut server = McpServer::new(app, actor);
     serve_blocking(&mut server, io::stdin().lock(), io::stdout().lock())?;
     Ok(())

@@ -95,3 +95,7 @@ fn git_output_blocking<const N: usize>(root: &Path, args: [&str; N]) -> Result<S
     }
     Ok(String::from_utf8(output.stdout)?.trim().into())
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic)]
+mod tests;

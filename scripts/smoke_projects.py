@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from smoke_agent import Agent, CLI, ROOT
+from smoke_agent import Agent, CLI, MCP, ROOT
 
 
 def cli(cwd, *arguments, error=None):
@@ -121,6 +121,15 @@ def bindings(directory):
         else:
             assert result.returncode == 0, value
         return value
+    unbound = directory / 'unbound-checkout'
+    (unbound / '.dpm').mkdir(parents=True)
+    workspace = local('--database', database, 'export')['workspace']['id']
+    (unbound / '.dpm/project.toml').write_text(f"version = 2\nworkspace = '{workspace}'\nresource = 'TEST-REPO'\n")
+    missing = local('--project', unbound, 'status', error='workspace_not_bound')['error']['message']
+    assert workspace in missing and 'workspace register' in missing
+    started = subprocess.run([str(MCP), '--project', str(unbound), '--actor', 'agent:unbound'], cwd=directory, env=env,
+                             stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    assert started.returncode != 0 and f'workspace_not_bound: {missing}' in started.stderr, started.stderr
     actor = Agent(None, 'human:device', project=ROOT, env=env)
     try:
         assert actor.call('workspace_list', {})['data'] == local('workspace', 'list') == []
@@ -138,6 +147,13 @@ def bindings(directory):
     local('--project', first, 'claim', 'TEST-A', '--actor', 'agent:shared')
     assert local('--project', second, 'show', 'TEST-A')['owner']['name'] == 'shared'
     local('--project', second, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
+    exported = local('--project', first, 'export')
+    moved = directory / 'moved/renamed-checkout'
+    moved.parent.mkdir()
+    first.rename(moved)
+    assert local('--project', moved, 'export') == exported
+    assert local('--project', moved, 'workspace', 'list') == local('workspace', 'list')
+    assert len(local('workspace', 'list')) == 1
 
 
 if __name__ == '__main__':
