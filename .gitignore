@@ -1,5 +1,5 @@
 # Rust
-/target/
+target/
 **/*.rs.bk
 
 # Local planning state
@@ -22,6 +22,7 @@ __pycache__/
 
 # Editors / OS
 .DS_Store
+._*
 .idea/
 .vscode/
 *.swp
