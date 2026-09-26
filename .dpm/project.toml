@@ -1,2 +1,4 @@
-version = 1
+version = 2
 preview = "../examples/self-host/dpm-alpha.json"
+workspace = "40600f85-eaac-57e8-925a-4e07f6ae5af4"
+resource = "DPM-REPO"

@@ -6,6 +6,8 @@ mod identity;
 mod instructions;
 mod plan;
 mod project;
+mod resource;
+pub use resource::*;
 mod validation;
 mod work;
 

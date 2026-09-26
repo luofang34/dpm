@@ -460,6 +460,7 @@ dependencies = [
  "dpm-engine",
  "dpm-model",
  "dpm-store",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",

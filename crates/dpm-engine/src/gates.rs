@@ -29,6 +29,8 @@ pub enum UnmetGate {
         key: String,
         /// Project containing the prerequisite.
         project: String,
+        /// Resources required by the prerequisite; these are context, not satisfied gates.
+        resource_keys: Vec<String>,
         /// Schedule relation; all relations currently require verified completion for execution.
         relation: DependencyKind,
         /// Lead/lag in the schedule projection, not an execution timer.
@@ -90,6 +92,12 @@ pub(crate) fn with_completion(
     {
         if let Some(item) = plan.work_items.get(&dep.predecessor) {
             unmet.push(UnmetGate::Dependency {
+                resource_keys: item
+                    .resources
+                    .iter()
+                    .filter_map(|r| plan.resources.get(&r.resource))
+                    .map(|r| r.key.to_string())
+                    .collect(),
                 predecessor: item.id,
                 key: item.key.to_string(),
                 project: plan

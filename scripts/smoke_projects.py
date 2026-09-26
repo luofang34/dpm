@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise project discovery, file previews and normal SQLite projects through real adapters."""
 import json
+import os
 import sqlite3
 import subprocess
 import tempfile
@@ -93,15 +94,50 @@ def git_evidence(directory):
     git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '--allow-empty', '-m', 'test evidence')
     head = git('rev-parse', 'HEAD')
     cli(root, 'import', ROOT / 'tests/support/execution-plan.json')
-    cli(directory, '--project', root, 'attach-git-head', 'TEST-A')
+    cli(directory, '--project', root, 'attach-git-head', 'TEST-A', error='invalid_request')
+    cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--resource', 'UNKNOWN', error='invalid_request')
+    cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--resource', 'TEST-REPO')
     actor = Agent(None, 'agent:evidence', cwd=directory, project=root)
     try:
-        actor.call('attach_git_head', {'key': 'TEST-A', 'base_revision': 1})
+        actor.call('attach_git_head', {'key': 'TEST-A', 'resource': 'TEST-REPO', 'base_revision': 1})
     finally:
         actor.close()
     exported = cli(root, 'export')
     assert len(exported['artifacts']) == 2
     assert all(a['metadata']['commit'] == head for a in exported['artifacts'].values())
+    resource = next(iter(exported['resources']))
+    assert all(a['metadata']['resource_id'] == resource and a['uri'] == f'git:resource:{resource}@{head}' for a in exported['artifacts'].values())
+
+
+def bindings(directory):
+    database = directory / 'shared.sqlite'
+    cli(directory, '--database', database, 'import', ROOT / 'tests/support/execution-plan.json')
+    env = {**os.environ, 'DPM_CONFIG_DIR': str(directory / 'config')}
+    def local(*args, error=None):
+        result = subprocess.run([str(CLI), '--json', *map(str, args)], cwd=directory, env=env, capture_output=True, text=True, timeout=30)
+        value = json.loads(result.stdout)
+        if error:
+            assert result.returncode and value['error']['code'] == error, value
+        else:
+            assert result.returncode == 0, value
+        return value
+    actor = Agent(None, 'human:device', project=ROOT, env=env)
+    try:
+        assert actor.call('workspace_list', {})['data'] == local('workspace', 'list') == []
+        assert not (directory / 'config').exists()
+        registered = actor.call('workspace_register', {'database': str(database)})['data']
+        assert registered == local('workspace', 'register', '--database', database)
+        assert actor.call('workspace_list', {})['data'] == local('workspace', 'list')
+    finally:
+        actor.close()
+    for name in ['repository-one', 'documents']:
+        root = directory / name
+        (root / '.dpm').mkdir(parents=True)
+        (root / '.dpm/project.toml').write_text(f"version = 2\nworkspace = '{registered['workspace']}'\nresource = 'TEST-REPO'\n")
+    first, second = directory / 'repository-one', directory / 'documents'
+    local('--project', first, 'claim', 'TEST-A', '--actor', 'agent:shared')
+    assert local('--project', second, 'show', 'TEST-A')['owner']['name'] == 'shared'
+    local('--project', second, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
 
 
 if __name__ == '__main__':
@@ -110,4 +146,5 @@ if __name__ == '__main__':
         preview(directory)
         normal(directory)
         git_evidence(directory)
+        bindings(directory)
     print('PASS: project discovery/overrides, Git boundaries, read-only preview, CLI/MCP parity, durable operations and scoped Git evidence')

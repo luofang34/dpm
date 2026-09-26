@@ -11,13 +11,13 @@ MCP = ROOT / 'target/release/dpm-mcp'
 
 
 class Agent:
-    def __init__(self, database, actor, *, cwd=ROOT, project=None):
+    def __init__(self, database, actor, *, cwd=ROOT, project=None, env=None):
         selection = ['--db', str(database)] if database is not None else []
         if project is not None:
             selection = ['--project', str(project)]
         self.process = subprocess.Popen(
             [str(MCP), *selection, '--actor', actor],
-            cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True,
         )
         self.sequence = 0
@@ -70,7 +70,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'project_status', 'next_work', 'get_work', 'explain_work', 'claim_work', 'report_blocker', 'unblock_work', 'submit_work', 'verify_work', 'report_progress', 'add_artifact', 'attach_git_head', 'decide_gate', 'ratify_contract', 'reject_work'} == names
+        assert {'project_status', 'next_work', 'get_work', 'explain_work', 'claim_work', 'report_blocker', 'unblock_work', 'submit_work', 'verify_work', 'report_progress', 'add_artifact', 'attach_git_head', 'decide_gate', 'ratify_contract', 'reject_work', 'workspace_list', 'workspace_register'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),
@@ -108,7 +108,7 @@ def smoke(database):
         summary = worker.call('project_status', {})['data']
         assert summary == run_cli(database, 'status') and summary['progress']['percent_complete'] > 0
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
-        worker.call('attach_git_head', {'key': 'TEST-A', 'base_revision': 3})
+        worker.call('attach_git_head', {'key': 'TEST-A', 'resource': 'TEST-REPO', 'base_revision': 3})
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')
         assert worker.call('next_work', {})['data'] == []
         worker.call('unblock_work', {'key': 'TEST-A', 'base_revision': 5})

@@ -8,7 +8,7 @@ The configured actor is the local principal for every mutation. A separate verif
 `--actor human:reviewer` or a service actor. This is a trusted local workspace, not remote authentication.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
-The CLI's `--json` output equals the MCP result's `structuredContent.data`. MCP adds `api_version:1`
+The CLI's `--json` output equals the MCP result's `structuredContent.data`. MCP adds `api_version:2`
 and the observed `revision`, so an agent can send `base_revision` with its next mutation. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
 which the store still checks atomically. Presentation text is not the API contract.
@@ -131,3 +131,8 @@ progress reporting, revision conflict, evidence, blocker, decision and independe
 Submitted work, a different reviewer, and a nonempty `reason`. Rejection retains ownership and
 the latest review in `last_rejection`. Both require `key` and `base_revision`.
 `explain_work.gates` and `project_status.gates` expose the same structured claim conditions.
+
+`workspace_list` and `workspace_register` manage device configuration through the shared registry.
+Registration accepts `database` and optional `replace`; neither tool takes a project revision.
+Their results contain `local_config: true` and `data`, without a project operation or revision.
+`attach_git_head` accepts an explicit `resource` key when the selected locator does not bind one.

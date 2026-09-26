@@ -1,5 +1,5 @@
 use crate::{AppError, Application};
-use dpm_model::Plan;
+use dpm_model::{Plan, WorkspaceId};
 use serde::Deserialize;
 use std::{
     fs,
@@ -15,6 +15,8 @@ pub use initialization::initialize_project_blocking;
 /// An explicitly configured source for a project.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectSource {
+    /// Resolve an explicit workspace identity through the device registry.
+    Registered,
     /// Authoritative local SQLite state with a semantic operation log.
     Database(PathBuf),
     /// An author-written JSON plan, accessible only as an in-memory read-only preview.
@@ -24,6 +26,10 @@ pub enum ProjectSource {
 /// A project root and the source named by its versioned locator.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectLocation {
+    /// Expected workspace identity, checked before any operation.
+    pub workspace: WorkspaceId,
+    /// Resource represented by this checkout, if any.
+    pub resource: Option<String>,
     /// Directory containing `.dpm/project.toml`.
     pub root: PathBuf,
     /// Resolved source path, relative to the locator directory when configured relatively.
@@ -34,6 +40,8 @@ pub struct ProjectLocation {
 #[serde(deny_unknown_fields)]
 struct Locator {
     version: u32,
+    workspace: WorkspaceId,
+    resource: Option<String>,
     database: Option<PathBuf>,
     preview: Option<PathBuf>,
 }
@@ -63,35 +71,68 @@ impl ProjectLocation {
             path: path.clone(),
             source,
         })?;
-        if locator.version != 1 {
+        if locator.version != 2 {
             return Err(ProjectError::Invalid {
                 path,
                 message: format!(
-                    "unsupported locator version {}; supported version is 1",
+                    "unsupported locator version {}; supported version is 2",
                     locator.version
                 ),
             });
         }
         let source = match (locator.database, locator.preview) {
-            (Some(path), None) if !path.as_os_str().is_empty() => {
+            (Some(path), None) if portable_path(&path) => {
                 ProjectSource::Database(root.join(".dpm").join(path))
             }
-            (None, Some(path)) if !path.as_os_str().is_empty() => {
+            (None, Some(path)) if portable_path(&path) => {
                 ProjectSource::Preview(root.join(".dpm").join(path))
             }
+            (None, None) => ProjectSource::Registered,
             _ => {
                 return Err(ProjectError::Invalid {
                     path,
-                    message: "specify exactly one nonempty database or preview path".into(),
+                    message: "use a relative database or preview path, or omit both for a registered workspace".into(),
                 });
             }
         };
-        Ok(Self { root, source })
+        Ok(Self {
+            root,
+            source,
+            workspace: locator.workspace,
+            resource: locator.resource,
+        })
     }
 
     /// Open through the application boundary without creating state on a read request.
     pub fn open_blocking(&self) -> Result<Application, AppError> {
+        let binding = if matches!(self.source, ProjectSource::Registered) {
+            Some(crate::WorkspaceRegistry::from_environment()?.resolve_blocking(self.workspace)?)
+        } else {
+            None
+        };
+        self.open_source_blocking(binding)
+    }
+
+    /// Open using explicitly supplied device bindings without changing process environment.
+    pub fn open_with_registry_blocking(
+        &self,
+        registry: &crate::WorkspaceRegistry,
+    ) -> Result<Application, AppError> {
+        let binding = if matches!(self.source, ProjectSource::Registered) {
+            Some(registry.resolve_blocking(self.workspace)?)
+        } else {
+            None
+        };
+        self.open_source_blocking(binding)
+    }
+
+    fn open_source_blocking(&self, binding: Option<PathBuf>) -> Result<Application, AppError> {
         let mut app = match &self.source {
+            ProjectSource::Registered => {
+                Application::open_blocking(binding.ok_or(crate::RegistryError::NotBound {
+                    workspace: self.workspace,
+                })?)
+            }
             ProjectSource::Database(path) => Application::open_blocking(path),
             ProjectSource::Preview(path) => {
                 let text = fs::read_to_string(path).map_err(io_error("read preview plan", path))?;
@@ -99,6 +140,29 @@ impl ProjectLocation {
                 Application::preview(plan)
             }
         }?;
+        let plan = app.plan_blocking()?;
+        if plan.workspace.id != self.workspace {
+            return Err(ProjectError::Invalid {
+                path: self.root.clone(),
+                message: format!(
+                    "locator expects workspace {}, store contains {}",
+                    self.workspace, plan.workspace.id
+                ),
+            }
+            .into());
+        }
+        if let Some(key) = &self.resource {
+            app.project_resource = Some(
+                plan.resources
+                    .values()
+                    .find(|r| r.key.0 == *key)
+                    .ok_or_else(|| ProjectError::Invalid {
+                        path: self.root.clone(),
+                        message: format!("unknown resource {key}"),
+                    })?
+                    .id,
+            );
+        }
         app.project_root = Some(self.root.clone());
         Ok(app)
     }
@@ -147,3 +211,10 @@ fn reject_legacy_blocking(root: &Path) -> Result<(), ProjectError> {
 
 #[cfg(test)]
 mod tests;
+
+fn portable_path(path: &Path) -> bool {
+    !path.as_os_str().is_empty()
+        && !path.is_absolute()
+        && !path.to_string_lossy().contains('\\')
+        && !path.to_string_lossy().contains(':')
+}

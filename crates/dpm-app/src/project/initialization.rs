@@ -17,11 +17,26 @@ pub fn initialize_project_blocking(root: &Path, plan: &Plan) -> Result<PathBuf, 
     let directory = root.join(".dpm");
     if exists_blocking(&directory)? {
         let project = ProjectLocation::at_blocking(&root)?;
-        let ProjectSource::Database(database) = project.source else {
-            return Err(AppError::ReadOnlyProject);
+        let database = match project.source {
+            ProjectSource::Database(database) => database,
+            ProjectSource::Preview(_) => return Err(AppError::ReadOnlyProject),
+            ProjectSource::Registered => {
+                return Err(crate::RegistryError::NotBound {
+                    workspace: project.workspace,
+                }
+                .into());
+            }
         };
         if exists_blocking(&database)? {
             return Err(ProjectError::AlreadyExists { path: directory }.into());
+        }
+        if project.workspace != plan.workspace.id {
+            return Err(ProjectError::Invalid {
+                path: root.clone(),
+                message: "initialization requires a plan with the locator's workspace identity"
+                    .into(),
+            }
+            .into());
         }
         Application::initialize_blocking(&database, plan)?;
         return Ok(database);
@@ -34,7 +49,13 @@ pub fn initialize_project_blocking(root: &Path, plan: &Plan) -> Result<PathBuf, 
     fs::write(&ignore, "*\n!project.toml\n!.gitignore\n")
         .map_err(io_error("write local state ignore rules", &ignore))?;
     let locator = directory.join("project.toml");
-    fs::write(&locator, "version = 1\ndatabase = \"state.sqlite\"\n")
-        .map_err(io_error("write project locator", &locator))?;
+    fs::write(
+        &locator,
+        format!(
+            "version = 2\nworkspace = \"{}\"\ndatabase = \"state.sqlite\"\n",
+            plan.workspace.id
+        ),
+    )
+    .map_err(io_error("write project locator", &locator))?;
     Ok(database)
 }

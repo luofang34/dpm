@@ -1,5 +1,5 @@
 use crate::{
-    args::{Cli, Commands},
+    args::{Cli, Commands, WorkspaceCommand},
     error::{CliError, io_error},
     output,
 };
@@ -28,6 +28,9 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
     });
     let root = project.as_deref().unwrap_or(&cwd);
     match command {
+        Commands::Workspace { command } => {
+            workspace_command_blocking(command, database.as_deref(), json)
+        }
         Commands::Init { name } => {
             initialize_blocking(root, database.as_deref(), Plan::empty(name), json)
         }
@@ -259,9 +262,17 @@ fn artifact_mutation_blocking(
                 },
             ))
         }
-        Commands::AttachGitHead { key, actor: who } => {
+        Commands::AttachGitHead {
+            key,
+            actor: who,
+            resource,
+        } => {
             let principal = actor(&who)?;
-            let artifact = app.git_head_artifact_blocking(principal.clone())?;
+            let artifact = app.git_head_artifact_blocking(
+                principal.clone(),
+                app.work_id_blocking(&key)?,
+                resource.as_deref(),
+            )?;
             Ok((
                 principal,
                 Command::AttachArtifact {
@@ -304,4 +315,25 @@ fn lifecycle_mutation_blocking(
         ),
         _ => return Err(CliError::Input("expected contract or claim command".into())),
     })
+}
+
+fn workspace_command_blocking(
+    command: WorkspaceCommand,
+    database: Option<&Path>,
+    json: bool,
+) -> Result<(), CliError> {
+    let registry =
+        dpm_app::WorkspaceRegistry::from_environment().map_err(dpm_app::AppError::from)?;
+    match command {
+        WorkspaceCommand::Register { replace } => {
+            let database = database.ok_or_else(|| {
+                CliError::Input("workspace register requires --database PATH".into())
+            })?;
+            output::value_blocking(&registry.register_blocking(database, replace)?, json)
+        }
+        WorkspaceCommand::List => output::value_blocking(
+            &registry.list_blocking().map_err(dpm_app::AppError::from)?,
+            json,
+        ),
+    }
 }

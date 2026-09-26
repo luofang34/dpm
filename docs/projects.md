@@ -1,123 +1,83 @@
 # Project discovery and local state
 
-`dpm` opens the nearest configured project's TUI. `dpm --json` returns project status instead of
-starting a terminal UI. CLI and `dpm-mcp` share the same discovery and opening implementation.
+`dpm` opens the nearest configured project's TUI; `dpm --json` returns status. CLI and MCP use
+one application service for discovery, commands, queries and device bindings.
 
-## Selection rules
+## Selection
 
-1. `--database PATH` (alias `--db`) opens that SQLite file directly, without project discovery.
-2. `--project DIR` opens exactly `DIR/.dpm/project.toml`. It never falls back to a parent project.
-3. With neither option, inspect the current directory and its parents for `.dpm/project.toml`.
-   The closest project wins. Inspect a Git root itself, then stop: do not cross a `.git` directory
-   or worktree `.git` file into an unrelated outer project.
+- `--database PATH` (`--db`) opens an existing SQLite store directly.
+- `--project DIR` selects exactly `DIR/.dpm/project.toml`; this option takes a directory, not a project key.
+- Otherwise search upward for the nearest locator, stopping at a Git root or worktree boundary.
 
-The two explicit options are mutually exclusive. A missing/invalid locator in the nearest `.dpm`
-directory, unsupported version or missing source is an error, not permission to open a parent
-project. No project means an actionable `project_not_found` error; no example is implicitly loaded
-and no directory/database is created by a query. Discovery does not search child directories.
+Explicit database and project options are mutually exclusive. A malformed nearer locator never
+falls back to a parent. Queries never initialize missing stores or silently open a sample.
 
-## Ordinary projects
+## Local projects
 
-In your project's directory, run:
-
-```sh
-dpm init "My project"
-dpm status --json
-dpm
-```
-
-Initialization writes:
-
-```text
-.dpm/
-  project.toml    # shareable project locator
-  .gitignore      # excludes runtime files
-  state.sqlite    # local authoritative plan and operation log; do not commit
-```
-
-The versioned locator is TOML:
+Run `dpm init "My project"` in a code or non-code directory. It creates a local SQLite store,
+ignore rules and a locator containing the generated workspace UUID:
 
 ```toml
-version = 1
+version = 2
+workspace = "00000000-0000-4000-8000-000000000001"
 database = "state.sqlite"
 ```
 
-Source paths are relative to the locator directory, not the command's working directory. Absolute
-paths are supported for local configuration but are not portable. The locator accepts exactly one
-nonempty `database` or `preview` field, plus `version`; unknown fields are rejected.
+The UUID must match the actual store. Paths are relative to `.dpm/`; absolute paths and unknown
+fields are rejected. Only the locator and ignore rules belong in Git. Plan JSON uses format 2;
+unsupported formats fail explicitly. A portable plan contains no device bindings or derived schedule.
 
-`init`, `import PLAN.json` and `demo` are explicit initialization commands. They target the current
-directory, or the exact `--project DIR`, and can create a nested independent project. They never
-replace an existing database or preview. A cloned database locator with no local database can be
-initialized explicitly with `import` or `init`. Existing malformed configuration must be fixed,
-not silently replaced. If initialization is interrupted, inspect any incomplete `.dpm` directory;
-DPM never deletes unknown state to retry automatically.
+`import PLAN.json` initializes an absent store from a validated plan; it never replaces live state.
+An existing locator requires the imported workspace identity to match. `export` produces a snapshot,
+not a backup of operation history. Keep consistent database backups for recovery.
 
-Only `project.toml` and `.gitignore` belong in Git. A locator does not synchronize the plan itself:
-use `export` and `import` to transfer a snapshot; exported JSON does not include operation history.
-SQLite remains authoritative for normal operation. A tracked configuration pointing at a missing
-local database therefore requires explicit initialization after cloning.
+## One workspace, several entry points
 
-## This repository's example
+Register an existing store on each device:
 
-The committed [.dpm/project.toml](../.dpm/project.toml) contains:
+```sh
+dpm workspace register --database /path/to/planning/.dpm/state.sqlite
+dpm workspace list --json
+```
+
+The returned workspace UUID can be used in several repository or document-directory locators:
 
 ```toml
-version = 1
-preview = "../examples/self-host/dpm-alpha.json"
+version = 2
+workspace = "00000000-0000-4000-8000-000000000001"
+resource = "SOURCE-REPO"
 ```
 
-Run `cargo run` in this repository, or run the built/installed `dpm` from any of its subdirectories.
-The same discovery rules select the self-host example; no executable special-cases the repository
-name, checkout path or remote. The console labels it `PREVIEW read-only`.
+Omit `resource` for an entry point that does not represent a specific resource. With neither
+`database` nor `preview`, the locator resolves the workspace through the device registry.
+Missing bindings return `workspace_not_bound`; changed store identities are rejected. Redirecting
+an existing binding requires `workspace register --replace --database PATH`.
 
-The plan is validated and loaded in memory. Queries/export work normally, and CLI/MCP mutations
-return `read_only_project`, even if a task would otherwise be eligible. No SQLite file is created,
-no open decision is resolved, and no task is claimed. To later operate on an explicitly authorized
-copy, import it into a separate database/project; preview mode never becomes writable implicitly.
+Bindings live in `DPM_CONFIG_DIR`, otherwise `XDG_CONFIG_HOME/dpm`, otherwise `HOME/.config/dpm`.
+These directories must be absolute. `workspace_list` and `workspace_register` expose identical data
+through MCP; device configuration does not append project operations or change project revisions.
 
-`dpm demo` remains an explicit way to initialize the sole bundled self-host plan elsewhere. It does
-not replace this repository's preview or start its gated tasks. There are no other bundled demos.
+Several local processes may open the same store. A checkout/worktree does not fork task ownership.
+An independent project needs a new workspace identity; a Git fork alone does not establish that choice.
+Copying SQLite to another device is not collaboration; do not use live database file syncing.
 
-## Agent and existing-database use
+## Resources and Git evidence
 
-An MCP client can launch `dpm-mcp --actor agent:reader` with its working directory inside a project,
-or specify `--project DIR` / `--database PATH`. Discovery, preview restrictions, engine commands and
-queries are identical to CLI. `attach-git-head` / `attach_git_head` capture the selected project's
-Git HEAD; an explicit bare database has no project root and uses the process's current repository.
+A plan's `resources` map gives repositories, folders, document collections and other resources stable
+IDs. Tasks may name zero, one or several read/write requirements. Keys, labels and remotes do not
+replace resource identity. These requirements describe work scope, not filesystem permissions.
+All readiness and ranking queries still consider the full workspace graph.
 
-Existing SQLite databases retain their serialization and operation history. Open any such file
-with `dpm --database PATH status --json`, or point a database locator at it. Discovery recognizes
-an unconfigured legacy workspace and asks for explicit selection; it never overwrites it or
-creates a second empty project that hides its history. A code rename is not an operation-log migration.
+`attach-git-head KEY` uses the selected locator's repository and resource. When selecting a bare
+database, run in the desired checkout and supply `--resource RESOURCE-KEY`. MCP `attach_git_head`
+accepts the same `resource` argument. The resource must be a repository named by the task; a resource
+conflicting with the locator is rejected. Evidence records both resource ID and commit SHA.
 
-## Multiple repositories and non-code work
+## This repository
 
-A project directory need not be a Git repository. Run `init` in a planning/document directory to
-keep a workspace there, then use `--project DIR` from any other checkout to query or operate on it.
-For example, for an already initialized central workspace:
-
-```sh
-dpm --project /path/to/product-planning status --json
-dpm --project /path/to/product-planning explain TASK-KEY --json
-```
-
-The graph can contain nested projects and tasks from multiple repositories, as well as procurement,
-design and other non-code work. They share work IDs and dependencies in one workspace. The upward
-search's Git boundary prevents accidental selection; it does not restrict graph membership.
-
-Current Git evidence capture uses the selected project directory. If the central planning directory
-is separate from the repository whose HEAD is needed, explicitly select the central database while
-running from that repository:
-
-```sh
-dpm --database /path/to/product-planning/.dpm/state.sqlite attach-git-head TASK-KEY --actor agent:worker
-```
-
-This is a manual local workflow. There is no typed repository binding or automatic checkout selection
-yet. Several processes on the same machine may open the same local workspace; copying its database
-onto another device does not establish collaboration. Do not put live SQLite files on a shared
-network/cloud folder as a sync mechanism.
-
-For planned resource bindings and operation exchange, inspect `CORE-20` and `SYNC-10` in this
-repository's prepared plan with `explain`. TOML is the locator format; plan import/export uses JSON.
+The committed [.dpm/project.toml](../.dpm/project.toml) points at the prepared self-host plan with
+`preview = "../examples/self-host/dpm-alpha.json"`. `cargo run` opens its read-only TUI using normal
+discovery. Task updates belong in that plan's contracts; queries and export do not create SQLite state.
+Execution commands return `read_only_project`. `demo` explicitly initializes this sole example elsewhere;
+it never starts its gated tasks. Future semantic plan editing and sync are tracked by `CORE-20` and
+`SYNC-10`, available through `explain`.

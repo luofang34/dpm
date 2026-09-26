@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 /// Resolved domain records needed by an agent to execute a work contract without guessing references.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionContext {
+    /// Resources named in this work contract, independent of local checkout paths.
+    pub resources: Vec<dpm_model::Resource>,
     /// Project owning the selected work.
     pub project: Project,
     /// Work-package ancestors, nearest first.
@@ -48,6 +50,11 @@ pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContex
         }
     }
     ExecutionContext {
+        resources: work
+            .resources
+            .iter()
+            .filter_map(|r| plan.resources.get(&r.resource).cloned())
+            .collect(),
         project: plan.projects[&work.project].clone(),
         parents,
         requirements: work

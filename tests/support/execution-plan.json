@@ -44,7 +44,13 @@
       ],
       "artifact_ids": [],
       "owner": null,
-      "block_reason": null
+      "block_reason": null,
+      "resources": [
+        {
+          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+          "access": "Write"
+        }
+      ]
     },
     "00000007-0000-4000-8000-000000000002": {
       "id": "00000007-0000-4000-8000-000000000002",
@@ -75,7 +81,13 @@
       ],
       "artifact_ids": [],
       "owner": null,
-      "block_reason": null
+      "block_reason": null,
+      "resources": [
+        {
+          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+          "access": "Write"
+        }
+      ]
     },
     "00000007-0000-4000-8000-000000000003": {
       "id": "00000007-0000-4000-8000-000000000003",
@@ -106,7 +118,13 @@
       ],
       "artifact_ids": [],
       "owner": null,
-      "block_reason": null
+      "block_reason": null,
+      "resources": [
+        {
+          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+          "access": "Write"
+        }
+      ]
     },
     "00000007-0000-4000-8000-000000000004": {
       "id": "00000007-0000-4000-8000-000000000004",
@@ -137,7 +155,13 @@
       ],
       "artifact_ids": [],
       "owner": null,
-      "block_reason": null
+      "block_reason": null,
+      "resources": [
+        {
+          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+          "access": "Write"
+        }
+      ]
     },
     "00000007-0000-4000-8000-000000000005": {
       "id": "00000007-0000-4000-8000-000000000005",
@@ -168,7 +192,13 @@
       ],
       "artifact_ids": [],
       "owner": null,
-      "block_reason": null
+      "block_reason": null,
+      "resources": [
+        {
+          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+          "access": "Write"
+        }
+      ]
     },
     "00000007-0000-4000-8000-000000000006": {
       "id": "00000007-0000-4000-8000-000000000006",
@@ -199,7 +229,13 @@
       ],
       "artifact_ids": [],
       "owner": null,
-      "block_reason": null
+      "block_reason": null,
+      "resources": [
+        {
+          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+          "access": "Write"
+        }
+      ]
     },
     "00000007-0000-4000-8000-000000000007": {
       "id": "00000007-0000-4000-8000-000000000007",
@@ -222,7 +258,8 @@
       "requirement_ids": [],
       "artifact_ids": [],
       "owner": null,
-      "block_reason": null
+      "block_reason": null,
+      "resources": []
     }
   },
   "requirements": {
@@ -306,5 +343,18 @@
       "kind": "FinishStart",
       "lag_hours": 0.0
     }
-  ]
+  ],
+  "format_version": 2,
+  "resources": {
+    "94f881b6-d30b-50cb-98bf-082aafc2cdd4": {
+      "id": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+      "key": "TEST-REPO",
+      "label": "Synthetic execution repository",
+      "kind": {
+        "GitRepository": {
+          "remotes": []
+        }
+      }
+    }
+  }
 }

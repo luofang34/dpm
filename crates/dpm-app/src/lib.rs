@@ -3,7 +3,9 @@
 mod error;
 mod git_artifact;
 mod project;
+mod registry;
 mod service;
+pub use registry::{RegistryError, WorkspaceBinding, WorkspaceRegistry};
 
 pub use project::{
     ProjectError, ProjectLocation, ProjectSource, initialize_project_blocking,
@@ -12,5 +14,3 @@ pub use project::{
 
 pub use error::{AppError, ErrorResponse};
 pub use service::{API_VERSION, Application, CommandRequest, Query, QueryResponse};
-
-pub use git_artifact::git_head_artifact_blocking;

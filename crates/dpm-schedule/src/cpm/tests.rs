@@ -32,6 +32,7 @@ fn task(project: ProjectId, key: &str, hours: f64) -> WorkItem {
         owner: None,
         block_reason: None,
         last_rejection: None,
+        resources: Vec::new(),
     }
 }
 

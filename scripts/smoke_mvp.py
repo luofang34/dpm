@@ -51,7 +51,7 @@ def smoke(binary, directory):
     assert run('claim', 'TEST-A', '--actor', 'agent:smoke', structured=True)['resulting_revision'] == 1
     run('claim', 'TEST-A', '--actor', 'agent:other', error='not ready')
     run('submit', 'TEST-A', '--actor', 'agent:other', error='owned by')
-    run('attach-git-head', 'TEST-A', '--actor', 'agent:smoke')
+    run('attach-git-head', 'TEST-A', '--resource', 'TEST-REPO', '--actor', 'agent:smoke')
     assert len(run('show', 'TEST-A', structured=True)['artifact_ids']) == 1
     run('submit', 'TEST-A', '--actor', 'agent:smoke')
     revision = run('status', structured=True)['revision']

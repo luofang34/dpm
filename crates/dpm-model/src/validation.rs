@@ -60,6 +60,14 @@ impl Plan {
     ///
     /// Call this at import, command, and persistence boundaries. It does not mutate the plan.
     pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.format_version != 2 {
+            return Err(invalid(
+                "plan format",
+                self.workspace.id,
+                format!("unsupported version {}; expected 2", self.format_version),
+            ));
+        }
+        crate::resource::validate(self)?;
         entities::validate(self)?;
         graph::validate(self)
     }

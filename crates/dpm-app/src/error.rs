@@ -4,6 +4,9 @@ use thiserror::Error;
 /// Shared application failures, preserving the original engine or storage cause.
 #[derive(Debug, Error)]
 pub enum AppError {
+    /// Local workspace binding failed.
+    #[error(transparent)]
+    Registry(#[from] crate::RegistryError),
     /// Invalid or missing project locator.
     #[error(transparent)]
     Project(#[from] crate::ProjectError),
@@ -72,6 +75,7 @@ impl AppError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::Project(error) => error.code(),
+            Self::Registry(error) => error.code(),
             Self::ReadOnlyProject => "read_only_project",
             Self::Conflict { .. } | Self::Store(dpm_store::StoreError::RevisionConflict { .. }) => {
                 "revision_conflict"

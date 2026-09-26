@@ -3,19 +3,59 @@ use chrono::Utc;
 use dpm_model::{ActorId, Artifact, ArtifactId, ArtifactKind};
 use std::{collections::BTreeMap, path::Path, process::Command};
 
-/// Capture immutable HEAD evidence in the current repository without changing Git.
-pub fn git_head_artifact_blocking(actor: ActorId) -> Result<Artifact, AppError> {
-    git_head_at_blocking(actor, Path::new("."))
-}
-
 impl Application {
     /// Capture evidence from the selected project, or the current directory for an explicit DB.
-    pub fn git_head_artifact_blocking(&self, actor: ActorId) -> Result<Artifact, AppError> {
+    pub fn git_head_artifact_blocking(
+        &self,
+        actor: ActorId,
+        work: dpm_model::WorkItemId,
+        resource: Option<&str>,
+    ) -> Result<Artifact, AppError> {
         self.ensure_writable()?;
-        git_head_at_blocking(
+        let plan = self.plan_blocking()?;
+        let selected = if let Some(key) = resource {
+            let id = plan
+                .resources
+                .values()
+                .find(|r| r.key.0 == key)
+                .ok_or_else(|| AppError::InvalidRequest(format!("unknown resource {key}")))?
+                .id;
+            if self.project_resource.is_some_and(|bound| bound != id) {
+                return Err(AppError::InvalidRequest(
+                    "resource differs from this checkout's locator binding".into(),
+                ));
+            }
+            id
+        } else {
+            self.project_resource.ok_or_else(|| {
+                AppError::InvalidRequest(
+                    "Git evidence needs a locator resource or explicit --resource key".into(),
+                )
+            })?
+        };
+        let item = plan
+            .work_items
+            .get(&work)
+            .ok_or(dpm_engine::EngineError::MissingWorkItem(work))?;
+        if !item.resources.iter().any(|r| r.resource == selected)
+            || !matches!(
+                plan.resources[&selected].kind,
+                dpm_model::ResourceKind::GitRepository { .. }
+            )
+        {
+            return Err(AppError::InvalidRequest(
+                "Git resource must belong to the task's requirements".into(),
+            ));
+        }
+        let mut artifact = git_head_at_blocking(
             actor,
             self.project_root.as_deref().unwrap_or(Path::new(".")),
-        )
+        )?;
+        artifact
+            .metadata
+            .insert("resource_id".into(), selected.to_string());
+        artifact.uri = format!("git:resource:{selected}@{}", artifact.metadata["commit"]);
+        Ok(artifact)
     }
 }
 
