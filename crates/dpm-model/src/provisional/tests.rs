@@ -1,6 +1,39 @@
 use crate::*;
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 
+#[test]
+fn a_pending_attempt_of_not_selected_work_never_releases_a_provisional_edge() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/conditional-plan.json"
+    ))
+    .expect("conditional fixture");
+    edge_mut(&mut plan, "SUP-A-QUOTE", "SUP-A-AUDIT").start_basis = StartBasis::Provisional;
+    attempts(&mut plan, "SUP-A-QUOTE", 0, AttemptOutcome::Pending);
+    plan.validate()
+        .expect("pending attempt on an undecided branch");
+    let edge = edge_mut(&mut plan.clone(), "SUP-A-QUOTE", "SUP-A-AUDIT").clone();
+    let open = Timeline::at(&plan, t(2)).start_edge(&plan, &edge);
+    assert_eq!(
+        open.attempt,
+        Some(1),
+        "an undecided branch waits on its own event"
+    );
+    let decision = plan
+        .decisions
+        .values_mut()
+        .find(|d| d.key.0 == "DEC-SUPPLIER")
+        .expect("decision");
+    decision.status = DecisionStatus::Decided;
+    decision.outcome = Some("B".into());
+    decision.resolved_at = Some(t(2));
+    plan.validate().expect("branch A not selected");
+    let excluded = Timeline::at(&plan, t(3)).start_edge(&plan, &edge);
+    assert_eq!(
+        (excluded.release, excluded.attempt),
+        (Release::NotSelected, None)
+    );
+}
+
 fn fixture() -> Plan {
     serde_json::from_str(include_str!(
         "../../../../tests/support/execution-plan.json"

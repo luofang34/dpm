@@ -42,7 +42,7 @@ impl Gantt {
             "{state} · {:.0}% · verified={} · critical={}",
             progress.percent_complete,
             progress.verified,
-            self.bounds(plan, work).2
+            self.bounds(plan, work).is_some_and(|b| b.2)
         )));
         self.relationships(&mut lines, plan, work, true);
         self.relationships(&mut lines, plan, work, false);

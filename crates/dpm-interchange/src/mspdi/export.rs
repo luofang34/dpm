@@ -40,6 +40,7 @@ pub fn export_mspdi(plan: &Plan, project_key: &str) -> Result<ExportResult, Inte
             key: project_key.into(),
         })?;
     let rows = outline(plan, project);
+    let applicability = plan.applicability();
     let uids: BTreeMap<WorkItemId, u32> = rows.iter().map(|r| (r.work.id, r.uid)).collect();
     let mut xml = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
@@ -62,7 +63,7 @@ pub fn export_mspdi(plan: &Plan, project_key: &str) -> Result<ExportResult, Inte
                 reason,
             }
         })?;
-        items.push(item_report(row));
+        items.push(item_report(plan, &applicability, row));
     }
     push_line(&mut xml, 1, "</Tasks>");
     xml.push_str("</Project>\n");
@@ -72,7 +73,7 @@ pub fn export_mspdi(plan: &Plan, project_key: &str) -> Result<ExportResult, Inte
             project: project.key.clone(),
             project_guid,
             items,
-            dependencies: dependency_reports(plan, &uids),
+            dependencies: dependency_reports(plan, &applicability, &uids),
             omitted: project_omissions(plan, project, &uids),
         },
     })
@@ -206,7 +207,11 @@ fn write_links(
     }
 }
 
-fn item_report(row: &Row) -> ItemExportReport {
+fn item_report(
+    plan: &Plan,
+    applicability: &BTreeMap<WorkItemId, dpm_model::Applicability>,
+    row: &Row,
+) -> ItemExportReport {
     let work = row.work;
     let mut preserved = vec![
         "identity".to_string(),
@@ -241,7 +246,10 @@ fn item_report(row: &Row) -> ItemExportReport {
         guid: format_guid(work.id.0),
         preserved,
         approximated,
-        omitted: omissions(work),
+        omitted: omissions(work)
+            .into_iter()
+            .chain(super::conditional::findings(plan, applicability, work))
+            .collect(),
     }
 }
 
@@ -316,6 +324,7 @@ fn omissions(work: &WorkItem) -> Vec<Finding> {
 
 fn dependency_reports(
     plan: &Plan,
+    applicability: &BTreeMap<WorkItemId, dpm_model::Applicability>,
     uids: &BTreeMap<WorkItemId, u32>,
 ) -> Vec<DependencyExportReport> {
     let mut reports: Vec<_> = plan
@@ -344,6 +353,7 @@ fn dependency_reports(
             if edge.waiver.is_some() {
                 notes.push("waiver is not represented; the link is written as enforced".into());
             }
+            notes.extend(super::conditional::edge_note(applicability, edge));
             if (edge.lag_hours * 600.0).fract() != 0.0 {
                 notes.push("lag rounded to a tenth of a minute".into());
             }

@@ -1,4 +1,7 @@
 use super::*;
+
+/// Bar text for work the remaining schedule omits because it is outside the active graph.
+const OUTSIDE_GRAPH: &str = " outside the active graph; see detail";
 use ratatui::{
     Frame,
     layout::{Constraint, Layout},
@@ -116,7 +119,8 @@ impl Gantt {
         label_width: usize,
         width: usize,
     ) -> Line<'static> {
-        let (start, end, critical) = self.bounds(plan, item);
+        let bounds = self.bounds(plan, item);
+        let critical = bounds.is_some_and(|b| b.2);
         let progress = self.progress[&item.id];
         let (symbol, bar_style) = self.palette.activity(item, progress.verified, critical);
         let selected = marker == "@ ";
@@ -145,7 +149,10 @@ impl Gantt {
         Line::from(vec![
             Span::styled(label, label_style),
             Span::styled(
-                self.bar(start, end, width, symbol, item.kind),
+                match bounds {
+                    Some((start, end, _)) => self.bar(start, end, width, symbol, item.kind),
+                    None => format!("{:<width$}", truncate(OUTSIDE_GRAPH, width)),
+                },
                 bar_style.add_modifier(if selected || marker == "~ " {
                     Modifier::BOLD
                 } else {

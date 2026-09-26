@@ -86,7 +86,10 @@ const NAMES: &[(&str, &str)] = &[
         "attach_git_head",
         "Attach the current repository HEAD as immutable evidence",
     ),
-    ("decide_gate", "Resolve an open decision gate"),
+    (
+        "decide_gate",
+        "Resolve an open decision; a decision with options takes one option key, which selects the work conditioned on it",
+    ),
     (
         "link_external",
         "Link work to a provider-scoped external issue or pull request; context only, never evidence, dependency satisfaction or verification",
@@ -161,7 +164,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.extend(["dependency","attempt","reason"]);
             },
             "decide_gate" => {
-                properties.insert("decision".into(),json!({"type":"string"})); properties.insert("outcome".into(),json!({"type":"string","minLength":1})); required.extend(["decision","outcome"]);
+                properties.insert("decision".into(),json!({"type":"string"})); properties.insert("outcome".into(),json!({"type":"string","minLength":1,"description":"Outcome text, or exactly one option key when the decision lists options"})); required.extend(["decision","outcome"]);
             },
             _ => {},
         }

@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
+mod applicability;
+pub use applicability::ApplicabilityChange;
 mod policy;
 mod protection;
 mod replacement;
@@ -34,6 +36,9 @@ pub struct ChangePreview {
     pub changes: Vec<EntityChange>,
     /// Work to reassess because a decision in its context is replaced; never a gate.
     pub affected_work: Vec<AffectedWork>,
+    /// Work entering or leaving the active graph, including in-flight work a choice change affects.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub applicability_changes: Vec<ApplicabilityChange>,
 }
 
 /// Validate a proposed plan without changing state, lifecycle, evidence or decision outcomes.
@@ -102,6 +107,7 @@ pub fn propose_change(current: &Plan, proposed: &Plan) -> Result<ChangePreview, 
         base_revision: current.revision,
         changes,
         affected_work: replacement::affected_work(current, proposed),
+        applicability_changes: applicability::changes(current, proposed),
     })
 }
 

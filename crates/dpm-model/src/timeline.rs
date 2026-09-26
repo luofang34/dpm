@@ -1,5 +1,6 @@
+use crate::applicability::{self, Derived};
 use crate::{
-    Decision, DecisionStatus, Dependency, Endpoint, EventTime, Plan, Release, WorkItem, WorkItemId,
+    Applicability, Decision, Dependency, Endpoint, EventTime, Plan, Release, WorkItem, WorkItemId,
     WorkKind, WorkStatus,
 };
 use chrono::{DateTime, Utc};
@@ -14,24 +15,39 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct Timeline {
     now: DateTime<Utc>,
     complete: BTreeMap<WorkItemId, EventTime>,
+    applicability: BTreeMap<WorkItemId, Applicability>,
+    choice_at: BTreeMap<WorkItemId, EventTime>,
 }
+
+const APPLICABLE: Applicability = Applicability::Applicable;
 
 impl Timeline {
     /// Derive completion from a validated plan and an adapter-supplied clock reading.
     ///
-    /// Tasks complete when verified. A milestone is reached when every unwaived incoming edge and
-    /// every decision gating it or its containers is released; its time is the latest of those
-    /// releases. A work package completes with all its children, at the latest child or gate time.
+    /// Tasks complete when verified and their conditions are selected. A milestone is reached when
+    /// it is applicable and every unwaived incoming edge and every decision gating it or its
+    /// containers is released; its time is the latest of those releases and of the choices that
+    /// selected it or skipped its branches. A work package completes when every child that a
+    /// choice did not exclude is complete, and at least one is, at the latest child, choice or
+    /// gate time.
     #[must_use]
     pub fn at(plan: &Plan, now: DateTime<Utc>) -> Self {
+        let Derived { states, choice_at } = applicability::derive(plan);
         let mut timeline = Self {
             now,
             complete: plan
                 .work_items
                 .values()
                 .filter(|w| w.is_executable())
+                .filter(|w| {
+                    states
+                        .get(&w.id)
+                        .is_none_or(Applicability::condition_selected)
+                })
                 .filter_map(|w| task_event(w, Endpoint::Finish).map(|at| (w.id, at)))
                 .collect(),
+            applicability: states,
+            choice_at,
         };
         loop {
             let reached: Vec<_> = plan
@@ -76,9 +92,27 @@ impl Timeline {
         }
     }
 
+    /// Whether work belongs to the active graph, and if not, why.
+    #[must_use]
+    pub fn applicability(&self, work: WorkItemId) -> &Applicability {
+        self.applicability.get(&work).unwrap_or(&APPLICABLE)
+    }
+
     /// Whether an edge's required predecessor event plus positive lag has elapsed.
+    ///
+    /// A constraint from not-selected work is a skipped branch, released when the choice was made,
+    /// only into an active-branch join; into any other successor it never releases.
     #[must_use]
     pub fn edge(&self, plan: &Plan, edge: &Dependency) -> Release {
+        if self.applicability(edge.predecessor).is_not_selected() {
+            let join = plan.work_items.get(&edge.successor).map(|w| w.join);
+            return match (join, self.choice_at.get(&edge.predecessor)) {
+                (Some(join), Some(at)) if join.skips_unselected() => {
+                    Release::SkippedBranch { at: *at }
+                }
+                _ => Release::NotSelected,
+            };
+        }
         let event = self.event(plan, edge.predecessor, edge.kind.predecessor_endpoint());
         Release::evaluate(event, edge.lag_hours, self.now)
     }
@@ -92,12 +126,12 @@ impl Timeline {
         plan.decisions
             .values()
             .filter(|d| !d.blocks.is_disjoint(&scope))
-            .map(|d| (d, Release::evaluate(decision_event(d), 0.0, self.now)))
+            .map(|d| (d, Release::evaluate(gate_event(d), 0.0, self.now)))
             .collect()
     }
 
     fn aggregate_completion(&self, plan: &Plan, work: &WorkItem) -> Option<EventTime> {
-        if work.status != WorkStatus::Planned {
+        if work.status != WorkStatus::Planned || !self.applicability(work.id).is_applicable() {
             return None;
         }
         let prerequisites: Vec<Release> = match work.kind {
@@ -111,19 +145,36 @@ impl Timeline {
                 .work_items
                 .values()
                 .filter(|w| w.parent == Some(work.id))
-                .map(|w| {
-                    self.completed_at(w.id)
-                        .map_or(Release::AwaitingEvent, |at| Release::Released { at })
+                .map(|w| match self.choice_at.get(&w.id) {
+                    Some(at) if self.applicability(w.id).is_not_selected() => {
+                        Release::SkippedBranch { at: *at }
+                    }
+                    _ => self
+                        .completed_at(w.id)
+                        .map_or(Release::AwaitingEvent, |at| Release::Released { at }),
                 })
                 .collect(),
         };
-        if prerequisites.is_empty() {
+        // Without one branch that happened, completion would rest only on excluded work.
+        let permits_empty = matches!(
+            work.join,
+            crate::JoinPolicy::ActiveBranches { allow_empty: true }
+        );
+        let happened = prerequisites
+            .iter()
+            .any(|r| !matches!(r, Release::SkippedBranch { .. }));
+        if prerequisites.is_empty() || (!happened && !permits_empty) {
             return None;
         }
         let gates = self.decisions(plan, work.id).into_iter().map(|(_, r)| r);
+        let chosen = self
+            .choice_at
+            .get(&work.id)
+            .map(|at| Release::Released { at: *at });
         prerequisites
             .into_iter()
             .chain(gates)
+            .chain(chosen)
             .try_fold(None, |latest: Option<EventTime>, release| {
                 let at = release.released_at()?;
                 Some(Some(latest.map_or(at, |l| l.latest(at))))
@@ -159,15 +210,13 @@ fn task_event(work: &WorkItem, endpoint: Endpoint) -> Option<EventTime> {
     }
 }
 
-fn decision_event(decision: &Decision) -> Option<EventTime> {
-    if decision.status == DecisionStatus::Open {
-        return None;
-    }
-    Some(
+/// A gate is released once it is no longer open, whether decided or superseded.
+fn gate_event(decision: &Decision) -> Option<EventTime> {
+    (decision.status != crate::DecisionStatus::Open).then(|| {
         decision
             .resolved_at
-            .map_or(EventTime::Unrecorded, EventTime::Recorded),
-    )
+            .map_or(EventTime::Unrecorded, EventTime::Recorded)
+    })
 }
 
 fn ancestors(plan: &Plan, work: WorkItemId) -> Option<BTreeSet<WorkItemId>> {

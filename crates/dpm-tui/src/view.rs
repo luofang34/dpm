@@ -224,13 +224,14 @@ impl View {
         if matches!(self.page, Page::Work) {
             let items = self.work.iter().map(|w| {
                 ListItem::new(format!(
-                    "{}{}{}  {:?}  {:.0}%  {}",
+                    "{}{}{}  {:?}  {:.0}%  {}{}",
                     "  ".repeat(depth(&self.plan, w)),
                     crate::work_label::milestone_badge(w, self.progress.work[&w.id].verified),
                     w.key,
                     w.status,
                     self.progress.work[&w.id].percent_complete,
-                    w.title
+                    w.title,
+                    crate::open_choices::scope_tag(self.progress.work[&w.id].scope)
                 ))
             });
             let list = List::new(items)
@@ -297,6 +298,7 @@ fn now_text(plan: &Plan, summary: &StatusSummary, candidates: Vec<NextWorkCandid
     if let Some(p95) = summary.p95_finish_hours {
         now.push_str(&format!(" · P95 {p95:.1}h"));
     }
+    now.push_str(&crate::open_choices::summary_text(summary));
     now.push_str("\n\nNeeds decision:\n");
     for decision in plan
         .decisions

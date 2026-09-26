@@ -78,14 +78,16 @@ impl Gantt {
         }
         bar.into_iter().collect()
     }
-    fn bounds(&self, plan: &Plan, item: &WorkItem) -> (f64, f64, bool) {
-        let activity = &self.schedule.activities[&item.id];
+    /// Scheduled range of work, or `None` for work outside the active graph, which the remaining
+    /// schedule omits; packages span their scheduled descendants.
+    fn bounds(&self, plan: &Plan, item: &WorkItem) -> Option<(f64, f64, bool)> {
         if item.kind != WorkKind::WorkPackage {
-            return (
+            let activity = self.schedule.activities.get(&item.id)?;
+            return Some((
                 activity.earliest_start_hours,
                 activity.earliest_finish_hours,
                 activity.critical,
-            );
+            ));
         }
         let children: Vec<_> = plan
             .work_items
@@ -93,14 +95,12 @@ impl Gantt {
             .filter(|child| child.parent == Some(item.id))
             .collect();
         if children.is_empty() {
-            return (0.0, 0.0, false);
+            return Some((0.0, 0.0, false));
         }
         children
             .into_iter()
-            .map(|child| self.bounds(plan, child))
-            .fold((f64::INFINITY, 0.0, false), |(a, b, c), (x, y, z)| {
-                (a.min(x), b.max(y), c || z)
-            })
+            .filter_map(|child| self.bounds(plan, child))
+            .reduce(|(a, b, c), (x, y, z)| (a.min(x), b.max(y), c || z))
     }
 }
 

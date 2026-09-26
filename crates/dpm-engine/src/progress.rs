@@ -1,6 +1,8 @@
 use crate::EngineError;
 use chrono::{DateTime, Utc};
-use dpm_model::{EventTime, Plan, Timeline, WorkItem, WorkItemId, WorkKind, WorkStatus};
+use dpm_model::{
+    Applicability, EventTime, Plan, Timeline, WorkItem, WorkItemId, WorkKind, WorkStatus,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -15,6 +17,37 @@ pub struct ProgressSummary {
     /// or package; unrecorded when any contributing event predates recorded event times.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<EventTime>,
+    /// Whether a choice keeps this work out of every percentage and completion condition.
+    #[serde(default, skip_serializing_if = "ProgressScope::is_counted")]
+    pub scope: ProgressScope,
+}
+
+/// Whether a work item's own conditions let it count toward progress.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgressScope {
+    /// The work counts: it is unconditional or every condition names the selected option.
+    #[default]
+    Counted,
+    /// A decision selected a different option; the work is excluded, not completed.
+    NotSelected,
+    /// A condition awaits an open decision; the work is not counted, and its container or
+    /// workspace cannot be complete until the choice is made.
+    Undecided,
+}
+
+impl ProgressScope {
+    fn is_counted(&self) -> bool {
+        *self == Self::Counted
+    }
+
+    fn of(applicability: &Applicability) -> Self {
+        match applicability {
+            Applicability::NotSelected { .. } => Self::NotSelected,
+            Applicability::Undecided { .. } => Self::Undecided,
+            _ => Self::Counted,
+        }
+    }
 }
 
 /// Derived progress values, never persisted as replacement domain objects.
@@ -28,6 +61,10 @@ pub struct ProgressProjection {
 
 /// Compute execution percentages without inferring work from elapsed time or changing the schedule.
 ///
+/// Percentages count only tasks whose conditions are selected: excluded work is not completed
+/// work, and undecided alternatives are not averaged into one figure. The workspace is verified
+/// only when every item is complete or excluded by a choice, so an open choice is not completion.
+///
 /// `now` is the adapter's clock reading; it decides only whether lagged milestone gates are reached.
 pub fn progress(plan: &Plan, now: DateTime<Utc>) -> Result<ProgressProjection, EngineError> {
     plan.validate()?;
@@ -36,10 +73,11 @@ pub fn progress(plan: &Plan, now: DateTime<Utc>) -> Result<ProgressProjection, E
 
 pub(crate) fn progress_with(plan: &Plan, timeline: &Timeline) -> ProgressProjection {
     let done = timeline.completed();
+    let scope = |id: WorkItemId| ProgressScope::of(timeline.applicability(id));
     let tasks: Vec<_> = plan
         .work_items
         .values()
-        .filter(|w| w.is_executable())
+        .filter(|w| w.is_executable() && scope(w.id).is_counted())
         .collect();
     let mut work = BTreeMap::new();
     for item in plan.work_items.values() {
@@ -68,10 +106,15 @@ pub(crate) fn progress_with(plan: &Plan, timeline: &Timeline) -> ProgressProject
                 percent_complete,
                 verified,
                 completed_at: timeline.completed_at(item.id),
+                scope: scope(item.id),
             },
         );
     }
-    let verified = !plan.work_items.is_empty() && done.len() == plan.work_items.len();
+    let verified = !done.is_empty()
+        && plan
+            .work_items
+            .keys()
+            .all(|id| done.contains(id) || scope(*id) == ProgressScope::NotSelected);
     let completed_at = verified
         .then(|| {
             plan.work_items
@@ -85,6 +128,7 @@ pub(crate) fn progress_with(plan: &Plan, timeline: &Timeline) -> ProgressProject
             percent_complete: average(&tasks, verified),
             verified,
             completed_at,
+            scope: ProgressScope::Counted,
         },
         work,
     }

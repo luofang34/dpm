@@ -222,8 +222,10 @@ impl Timeline {
     #[must_use]
     pub fn start_edge(&self, plan: &Plan, edge: &Dependency) -> StartRelease {
         let release = self.edge(plan, edge);
+        // Only an edge still waiting on the predecessor's own event may use its attempt; a
+        // not-selected branch stays governed by the choice, never by a submission.
         let current = (edge.start_basis == StartBasis::Provisional
-            && release.released_at().is_none())
+            && matches!(release, Release::AwaitingEvent | Release::Elapsing { .. }))
         .then(|| plan.work_items.get(&edge.predecessor))
         .flatten()
         .and_then(WorkItem::current_attempt);

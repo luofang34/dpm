@@ -109,6 +109,9 @@ pub struct Decision {
     /// Superseded decision whose rationale and sources this choice replaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<DecisionId>,
+    /// Structured alternatives; when present, a decided outcome is exactly one option key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<crate::DecisionOption>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

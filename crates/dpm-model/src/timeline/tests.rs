@@ -42,6 +42,7 @@ fn gate(plan: &mut Plan, key: &str, blocks: WorkItemId, resolved: Option<DateTim
         artifact_ids: BTreeSet::new(),
         blocks: BTreeSet::from([blocks]),
         supersedes: None,
+        options: Vec::new(),
     };
     plan.decisions.insert(decision.id, decision);
 }

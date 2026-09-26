@@ -2,7 +2,8 @@ use super::{downstream_counts, simulation_config};
 use crate::{EngineError, GateReport, Transition, gates, readiness::show_with};
 use chrono::{DateTime, Utc};
 use dpm_model::{
-    BasisStatus, Plan, Timeline, WorkItem, WorkItemId, basis_dependents, basis_status,
+    Applicability, BasisStatus, Plan, Timeline, WorkItem, WorkItemId, basis_dependents,
+    basis_status,
 };
 use dpm_schedule::{deterministic_remaining, simulate_remaining};
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,9 @@ pub struct WorkExplanation {
     pub work: WorkItem,
     /// Whether this task can be claimed now.
     pub ready: bool,
+    /// Whether the work belongs to the active graph, derived from conditions, joins and choices.
+    #[serde(default = "applicable")]
+    pub applicability: Applicability,
     /// Direct predecessor work items.
     pub predecessors: Vec<WorkItem>,
     /// Count of distinct transitively dependent work items.
@@ -65,7 +69,10 @@ pub fn explain_work(
         .filter(|dep| dep.successor == work)
         .filter_map(|dep| plan.work_items.get(&dep.predecessor).cloned())
         .collect::<Vec<_>>();
-    let downstream_count = downstream_counts(plan).get(&work).copied().unwrap_or(0);
+    let downstream_count = downstream_counts(plan, &timeline)
+        .get(&work)
+        .copied()
+        .unwrap_or(0);
     let authoritative = plan
         .work_items
         .get(&work)
@@ -96,6 +103,7 @@ pub fn explain_work(
         context: crate::context::execution_context(plan, &item),
         work: item,
         ready,
+        applicability: timeline.applicability(work).clone(),
         predecessors,
         downstream_count,
         schedule: schedule.activities.get(&work).cloned(),
@@ -106,6 +114,10 @@ pub fn explain_work(
             relied_on_by: basis_dependents(plan, work),
         },
     })
+}
+
+fn applicable() -> Applicability {
+    Applicability::Applicable
 }
 
 fn why_now(

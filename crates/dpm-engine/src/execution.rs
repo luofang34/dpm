@@ -1,6 +1,6 @@
 use crate::{Command, EngineError, Operation};
 use chrono::{DateTime, Utc};
-use dpm_model::{ActorId, Artifact, DecisionStatus, OperationId, Plan, WorkItem, WorkItemId};
+use dpm_model::{ActorId, Artifact, OperationId, Plan, WorkItem, WorkItemId};
 use lifecycle::{block, claim, report_progress, start, submit, unblock, verify};
 
 /// Apply one validated semantic command atomically and return its audit operation.
@@ -84,20 +84,7 @@ fn execute(
             attempt,
             reason,
         } => revalidation::revalidate(plan, actor, *work, *dependency, *attempt, reason, at),
-        Command::Decide { decision, outcome } => {
-            nonempty(&decision.to_string(), "outcome", outcome)?;
-            let gate = plan
-                .decisions
-                .get_mut(decision)
-                .ok_or(EngineError::MissingDecision(*decision))?;
-            if gate.status != DecisionStatus::Open {
-                return Err(EngineError::DecisionNotOpen(*decision));
-            }
-            gate.status = DecisionStatus::Decided;
-            gate.outcome = Some(outcome.clone());
-            gate.resolved_at = Some(at);
-            Ok(())
-        }
+        Command::Decide { decision, outcome } => choice::decide(plan, *decision, outcome, at),
     }
 }
 
@@ -163,6 +150,7 @@ fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
     Ok(())
 }
 
+mod choice;
 mod lifecycle;
 mod revalidation;
 mod review;

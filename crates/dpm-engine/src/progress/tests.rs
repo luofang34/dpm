@@ -50,6 +50,7 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
             percent_complete: 100.0,
             verified: false,
             completed_at: None,
+            scope: crate::ProgressScope::Counted,
         }
     );
     assert_eq!(
@@ -222,6 +223,7 @@ fn import_defaults_reports_to_zero_and_rejects_invalid_progress() {
             percent_complete: 0.0,
             verified: false,
             completed_at: None,
+            scope: crate::ProgressScope::Counted,
         }
     );
 }

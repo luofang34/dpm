@@ -34,7 +34,7 @@ which the store still checks atomically. Presentation text is not the API contra
 | progress KEY PERCENT --note TEXT | report_progress | Owner reports 0..100 execution; verification remains separate |
 | submit KEY --note TEXT | submit_work | Request independent verification of started work once FF/SF gates are released |
 | verify KEY --note TEXT | verify_work | Reject self-verification; re-check every relation and decision; record the finish event |
-| decide KEY OUTCOME | decide_gate | Resolve an open decision gate |
+| decide KEY OUTCOME | decide_gate | Resolve an open decision; with `options`, OUTCOME is exactly one option key |
 | artifact KEY FILE.json | add_artifact | Attach the same Artifact JSON object |
 | attach-git-head KEY --resource KEY | attach_git_head | Capture HEAD for an explicit task resource; locator binding is the default |
 | link-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | link_external | Link work to a provider-scoped external object; context only |
@@ -69,6 +69,10 @@ Open gates are resolved only by `decide`; superseding one, rewriting a prior dec
 repeated `supersedes` links, and replacements that add gates are rejected with no state change.
 `affected_work` in the preview lists every work item (key, kind, status) whose context contains either
 decision, including started work, so reviewers can reassess it; it never changes readiness.
+A replacement for a decision with `options` keeps the same option keys, and its outcome may select a
+different option: that is the only way to change a choice once made. `applicability_changes` in the
+preview lists each work item whose [applicability](#conditional-work-and-branch-joins) the proposal
+changes, with `in_flight`, `before` and `after`.
 
 ## External tracking references
 
@@ -178,6 +182,9 @@ siblings follow key order, `UID`s number that order (they are local to the file)
 the stable project and work identities. Tasks carry the PERT expectation in elapsed hours, and
 links carry elapsed-hour lags. The report lists per-item omissions (acceptance, instructions,
 lifecycle, owner, requirements, evidence, resources) and project-level data outside the subset.
+MSPDI has no conditional work: every task is written unconditionally, never dropped, and the item
+report names its `condition`, an active-branch `join`, and any current non-applicable state
+(`applicability`); a link from not-selected work carries a note that it is written as enforced.
 Exporting a project and importing the document into the same workspace yields no changes.
 
 ## Dependency policies, waivers and links
@@ -205,6 +212,52 @@ forecast. An unwaived Soft edge gates exactly like a Hard one, and `gates.unmet`
 Endpoints must exist and differ; one pair holds at most one link of each kind in either direction.
 `explain_work.context.links` lists those touching the work. Links never change readiness,
 scheduling, ranking or progress.
+
+## Conditional work and branch joins
+
+A decision may list structured `options` (`[{key, label}]`, at least two, unique trimmed keys).
+Once decided, its `outcome` is exactly one option key; `decide` refuses any other outcome with no
+state change. A work item's optional `condition: {decision, option}` makes it, and everything a
+work package contains, apply only when that option is selected; conditions on nested packages all
+apply. A task or milestone may set `join: {"mode": "active_branches", "allow_empty": false}`; the
+default (`all_predecessors`, omitted) keeps ordinary dependency semantics. All three fields are
+additive and edited through `propose_change` / `apply_change`.
+
+Applicability is derived at query time and never stored. `explain_work.applicability` and
+`project_status.not_applicable` report it with `state`:
+
+| State | Meaning | Transitions | Forecast | Progress |
+|---|---|---|---|---|
+| `applicable` | Selected, and every prerequisite can proceed | gated as usual | included | counted |
+| `undecided` | A condition awaits an open decision | refused | excluded; see scenarios | not counted; container/workspace incomplete |
+| `not_selected` | A decision selected another option | refused | excluded | not counted; never completion |
+| `awaiting_choice` | A prerequisite is undecided | refused | excluded; see scenarios | counted |
+| `stranded` | An ordinary edge from not-selected or stranded work never releases | refused | excluded | counted, outstanding |
+| `empty_join` | Every branch into an active-branch join was not selected and `allow_empty` is false | refused | excluded | never reached |
+
+A refused transition reports `{type: "applicability", applicability}` in `unmet`. A dependency from
+not-selected work reports `release.state = "not_selected"` into an ordinary successor and
+`"skipped_branch"` (released at the choice time) into an active-branch join. A join is reached when
+at least one branch is verified (or `allow_empty` is set and every branch was skipped), every active
+branch is released, and its gates are resolved; its time includes the `resolved_at` of the choices
+that selected it or skipped its branches. A work package completes when every child that a choice
+did not exclude is complete, with at least one. `progress.scope` is `not_selected` or `undecided`
+for work outside the counted scope.
+
+`next`, scoped `next`, `status`, `explain`, progress, milestone completion, the remaining CPM and
+Monte Carlo and the TUI read one evaluation. While open decisions condition work,
+`project_status.open_choices` lists them with `scenario_count` and one `scenarios` entry per option
+combination (up to 16): `choices`, `expected_finish_hours`, optional percentiles and the work that
+would be `stranded`. The headline `expected_finish_hours` then covers committed work only and the
+headline percentiles are null: branches without a probability model are never blended. Float and
+criticality in `next` and `explain` are likewise computed over committed work. Lifecycle counts
+(`in_flight`, `blocked`, `awaiting_verification`) still tally excluded work whose lifecycle a
+reviewed choice change kept; `complete` and progress do not count it. A replacement decision carries
+no `blocks`, as for any replacement.
+
+`decide` refuses a choice that would exclude claimed or started work. Changing a made choice is a
+reviewed decision replacement; it keeps in-flight work's lifecycle, owner and evidence, lists it in
+`applicability_changes`, and that work then refuses further transitions until the plan changes.
 
 ## Prepared self-host example
 
@@ -280,7 +333,7 @@ submission of the predecessor's current (pending or verified) attempt plus posit
 verifying that attempt never delays an elapsing start; `gates.provisional[]` names each edge
 released on a still-pending attempt with the `attempt` relied on, and `why_now` and `next_work`
 reasons say so. A legacy submission without
-an attempt record does not release it. `submit`, `verify`, milestone completion, progress and the
+an attempt record, or a predecessor a choice did not select, does not release it. `submit`, `verify`, milestone completion, progress and the
 remaining forecast still wait for the predecessor's verified finish: in `transitions.verify` the
 edge appears with `start_basis: "Provisional"` and no `accepts_submission`.
 
@@ -408,6 +461,7 @@ Specification:
 `python3 scripts/smoke_interchange.py` covers MSPDI import/export parity, refused applies and round trips.
 `python3 scripts/smoke_agent.py` verifies real-process CLI/MCP query equality and shared execution,
 progress reporting, revision conflict, evidence, blocker, decision and independent-verification behavior.
+It includes `scripts/smoke_conditional.py`, which covers conditional-work parity and choice changes.
 
 `ratify_contract` approves a complete Proposed task as a human/service; `reject_work` requires
 Submitted work, a different reviewer, and a nonempty `reason`. Rejection retains ownership and

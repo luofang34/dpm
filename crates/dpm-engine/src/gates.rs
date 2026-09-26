@@ -85,6 +85,12 @@ pub enum UnmetGate {
         /// Human-readable gate key.
         key: String,
     },
+    /// The work is outside the active graph: not selected, undecided, awaiting an upstream choice,
+    /// stranded behind excluded work, or an empty join.
+    Applicability {
+        /// Derived applicability explaining the exclusion.
+        applicability: dpm_model::Applicability,
+    },
 }
 
 /// A provisional edge released on a predecessor's pending attempt; a start records it as basis.
@@ -149,6 +155,12 @@ pub(crate) fn evaluate(
     if let Some(reason) = &work.block_reason {
         unmet.push(UnmetGate::Blocker {
             reason: reason.clone(),
+        });
+    }
+    let applicability = timeline.applicability(work.id);
+    if !applicability.is_applicable() {
+        unmet.push(UnmetGate::Applicability {
+            applicability: applicability.clone(),
         });
     }
     let mut provisional = Vec::new();
@@ -300,6 +312,9 @@ pub(crate) fn describe(gate: &UnmetGate) -> String {
             ..
         } => provisional::describe_invalidated(key, *attempt, state, *current_attempt),
         UnmetGate::Decision { key } => format!("work awaits decision: {key}"),
+        UnmetGate::Applicability { applicability } => {
+            transition::describe_applicability(applicability)
+        }
     }
 }
 

@@ -1,0 +1,396 @@
+{
+  "format_version": 2,
+  "workspace": {
+    "id": "0000000f-0000-4000-8000-000000000001",
+    "name": "Conditional supplier test"
+  },
+  "revision": 0,
+  "resources": {},
+  "projects": {
+    "0000000c-0000-4000-8000-000000000001": {
+      "id": "0000000c-0000-4000-8000-000000000001",
+      "key": "SUP",
+      "parent": null,
+      "title": "Conditional supplier graph",
+      "objective": "Exercise decision options, conditional packages and branch joins."
+    }
+  },
+  "work_items": {
+    "0000000d-0000-4000-8000-000000000001": {
+      "id": "0000000d-0000-4000-8000-000000000001",
+      "key": "SUP-DESIGN",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Specify the part",
+      "objective": "Specify the part: observable result for the conditional supplier graph.",
+      "acceptance": [
+        {
+          "text": "Specify the part passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 2.0,
+        "likely_hours": 4.0,
+        "pessimistic_hours": 8.0
+      },
+      "capabilities": [
+        "supply"
+      ],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": []
+    },
+    "0000000d-0000-4000-8000-000000000002": {
+      "id": "0000000d-0000-4000-8000-000000000002",
+      "key": "SUP-PKG-A",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "WorkPackage",
+      "title": "Supplier A sourcing",
+      "objective": "Supplier A sourcing.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": [],
+      "condition": {
+        "decision": "0000000e-0000-4000-8000-000000000001",
+        "option": "A"
+      }
+    },
+    "0000000d-0000-4000-8000-000000000003": {
+      "id": "0000000d-0000-4000-8000-000000000003",
+      "key": "SUP-A-QUOTE",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": "0000000d-0000-4000-8000-000000000002",
+      "kind": "Task",
+      "title": "Obtain supplier A quote",
+      "objective": "Obtain supplier A quote: observable result for the conditional supplier graph.",
+      "acceptance": [
+        {
+          "text": "Obtain supplier A quote passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 1.0,
+        "likely_hours": 2.0,
+        "pessimistic_hours": 4.0
+      },
+      "capabilities": [
+        "supply"
+      ],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": []
+    },
+    "0000000d-0000-4000-8000-000000000004": {
+      "id": "0000000d-0000-4000-8000-000000000004",
+      "key": "SUP-A-TEST",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": "0000000d-0000-4000-8000-000000000002",
+      "kind": "WorkPackage",
+      "title": "Supplier A qualification",
+      "objective": "Supplier A qualification.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": []
+    },
+    "0000000d-0000-4000-8000-000000000005": {
+      "id": "0000000d-0000-4000-8000-000000000005",
+      "key": "SUP-A-QUAL",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": "0000000d-0000-4000-8000-000000000004",
+      "kind": "Task",
+      "title": "Qualify supplier A samples",
+      "objective": "Qualify supplier A samples: observable result for the conditional supplier graph.",
+      "acceptance": [
+        {
+          "text": "Qualify supplier A samples passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 3.0,
+        "likely_hours": 6.0,
+        "pessimistic_hours": 12.0
+      },
+      "capabilities": [
+        "supply"
+      ],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": []
+    },
+    "0000000d-0000-4000-8000-000000000006": {
+      "id": "0000000d-0000-4000-8000-000000000006",
+      "key": "SUP-PKG-B",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "WorkPackage",
+      "title": "Supplier B sourcing",
+      "objective": "Supplier B sourcing.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": [],
+      "condition": {
+        "decision": "0000000e-0000-4000-8000-000000000001",
+        "option": "B"
+      }
+    },
+    "0000000d-0000-4000-8000-000000000007": {
+      "id": "0000000d-0000-4000-8000-000000000007",
+      "key": "SUP-B-QUOTE",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": "0000000d-0000-4000-8000-000000000006",
+      "kind": "Task",
+      "title": "Obtain supplier B quote",
+      "objective": "Obtain supplier B quote: observable result for the conditional supplier graph.",
+      "acceptance": [
+        {
+          "text": "Obtain supplier B quote passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 1.5,
+        "likely_hours": 3.0,
+        "pessimistic_hours": 6.0
+      },
+      "capabilities": [
+        "supply"
+      ],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": []
+    },
+    "0000000d-0000-4000-8000-000000000008": {
+      "id": "0000000d-0000-4000-8000-000000000008",
+      "key": "SUP-B-QUAL",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": "0000000d-0000-4000-8000-000000000006",
+      "kind": "Task",
+      "title": "Qualify supplier B samples",
+      "objective": "Qualify supplier B samples: observable result for the conditional supplier graph.",
+      "acceptance": [
+        {
+          "text": "Qualify supplier B samples passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 6.0,
+        "likely_hours": 12.0,
+        "pessimistic_hours": 24.0
+      },
+      "capabilities": [
+        "supply"
+      ],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": []
+    },
+    "0000000d-0000-4000-8000-000000000009": {
+      "id": "0000000d-0000-4000-8000-000000000009",
+      "key": "SUP-MERGE",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Milestone",
+      "title": "Selected supplier qualified",
+      "objective": "Selected supplier qualified.",
+      "acceptance": [],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": null,
+      "capabilities": [],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": [],
+      "join": {
+        "mode": "active_branches",
+        "allow_empty": false
+      }
+    },
+    "0000000d-0000-4000-8000-000000000010": {
+      "id": "0000000d-0000-4000-8000-000000000010",
+      "key": "SUP-BUILD",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Build the pilot batch",
+      "objective": "Build the pilot batch: observable result for the conditional supplier graph.",
+      "acceptance": [
+        {
+          "text": "Build the pilot batch passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 2.5,
+        "likely_hours": 5.0,
+        "pessimistic_hours": 10.0
+      },
+      "capabilities": [
+        "supply"
+      ],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": []
+    },
+    "0000000d-0000-4000-8000-000000000011": {
+      "id": "0000000d-0000-4000-8000-000000000011",
+      "key": "SUP-A-AUDIT",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Audit the supplier A quote",
+      "objective": "Audit the supplier A quote: observable result for the conditional supplier graph.",
+      "acceptance": [
+        {
+          "text": "Audit the supplier A quote passes its independent check."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 0.5,
+        "likely_hours": 1.0,
+        "pessimistic_hours": 2.0
+      },
+      "capabilities": [
+        "supply"
+      ],
+      "requirement_ids": [],
+      "artifact_ids": [],
+      "owner": null,
+      "block_reason": null,
+      "resources": []
+    }
+  },
+  "requirements": {},
+  "artifacts": {},
+  "decisions": {
+    "0000000e-0000-4000-8000-000000000001": {
+      "id": "0000000e-0000-4000-8000-000000000001",
+      "key": "DEC-SUPPLIER",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "question": "Which supplier provides the part?",
+      "status": "Open",
+      "outcome": null,
+      "blocks": [],
+      "options": [
+        {
+          "key": "A",
+          "label": "Supplier A"
+        },
+        {
+          "key": "B",
+          "label": "Supplier B"
+        }
+      ]
+    }
+  },
+  "risks": {},
+  "dependencies": [
+    {
+      "predecessor": "0000000d-0000-4000-8000-000000000001",
+      "successor": "0000000d-0000-4000-8000-000000000003",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "0000000d-0000-4000-8000-000000000001",
+      "successor": "0000000d-0000-4000-8000-000000000007",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "0000000d-0000-4000-8000-000000000003",
+      "successor": "0000000d-0000-4000-8000-000000000005",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "0000000d-0000-4000-8000-000000000007",
+      "successor": "0000000d-0000-4000-8000-000000000008",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "0000000d-0000-4000-8000-000000000005",
+      "successor": "0000000d-0000-4000-8000-000000000009",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "0000000d-0000-4000-8000-000000000008",
+      "successor": "0000000d-0000-4000-8000-000000000009",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "0000000d-0000-4000-8000-000000000009",
+      "successor": "0000000d-0000-4000-8000-000000000010",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    },
+    {
+      "predecessor": "0000000d-0000-4000-8000-000000000003",
+      "successor": "0000000d-0000-4000-8000-000000000011",
+      "kind": "FinishStart",
+      "lag_hours": 0.0
+    }
+  ]
+}

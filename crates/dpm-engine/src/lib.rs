@@ -1,7 +1,7 @@
 //! Validated commands and consistent execution projections for humans and agents.
 
 mod change;
-pub use change::{AffectedWork, ChangePreview, EntityChange, propose_change};
+pub use change::{AffectedWork, ApplicabilityChange, ChangePreview, EntityChange, propose_change};
 mod command;
 mod context;
 mod execution;
@@ -19,11 +19,11 @@ pub use scope::{
 pub use command::{Command, EngineError, ExternalLinkRequest, Operation};
 pub use execution::apply_command;
 pub use query::{
-    BasisReport, NextWorkCandidate, NextWorkQuery, StatusSummary, WorkExplanation, explain_work,
-    next_work, status,
+    BasisReport, InapplicableWork, MAX_SCENARIOS, NextWorkCandidate, NextWorkQuery, OpenChoices,
+    ScenarioForecast, StatusSummary, WorkExplanation, explain_work, next_work, status,
 };
 pub use readiness::{completion, is_ready, show_work};
 
 pub use context::ExecutionContext;
 
-pub use progress::{ProgressProjection, ProgressSummary, progress};
+pub use progress::{ProgressProjection, ProgressScope, ProgressSummary, progress};

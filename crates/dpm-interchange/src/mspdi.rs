@@ -4,6 +4,7 @@
 //! durations as single-point estimates, and FS/SS/FF/SF predecessor links with hour-based lags.
 //! Everything else found in a document is reported per item and not imported.
 
+mod conditional;
 mod encoding;
 mod export;
 mod items;

@@ -93,6 +93,14 @@ pub enum Release {
         /// When it became satisfied: the event time plus any positive lag.
         at: EventTime,
     },
+    /// The predecessor was excluded by a choice and the successor is an active-branch join, so
+    /// the constraint is an absent branch rather than a satisfied prerequisite.
+    SkippedBranch {
+        /// When the excluding choice was made.
+        at: EventTime,
+    },
+    /// The predecessor was excluded by a choice; an ordinary constraint from it never releases.
+    NotSelected,
 }
 
 impl Release {
@@ -127,7 +135,7 @@ impl Release {
     #[must_use]
     pub fn released_at(self) -> Option<EventTime> {
         match self {
-            Self::Released { at } => Some(at),
+            Self::Released { at } | Self::SkippedBranch { at } => Some(at),
             _ => None,
         }
     }
