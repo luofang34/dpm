@@ -177,3 +177,38 @@ fn unknown_plan_fields_are_rejected_instead_of_dropping_proposed_edits() {
         assert!(error.to_string().contains("unknown field"));
     }
 }
+
+#[test]
+fn decision_replacement_links_must_reach_a_superseded_decision_without_loops() {
+    let mut plan = fixture();
+    let old = plan.decisions.values().next().expect("decision").clone();
+    let mut replacement = old.clone();
+    replacement.id = DecisionId::new();
+    replacement.key = Key::new("TEST-GATE-2");
+    replacement.status = DecisionStatus::Decided;
+    replacement.outcome = Some("Use the revised input".into());
+    replacement.blocks.clear();
+    replacement.supersedes = Some(old.id);
+    plan.decisions.insert(replacement.id, replacement.clone());
+    assert!(plan.validate().is_err(), "target is still Open");
+    plan.decisions.get_mut(&old.id).expect("old").status = DecisionStatus::Superseded;
+    plan.validate().expect("linked replacement");
+    let mut duplicate = replacement.clone();
+    duplicate.id = DecisionId::new();
+    duplicate.key = Key::new("TEST-GATE-3");
+    plan.decisions.insert(duplicate.id, duplicate.clone());
+    assert!(plan.validate().is_err(), "one replacement per decision");
+    plan.decisions.remove(&duplicate.id);
+    let (first, second) = (old.id, replacement.id);
+    let edited = plan.decisions.get_mut(&second).expect("new");
+    edited.supersedes = Some(DecisionId::new());
+    assert!(plan.validate().is_err(), "dangling replacement");
+    let edited = plan.decisions.get_mut(&second).expect("new");
+    edited.supersedes = Some(second);
+    assert!(plan.validate().is_err(), "self replacement");
+    let edited = plan.decisions.get_mut(&second).expect("new");
+    edited.status = DecisionStatus::Superseded;
+    edited.supersedes = Some(first);
+    plan.decisions.get_mut(&first).expect("old").supersedes = Some(second);
+    assert!(plan.validate().is_err(), "replacement cycle");
+}

@@ -1,6 +1,6 @@
 use super::invalid;
 use crate::EngineError;
-use dpm_model::{DecisionStatus, Plan, WorkItem, WorkItemId, WorkKind, WorkStatus};
+use dpm_model::{Plan, WorkItem, WorkItemId, WorkKind, WorkStatus};
 use std::collections::BTreeSet;
 
 pub(super) fn validate(current: &Plan, proposed: &Plan) -> Result<(), EngineError> {
@@ -68,7 +68,7 @@ pub(super) fn validate(current: &Plan, proposed: &Plan) -> Result<(), EngineErro
         }
     }
     validate_new_work(current, proposed)?;
-    protect_decisions(current, proposed, &locked)
+    super::replacement::validate(current, proposed, &locked)
 }
 
 fn validate_new_work(current: &Plan, proposed: &Plan) -> Result<(), EngineError> {
@@ -160,37 +160,6 @@ fn protect_context(current: &Plan, proposed: &Plan, work: &WorkItem) -> Result<(
             &work.key,
             "cannot change the requirement or resource basis of execution",
         ));
-    }
-    Ok(())
-}
-
-fn protect_decisions(
-    current: &Plan,
-    proposed: &Plan,
-    locked: &BTreeSet<WorkItemId>,
-) -> Result<(), EngineError> {
-    for decision in current.decisions.values() {
-        if proposed.decisions.get(&decision.id) != Some(decision) {
-            return Err(invalid(
-                &decision.key,
-                "existing decisions are immutable here; use decide for an open outcome",
-            ));
-        }
-    }
-    for decision in proposed
-        .decisions
-        .values()
-        .filter(|d| !current.decisions.contains_key(&d.id))
-    {
-        if decision.status != DecisionStatus::Open || decision.outcome.is_some() {
-            return Err(invalid(&decision.key, "new decisions must be open"));
-        }
-        if !decision.blocks.is_disjoint(locked) {
-            return Err(invalid(
-                &decision.key,
-                "cannot add a gate to the basis of existing execution",
-            ));
-        }
     }
     Ok(())
 }

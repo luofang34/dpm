@@ -1,4 +1,6 @@
-use dpm_model::{Artifact, Decision, Dependency, Plan, Project, Requirement, Risk, WorkItem};
+use dpm_model::{
+    Artifact, Decision, Dependency, Plan, Project, Requirement, Risk, WorkItem, WorkItemId,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -25,19 +27,30 @@ pub struct ExecutionContext {
     pub successors: Vec<WorkItem>,
 }
 
-pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContext {
-    let mut ancestors = BTreeSet::from([work.id]);
-    let mut parents = Vec::new();
+/// Work and its containing packages, nearest first; decisions and risks attach through any of them.
+pub(crate) fn lineage<'a>(plan: &'a Plan, work: &'a WorkItem) -> Vec<&'a WorkItem> {
+    let mut items = vec![work];
     let mut parent = work.parent;
     while let Some(item) = parent.and_then(|id| plan.work_items.get(&id)) {
-        ancestors.insert(item.id);
-        parents.push(item.clone());
+        items.push(item);
         parent = item.parent;
     }
+    items
+}
+
+/// Whether a decision belongs to the context of work with these lineage IDs.
+pub(crate) fn decision_applies(decision: &Decision, lineage: &BTreeSet<WorkItemId>) -> bool {
+    !decision.blocks.is_disjoint(lineage) || !decision.related_work.is_disjoint(lineage)
+}
+
+pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContext {
+    let lineage = lineage(plan, work);
+    let ancestors: BTreeSet<_> = lineage.iter().map(|w| w.id).collect();
+    let parents: Vec<_> = lineage.iter().skip(1).map(|w| (*w).clone()).collect();
     let decisions: Vec<_> = plan
         .decisions
         .values()
-        .filter(|d| !d.blocks.is_disjoint(&ancestors) || !d.related_work.is_disjoint(&ancestors))
+        .filter(|d| decision_applies(d, &ancestors))
         .cloned()
         .collect();
     let mut artifact_ids = work.artifact_ids.clone();

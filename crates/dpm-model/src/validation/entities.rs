@@ -207,8 +207,19 @@ fn validate_context(plan: &Plan) -> Result<(), ValidationError> {
         nonempty("artifact URI", id, &artifact.uri)?;
         nonempty("artifact creator", id, &artifact.created_by.name)?;
     }
+    let mut replaced = BTreeSet::new();
     for decision in plan.decisions.values() {
         validate_decision(plan, decision)?;
+        if let Some(target) = decision.supersedes {
+            validate_replacement(plan, decision, target)?;
+            if !replaced.insert(target) {
+                return Err(invalid(
+                    "decision",
+                    decision.id,
+                    format!("decision {target} already has a replacement"),
+                ));
+            }
+        }
     }
     for risk in plan.risks.values() {
         project_reference(plan, risk.project, risk.id)?;
@@ -280,6 +291,38 @@ fn validate_decision(plan: &Plan, decision: &Decision) -> Result<(), ValidationE
                 format!("missing source artifact {id}"),
             ));
         }
+    }
+    Ok(())
+}
+
+/// A replacement chain must end at a real superseded decision and never loop, so its prior
+/// rationale and sources remain reachable from the current choice.
+fn validate_replacement(
+    plan: &Plan,
+    decision: &Decision,
+    target: DecisionId,
+) -> Result<(), ValidationError> {
+    let mut seen = BTreeSet::from([decision.id]);
+    let mut next = Some(target);
+    while let Some(id) = next {
+        if !seen.insert(id) {
+            return Err(invalid("decision", decision.id, "replacement cycle"));
+        }
+        let previous = plan.decisions.get(&id).ok_or_else(|| {
+            invalid(
+                "decision",
+                decision.id,
+                format!("missing replaced decision {id}"),
+            )
+        })?;
+        if previous.status != DecisionStatus::Superseded {
+            return Err(invalid(
+                "decision",
+                decision.id,
+                format!("replaced decision {id} must be Superseded"),
+            ));
+        }
+        next = previous.supersedes;
     }
     Ok(())
 }

@@ -4,6 +4,7 @@ import copy
 import json
 import sqlite3
 import tempfile
+import uuid
 from pathlib import Path
 
 from smoke_agent import Agent, ROOT, run_cli
@@ -90,7 +91,99 @@ def reject_invalid(database, worker, reviewer, candidate, current):
         assert run_cli(database, 'export') == current
 
 
+def key_map(plan):
+    return {w['key']: w['id'] for w in plan['work_items'].values()}
+
+
+def replacement(directory):
+    database = directory / 'replacement.sqlite'
+    candidate = directory / 'replacement.json'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    worker = Agent(database, 'agent:planner')
+    reviewer = Agent(database, 'human:reviewer')
+    try:
+        plan = run_cli(database, 'export')
+        ids = key_map(plan)
+        project = next(iter(plan['projects']))
+        choice = {'id': str(uuid.uuid4()), 'key': 'TEST-CHOICE', 'project': project,
+                  'question': 'Which input format?', 'status': 'Open', 'outcome': None,
+                  'rationale': 'Existing tooling reads JSON',
+                  'related_work': [ids['TEST-A'], ids['TEST-C']], 'blocks': []}
+        plan['decisions'][choice['id']] = choice
+        reviewer.call('apply_change', {'plan': plan, 'reason': 'Record the format question', 'base_revision': 0})
+        reviewer.call('decide_gate', {'decision': 'TEST-CHOICE', 'outcome': 'JSON', 'base_revision': 1})
+        worker.call('claim_work', {'key': 'TEST-A', 'base_revision': 2})
+        current = run_cli(database, 'export')
+        replace_invalid(database, worker, reviewer, candidate, current, choice['id'])
+        proposal = superseding(current, choice['id'], [ids['TEST-A'], ids['TEST-F']])
+        candidate.write_text(json.dumps(proposal))
+        preview = worker.call('propose_change', {'plan': proposal})['data']
+        assert preview == run_cli(database, 'plan', 'diff', str(candidate))
+        assert [(a['key'], a['status']) for a in preview['affected_work']] == [
+            ('TEST-A', 'Claimed'), ('TEST-C', 'Planned'), ('TEST-F', 'Planned')]
+        old_change = next(c for c in preview['changes'] if c['id'] == choice['id'])
+        assert old_change['fields'] == ['status']
+        refused = worker.call('apply_change', {'plan': proposal, 'reason': 'self-approve', 'base_revision': 3}, error='invalid_command')
+        assert refused['message'] == run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'self-approve', '--actor', 'agent:planner', error='invalid_command')['error']['message']
+        readiness = worker.call('next_work', {'probabilistic': False})['data']
+        applied = run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'Reviewers edit TOML', '--actor', 'human:reviewer')
+        assert applied['resulting_revision'] == 4
+        assert worker.call('next_work', {'probabilistic': False})['data'] == readiness
+        explained = worker.call('explain_work', {'key': 'TEST-A'})['data']
+        assert explained == run_cli(database, 'explain', 'TEST-A')
+        decisions = {d['key']: d for d in explained['context']['decisions']}
+        assert decisions['TEST-CHOICE']['status'] == 'Superseded'
+        assert decisions['TEST-CHOICE']['rationale'] == 'Existing tooling reads JSON'
+        assert decisions['TEST-CHOICE-2']['supersedes'] == choice['id']
+        stale = worker.call('propose_change', {'plan': proposal}, error='revision_conflict')
+        assert stale['message'] == run_cli(database, 'plan', 'diff', str(candidate), error='revision_conflict')['error']['message']
+    finally:
+        worker.close()
+        reviewer.close()
+    reopened = Agent(database, 'agent:reader')
+    try:
+        assert reopened.call('explain_work', {'key': 'TEST-A'})['data'] == explained
+    finally:
+        reopened.close()
+
+
+def superseding(plan, old, related):
+    proposal = copy.deepcopy(plan)
+    proposal['decisions'][old]['status'] = 'Superseded'
+    new = {**proposal['decisions'][old], 'id': str(uuid.uuid4()), 'key': 'TEST-CHOICE-2',
+           'status': 'Decided', 'outcome': 'TOML', 'rationale': 'Reviewers edit TOML by hand',
+           'related_work': related, 'blocks': [], 'supersedes': old}
+    proposal['decisions'][new['id']] = new
+    return proposal
+
+
+def replace_invalid(database, worker, reviewer, candidate, current, choice):
+    gate = next(d['id'] for d in current['decisions'].values() if d['key'] == 'TEST-GATE')
+    for error_case in ['open_gate', 'dangling', 'rewrite', 'unlinked']:
+        if error_case == 'open_gate':
+            bad = superseding(current, gate, [])
+            bad['decisions'][gate]['outcome'] = None
+        else:
+            bad = superseding(current, choice, [])
+        new = next(d for d in bad['decisions'].values() if d['key'] == 'TEST-CHOICE-2')
+        if error_case == 'dangling':
+            new['supersedes'] = str(uuid.uuid4())
+        elif error_case == 'rewrite':
+            bad['decisions'][choice]['rationale'] = 'Rewritten reasoning'
+        elif error_case == 'unlinked':
+            del bad['decisions'][new['id']]
+        candidate.write_text(json.dumps(bad))
+        remote = worker.call('propose_change', {'plan': bad}, error='invalid_command')
+        assert remote['message'] == run_cli(database, 'plan', 'diff', str(candidate), error='invalid_command')['error']['message']
+        if error_case == 'open_gate':
+            assert 'use decide for an open outcome' in remote['message'], remote
+        remote = reviewer.call('apply_change', {'plan': bad, 'reason': 'Invalid replacement', 'base_revision': 3}, error='invalid_command')
+        assert remote['message'] == run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'Invalid replacement', error='invalid_command')['error']['message']
+        assert run_cli(database, 'export') == current
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-plan-') as temporary:
         smoke(Path(temporary))
-    print('PASS: empty workspace to reviewed graph, CLI/MCP plan diff/apply/history parity, protected execution, stale proposals and durable restart')
+        replacement(Path(temporary))
+    print('PASS: empty workspace to reviewed graph, CLI/MCP plan diff/apply/history parity, protected execution, stale proposals, decision replacement with affected work and durable restart')

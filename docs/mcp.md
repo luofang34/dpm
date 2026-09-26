@@ -45,10 +45,18 @@ means addition/deletion. Preview has no side effects. Applying requires a nonemp
 human/service actor. Agents draft scope; they do not approve their own expansion.
 
 New tasks must be Proposed, without execution/evidence. Existing work keys/kinds, lifecycle, owners,
-progress, reviews, artifacts and decisions cannot be changed through this route. Started work and
+progress, reviews and artifacts cannot be changed through this route. Started work and
 its prerequisite/containment/context basis are protected; add follow-up work instead. Unstarted
 contracts, dependencies, projects, requirements, resources and risks can be maintained after review.
-Decision amendments and undo remain separate future contracts.
+New decisions are Open questions. Undo is not part of this route.
+
+A Decided choice is replaced, never edited: the proposal changes only its `status` to `Superseded`
+and adds one new Decided decision whose `supersedes` names it, with a nonempty `rationale` and no
+`blocks`. The old outcome, rationale and sources stay intact, and `explain` returns both records.
+Open gates are resolved only by `decide`; superseding one, rewriting a prior decision, dangling or
+repeated `supersedes` links, and replacements that add gates are rejected with no state change.
+`affected_work` in the preview lists every work item (key, kind, status) whose context contains either
+decision, including started work, so reviewers can reassess it; it never changes readiness.
 
 `history` returns entries in append order with a `next_after_sequence` cursor (default limit 100,
 capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export

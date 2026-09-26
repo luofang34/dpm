@@ -5,6 +5,8 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 
 mod protection;
+mod replacement;
+pub use replacement::AffectedWork;
 
 /// One entity-level semantic difference, including explicit additions and removals.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -28,6 +30,8 @@ pub struct ChangePreview {
     pub base_revision: u64,
     /// Deterministically ordered semantic differences.
     pub changes: Vec<EntityChange>,
+    /// Work to reassess because a decision in its context is replaced; never a gate.
+    pub affected_work: Vec<AffectedWork>,
 }
 
 /// Validate a proposed plan without changing state, lifecycle, evidence or decision outcomes.
@@ -79,6 +83,7 @@ pub fn propose_change(current: &Plan, proposed: &Plan) -> Result<ChangePreview, 
     Ok(ChangePreview {
         base_revision: current.revision,
         changes,
+        affected_work: replacement::affected_work(current, proposed),
     })
 }
 

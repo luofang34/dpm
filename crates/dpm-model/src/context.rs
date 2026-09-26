@@ -103,6 +103,9 @@ pub struct Decision {
     pub artifact_ids: BTreeSet<ArtifactId>,
     /// Work items gated by this decision.
     pub blocks: BTreeSet<WorkItemId>,
+    /// Superseded decision whose rationale and sources this choice replaces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supersedes: Option<DecisionId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
