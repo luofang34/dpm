@@ -70,7 +70,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'project_status', 'next_work', 'get_work', 'explain_work', 'claim_work', 'report_blocker', 'unblock_work', 'submit_work', 'verify_work', 'report_progress', 'add_artifact', 'attach_git_head', 'decide_gate'} == names
+        assert {'project_status', 'next_work', 'get_work', 'explain_work', 'claim_work', 'report_blocker', 'unblock_work', 'submit_work', 'verify_work', 'report_progress', 'add_artifact', 'attach_git_head', 'decide_gate', 'ratify_contract', 'reject_work'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),
@@ -127,7 +127,49 @@ def smoke(database):
         reviewer.close()
 
 
+def review_smoke(directory):
+    plan = json.loads((ROOT / 'tests/support/execution-plan.json').read_text())
+    task = next(w for w in plan['work_items'].values() if w['key'] == 'TEST-A')
+    task['status'] = 'Proposed'
+    fixture = directory / 'proposed.json'
+    fixture.write_text(json.dumps(plan))
+    database = directory / 'review.sqlite'
+    run_cli(database, 'import', str(fixture))
+    worker = Agent(database, 'agent:worker')
+    reviewer = Agent(database, 'human:reviewer')
+    try:
+        for tool, args, command in [
+            ('ratify_contract', {}, ('ratify', 'TEST-A', '--actor', 'agent:worker')),
+            ('reject_work', {'reason': 'missing result'}, ('reject', 'TEST-A', 'missing result', '--actor', 'agent:worker')),
+        ]:
+            remote = worker.call(tool, {'key': 'TEST-A', 'base_revision': 0, **args}, error='invalid_command')
+            local = run_cli(database, *command, error='invalid_command')['error']
+            assert remote['message'] == local['message']
+        reviewer.call('ratify_contract', {'key': 'TEST-A', 'base_revision': 0})
+        worker.call('claim_work', {'key': 'TEST-A', 'base_revision': 1})
+        run_cli(database, 'submit', 'TEST-A', '--actor', 'agent:worker')
+        review = reviewer.call('reject_work', {'key': 'TEST-A', 'reason': 'Missing acceptance evidence', 'base_revision': 3})
+        assert review['data']['command']['Reject']['reason'] == 'Missing acceptance evidence'
+        detail = worker.call('explain_work', {'key': 'TEST-A'})['data']
+        assert detail == run_cli(database, 'explain', 'TEST-A')
+        assert detail['work']['status'] == 'InProgress'
+        assert detail['work']['last_rejection']['reason'] == 'Missing acceptance evidence'
+        assert worker.call('next_work', {})['data'] == []
+        run_cli(database, 'submit', 'TEST-A', '--actor', 'agent:worker')
+        run_cli(database, 'reject', 'TEST-A', 'Still missing evidence', '--actor', 'human:reviewer')
+        assert worker.call('get_work', {'key': 'TEST-A'})['data'] == run_cli(database, 'show', 'TEST-A')
+    finally:
+        worker.close()
+        reviewer.close()
+    # Exercise successful CLI ratification independently of the already approved contract.
+    second = directory / 'ratify.sqlite'
+    run_cli(second, 'import', str(fixture))
+    result = run_cli(second, 'ratify', 'TEST-A', '--actor', 'human:reviewer')
+    assert 'RatifyContract' in result['command'] and result['resulting_revision'] == 1
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-agent-') as directory:
         smoke(Path(directory) / 'plan.sqlite')
+        review_smoke(Path(directory))
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')

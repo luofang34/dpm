@@ -22,6 +22,14 @@ const NAMES: &[(&str, &str)] = &[
         "explain_work",
         "Get the task contract plus resolved requirements, gates, risks, dependencies and evidence",
     ),
+    (
+        "ratify_contract",
+        "Approve a proposed execution contract as a human or service",
+    ),
+    (
+        "reject_work",
+        "Return a submission for rework with an independent review",
+    ),
     ("claim_work", "Claim a ready task for this configured actor"),
     ("report_blocker", "Suspend work with a concrete blocker"),
     ("unblock_work", "Resume blocked work preserving ownership"),
@@ -47,7 +55,7 @@ pub(crate) fn definitions() -> Vec<Value> {
         let read = index < 4;
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
-        if matches!(*name,"get_work"|"explain_work"|"claim_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head") {
+        if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head") {
             properties.insert("key".into(),json!({"type":"string"})); required.push("key");
         }
         if !read {
@@ -57,6 +65,7 @@ pub(crate) fn definitions() -> Vec<Value> {
         match *name {
             "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); },
             "next_work" => { properties.insert("capabilities".into(),json!({"type":"array","items":{"type":"string"}})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"default":5})); properties.insert("probabilistic".into(),json!({"type":"boolean","default":true})); },
+            "reject_work" => { properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.push("reason"); },
             "report_blocker" => { properties.insert("blocker".into(),json!({"type":"string","minLength":1})); required.push("blocker"); },
             "report_progress" => {
                 properties.insert("percent".into(),json!({"type":"integer","minimum":0,"maximum":100}));
@@ -85,6 +94,7 @@ struct Arguments {
     #[serde(default = "default_limit")]
     limit: usize,
     blocker: Option<String>,
+    reason: Option<String>,
     note: Option<String>,
     percent: Option<u8>,
     artifact: Option<Artifact>,
@@ -162,6 +172,11 @@ fn mutation_blocking(
         "attach_git_head" => Ok(Command::AttachArtifact {
             work,
             artifact: app.git_head_artifact_blocking(actor.clone())?,
+        }),
+        "ratify_contract" => Ok(Command::RatifyContract { work }),
+        "reject_work" => Ok(Command::Reject {
+            work,
+            reason: required(args.reason, "reason")?,
         }),
         "claim_work" => Ok(Command::Claim { work }),
         "report_blocker" => Ok(Command::Block {

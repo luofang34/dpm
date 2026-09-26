@@ -56,6 +56,19 @@ pub(crate) enum Commands {
     Show { key: String },
     /// Explain why a work item exists in the current execution state.
     Explain { key: String },
+    /// Approve a proposed contract with objective and acceptance criteria.
+    Ratify {
+        key: String,
+        #[arg(long, default_value = "human:local")]
+        actor: String,
+    },
+    /// Return submitted work to its owner with an independent review.
+    Reject {
+        key: String,
+        reason: String,
+        #[arg(long, default_value = "human:local")]
+        actor: String,
+    },
     /// Claim a ready work item.
     Claim {
         key: String,

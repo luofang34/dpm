@@ -161,8 +161,22 @@ pub struct WorkItem {
     pub artifact_ids: BTreeSet<ArtifactId>,
     /// Principal that claimed the task and owns submission.
     pub owner: Option<ActorId>,
+    /// Most recent independent rejection; retained across resubmission as review context.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_rejection: Option<ReviewRejection>,
     /// Non-empty reason while the task is blocked.
     pub block_reason: Option<String>,
+}
+
+/// Independent review explaining why submitted work needs another attempt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReviewRejection {
+    /// Principal who rejected the result.
+    pub actor: ActorId,
+    /// Caller-supplied UTC review time.
+    pub at: chrono::DateTime<chrono::Utc>,
+    /// Concrete unmet acceptance or evidence requirement.
+    pub reason: String,
 }
 
 impl WorkItem {

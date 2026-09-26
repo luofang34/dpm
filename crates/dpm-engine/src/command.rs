@@ -9,6 +9,18 @@ use thiserror::Error;
 /// A semantic state change; adapters must use the engine to apply it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Command {
+    /// Approve a proposed execution contract as a human or service.
+    RatifyContract {
+        /// Proposed task with a complete objective and acceptance criteria.
+        work: WorkItemId,
+    },
+    /// Return submitted work to its owner with an independent review.
+    Reject {
+        /// Submitted task to return for rework.
+        work: WorkItemId,
+        /// Non-empty explanation of unmet acceptance.
+        reason: String,
+    },
     /// Reserve a ready task for the calling actor.
     Claim {
         /// Task to reserve.
@@ -85,6 +97,14 @@ pub struct Operation {
 /// A rejected command or failed execution projection.
 #[derive(Debug, Error)]
 pub enum EngineError {
+    /// Local principal policy refuses this action.
+    #[error("actor {actor} is not permitted to {action}")]
+    ActorNotAllowed {
+        /// Principal requesting the operation.
+        actor: ActorId,
+        /// Refused action.
+        action: &'static str,
+    },
     /// Invalid authoritative input.
     #[error(transparent)]
     Validation(#[from] ValidationError),

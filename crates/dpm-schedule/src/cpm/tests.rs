@@ -31,6 +31,7 @@ fn task(project: ProjectId, key: &str, hours: f64) -> WorkItem {
         artifact_ids: BTreeSet::new(),
         owner: None,
         block_reason: None,
+        last_rejection: None,
     }
 }
 

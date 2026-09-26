@@ -1,7 +1,5 @@
 use crate::readiness::ready_with_completion;
-use crate::{
-    EngineError, completion, decisions_resolved, dependencies_satisfied, is_ready, show_work,
-};
+use crate::{EngineError, completion, show_work};
 use dpm_model::{DecisionStatus, Plan, Priority, WorkItem, WorkItemId, WorkStatus};
 use dpm_schedule::{Schedule, SimulationConfig, deterministic_remaining, simulate_remaining};
 use serde::{Deserialize, Serialize};
@@ -9,6 +7,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Execution counts and remaining schedule projections.
 pub struct StatusSummary {
+    /// Claim eligibility of each leaf task, using the same policy as commands and next.
+    pub gates: BTreeMap<WorkItemId, crate::GateReport>,
     /// Reported execution progress, separate from verified completion.
     pub progress: crate::ProgressSummary,
     /// Authoritative wrapping revision used for this projection.
@@ -53,6 +53,12 @@ pub fn status(plan: &Plan, probabilistic: bool) -> Result<StatusSummary, EngineE
     };
 
     Ok(StatusSummary {
+        gates: plan
+            .work_items
+            .values()
+            .filter(|w| w.is_executable())
+            .map(|w| (w.id, crate::gates::with_completion(plan, w, &done)))
+            .collect(),
         progress: crate::progress(plan)?.overall,
         revision: plan.revision,
         total_work: plan.work_items.len(),
@@ -267,6 +273,8 @@ fn candidate(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Execution contract, prerequisites, and derived reason for a work item.
 pub struct WorkExplanation {
+    /// Structured conditions shared with claim eligibility.
+    pub gates: crate::GateReport,
     /// Execution percentage and independent completion condition.
     pub progress: crate::ProgressSummary,
     /// Resolved requirements, gates, evidence and related work for the execution contract.
@@ -305,7 +313,8 @@ pub fn explain_work(plan: &Plan, work: WorkItemId) -> Result<WorkExplanation, En
         .filter_map(|dep| plan.work_items.get(&dep.predecessor).cloned())
         .collect::<Vec<_>>();
     let downstream_count = downstream_counts(plan).get(&work).copied().unwrap_or(0);
-    let ready = is_ready(plan, &item);
+    let gates = crate::gate_report(plan, work)?;
+    let ready = gates.ready;
     let activity = schedule.activities.get(&work).cloned();
     let criticality = simulation.criticality.get(&work).copied();
 
@@ -314,21 +323,10 @@ pub fn explain_work(plan: &Plan, work: WorkItemId) -> Result<WorkExplanation, En
         why_now.push("work is executable now: all predecessor dependencies are complete".into());
     } else if completion(plan).contains(&work) {
         why_now.push("work is complete".into());
-    } else if !item.is_executable() {
-        why_now.push("aggregate work completes through its prerequisites or children".into());
-    } else if item.status == WorkStatus::Blocked {
-        why_now.push(format!(
-            "work is blocked: {}",
-            item.block_reason.as_deref().unwrap_or("no reason recorded")
-        ));
-    } else if !dependencies_satisfied(plan, work) {
-        why_now.push("one or more predecessor dependencies are incomplete".into());
-    } else if !decisions_resolved(plan, work) {
-        let keys = crate::readiness::blocking_decision_keys(plan, work).join(", ");
-        why_now.push(format!("work awaits decision: {keys}"));
     } else {
-        why_now.push(format!("work lifecycle state is {:?}", item.status));
+        why_now.extend(gates.reasons());
     }
+
     if downstream_count > 0 {
         why_now.push(format!(
             "completion affects {downstream_count} downstream work items"
@@ -339,6 +337,7 @@ pub fn explain_work(plan: &Plan, work: WorkItemId) -> Result<WorkExplanation, En
     }
 
     Ok(WorkExplanation {
+        gates,
         progress: crate::progress(plan)?.work[&work],
         context: crate::context::execution_context(plan, &item),
         work: item,

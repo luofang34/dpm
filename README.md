@@ -273,3 +273,7 @@ requirements, decision gates, risks and predecessor evidence so agents can inspe
 
 This increment deliberately defers server/sync, auth enrollment, history/undo, resource leveling,
 calendar expansion and rich UI. AGPL-3.0-only and the core/store/adapter boundaries are unchanged.
+
+Use `dpm ratify KEY --actor human:reviewer` to approve a Proposed contract.
+Use `dpm reject KEY "unmet acceptance" --actor human:reviewer` to return Submitted work
+to its owner. `show` and `explain` retain the latest rejection across resubmission.

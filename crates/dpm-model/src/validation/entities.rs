@@ -69,6 +69,20 @@ pub(super) fn nonempty(
 fn validate_work(plan: &Plan, work: &WorkItem) -> Result<(), ValidationError> {
     nonempty("work title", work.id, &work.title)?;
     super::instructions::validate(work)?;
+    if let Some(review) = &work.last_rejection {
+        nonempty("review reason", work.id, &review.reason)?;
+        nonempty("review actor", work.id, &review.actor.name)?;
+        if !work.is_executable()
+            || work.owner.is_none()
+            || work.owner.as_ref() == Some(&review.actor)
+        {
+            return Err(invalid(
+                "review",
+                work.id,
+                "rejection requires an owned task and an independent reviewer",
+            ));
+        }
+    }
     if work.reported_progress_percent > 100
         || (work.reported_progress_percent > 0 && (!work.is_executable() || work.owner.is_none()))
     {

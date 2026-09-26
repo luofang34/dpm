@@ -3,6 +3,8 @@
 mod command;
 mod context;
 mod execution;
+mod gates;
+pub use gates::{GateReport, UnmetGate, gate_report};
 mod progress;
 mod query;
 mod readiness;

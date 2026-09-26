@@ -126,3 +126,8 @@ Specification:
 
 `python3 scripts/smoke_agent.py` verifies real-process CLI/MCP query equality and shared execution,
 progress reporting, revision conflict, evidence, blocker, decision and independent-verification behavior.
+
+`ratify_contract` approves a complete Proposed task as a human/service; `reject_work` requires
+Submitted work, a different reviewer, and a nonempty `reason`. Rejection retains ownership and
+the latest review in `last_rejection`. Both require `key` and `base_revision`.
+`explain_work.gates` and `project_status.gates` expose the same structured claim conditions.

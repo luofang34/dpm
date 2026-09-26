@@ -166,12 +166,10 @@ fn mutate_blocking(
 
 fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, Command), CliError> {
     let pair = match command {
-        Commands::Claim { key, actor: who } => (
-            actor(&who)?,
-            Command::Claim {
-                work: app.work_id_blocking(&key)?,
-            },
-        ),
+        lifecycle
+        @ (Commands::Ratify { .. } | Commands::Reject { .. } | Commands::Claim { .. }) => {
+            lifecycle_mutation_blocking(app, lifecycle)?
+        }
         Commands::Block {
             key,
             reason,
@@ -274,4 +272,36 @@ fn artifact_mutation_blocking(
         }
         _ => Err(CliError::Input("expected artifact command".into())),
     }
+}
+
+fn lifecycle_mutation_blocking(
+    app: &Application,
+    command: Commands,
+) -> Result<(ActorId, Command), CliError> {
+    Ok(match command {
+        Commands::Ratify { key, actor: who } => (
+            actor(&who)?,
+            Command::RatifyContract {
+                work: app.work_id_blocking(&key)?,
+            },
+        ),
+        Commands::Reject {
+            key,
+            reason,
+            actor: who,
+        } => (
+            actor(&who)?,
+            Command::Reject {
+                work: app.work_id_blocking(&key)?,
+                reason,
+            },
+        ),
+        Commands::Claim { key, actor: who } => (
+            actor(&who)?,
+            Command::Claim {
+                work: app.work_id_blocking(&key)?,
+            },
+        ),
+        _ => return Err(CliError::Input("expected contract or claim command".into())),
+    })
 }

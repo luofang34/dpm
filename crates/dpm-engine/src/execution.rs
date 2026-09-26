@@ -18,7 +18,7 @@ pub fn apply_command(
     plan.validate()?;
     nonempty(&actor.to_string(), "actor name", &actor.name)?;
     let mut candidate = plan.clone();
-    execute(&mut candidate, &actor, &command)?;
+    execute(&mut candidate, &actor, &command, timestamp)?;
     candidate.revision = plan.revision.wrapping_add(1);
     candidate.validate()?;
     let operation = Operation {
@@ -33,8 +33,15 @@ pub fn apply_command(
     Ok(operation)
 }
 
-fn execute(plan: &mut Plan, actor: &ActorId, command: &Command) -> Result<(), EngineError> {
+fn execute(
+    plan: &mut Plan,
+    actor: &ActorId,
+    command: &Command,
+    at: DateTime<Utc>,
+) -> Result<(), EngineError> {
     match command {
+        Command::RatifyContract { work } => review::ratify(plan, actor, *work),
+        Command::Reject { work, reason } => review::reject(plan, actor, *work, reason, at),
         Command::Claim { work } => claim(plan, actor, *work),
         Command::Block { work, reason } => block(plan, actor, *work, reason),
         Command::Unblock { work } => {
@@ -240,6 +247,8 @@ fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
     }
     Ok(())
 }
+
+mod review;
 
 #[cfg(test)]
 #[allow(clippy::expect_used, clippy::panic)]

@@ -109,15 +109,7 @@ pub(crate) fn ready_with_completion(
     work: &WorkItem,
     done: &BTreeSet<WorkItemId>,
 ) -> bool {
-    work.is_executable()
-        && work.status == WorkStatus::Planned
-        && work.block_reason.is_none()
-        && work.owner.is_none()
-        && !work.objective.trim().is_empty()
-        && !work.acceptance.is_empty()
-        && work.acceptance.iter().all(|a| !a.text.trim().is_empty())
-        && dependencies_with_completion(plan, work.id, done)
-        && decisions_resolved(plan, work.id)
+    crate::gates::with_completion(plan, work, done).ready
 }
 
 /// Return a work projection with aggregate completion reflected in its lifecycle.
