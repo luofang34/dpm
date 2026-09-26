@@ -3,6 +3,7 @@ use thiserror::Error;
 
 mod dependency;
 mod entities;
+mod events;
 mod graph;
 mod instructions;
 

@@ -22,7 +22,7 @@ fn agent_and_human_execution_loop_unlocks_work_semantically() {
         ..NextWorkQuery::default()
     };
 
-    let first = next_work(&plan, &query).expect("next work");
+    let first = next_work(&plan, &query, chrono::Utc::now()).expect("next work");
     assert_eq!(first.len(), 1);
     assert_eq!(first[0].work.key.0, "TEST-A");
 
@@ -31,10 +31,18 @@ fn agent_and_human_execution_loop_unlocks_work_semantically() {
 
     // The predecessor is complete, but the explicit human decision gate still prevents branch
     // and parallel work from silently becoming executable.
-    assert!(next_work(&plan, &query).expect("next work").is_empty());
+    assert!(
+        next_work(&plan, &query, chrono::Utc::now())
+            .expect("next work")
+            .is_empty()
+    );
     let branch = id(&plan, "TEST-B");
-    assert!(!is_ready(&plan, &plan.work_items[&branch]));
-    let explanation = explain_work(&plan, branch).expect("explain");
+    assert!(!is_ready(
+        &plan,
+        &plan.work_items[&branch],
+        chrono::Utc::now()
+    ));
+    let explanation = explain_work(&plan, branch, chrono::Utc::now()).expect("explain");
     assert!(
         explanation
             .why_now
@@ -54,7 +62,7 @@ fn agent_and_human_execution_loop_unlocks_work_semantically() {
     )
     .expect("decide");
 
-    let keys = next_work(&plan, &query)
+    let keys = next_work(&plan, &query, chrono::Utc::now())
         .expect("next work")
         .into_iter()
         .map(|candidate| candidate.work.key.0)
@@ -74,7 +82,7 @@ fn agent_and_human_execution_loop_unlocks_work_semantically() {
     )
     .expect("block");
     assert_eq!(plan.work_items[&branch].status, WorkStatus::Blocked);
-    let keys = next_work(&plan, &query)
+    let keys = next_work(&plan, &query, chrono::Utc::now())
         .expect("next work")
         .into_iter()
         .map(|candidate| candidate.work.key.0)
@@ -92,6 +100,13 @@ fn complete_input(plan: &mut Plan, input: dpm_model::WorkItemId) {
         Utc::now(),
     )
     .expect("claim");
+    apply_command(
+        plan,
+        agent.clone(),
+        Command::Start { work: input },
+        Utc::now(),
+    )
+    .expect("start");
     apply_command(
         plan,
         agent,

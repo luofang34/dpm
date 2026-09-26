@@ -62,12 +62,19 @@ const NAMES: &[(&str, &str)] = &[
         "reject_work",
         "Return a submission for rework with an independent review",
     ),
-    ("claim_work", "Claim a ready task for this configured actor"),
+    (
+        "claim_work",
+        "Reserve a ready task for this configured actor; a claim is not a start",
+    ),
+    (
+        "start_work",
+        "Start a claimed task owned by this actor, recording the start event SS/SF successors wait for",
+    ),
     ("report_blocker", "Suspend work with a concrete blocker"),
     ("unblock_work", "Resume blocked work preserving ownership"),
     (
         "submit_work",
-        "Submit owned work for independent verification",
+        "Submit started work for independent verification once FF/SF prerequisites are released",
     ),
     (
         "report_progress",
@@ -103,7 +110,7 @@ pub(crate) fn definitions() -> Vec<Value> {
         let read = matches!(*name, "export_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
-        if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external") {
+        if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"start_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external") {
             properties.insert("key".into(),json!({"type":"string"})); required.push("key");
         }
         if !read && *name != "workspace_register" {
@@ -319,6 +326,7 @@ fn mutation_blocking(
             reason: required(args.reason, "reason")?,
         }),
         "claim_work" => Ok(Command::Claim { work }),
+        "start_work" => Ok(Command::Start { work }),
         "report_blocker" => Ok(Command::Block {
             work,
             reason: required(args.blocker, "blocker")?,

@@ -81,6 +81,9 @@ pub struct ErrorResponse {
     pub code: &'static str,
     /// Human-readable context.
     pub message: String,
+    /// Structured context for refusals an agent can act on, such as the unmet gates of a transition.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
 }
 impl AppError {
     /// Stable category for coding agents.
@@ -110,12 +113,22 @@ impl AppError {
             Self::Json(_) | Self::InvalidRequest(_) => "invalid_request",
         }
     }
+    /// Structured refusal context: a refused transition returns the same unmet gates as `explain`.
+    pub fn details(&self) -> Option<serde_json::Value> {
+        match self {
+            Self::Engine(dpm_engine::EngineError::NotReady {
+                transition, unmet, ..
+            }) => Some(serde_json::json!({"transition": transition, "unmet": unmet})),
+            _ => None,
+        }
+    }
     /// Serialize a diagnostic without presentation-specific parsing.
     pub fn response(&self) -> ErrorResponse {
         ErrorResponse {
             api_version: crate::API_VERSION,
             code: self.code(),
             message: self.to_string(),
+            details: self.details(),
         }
     }
 }

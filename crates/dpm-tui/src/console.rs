@@ -54,7 +54,7 @@ pub fn run_reloading_blocking<E: std::fmt::Display>(
     preview: bool,
     mut reload: impl FnMut() -> Result<Plan, E>,
 ) -> Result<(), TuiError> {
-    let mut view = View::new(plan)?;
+    let mut view = View::new(plan, chrono::Utc::now())?;
     view.preview = preview;
     view.set_colors(std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()));
     enable_raw_mode()?;
@@ -90,7 +90,7 @@ fn event_loop_blocking<E: std::fmt::Display>(
                 if key.code == crossterm::event::KeyCode::Char('r') {
                     match reload() {
                         Ok(plan) => {
-                            if let Err(error) = view.refresh(&plan) {
+                            if let Err(error) = view.refresh(&plan, chrono::Utc::now()) {
                                 view.reload_failed(&error);
                             }
                         }

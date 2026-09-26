@@ -7,7 +7,9 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
         "../../../../tests/support/execution-plan.json"
     ))
     .expect("fixture");
-    let mut app = Application::in_memory_blocking(&plan).expect("app");
+    let dir = tempfile::tempdir().expect("directory");
+    let path = dir.path().join("state.sqlite");
+    let mut app = Application::initialize_blocking(&path, &plan).expect("app");
     let work = app.work_id_blocking("TEST-A").expect("work");
     let actor = ActorId::agent("worker");
     let request = CommandRequest {
@@ -20,18 +22,32 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
         app.execute_blocking(request),
         Err(AppError::Conflict { .. })
     ));
-    app.execute_blocking(CommandRequest {
+    let submit = CommandRequest {
         actor: actor.clone(),
         base_revision: 1,
         command: Command::Submit {
             work,
             note: Some("acceptance passed".into()),
         },
+    };
+    let refused = app
+        .execute_blocking(submit.clone())
+        .expect_err("claim is not start");
+    assert!(refused.to_string().contains("has not started"), "{refused}");
+    app.execute_blocking(CommandRequest {
+        actor: actor.clone(),
+        base_revision: 1,
+        command: Command::Start { work },
+    })
+    .expect("start");
+    app.execute_blocking(CommandRequest {
+        base_revision: 2,
+        ..submit
     })
     .expect("submit");
     let verify = CommandRequest {
         actor,
-        base_revision: 2,
+        base_revision: 3,
         command: Command::Verify { work, note: None },
     };
     assert!(app.execute_blocking(verify.clone()).is_err());
@@ -40,15 +56,53 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
         ..verify
     })
     .expect("verify");
-    assert_eq!(app.plan_blocking().expect("plan").revision, 3);
+    let recorded = app.plan_blocking().expect("plan").work_items[&work].events;
+    drop(app);
+    let reopened = Application::open_blocking(&path).expect("reopen");
+    let plan = reopened.plan_blocking().expect("plan");
+    assert_eq!(plan.revision, 4);
     assert_eq!(
-        app.query_blocking(Query::Show {
-            key: "TEST-A".into()
-        })
-        .expect("show")
-        .data["status"],
+        plan.work_items[&work].events, recorded,
+        "event facts survive restart"
+    );
+    assert!(recorded.started_at <= recorded.submitted_at);
+    assert!(recorded.submitted_at <= recorded.verified_at && recorded.verified_at.is_some());
+    assert_eq!(
+        reopened
+            .query_blocking(Query::Show {
+                key: "TEST-A".into()
+            })
+            .expect("show")
+            .data["status"],
         "Verified"
     );
+}
+
+#[test]
+fn refused_transitions_carry_the_same_unmet_gates_as_explain() {
+    let plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let mut app = Application::in_memory_blocking(&plan).expect("app");
+    let work = app.work_id_blocking("TEST-B").expect("work");
+    let error = app
+        .execute_blocking(CommandRequest {
+            actor: ActorId::agent("worker"),
+            base_revision: 0,
+            command: Command::Claim { work },
+        })
+        .expect_err("gated");
+    let response = serde_json::to_value(error.response()).expect("json");
+    let explained = app
+        .query_blocking(Query::Explain {
+            key: "TEST-B".into(),
+        })
+        .expect("explain")
+        .data;
+    assert_eq!(response["details"]["transition"], "claim");
+    assert_eq!(response["details"]["unmet"], explained["gates"]["unmet"]);
+    assert_eq!(app.plan_blocking().expect("plan").revision, 0);
 }
 
 fn next_query(project_keys: &[&str], resource_keys: &[&str], limit: usize) -> Query {

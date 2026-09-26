@@ -130,10 +130,10 @@ fn forged_snapshots_and_duplicate_operation_ids_are_atomic_failures() {
     let mut second = apply_command(
         &mut plan,
         ActorId::agent("owner"),
-        Command::Submit { work, note: None },
+        Command::Start { work },
         Utc::now(),
     )
-    .expect("submit");
+    .expect("start");
     second.id = op.id;
     assert!(matches!(
         store.persist_blocking(&plan, &second),

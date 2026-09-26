@@ -1,11 +1,15 @@
-use crate::{EngineError, completion};
+use crate::EngineError;
+use chrono::{DateTime, Utc};
 use dpm_model::{
-    ActorId, DependencyId, DependencyKind, DependencyPolicy, Plan, WorkItem, WorkItemId, WorkStatus,
+    ActorId, DependencyId, DependencyKind, DependencyPolicy, Endpoint, Plan, Release, Timeline,
+    WorkItem, WorkItemId, WorkStatus,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 
-/// Machine-readable reason preventing a claim under the verified-predecessor execution policy.
+mod transition;
+pub use transition::Transition;
+
+/// Machine-readable reason preventing a lifecycle transition at the evaluated time.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum UnmetGate {
@@ -13,7 +17,7 @@ pub enum UnmetGate {
     Aggregate,
     /// Proposed work needs explicit approval of its execution contract.
     ContractNotRatified,
-    /// An existing lifecycle state prevents a new claim.
+    /// The current lifecycle state does not permit this transition.
     Lifecycle {
         /// Current authoritative lifecycle.
         status: WorkStatus,
@@ -23,7 +27,7 @@ pub enum UnmetGate {
         /// Concrete blocker text.
         reason: String,
     },
-    /// A predecessor must complete independently of the temporal projection.
+    /// An unwaived constraint governing this transition is not yet released.
     Dependency {
         /// Stable identity of the unwaived constraint.
         dependency: DependencyId,
@@ -37,11 +41,15 @@ pub enum UnmetGate {
         project: String,
         /// Resources required by the prerequisite; these are context, not satisfied gates.
         resource_keys: Vec<String>,
-        /// Schedule relation; all relations currently require verified completion for execution.
+        /// Relation; FS and SS govern the successor's start, FF and SF its finish.
         relation: DependencyKind,
-        /// Lead/lag in the schedule projection, not an execution timer.
+        /// Positive lag must elapse after the event; negative lag shapes the schedule only.
         lag_hours: f64,
-        /// Authoritative state of the incomplete prerequisite.
+        /// Predecessor event the relation waits for: start, or finish (verification).
+        requires: Endpoint,
+        /// Why the constraint is not released: missing event, elapsing lag or unknown event time.
+        release: Release,
+        /// Authoritative state of the prerequisite.
         status: WorkStatus,
         /// Worker responsible for the prerequisite, if reserved.
         owner: Option<ActorId>,
@@ -53,37 +61,47 @@ pub enum UnmetGate {
     },
 }
 
-/// Shared claim eligibility for queries, commands and terminal projections.
+/// Shared eligibility of one lifecycle transition for queries, commands and terminal projections.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GateReport {
-    /// Whether this leaf task can be claimed now.
+    /// Transition this report evaluates; `claim` is the readiness used by `next`.
+    #[serde(default)]
+    pub transition: Transition,
+    /// Whether the transition is permitted at the evaluated time.
     pub ready: bool,
     /// Every unmet condition; an empty list means ready.
     pub unmet: Vec<UnmetGate>,
 }
 
-/// Explain claim eligibility without changing authoritative state.
-pub fn gate_report(plan: &Plan, work: WorkItemId) -> Result<GateReport, EngineError> {
+/// Explain whether a transition is permitted at an adapter-supplied time, without changing state.
+pub fn gate_report(
+    plan: &Plan,
+    work: WorkItemId,
+    transition: Transition,
+    now: DateTime<Utc>,
+) -> Result<GateReport, EngineError> {
     plan.validate()?;
     let item = plan
         .work_items
         .get(&work)
         .ok_or(EngineError::MissingWorkItem(work))?;
-    Ok(with_completion(plan, item, &completion(plan)))
+    Ok(evaluate(plan, item, transition, &Timeline::at(plan, now)))
 }
 
-pub(crate) fn with_completion(
+/// The one gate evaluation used by every query, command and view.
+pub(crate) fn evaluate(
     plan: &Plan,
     work: &WorkItem,
-    done: &BTreeSet<WorkItemId>,
+    transition: Transition,
+    timeline: &Timeline,
 ) -> GateReport {
     let mut unmet = Vec::new();
     if !work.is_executable() {
         unmet.push(UnmetGate::Aggregate);
     }
     match work.status {
+        status if status == transition.lifecycle() => {}
         WorkStatus::Proposed => unmet.push(UnmetGate::ContractNotRatified),
-        WorkStatus::Planned => {}
         status => unmet.push(UnmetGate::Lifecycle { status }),
     }
     if let Some(reason) = &work.block_reason {
@@ -93,8 +111,12 @@ pub(crate) fn with_completion(
     }
     for dep in plan
         .enforced_dependencies()
-        .filter(|dep| dep.successor == work.id && !done.contains(&dep.predecessor))
+        .filter(|dep| dep.successor == work.id && transition.governs(dep.kind))
     {
+        let release = timeline.edge(plan, dep);
+        if release.released_at().is_some() {
+            continue;
+        }
         if let Some(item) = plan.work_items.get(&dep.predecessor) {
             unmet.push(UnmetGate::Dependency {
                 dependency: dep.id,
@@ -114,17 +136,26 @@ pub(crate) fn with_completion(
                     .unwrap_or_default(),
                 relation: dep.kind,
                 lag_hours: dep.lag_hours,
+                requires: dep.kind.predecessor_endpoint(),
+                release,
                 status: item.status,
                 owner: item.owner.clone(),
             });
         }
     }
-    unmet.extend(
-        crate::readiness::blocking_decision_keys(plan, work.id)
-            .into_iter()
-            .map(|key| UnmetGate::Decision { key }),
-    );
+    if transition.checks_decisions() {
+        unmet.extend(
+            timeline
+                .decisions(plan, work.id)
+                .into_iter()
+                .filter(|(_, release)| release.released_at().is_none())
+                .map(|(decision, _)| UnmetGate::Decision {
+                    key: decision.key.to_string(),
+                }),
+        );
+    }
     GateReport {
+        transition,
         ready: unmet.is_empty(),
         unmet,
     }
@@ -133,14 +164,42 @@ pub(crate) fn with_completion(
 impl GateReport {
     /// Human-readable rendering of the same structured conditions returned to agents.
     pub fn reasons(&self) -> Vec<String> {
-        self.unmet.iter().map(|gate| match gate {
-            UnmetGate::Aggregate => "aggregate work completes through its prerequisites or children".into(),
-            UnmetGate::ContractNotRatified => "contract not ratified".into(),
-            UnmetGate::Lifecycle { status } => format!("work lifecycle state is {status:?}"),
-            UnmetGate::Blocker { reason } => format!("work is blocked: {reason}"),
-            UnmetGate::Dependency { key, relation, lag_hours, policy, .. } => format!("awaits verified prerequisite {key} ({relation:?}, {lag_hours:+}h, {policy:?}; relation and lag apply to schedule projection)"),
-            UnmetGate::Decision { key } => format!("work awaits decision: {key}"),
-        }).collect()
+        self.unmet.iter().map(describe).collect()
+    }
+}
+
+pub(crate) fn summary(unmet: &[UnmetGate]) -> String {
+    unmet.iter().map(describe).collect::<Vec<_>>().join("; ")
+}
+
+/// Human-readable rendering of one unmet condition.
+pub(crate) fn describe(gate: &UnmetGate) -> String {
+    match gate {
+        UnmetGate::Aggregate => {
+            "aggregate work completes through its prerequisites or children".into()
+        }
+        UnmetGate::ContractNotRatified => "contract not ratified".into(),
+        UnmetGate::Lifecycle { status } => format!("work lifecycle state is {status:?}"),
+        UnmetGate::Blocker { reason } => format!("work is blocked: {reason}"),
+        UnmetGate::Dependency {
+            key,
+            relation,
+            lag_hours,
+            policy,
+            requires,
+            release,
+            ..
+        } => {
+            let edge = format!("{} {lag_hours:+}h, {policy:?}", relation.abbreviation());
+            let mut text = transition::describe_release(key, *requires, *release, &edge, *policy);
+            if *lag_hours < 0.0 {
+                text.push_str(&format!(
+                    "; the {lag_hours}h lead shapes the schedule only and never releases work before the event"
+                ));
+            }
+            text
+        }
+        UnmetGate::Decision { key } => format!("work awaits decision: {key}"),
     }
 }
 

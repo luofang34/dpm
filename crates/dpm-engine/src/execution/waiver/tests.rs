@@ -71,8 +71,10 @@ fn restore(dependency: DependencyId, reason: &str) -> Command {
 #[test]
 fn waiver_and_restoration_change_readiness_and_remaining_cpm_consistently() {
     let (mut plan, edge, b) = soft_edge_plan();
-    let gates_before = gate_report(&plan, b).expect("gates");
-    let remaining_before = json(&deterministic_remaining(&plan).expect("remaining"));
+    let gates_before =
+        gate_report(&plan, b, crate::Transition::Claim, chrono::Utc::now()).expect("gates");
+    let remaining_before =
+        json(&deterministic_remaining(&plan, chrono::Utc::now()).expect("remaining"));
     let baseline_before = json(&deterministic(&plan).expect("baseline"));
     assert!(!gates_before.ready);
     assert!(gates_before.unmet.iter().any(|g| matches!(g,
@@ -98,10 +100,18 @@ fn waiver_and_restoration_change_readiness_and_remaining_cpm_consistently() {
         (record.actor, record.at, record.reason.as_str()),
         (ActorId::human("lead"), at, "prototype of A is sufficient")
     );
-    let waived = gate_report(&plan, b).expect("gates");
+    let waived =
+        gate_report(&plan, b, crate::Transition::Claim, chrono::Utc::now()).expect("gates");
     assert!(waived.ready, "{waived:?}");
-    assert!(crate::dependencies_satisfied(&plan, b));
-    let remaining = deterministic_remaining(&plan).expect("remaining");
+    let verify =
+        gate_report(&plan, b, crate::Transition::Verify, chrono::Utc::now()).expect("gates");
+    assert!(
+        !verify
+            .unmet
+            .iter()
+            .any(|g| matches!(g, crate::UnmetGate::Dependency { .. }))
+    );
+    let remaining = deterministic_remaining(&plan, chrono::Utc::now()).expect("remaining");
     assert_eq!(remaining.activities[&b].earliest_start_hours, 0.0);
     assert!(
         Some(remaining.project_finish_hours) <= remaining_before["project_finish_hours"].as_f64()
@@ -110,9 +120,10 @@ fn waiver_and_restoration_change_readiness_and_remaining_cpm_consistently() {
         json(&deterministic(&plan).expect("baseline")),
         baseline_before
     );
-    let simulated = simulate_remaining(&plan, Default::default()).expect("simulation");
+    let simulated =
+        simulate_remaining(&plan, Default::default(), chrono::Utc::now()).expect("simulation");
     assert!(simulated.criticality.contains_key(&b));
-    let ready: Vec<_> = next_work(&plan, &NextWorkQuery::default())
+    let ready: Vec<_> = next_work(&plan, &NextWorkQuery::default(), chrono::Utc::now())
         .expect("next")
         .into_iter()
         .map(|c| c.work.id)
@@ -126,9 +137,12 @@ fn waiver_and_restoration_change_readiness_and_remaining_cpm_consistently() {
     )
     .expect("restore");
     assert!(plan.find_dependency(edge).expect("edge").waiver.is_none());
-    assert_eq!(gate_report(&plan, b).expect("gates"), gates_before);
     assert_eq!(
-        json(&deterministic_remaining(&plan).expect("remaining")),
+        gate_report(&plan, b, crate::Transition::Claim, chrono::Utc::now()).expect("gates"),
+        gates_before
+    );
+    assert_eq!(
+        json(&deterministic_remaining(&plan, chrono::Utc::now()).expect("remaining")),
         remaining_before
     );
 }
@@ -136,7 +150,11 @@ fn waiver_and_restoration_change_readiness_and_remaining_cpm_consistently() {
 #[test]
 fn unwaived_soft_edges_still_gate_and_invalid_waivers_fail_atomically() {
     let (mut plan, edge, b) = soft_edge_plan();
-    assert!(!gate_report(&plan, b).expect("gates").ready);
+    assert!(
+        !gate_report(&plan, b, crate::Transition::Claim, chrono::Utc::now())
+            .expect("gates")
+            .ready
+    );
     let hard = plan
         .dependencies
         .iter()
@@ -182,7 +200,7 @@ fn a_milestone_whose_only_prerequisite_is_waived_stays_unreached() {
     edge.policy = DependencyPolicy::Soft;
     let id = edge.id;
     run(&mut plan, ActorId::human("lead"), waive(id, "scope cut")).expect("waive");
-    assert!(!crate::completion(&plan).contains(&milestone));
+    assert!(!crate::completion(&plan, chrono::Utc::now()).contains(&milestone));
 }
 
 #[test]
@@ -190,12 +208,12 @@ fn non_gating_links_leave_readiness_schedule_progress_and_ranking_unchanged() {
     let (plan, _, _) = soft_edge_plan();
     let observe = |plan: &Plan| {
         serde_json::json!({
-            "status": status(plan, true).expect("status"),
-            "next": next_work(plan, &NextWorkQuery::default()).expect("next"),
-            "remaining": deterministic_remaining(plan).expect("remaining"),
+            "status": status(plan, true, chrono::Utc::now()).expect("status"),
+            "next": next_work(plan, &NextWorkQuery::default(), chrono::Utc::now()).expect("next"),
+            "remaining": deterministic_remaining(plan, chrono::Utc::now()).expect("remaining"),
             "baseline": deterministic(plan).expect("baseline"),
-            "progress": progress(plan).expect("progress"),
-            "gates": plan.work_items.keys().map(|id| gate_report(plan, *id).expect("gates")).collect::<Vec<_>>(),
+            "progress": progress(plan, chrono::Utc::now()).expect("progress"),
+            "gates": plan.work_items.keys().map(|id| gate_report(plan, *id, crate::Transition::Claim, chrono::Utc::now()).expect("gates")).collect::<Vec<_>>(),
         })
     };
     let before = observe(&plan);
@@ -220,11 +238,13 @@ fn non_gating_links_leave_readiness_schedule_progress_and_ranking_unchanged() {
     }
     linked.validate().expect("links");
     assert_eq!(observe(&linked), before);
-    let explained = crate::explain_work(&linked, a).expect("explain");
+    let explained = crate::explain_work(&linked, a, chrono::Utc::now()).expect("explain");
     assert_eq!(explained.context.links.len(), 3);
     assert_eq!(
         explained.gates,
-        crate::explain_work(&plan, a).expect("explain").gates
+        crate::explain_work(&plan, a, chrono::Utc::now())
+            .expect("explain")
+            .gates
     );
 }
 
@@ -239,7 +259,7 @@ fn relation_kinds_between_one_pair_are_addressed_by_distinct_identities() {
     run(&mut plan, ActorId::human("lead"), waive(edge, "FS relaxed")).expect("waive");
     assert!(plan.find_dependency(edge).expect("fs").is_waived());
     assert!(!plan.find_dependency(ss_id).expect("ss").is_waived());
-    let gates = gate_report(&plan, b).expect("gates");
+    let gates = gate_report(&plan, b, crate::Transition::Claim, chrono::Utc::now()).expect("gates");
     assert!(!gates.ready);
     assert!(gates.unmet.iter().any(|g| matches!(g,
         UnmetGate::Dependency { dependency, relation: DependencyKind::StartStart, .. } if *dependency == ss_id)));

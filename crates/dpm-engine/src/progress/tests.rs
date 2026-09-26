@@ -25,8 +25,10 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
         DependencyKind::FinishStart,
         0.0,
     ));
-    let schedule = dpm_schedule::deterministic_remaining(&plan).expect("schedule");
+    let schedule =
+        dpm_schedule::deterministic_remaining(&plan, chrono::Utc::now()).expect("schedule");
     apply(&mut plan, Command::Claim { work });
+    apply(&mut plan, Command::Start { work });
     apply(
         &mut plan,
         Command::ReportProgress {
@@ -37,26 +39,27 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
     );
     assert_eq!(plan.work_items[&work].status, WorkStatus::InProgress);
     assert_eq!(
-        dpm_schedule::deterministic_remaining(&plan)
+        dpm_schedule::deterministic_remaining(&plan, chrono::Utc::now())
             .expect("schedule")
             .project_finish_hours,
         schedule.project_finish_hours
     );
     assert_eq!(
-        progress(&plan).expect("progress").work[&work],
+        progress(&plan, chrono::Utc::now()).expect("progress").work[&work],
         ProgressSummary {
             percent_complete: 100.0,
-            verified: false
+            verified: false,
+            completed_at: None,
         }
     );
     assert_eq!(
-        progress(&plan).expect("progress").work[&milestone].percent_complete,
+        progress(&plan, chrono::Utc::now()).expect("progress").work[&milestone].percent_complete,
         0.0
     );
     let after = plan.find_work_by_key("TEST-B").expect("after");
-    assert!(!is_ready(&plan, after));
+    assert!(!is_ready(&plan, after, chrono::Utc::now()));
     apply(&mut plan, Command::Submit { work, note: None });
-    assert!(!progress(&plan).expect("progress").work[&work].verified);
+    assert!(!progress(&plan, chrono::Utc::now()).expect("progress").work[&work].verified);
     apply_command(
         &mut plan,
         ActorId::human("reviewer"),
@@ -64,12 +67,14 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
         Utc::now(),
     )
     .expect("verify");
+    let reached = progress(&plan, chrono::Utc::now()).expect("progress").work[&milestone];
+    assert_eq!((reached.percent_complete, reached.verified), (100.0, true));
     assert_eq!(
-        progress(&plan).expect("progress").work[&milestone],
-        ProgressSummary {
-            percent_complete: 100.0,
-            verified: true
-        }
+        reached.completed_at,
+        plan.work_items[&work]
+            .events
+            .verified_at
+            .map(dpm_model::EventTime::Recorded)
     );
     assert_eq!(plan.work_items[&milestone].status, WorkStatus::Planned);
     assert_eq!(plan.work_items[&milestone].expected_duration_hours(), 0.0);
@@ -95,6 +100,7 @@ fn report_validation_is_atomic_and_blocked_corrections_preserve_the_blocker() {
     );
     assert_eq!(plan, before);
     apply(&mut plan, Command::Claim { work });
+    apply(&mut plan, Command::Start { work });
     for (actor, command) in [
         ("other", report.clone()),
         (
@@ -132,7 +138,7 @@ fn report_validation_is_atomic_and_blocked_corrections_preserve_the_blocker() {
         Some("waiting")
     );
     assert_eq!(
-        progress(&plan).expect("progress").work[&work].percent_complete,
+        progress(&plan, chrono::Utc::now()).expect("progress").work[&work].percent_complete,
         25.0
     );
 }
@@ -158,6 +164,7 @@ fn nested_packages_average_leaf_tasks_once_and_legacy_submissions_show_100_perce
     plan.work_items.get_mut(&a).expect("a").parent = Some(parent);
     plan.work_items.get_mut(&b).expect("b").parent = Some(nested);
     apply(&mut plan, Command::Claim { work: a });
+    apply(&mut plan, Command::Start { work: a });
     apply(
         &mut plan,
         Command::ReportProgress {
@@ -167,6 +174,7 @@ fn nested_packages_average_leaf_tasks_once_and_legacy_submissions_show_100_perce
         },
     );
     apply(&mut plan, Command::Claim { work: b });
+    apply(&mut plan, Command::Start { work: b });
     apply(
         &mut plan,
         Command::Submit {
@@ -176,7 +184,7 @@ fn nested_packages_average_leaf_tasks_once_and_legacy_submissions_show_100_perce
     );
     assert_eq!(plan.work_items[&b].reported_progress_percent, 0);
     let before = plan.clone();
-    let projection = progress(&plan).expect("progress");
+    let projection = progress(&plan, chrono::Utc::now()).expect("progress");
     assert_eq!(projection.work[&parent].percent_complete, 75.0);
     assert_eq!(projection.work[&nested].percent_complete, 100.0);
     assert!(!projection.work[&nested].verified);
@@ -207,12 +215,13 @@ fn import_defaults_reports_to_zero_and_rejects_invalid_progress() {
         .expect("task")
         .reported_progress_percent = 101;
     assert!(plan.validate().is_err());
-    let empty = progress(&Plan::empty("empty")).expect("empty");
+    let empty = progress(&Plan::empty("empty"), chrono::Utc::now()).expect("empty");
     assert_eq!(
         empty.overall,
         ProgressSummary {
             percent_complete: 0.0,
-            verified: false
+            verified: false,
+            completed_at: None,
         }
     );
 }

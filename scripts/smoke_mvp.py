@@ -33,6 +33,7 @@ def smoke(binary, directory):
 
     def finish(key):
         run('claim', key, '--actor', 'agent:smoke')
+        run('start', key, '--actor', 'agent:smoke')
         run('submit', key, '--actor', 'agent:smoke', '--note', 'Smoke acceptance evidence')
         run('verify', key, '--actor', 'human:reviewer')
 
@@ -52,6 +53,10 @@ def smoke(binary, directory):
     assert run('claim', 'TEST-A', '--actor', 'agent:smoke', structured=True)['resulting_revision'] == 1
     run('claim', 'TEST-A', '--actor', 'agent:other', error='not ready')
     run('submit', 'TEST-A', '--actor', 'agent:other', error='owned by')
+    run('submit', 'TEST-A', '--actor', 'agent:smoke', error='has not started')
+    run('start', 'TEST-A', '--actor', 'agent:other', error='owned by')
+    assert run('start', 'TEST-A', '--actor', 'agent:smoke', structured=True)['resulting_revision'] == 2
+    assert run('show', 'TEST-A', structured=True)['events']['started_at']
     run('attach-git-head', 'TEST-A', '--resource', 'TEST-REPO', '--actor', 'agent:smoke')
     assert len(run('show', 'TEST-A', structured=True)['artifact_ids']) == 1
     run('submit', 'TEST-A', '--actor', 'agent:smoke')
@@ -80,7 +85,7 @@ def smoke(binary, directory):
     run('claim', 'TEST-M1', '--actor', 'agent:smoke', error='not a task')
     with sqlite3.connect(database) as connection:
         count = connection.execute('SELECT COUNT(*) FROM operations').fetchone()[0]
-        assert count == final['revision'] == 22
+        assert count == final['revision'] == 28
         snapshot = json.loads(connection.execute('SELECT plan_json FROM plan_state').fetchone()[0])
         assert snapshot['revision'] == count
         artifact = next(iter(snapshot['artifacts'].values()))
@@ -92,7 +97,7 @@ def smoke(binary, directory):
     export_path.write_text(json.dumps(exported))
     assert run('validate', str(export_path), structured=True)['valid']
     database = directory / 'imported.sqlite'
-    assert run('import', str(export_path), structured=True)['revision'] == 22
+    assert run('import', str(export_path), structured=True)['revision'] == 28
     assert run('export', structured=True) == exported
     run('import', str(export_path), error='workspace already exists', structured=True)
     database = directory / 'invalid.sqlite'

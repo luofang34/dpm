@@ -76,7 +76,7 @@ Implement and harden:
 - deterministic CPM and float;
 - three-point estimates plus Monte Carlo P50/P80/P95 and criticality;
 - semantic readiness and decision gates;
-- `status`, `next`, `show`, `explain`, `claim`, `block`, `unblock`, `submit`, `verify`, `decide`;
+- `status`, `next`, `show`, `explain`, `claim`, `start`, `block`, `unblock`, `submit`, `verify`, `decide`;
 - Git HEAD as an attachable artifact;
 - SQLite snapshot + append-only semantic operation log;
 - CLI JSON output and a small Ratatui operator console;
@@ -105,11 +105,14 @@ When operating on a real DPM workspace, prefer the machine interface:
 2. `dpm next --json --capability <capability>`
 3. `dpm explain <KEY> --json`; read `work.instructions.steps`, `in_scope`, `out_of_scope`,
    `verification`, objective and acceptance together with the resolved context;
-4. `dpm claim <KEY> --actor agent:<name>`
-5. perform the work and run its acceptance checks;
-6. `dpm attach-git-head <KEY> --actor agent:<name>` when a commit is relevant;
-7. `dpm submit <KEY> --actor agent:<name> --note "..."`;
-8. a separate human/service verifier runs `dpm verify <KEY> ...`.
+4. `dpm claim <KEY> --actor agent:<name>` reserves the task;
+5. `dpm start <KEY> --actor agent:<name>` when work actually begins; the start is the event SS/SF
+   successors wait for, and progress and submission require it;
+6. perform the work and run its acceptance checks;
+7. `dpm attach-git-head <KEY> --actor agent:<name>` when a commit is relevant;
+8. `dpm submit <KEY> --actor agent:<name> --note "..."` once `explain` shows `transitions.submit`
+   ready (FF/SF prerequisites and their lag);
+9. a separate human/service verifier runs `dpm verify <KEY> ...`.
 
 If work cannot proceed, use `block` with a concrete reason instead of silently switching scope.
 If the plan itself is wrong, export it and use `plan diff` / `propose_change`; do not route around

@@ -1,5 +1,6 @@
 use super::*;
-use crate::{NextWorkQuery, completion, next_work, show_work, status};
+use crate::{NextWorkQuery, completion, is_ready, next_work, show_work, status};
+use dpm_model::WorkStatus;
 use dpm_model::{Dependency, DependencyKind, Key, WorkItemId, WorkKind};
 use std::collections::BTreeSet;
 
@@ -20,6 +21,7 @@ fn apply(plan: &mut Plan, actor: &str, command: Command) -> Operation {
 
 fn finish(plan: &mut Plan, work: WorkItemId) {
     apply(plan, "owner", Command::Claim { work });
+    apply(plan, "owner", Command::Start { work });
     apply(plan, "owner", Command::Submit { work, note: None });
     apply(plan, "reviewer", Command::Verify { work, note: None });
 }
@@ -29,6 +31,7 @@ fn failed_commands_are_atomic_and_self_verification_is_rejected() {
     let mut plan = fixture();
     let work = task(&plan);
     apply(&mut plan, "owner", Command::Claim { work });
+    apply(&mut plan, "owner", Command::Start { work });
     for command in [
         Command::Submit { work, note: None },
         Command::Block {
@@ -53,7 +56,7 @@ fn failed_commands_are_atomic_and_self_verification_is_rejected() {
     ));
     assert_eq!(plan, before);
     apply(&mut plan, "reviewer", Command::Verify { work, note: None });
-    assert!(completion(&plan).contains(&work));
+    assert!(completion(&plan, chrono::Utc::now()).contains(&work));
 }
 
 #[test]
@@ -73,7 +76,7 @@ fn blocking_and_resuming_preserve_the_owner() {
     assert_eq!(plan.work_items[&work].owner, Some(ActorId::agent("owner")));
     assert_eq!(plan.work_items[&work].status, WorkStatus::Claimed);
     assert!(
-        next_work(&plan, &NextWorkQuery::default())
+        next_work(&plan, &NextWorkQuery::default(), chrono::Utc::now())
             .expect("query")
             .is_empty()
     );
@@ -86,9 +89,18 @@ fn capabilities_filter_eligibility_instead_of_only_lowering_the_score() {
         capabilities: BTreeSet::from(["unrelated".into()]),
         use_probabilistic_criticality: false,
     };
-    assert!(next_work(&plan, &query).expect("query").is_empty());
+    assert!(
+        next_work(&plan, &query, chrono::Utc::now())
+            .expect("query")
+            .is_empty()
+    );
     query.capabilities = BTreeSet::from(["rust".into(), "testing".into()]);
-    assert_eq!(next_work(&plan, &query).expect("query").len(), 1);
+    assert_eq!(
+        next_work(&plan, &query, chrono::Utc::now())
+            .expect("query")
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -131,11 +143,22 @@ fn milestone_completion_unlocks_successors_without_mutating_authoritative_state(
     finish(&mut plan, work);
     assert_eq!(plan.work_items[&milestone].status, WorkStatus::Planned);
     assert_eq!(
-        show_work(&plan, milestone).expect("projection").status,
+        show_work(&plan, milestone, chrono::Utc::now())
+            .expect("projection")
+            .status,
         WorkStatus::Verified
     );
-    assert!(is_ready(&plan, &plan.work_items[&after]));
-    assert_eq!(status(&plan, false).expect("summary").complete, 2);
+    assert!(is_ready(
+        &plan,
+        &plan.work_items[&after],
+        chrono::Utc::now()
+    ));
+    assert_eq!(
+        status(&plan, false, chrono::Utc::now())
+            .expect("summary")
+            .complete,
+        2
+    );
 }
 
 #[test]
@@ -191,6 +214,7 @@ fn execution_commands(work: WorkItemId) -> Vec<(ActorId, Command)> {
     let reviewer = ActorId::human("reviewer");
     vec![
         (agent.clone(), Command::Claim { work }),
+        (agent.clone(), Command::Start { work }),
         (
             agent.clone(),
             Command::Block {

@@ -180,7 +180,7 @@ fn assert_cycle_rejected(net: &Network, label: &str) {
     );
     assert!(
         matches!(
-            deterministic_remaining(&net.plan),
+            deterministic_remaining(&net.plan, chrono::DateTime::UNIX_EPOCH),
             Err(ScheduleError::Validation(_))
         ),
         "{label}: remaining forecast validates the plan first"

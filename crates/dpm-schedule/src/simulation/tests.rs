@@ -42,6 +42,7 @@ fn completed_plan_has_zero_remaining_duration_even_with_lag() {
     for work in plan.work_items.values_mut().filter(|w| w.is_executable()) {
         work.status = WorkStatus::Verified;
         work.owner = Some(ActorId::agent("owner"));
+        work.events.verified_at = Some(chrono::DateTime::UNIX_EPOCH);
     }
     for dependency in &mut plan.dependencies {
         dependency.lag_hours = 5.0;
@@ -52,6 +53,7 @@ fn completed_plan_has_zero_remaining_duration_even_with_lag() {
             iterations: 10,
             seed: 0,
         },
+        chrono::DateTime::UNIX_EPOCH + chrono::TimeDelta::hours(5),
     )
     .expect("remaining");
     assert_eq!(result.p95_finish_hours, 0.0);

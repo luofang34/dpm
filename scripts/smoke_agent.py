@@ -71,7 +71,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'project_status', 'next_work', 'get_work', 'explain_work', 'claim_work', 'report_blocker', 'unblock_work', 'submit_work', 'verify_work', 'report_progress', 'add_artifact', 'attach_git_head', 'decide_gate', 'ratify_contract', 'reject_work', 'workspace_list', 'workspace_register', 'export_plan', 'propose_change', 'apply_change', 'history', 'link_external', 'unlink_external', 'waive_dependency', 'restore_dependency', 'import_mspdi', 'export_mspdi'} == names
+        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'report_blocker', 'report_progress', 'restore_dependency', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),
@@ -92,8 +92,10 @@ def smoke(database):
             assert agent_error['message'] == cli_error['message']
         context = worker.call('explain_work', {'key': 'TEST-B'})['data']['context']
         assert context['requirements'] and context['decisions'][0]['key'] == 'TEST-GATE'
-        worker.call('claim_work', {'key': 'TEST-B', 'base_revision': 0}, error='invalid_command')
-        run_cli(database, 'claim', 'TEST-B', error='invalid_command')
+        gated = worker.call('claim_work', {'key': 'TEST-B', 'base_revision': 0}, error='invalid_command')
+        cli_gated = run_cli(database, 'claim', 'TEST-B', error='invalid_command')['error']
+        assert gated['message'] == cli_gated['message'] and gated['details'] == cli_gated['details']
+        assert gated['details']['unmet'] == worker.call('explain_work', {'key': 'TEST-B'})['data']['gates']['unmet']
         agent_error = worker.call('claim_work', {'key': 'TEST-M1', 'base_revision': 0}, error='invalid_command')
         cli_error = run_cli(database, 'claim', 'TEST-M1', error='invalid_command')['error']
         assert agent_error['message'] == cli_error['message'] and 'not a task' in cli_error['message']
@@ -101,9 +103,21 @@ def smoke(database):
         run_cli(database, 'progress', 'TEST-A', '50', error='invalid_command')
         claim = worker.call('claim_work', {'key': 'TEST-A', 'base_revision': 0})['data']
         assert claim['resulting_revision'] == 1
+        for tool, arguments, command in [
+            ('submit_work', {}, ('submit', 'TEST-A', '--actor', 'agent:parity')),
+            ('report_progress', {'percent': 10}, ('progress', 'TEST-A', '10', '--actor', 'agent:parity')),
+        ]:
+            remote = worker.call(tool, {'key': 'TEST-A', 'base_revision': 1, **arguments}, error='invalid_command')
+            local = run_cli(database, *command, error='invalid_command')['error']
+            assert remote['message'] == local['message'] and 'has not started' in local['message']
+        reviewer.call('start_work', {'key': 'TEST-A', 'base_revision': 1}, error='invalid_command')
+        started = worker.call('start_work', {'key': 'TEST-A', 'base_revision': 1})['data']
+        assert started['command'] == {'Start': {'work': claim['command']['Claim']['work']}}
+        events = worker.call('get_work', {'key': 'TEST-A'})['data']['events']
+        assert events == {'started_at': started['timestamp']}
         run_cli(database, 'progress', 'TEST-A', '25', '--actor', 'agent:parity')
-        worker.call('report_progress', {'key': 'TEST-A', 'percent': 50, 'note': 'Half the acceptance work is implemented', 'base_revision': 2})
-        worker.call('report_progress', {'key': 'TEST-A', 'percent': 101, 'base_revision': 3}, error='invalid_command')
+        worker.call('report_progress', {'key': 'TEST-A', 'percent': 50, 'note': 'Half the acceptance work is implemented', 'base_revision': 3})
+        worker.call('report_progress', {'key': 'TEST-A', 'percent': 101, 'base_revision': 4}, error='invalid_command')
         run_cli(database, 'progress', 'TEST-A', '101', '--actor', 'agent:parity', error='invalid_command')
         shown = worker.call('get_work', {'key': 'TEST-A'})['data']
         assert shown == run_cli(database, 'show', 'TEST-A')
@@ -112,20 +126,27 @@ def smoke(database):
         summary = worker.call('project_status', {})['data']
         assert summary == run_cli(database, 'status') and summary['progress']['percent_complete'] > 0
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
-        worker.call('attach_git_head', {'key': 'TEST-A', 'resource': 'TEST-REPO', 'base_revision': 3})
+        worker.call('attach_git_head', {'key': 'TEST-A', 'resource': 'TEST-REPO', 'base_revision': 4})
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')
         assert worker.call('next_work', {})['data']['candidates'] == []
-        worker.call('unblock_work', {'key': 'TEST-A', 'base_revision': 5})
-        worker.call('submit_work', {'key': 'TEST-A', 'base_revision': 6, 'note': 'Acceptance evidence reviewed'})
-        worker.call('verify_work', {'key': 'TEST-A', 'base_revision': 7}, error='invalid_command')
+        worker.call('unblock_work', {'key': 'TEST-A', 'base_revision': 6})
+        assert worker.call('get_work', {'key': 'TEST-A'})['data']['status'] == 'InProgress'
+        worker.call('submit_work', {'key': 'TEST-A', 'base_revision': 7, 'note': 'Acceptance evidence reviewed'})
+        worker.call('verify_work', {'key': 'TEST-A', 'base_revision': 8}, error='invalid_command')
         run_cli(database, 'verify', 'TEST-A', '--actor', 'agent:parity', error='invalid_command')
-        reviewer.call('verify_work', {'key': 'TEST-A', 'base_revision': 7})
+        reviewer.call('verify_work', {'key': 'TEST-A', 'base_revision': 8})
         assert worker.call('next_work', {})['data']['candidates'] == []
-        reviewer.call('decide_gate', {'decision': 'TEST-GATE', 'outcome': 'Accept the verified input', 'base_revision': 8})
+        reviewer.call('decide_gate', {'decision': 'TEST-GATE', 'outcome': 'Accept the verified input', 'base_revision': 9})
         next_work = worker.call('next_work', {})['data']
         assert next_work == run_cli(database, 'next')
         assert {candidate['work']['key'] for candidate in next_work['candidates']} == {'TEST-B', 'TEST-D'}
-        assert worker.call('project_status', {})['data']['revision'] == 9
+        assert worker.call('project_status', {})['data']['revision'] == 10
+        verified = worker.call('explain_work', {'key': 'TEST-A'})['data']
+        assert verified == run_cli(database, 'explain', 'TEST-A')
+        assert verified['progress']['completed_at'] == {'recorded': verified['work']['events']['verified_at']}
+        assert set(verified['work']['events']) == {'started_at', 'submitted_at', 'verified_at'}
+        decided = next(d for d in run_cli(database, 'export')['decisions'].values() if d['key'] == 'TEST-GATE')
+        assert decided['resolved_at']
     finally:
         worker.close()
         reviewer.close()
@@ -151,13 +172,15 @@ def review_smoke(directory):
             assert remote['message'] == local['message']
         reviewer.call('ratify_contract', {'key': 'TEST-A', 'base_revision': 0})
         worker.call('claim_work', {'key': 'TEST-A', 'base_revision': 1})
+        run_cli(database, 'start', 'TEST-A', '--actor', 'agent:worker')
         run_cli(database, 'submit', 'TEST-A', '--actor', 'agent:worker')
-        review = reviewer.call('reject_work', {'key': 'TEST-A', 'reason': 'Missing acceptance evidence', 'base_revision': 3})
+        review = reviewer.call('reject_work', {'key': 'TEST-A', 'reason': 'Missing acceptance evidence', 'base_revision': 4})
         assert review['data']['command']['Reject']['reason'] == 'Missing acceptance evidence'
         detail = worker.call('explain_work', {'key': 'TEST-A'})['data']
         assert detail == run_cli(database, 'explain', 'TEST-A')
         assert detail['work']['status'] == 'InProgress'
         assert detail['work']['last_rejection']['reason'] == 'Missing acceptance evidence'
+        assert 'submitted_at' not in detail['work']['events'] and detail['work']['events']['started_at']
         assert worker.call('next_work', {})['data']['candidates'] == []
         run_cli(database, 'submit', 'TEST-A', '--actor', 'agent:worker')
         run_cli(database, 'reject', 'TEST-A', 'Still missing evidence', '--actor', 'human:reviewer')
@@ -317,12 +340,75 @@ def dependency_smoke(directory):
         reviewer.close()
 
 
+def timing_plan(kind, lag, legacy=False):
+    """TEST-A -> TEST-B under one relation and lag; `legacy` marks A verified without event times."""
+    plan = json.loads((ROOT / 'tests/support/execution-plan.json').read_text())
+    keys = {w['key']: w['id'] for w in plan['work_items'].values()}
+    plan['decisions'] = {}
+    for edge in plan['dependencies']:
+        if edge['predecessor'] == keys['TEST-A'] and edge['successor'] == keys['TEST-B']:
+            edge['kind'], edge['lag_hours'] = kind, lag
+    if legacy:
+        task = plan['work_items'][keys['TEST-A']]
+        task['status'], task['owner'] = 'Verified', {'kind': 'Agent', 'name': 'legacy'}
+    return plan
+
+
+def timing_smoke(directory):
+    """Elapsed-lag gates, start events and unknown legacy times read identically through CLI and MCP."""
+    fixture = directory / 'lag.json'
+    fixture.write_text(json.dumps(timing_plan('StartStart', 24.0)))
+    database = directory / 'lag.sqlite'
+    run_cli(database, 'import', str(fixture))
+    worker = Agent(database, 'agent:timing')
+    try:
+        worker.call('claim_work', {'key': 'TEST-A', 'base_revision': 0})
+        awaiting = worker.call('explain_work', {'key': 'TEST-B'})['data']
+        assert awaiting == run_cli(database, 'explain', 'TEST-B')
+        [gate] = awaiting['gates']['unmet']
+        assert (gate['relation'], gate['requires'], gate['release']) == ('StartStart', 'start', {'state': 'awaiting_event'})
+        started = run_cli(database, 'start', 'TEST-A', '--actor', 'agent:timing')
+        elapsing = worker.call('explain_work', {'key': 'TEST-B'})['data']
+        assert elapsing == run_cli(database, 'explain', 'TEST-B') and not elapsing['ready']
+        [gate] = elapsing['gates']['unmet']
+        assert gate['release']['state'] == 'elapsing' and gate['release']['event_at'] == started['timestamp']
+        assert elapsing['transitions']['submit']['unmet'][0]['type'] == 'lifecycle'
+        remote = worker.call('claim_work', {'key': 'TEST-B', 'base_revision': 2}, error='invalid_command')
+        local = run_cli(database, 'claim', 'TEST-B', '--actor', 'agent:timing', error='invalid_command')['error']
+        assert remote['details'] == local['details']
+        assert local['details']['unmet'][0]['release']['opens_at'] == gate['release']['opens_at']
+        assert worker.call('next_work', {'probabilistic': False})['data'] == run_cli(database, 'next', '--deterministic-only')
+    finally:
+        worker.close()
+    cases = [('legacy-zero', 'FinishStart', 0.0, True), ('legacy-positive', 'FinishStart', 1.0, False),
+             ('lead', 'FinishFinish', -8.0, True)]
+    for name, kind, lag, ready in cases:
+        fixture = directory / f'{name}.json'
+        fixture.write_text(json.dumps(timing_plan(kind, lag, legacy=name.startswith('legacy'))))
+        database = directory / f'{name}.sqlite'
+        run_cli(database, 'import', str(fixture))
+        agent = Agent(database, 'agent:timing')
+        try:
+            detail = agent.call('explain_work', {'key': 'TEST-B'})['data']
+            assert detail == run_cli(database, 'explain', 'TEST-B') and detail['ready'] == ready, name
+            if name == 'legacy-positive':
+                assert detail['gates']['unmet'][0]['release'] == {'state': 'unrecorded_event_time'}
+                assert any('was not recorded' in reason for reason in detail['why_now'])
+            if name == 'lead':
+                assert detail['transitions']['submit']['unmet'][-1]['release'] == {'state': 'awaiting_event'}
+                assert any('schedule only' in reason for reason in detail['why_now'])
+        finally:
+            agent.close()
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-agent-') as directory:
         smoke(Path(directory) / 'plan.sqlite')
         review_smoke(Path(directory))
         scope_smoke(Path(directory))
         dependency_smoke(Path(directory))
+        timing_smoke(Path(directory))
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')
     print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')
     print('PASS: CLI/MCP dependency identity, soft-edge waiver/restore, refusals and non-gating links')
+    print('PASS: CLI/MCP start events, elapsed-lag gates, unknown legacy event times and lead explanations')

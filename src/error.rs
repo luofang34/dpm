@@ -37,6 +37,13 @@ pub(crate) fn io_error(
 }
 
 impl CliError {
+    pub(crate) fn details(&self) -> Option<serde_json::Value> {
+        match self {
+            Self::Application(error) => error.details(),
+            _ => None,
+        }
+    }
+
     pub(crate) fn code(&self) -> &'static str {
         match self {
             Self::Application(error) => error.code(),

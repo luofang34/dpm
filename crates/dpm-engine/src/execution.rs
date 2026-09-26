@@ -1,10 +1,7 @@
-use crate::{
-    Command, EngineError, Operation, decisions_resolved, dependencies_satisfied, is_ready,
-};
+use crate::{Command, EngineError, Operation};
 use chrono::{DateTime, Utc};
-use dpm_model::{
-    ActorId, Artifact, DecisionStatus, OperationId, Plan, WorkItem, WorkItemId, WorkStatus,
-};
+use dpm_model::{ActorId, Artifact, DecisionStatus, OperationId, Plan, WorkItem, WorkItemId};
+use lifecycle::{block, claim, report_progress, start, submit, unblock, verify};
 
 /// Apply one validated semantic command atomically and return its audit operation.
 ///
@@ -63,30 +60,15 @@ fn execute(
         }
         Command::RatifyContract { work } => review::ratify(plan, actor, *work),
         Command::Reject { work, reason } => review::reject(plan, actor, *work, reason, at),
-        Command::Claim { work } => claim(plan, actor, *work),
+        Command::Claim { work } => claim(plan, actor, *work, at),
+        Command::Start { work } => start(plan, actor, *work, at),
         Command::Block { work, reason } => block(plan, actor, *work, reason),
-        Command::Unblock { work } => {
-            let item = task_mut(plan, *work)?;
-            owns(item, actor)?;
-            if item.status != WorkStatus::Blocked {
-                return Err(EngineError::InvalidTransition {
-                    work: item.id,
-                    status: item.status,
-                });
-            }
-            item.block_reason = None;
-            item.status = if item.owner.is_some() {
-                WorkStatus::Claimed
-            } else {
-                WorkStatus::Planned
-            };
-            Ok(())
-        }
+        Command::Unblock { work } => unblock(plan, actor, *work),
         Command::ReportProgress { work, percent, .. } => {
             report_progress(plan, actor, *work, *percent)
         }
-        Command::Submit { work, .. } => submit(plan, actor, *work),
-        Command::Verify { work, .. } => verify(plan, actor, *work),
+        Command::Submit { work, .. } => submit(plan, actor, *work, at),
+        Command::Verify { work, .. } => verify(plan, actor, *work, at),
         Command::AttachArtifact { work, artifact } => attach(plan, actor, *work, artifact),
         Command::LinkExternal(request) => tracking::link(plan, actor, request, at),
         Command::UnlinkExternal { work, reference } => tracking::unlink(plan, *work, *reference),
@@ -107,6 +89,7 @@ fn execute(
             }
             gate.status = DecisionStatus::Decided;
             gate.outcome = Some(outcome.clone());
+            gate.resolved_at = Some(at);
             Ok(())
         }
     }
@@ -135,112 +118,6 @@ fn owns(item: &WorkItem, actor: &ActorId) -> Result<(), EngineError> {
             owner: owner.clone(),
         });
     }
-    Ok(())
-}
-
-fn claim(plan: &mut Plan, actor: &ActorId, work: WorkItemId) -> Result<(), EngineError> {
-    // The kind check precedes readiness so a non-task never reports a misleading "not ready".
-    task_mut(plan, work)?;
-    let item = plan
-        .work_items
-        .get(&work)
-        .ok_or(EngineError::MissingWorkItem(work))?;
-    if !is_ready(plan, item) {
-        if let Some(reason) = &item.block_reason {
-            return Err(EngineError::Blocked {
-                work,
-                reason: reason.clone(),
-            });
-        }
-        return Err(EngineError::NotReady(work));
-    }
-    let item = task_mut(plan, work)?;
-    item.owner = Some(actor.clone());
-    item.status = WorkStatus::Claimed;
-    Ok(())
-}
-
-fn block(
-    plan: &mut Plan,
-    actor: &ActorId,
-    work: WorkItemId,
-    reason: &str,
-) -> Result<(), EngineError> {
-    nonempty(&work.to_string(), "block reason", reason)?;
-    let item = task_mut(plan, work)?;
-    owns(item, actor)?;
-    if !matches!(
-        item.status,
-        WorkStatus::Planned | WorkStatus::Claimed | WorkStatus::InProgress
-    ) {
-        return Err(EngineError::InvalidTransition {
-            work: item.id,
-            status: item.status,
-        });
-    }
-    item.block_reason = Some(reason.into());
-    item.status = WorkStatus::Blocked;
-    Ok(())
-}
-
-fn report_progress(
-    plan: &mut Plan,
-    actor: &ActorId,
-    work: WorkItemId,
-    percent: u8,
-) -> Result<(), EngineError> {
-    let item = task_mut(plan, work)?;
-    owns(item, actor)?;
-    if item.owner.as_ref() != Some(actor)
-        || !matches!(
-            item.status,
-            WorkStatus::Claimed | WorkStatus::InProgress | WorkStatus::Blocked
-        )
-    {
-        return Err(EngineError::InvalidTransition {
-            work,
-            status: item.status,
-        });
-    }
-    if percent > 100 {
-        return Err(EngineError::InvalidCommand {
-            entity: work.to_string(),
-            reason: "progress must be between 0 and 100".into(),
-        });
-    }
-    item.reported_progress_percent = percent;
-    if item.status != WorkStatus::Blocked {
-        item.status = WorkStatus::InProgress;
-    }
-    Ok(())
-}
-
-fn submit(plan: &mut Plan, actor: &ActorId, work: WorkItemId) -> Result<(), EngineError> {
-    let item = task_mut(plan, work)?;
-    owns(item, actor)?;
-    if !matches!(item.status, WorkStatus::Claimed | WorkStatus::InProgress) {
-        return Err(EngineError::InvalidTransition {
-            work: item.id,
-            status: item.status,
-        });
-    }
-    item.status = WorkStatus::Submitted;
-    Ok(())
-}
-
-fn verify(plan: &mut Plan, actor: &ActorId, work: WorkItemId) -> Result<(), EngineError> {
-    task_mut(plan, work)?;
-    if !dependencies_satisfied(plan, work) || !decisions_resolved(plan, work) {
-        return Err(EngineError::NotReady(work));
-    }
-    let item = task_mut(plan, work)?;
-    if item.status != WorkStatus::Submitted {
-        return Err(EngineError::NotSubmitted(work));
-    }
-    if item.owner.as_ref() == Some(actor) {
-        return Err(EngineError::SelfVerification(work));
-    }
-    item.status = WorkStatus::Verified;
     Ok(())
 }
 
@@ -280,6 +157,7 @@ fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
     Ok(())
 }
 
+mod lifecycle;
 mod review;
 mod tracking;
 mod waiver;

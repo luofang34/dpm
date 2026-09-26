@@ -25,6 +25,24 @@ impl DependencyKind {
             Self::StartFinish => "SF",
         }
     }
+
+    /// Predecessor event the relation waits for: its start (SS, SF) or its finish (FS, FF).
+    #[must_use]
+    pub fn predecessor_endpoint(self) -> crate::Endpoint {
+        match self {
+            Self::FinishStart | Self::FinishFinish => crate::Endpoint::Finish,
+            Self::StartStart | Self::StartFinish => crate::Endpoint::Start,
+        }
+    }
+
+    /// Successor event the relation constrains: its start (FS, SS) or its finish (FF, SF).
+    #[must_use]
+    pub fn successor_endpoint(self) -> crate::Endpoint {
+        match self {
+            Self::FinishStart | Self::StartStart => crate::Endpoint::Start,
+            Self::FinishFinish | Self::StartFinish => crate::Endpoint::Finish,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

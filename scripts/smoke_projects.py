@@ -61,6 +61,7 @@ def normal(directory):
     try:
         assert actor.call('project_status', {'probabilistic': False})['data'] == cli(child, 'status', '--no-simulation')
         actor.call('claim_work', {'key': 'TEST-A', 'base_revision': 0})
+        actor.call('start_work', {'key': 'TEST-A', 'base_revision': 1})
         cli(child, 'submit', 'TEST-A', '--actor', 'agent:discovery')
         cli(child, 'verify', 'TEST-A', '--actor', 'human:reviewer')
         assert actor.call('get_work', {'key': 'TEST-A'})['data']['status'] == 'Verified'
@@ -68,13 +69,13 @@ def normal(directory):
         actor.close()
     cli(root, 'init', error='project_exists')
     with sqlite3.connect(database) as connection:
-        assert connection.execute('select count(*) from operations').fetchone()[0] == 3
+        assert connection.execute('select count(*) from operations').fetchone()[0] == 4
     malformed = child / '.dpm'
     malformed.mkdir()
     (malformed / 'project.toml').write_text('version = 99\ndatabase = "missing.sqlite"\n')
     cli(child, 'status', error='project_configuration')
-    assert cli(child, '--database', database, 'status', '--no-simulation')['revision'] == 3
-    assert cli(child, '--project', root, 'status', '--no-simulation')['revision'] == 3
+    assert cli(child, '--database', database, 'status', '--no-simulation')['revision'] == 4
+    assert cli(child, '--project', root, 'status', '--no-simulation')['revision'] == 4
     foreign = root / 'separate-git'
     foreign.mkdir()
     (foreign / '.git').write_text('gitdir: elsewhere\n')

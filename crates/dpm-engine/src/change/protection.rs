@@ -73,8 +73,17 @@ pub(super) fn validate(current: &Plan, proposed: &Plan) -> Result<(), EngineErro
     super::replacement::validate(current, proposed, &locked)
 }
 
-/// Observations are attributed reports like evidence and reviews, so review cannot author them.
+/// Observations and decision times are attributed records, so review cannot author them.
 fn protect_observations(current: &Plan, proposed: &Plan) -> Result<(), EngineError> {
+    for (id, decision) in &proposed.decisions {
+        let recorded = current.decisions.get(id).and_then(|d| d.resolved_at);
+        if decision.resolved_at != recorded {
+            return Err(invalid(
+                &decision.key,
+                "resolution times are recorded by decide; plan changes cannot add or rewrite them",
+            ));
+        }
+    }
     for (id, reference) in &proposed.external_references {
         let recorded = current
             .external_references
@@ -107,6 +116,7 @@ fn validate_new_work(current: &Plan, proposed: &Plan) -> Result<(), EngineError>
             || work.last_rejection.is_some()
             || work.block_reason.is_some()
             || !work.artifact_ids.is_empty()
+            || !work.events.is_empty()
         {
             return Err(invalid(
                 &work.key,
@@ -124,6 +134,7 @@ fn same_execution(a: &WorkItem, b: &WorkItem) -> bool {
         && a.block_reason == b.block_reason
         && a.last_rejection == b.last_rejection
         && a.artifact_ids == b.artifact_ids
+        && a.events == b.events
 }
 
 fn execution_basis(plan: &Plan) -> BTreeSet<WorkItemId> {

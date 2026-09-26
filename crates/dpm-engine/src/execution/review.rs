@@ -48,6 +48,8 @@ pub(super) fn reject(
         });
     }
     item.status = WorkStatus::InProgress;
+    // The rejected submission is no longer a finish claim; resubmission records a new time.
+    item.events.submitted_at = None;
     item.last_rejection = Some(ReviewRejection {
         actor: actor.clone(),
         at,

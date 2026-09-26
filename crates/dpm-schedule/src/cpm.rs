@@ -1,5 +1,5 @@
 use crate::{ActivitySchedule, Schedule, ScheduleError};
-use dpm_model::{DependencyKind, Plan, WorkItemId};
+use dpm_model::{Dependency, DependencyKind, Plan, Release, WorkItemId};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// Absolute tolerance, in hours, below which total float counts as zero.
@@ -74,9 +74,13 @@ pub fn deterministic(plan: &Plan) -> Result<Schedule, ScheduleError> {
 /// Project outstanding work, treating verified tasks as zero remaining duration.
 ///
 /// Waived constraints no longer bound outstanding work; the baseline projection keeps them.
-pub fn deterministic_remaining(plan: &Plan) -> Result<Schedule, ScheduleError> {
+/// `now` is the adapter's clock reading, used only to decide which milestones are reached.
+pub fn deterministic_remaining(
+    plan: &Plan,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<Schedule, ScheduleError> {
     plan.validate()?;
-    let remaining = remaining_plan(plan);
+    let remaining = remaining_plan(plan, now);
     let plan = &remaining;
     let durations = plan
         .work_items
@@ -95,12 +99,37 @@ pub fn deterministic_remaining(plan: &Plan) -> Result<Schedule, ScheduleError> {
     deterministic_with_durations(plan, &durations)
 }
 
-pub(crate) fn remaining_plan(plan: &Plan) -> Plan {
+/// Outstanding constraints measured from `now` as the projection origin.
+///
+/// Edges into completed work and waived edges no longer bound anything. An edge from completed
+/// work keeps only the part of its lag the shared gate evaluator still reports as elapsing, so the
+/// forecast waits exactly as long as execution will; a lag whose event time was never recorded is
+/// kept whole rather than assumed to have elapsed. The completed predecessor projects at the origin
+/// with zero duration, so the kept lag is measured from `now`.
+pub(crate) fn remaining_plan(plan: &Plan, now: chrono::DateTime<chrono::Utc>) -> Plan {
     let mut remaining = plan.clone();
-    let completed = dpm_model::completion(plan);
-    remaining.dependencies.retain(|d| {
-        !d.is_waived() && !completed.contains(&d.predecessor) && !completed.contains(&d.successor)
-    });
+    let timeline = dpm_model::Timeline::at(plan, now);
+    let completed = timeline.completed();
+    remaining.dependencies = plan
+        .enforced_dependencies()
+        .filter(|d| !completed.contains(&d.successor))
+        .filter_map(|d| {
+            if !completed.contains(&d.predecessor) {
+                return Some(d.clone());
+            }
+            let lag_hours = match timeline.edge(plan, d) {
+                Release::Released { .. } | Release::AwaitingEvent => return None,
+                Release::Elapsing { opens_at, .. } => {
+                    (opens_at - now).num_milliseconds() as f64 / 3_600_000.0
+                }
+                Release::UnrecordedEventTime | Release::LagOutOfRange { .. } => d.lag_hours,
+            };
+            Some(Dependency {
+                lag_hours,
+                ..d.clone()
+            })
+        })
+        .collect();
     remaining
 }
 

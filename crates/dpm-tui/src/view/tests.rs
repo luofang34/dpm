@@ -23,7 +23,7 @@ fn render(view: &mut View) -> String {
 #[test]
 fn all_pages_render_snapshot_and_selection() {
     let plan = fixture();
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     for (page, text) in [
         (Page::Now, "Recommended ready work"),
         (Page::Work, "TEST-A"),
@@ -49,18 +49,18 @@ fn selected_blocked_work_exposes_reason_and_invalid_plans_fail() {
     let task = plan.work_items.get_mut(&id).expect("task");
     task.status = WorkStatus::Blocked;
     task.block_reason = Some("waiting for review".into());
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     view.state.select(view.work.iter().position(|w| w.id == id));
     view.page = Page::Detail;
     assert!(render(&mut view).contains("waiting for review"));
     plan.workspace.name.clear();
-    assert!(View::new(&plan).is_err());
+    assert!(View::new(&plan, chrono::Utc::now()).is_err());
 }
 
 #[test]
 fn empty_workspace_is_safe_to_navigate() {
     let plan = Plan::empty("Empty");
-    let mut view = View::new(&plan).expect("empty view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("empty view");
     view.move_selection(1);
     view.page = Page::Detail;
     assert!(render(&mut view).contains("No work in this workspace"));
@@ -70,7 +70,7 @@ fn empty_workspace_is_safe_to_navigate() {
 fn gantt_arrow_keys_pan_time_and_preserve_selection_and_plan() {
     let plan = fixture();
     let before = plan.clone();
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     let selected_key = view.work[view.state.selected().expect("selection")]
         .key
         .to_string();
@@ -106,7 +106,7 @@ fn partial_progress_and_milestone_status_are_visible() {
     item.owner = Some(dpm_model::ActorId::agent("owner"));
     item.status = WorkStatus::InProgress;
     item.reported_progress_percent = 45;
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     view.handle_key(KeyCode::Char('g'));
     assert!(render(&mut view).contains(" 45%"));
     view.state
@@ -146,7 +146,7 @@ fn reached_pending_and_partial_progress_are_visible() {
         0.0,
     ));
     plan.work_items.insert(reached.id, reached);
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     view.handle_key(KeyCode::Char('g'));
     let screen = render(&mut view);
     assert!(screen.contains(" 40%"));
@@ -169,7 +169,7 @@ fn self_host_roadmap_renders_without_starting_its_contracts() {
     ))
     .expect("self-host");
     let before = plan.clone();
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     assert!(render(&mut view).contains("DEC-EXECUTE"));
     view.handle_key(KeyCode::Char('g'));
     let screen = render(&mut view);
@@ -185,7 +185,7 @@ fn self_host_roadmap_renders_without_starting_its_contracts() {
 #[test]
 fn inspector_focus_routes_arrows_and_escape_without_changing_work() {
     let plan = fixture();
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     view.handle_key(KeyCode::Char('g'));
     render(&mut view);
     let selected = view.state.selected();
@@ -207,7 +207,7 @@ fn work_list_marks_milestone_kind_without_inferring_it_from_the_key() {
     let milestone = plan.find_work_by_key_mut("TEST-M1").expect("milestone");
     milestone.key = dpm_model::Key::new("RELEASE");
     plan.find_work_by_key_mut("TEST-A").expect("task").key = dpm_model::Key::new("M-TASK");
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     view.handle_key(KeyCode::Char('2'));
     let screen = render(&mut view);
     assert!(screen.contains("◇[M] RELEASE"));
@@ -217,7 +217,7 @@ fn work_list_marks_milestone_kind_without_inferring_it_from_the_key() {
 #[test]
 fn file_preview_is_labeled_separately_from_database_snapshot() {
     let plan = fixture();
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     view.preview = true;
     assert!(render(&mut view).contains("PREVIEW read-only revision 0"));
     view.preview = false;
@@ -244,7 +244,7 @@ fn detail_exposes_complete_contract_context_and_latest_review_by_scrolling() {
         at: "2026-09-26T00:00:00Z".parse().expect("timestamp"),
         reason: "Missing measured evidence".into(),
     });
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     view.handle_key(KeyCode::Enter);
     let mut text = render(&mut view);
     for _ in 0..10 {
@@ -267,14 +267,14 @@ fn detail_exposes_complete_contract_context_and_latest_review_by_scrolling() {
 #[test]
 fn refresh_preserves_selection_and_viewport_and_rejects_source_switches_atomically() {
     let mut plan = fixture();
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     view.handle_key(KeyCode::Char('g'));
     view.handle_key(KeyCode::Right);
     view.handle_key(KeyCode::Down);
     let selected = view.work[view.state.selected().expect("selection")].id;
     plan.work_items.get_mut(&selected).expect("work").title = "Refreshed task title".into();
     plan.revision = 1;
-    view.refresh(&plan).expect("refresh");
+    view.refresh(&plan, chrono::Utc::now()).expect("refresh");
     assert_eq!(
         view.work[view.state.selected().expect("selection")].id,
         selected
@@ -287,25 +287,59 @@ fn refresh_preserves_selection_and_viewport_and_rejects_source_switches_atomical
     );
     let mut invalid = plan.clone();
     invalid.workspace.id = dpm_model::WorkspaceId::new();
-    assert!(view.refresh(&invalid).is_err());
+    assert!(view.refresh(&invalid, chrono::Utc::now()).is_err());
     assert_eq!(view.plan, plan);
     assert_eq!(render(&mut view), updated);
     view.reload_failed(&"missing source");
     assert!(render(&mut view).contains("missing source"));
-    view.refresh(&plan).expect("retry");
+    view.refresh(&plan, chrono::Utc::now()).expect("retry");
     assert!(view.notice.is_none());
 }
 
 #[test]
 fn now_exposes_all_completion_percentiles_and_detail_separates_float() {
     let plan = fixture();
-    let mut view = View::new(&plan).expect("view");
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     let now = render(&mut view);
     for marker in ["P50", "P80", "P95"] {
         assert!(now.contains(marker));
     }
     let work = plan.find_work_by_key("TEST-A").expect("work");
-    let explanation = dpm_engine::explain_work(&plan, work.id).expect("explain");
+    let explanation =
+        dpm_engine::explain_work(&plan, work.id, chrono::Utc::now()).expect("explain");
     let detail = crate::detail::text(&plan, &explanation);
     assert!(detail.contains("Free float") && detail.contains("total float"));
+}
+
+#[test]
+fn detail_shows_recorded_events_and_every_transition_gate() {
+    use chrono::TimeZone;
+    let mut plan = fixture();
+    let work = plan.find_work_by_key("TEST-A").expect("work").id;
+    let at = chrono::Utc
+        .with_ymd_and_hms(2026, 9, 1, 8, 0, 0)
+        .single()
+        .expect("time");
+    let worker = dpm_model::ActorId::agent("worker");
+    for command in [
+        dpm_engine::Command::Claim { work },
+        dpm_engine::Command::Start { work },
+    ] {
+        dpm_engine::apply_command(&mut plan, worker.clone(), command, at).expect("execute");
+    }
+    let explanation = dpm_engine::explain_work(&plan, work, at).expect("explain");
+    let detail = crate::detail::text(&plan, &explanation);
+    assert!(
+        detail.contains("started at 2026-09-01 08:00:00 UTC"),
+        "{detail}"
+    );
+    assert!(detail.contains("Transitions:") && detail.contains("submit: permitted now"));
+    assert!(detail.contains("start: work lifecycle state is InProgress"));
+    let successor = plan.find_work_by_key("TEST-B").expect("work").id;
+    let explanation = dpm_engine::explain_work(&plan, successor, at).expect("explain");
+    let detail = crate::detail::text(&plan, &explanation);
+    assert!(
+        detail.contains("claim: awaits the verified finish of TEST-A"),
+        "{detail}"
+    );
 }

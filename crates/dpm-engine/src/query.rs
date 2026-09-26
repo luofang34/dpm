@@ -1,9 +1,12 @@
-use crate::readiness::ready_with_completion;
-use crate::{EngineError, completion, show_work};
-use dpm_model::{DecisionStatus, Plan, Priority, WorkItem, WorkItemId, WorkStatus};
-use dpm_schedule::{Schedule, SimulationConfig, deterministic_remaining, simulate_remaining};
+use crate::{EngineError, Transition, gates};
+use chrono::{DateTime, Utc};
+use dpm_model::{DecisionStatus, Plan, Priority, Timeline, WorkItem, WorkItemId, WorkStatus};
+use dpm_schedule::{SimulationConfig, deterministic_remaining, simulate_remaining};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+mod explain;
+pub use explain::{WorkExplanation, explain_work};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Execution counts and remaining schedule projections.
 pub struct StatusSummary {
@@ -37,38 +40,44 @@ pub struct StatusSummary {
     pub p95_finish_hours: Option<f64>,
 }
 
-/// Project validated lifecycle counts and remaining duration.
-pub fn status(plan: &Plan, probabilistic: bool) -> Result<StatusSummary, EngineError> {
+pub(crate) fn simulation_config() -> SimulationConfig {
+    SimulationConfig {
+        iterations: 2_000,
+        ..SimulationConfig::default()
+    }
+}
+
+/// Claim readiness of every leaf task, evaluated once for one timeline.
+fn claim_reports(plan: &Plan, timeline: &Timeline) -> BTreeMap<WorkItemId, crate::GateReport> {
+    plan.work_items
+        .values()
+        .filter(|w| w.is_executable())
+        .map(|w| (w.id, gates::evaluate(plan, w, Transition::Claim, timeline)))
+        .collect()
+}
+
+/// Project validated lifecycle counts and remaining duration at an adapter-supplied time.
+pub fn status(
+    plan: &Plan,
+    probabilistic: bool,
+    now: DateTime<Utc>,
+) -> Result<StatusSummary, EngineError> {
     plan.validate()?;
-    let done = completion(plan);
-    let schedule = deterministic_remaining(plan)?;
+    let timeline = Timeline::at(plan, now);
+    let schedule = deterministic_remaining(plan, now)?;
     let simulation = if probabilistic && plan.work_items.values().any(|w| w.estimate.is_some()) {
-        Some(simulate_remaining(
-            plan,
-            SimulationConfig {
-                iterations: 2_000,
-                ..SimulationConfig::default()
-            },
-        )?)
+        Some(simulate_remaining(plan, simulation_config(), now)?)
     } else {
         None
     };
+    let gates = claim_reports(plan, &timeline);
 
     Ok(StatusSummary {
-        gates: plan
-            .work_items
-            .values()
-            .filter(|w| w.is_executable())
-            .map(|w| (w.id, crate::gates::with_completion(plan, w, &done)))
-            .collect(),
-        progress: crate::progress(plan)?.overall,
+        ready: gates.values().filter(|report| report.ready).count(),
+        gates,
+        progress: crate::progress::progress_with(plan, &timeline).overall,
         revision: plan.revision,
         total_work: plan.work_items.len(),
-        ready: plan
-            .work_items
-            .values()
-            .filter(|w| ready_with_completion(plan, w, &done))
-            .count(),
         blocked: plan
             .work_items
             .values()
@@ -84,7 +93,7 @@ pub fn status(plan: &Plan, probabilistic: bool) -> Result<StatusSummary, EngineE
             .values()
             .filter(|w| w.status == WorkStatus::Submitted)
             .count(),
-        complete: done.len(),
+        complete: timeline.completed().len(),
         open_decisions: plan
             .decisions
             .values()
@@ -163,40 +172,38 @@ impl Default for NextWorkQuery {
     }
 }
 
-/// Recommend only ready tasks compatible with the supplied capabilities.
+/// Recommend only tasks claimable at an adapter-supplied time and compatible with capabilities.
 pub fn next_work(
     plan: &Plan,
     query: &NextWorkQuery,
+    now: DateTime<Utc>,
 ) -> Result<Vec<NextWorkCandidate>, EngineError> {
     plan.validate()?;
-    let done = completion(plan);
-    let schedule = deterministic_remaining(plan)?;
+    let timeline = Timeline::at(plan, now);
+    let schedule = deterministic_remaining(plan, now)?;
     let downstream = downstream_counts(plan);
     let simulation = if query.use_probabilistic_criticality
         && plan.work_items.values().any(|w| w.estimate.is_some())
     {
-        Some(simulate_remaining(
-            plan,
-            SimulationConfig {
-                iterations: 2_000,
-                ..SimulationConfig::default()
-            },
-        )?)
+        Some(simulate_remaining(plan, simulation_config(), now)?)
     } else {
         None
     };
+    let reports = claim_reports(plan, &timeline);
 
     let mut candidates = plan
         .work_items
         .values()
-        .filter(|work| ready_with_completion(plan, work, &done))
+        .filter(|work| reports.get(&work.id).is_some_and(|r| r.ready))
         .filter(|work| {
             query.capabilities.is_empty() || work.capabilities.is_subset(&query.capabilities)
         })
         .map(|work| {
+            let finish = gates::evaluate(plan, work, Transition::Submit, &timeline);
             candidate(
                 work,
                 query,
+                &finish,
                 &schedule.activities[&work.id],
                 &downstream,
                 simulation.as_ref(),
@@ -215,6 +222,7 @@ pub fn next_work(
 fn candidate(
     work: &WorkItem,
     query: &NextWorkQuery,
+    finish: &crate::GateReport,
     activity: &dpm_schedule::ActivitySchedule,
     downstream: &BTreeMap<WorkItemId, usize>,
     simulation: Option<&dpm_schedule::SimulationSummary>,
@@ -238,7 +246,20 @@ fn candidate(
         - float_penalty;
 
     let mut reasons = Vec::new();
-    reasons.push("all predecessor work is complete".into());
+    reasons.push(
+        "start gates are satisfied: every FS/SS predecessor event and positive lag has elapsed"
+            .into(),
+    );
+    let pending_finish = finish
+        .unmet
+        .iter()
+        .filter(|g| matches!(g, crate::UnmetGate::Dependency { .. }))
+        .count();
+    if pending_finish > 0 {
+        reasons.push(format!(
+            "submission additionally waits for {pending_finish} FF/SF prerequisite(s); see explain transitions.submit"
+        ));
+    }
     if let Some(value) = criticality {
         reasons.push(format!(
             "critical in {:.0}% of schedule simulations",
@@ -271,84 +292,4 @@ fn candidate(
         capability_match,
         reasons,
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-/// Execution contract, prerequisites, and derived reason for a work item.
-pub struct WorkExplanation {
-    /// Structured conditions shared with claim eligibility.
-    pub gates: crate::GateReport,
-    /// Execution percentage and independent completion condition.
-    pub progress: crate::ProgressSummary,
-    /// Resolved requirements, gates, evidence and related work for the execution contract.
-    pub context: crate::ExecutionContext,
-    /// Work-item projection represented by this result.
-    pub work: WorkItem,
-    /// Whether this task can be claimed now.
-    pub ready: bool,
-    /// Direct predecessor work items.
-    pub predecessors: Vec<WorkItem>,
-    /// Count of distinct transitively dependent work items.
-    pub downstream_count: usize,
-    /// Derived timing of this activity when available.
-    pub schedule: Option<dpm_schedule::ActivitySchedule>,
-    /// Fraction of sampled schedules in which each activity is critical.
-    pub criticality: Option<f64>,
-    /// Readiness, blocker, gate, lifecycle, and schedule explanations.
-    pub why_now: Vec<String>,
-}
-
-/// Explain a validated work item, including derived aggregate completion.
-pub fn explain_work(plan: &Plan, work: WorkItemId) -> Result<WorkExplanation, EngineError> {
-    let item = show_work(plan, work)?;
-    let schedule: Schedule = deterministic_remaining(plan)?;
-    let simulation = simulate_remaining(
-        plan,
-        SimulationConfig {
-            iterations: 2_000,
-            ..SimulationConfig::default()
-        },
-    )?;
-    let predecessors = plan
-        .dependencies
-        .iter()
-        .filter(|dep| dep.successor == work)
-        .filter_map(|dep| plan.work_items.get(&dep.predecessor).cloned())
-        .collect::<Vec<_>>();
-    let downstream_count = downstream_counts(plan).get(&work).copied().unwrap_or(0);
-    let gates = crate::gate_report(plan, work)?;
-    let ready = gates.ready;
-    let activity = schedule.activities.get(&work).cloned();
-    let criticality = simulation.criticality.get(&work).copied();
-
-    let mut why_now = Vec::new();
-    if ready {
-        why_now.push("work is executable now: all predecessor dependencies are complete".into());
-    } else if completion(plan).contains(&work) {
-        why_now.push("work is complete".into());
-    } else {
-        why_now.extend(gates.reasons());
-    }
-
-    if downstream_count > 0 {
-        why_now.push(format!(
-            "completion affects {downstream_count} downstream work items"
-        ));
-    }
-    if let Some(value) = criticality {
-        why_now.push(format!("schedule criticality is {:.0}%", value * 100.0));
-    }
-
-    Ok(WorkExplanation {
-        gates,
-        progress: crate::progress(plan)?.work[&work],
-        context: crate::context::execution_context(plan, &item),
-        work: item,
-        ready,
-        predecessors,
-        downstream_count,
-        schedule: activity,
-        criticality,
-        why_now,
-    })
 }

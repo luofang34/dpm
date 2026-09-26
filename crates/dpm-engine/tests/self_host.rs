@@ -18,7 +18,7 @@ fn prepared_contracts_have_no_owners_progress_or_implicit_authorization() {
         "../../../examples/self-host/dpm-alpha.expected.json"
     ))
     .expect("expected contract");
-    let summary = status(&plan, false).expect("summary");
+    let summary = status(&plan, false, chrono::Utc::now()).expect("summary");
     assert_eq!(
         summary.total_work as u64,
         expected["total_work"].as_u64().expect("count")
@@ -29,7 +29,7 @@ fn prepared_contracts_have_no_owners_progress_or_implicit_authorization() {
     );
     assert_eq!(summary.progress.percent_complete, 0.0);
     assert!(
-        next_work(&plan, &NextWorkQuery::default())
+        next_work(&plan, &NextWorkQuery::default(), chrono::Utc::now())
             .expect("next")
             .is_empty()
     );
@@ -103,7 +103,7 @@ fn recorded_design_choices_are_context_and_never_execution_approval() {
         }
     }
     for work in plan.work_items.values().filter(|w| w.is_executable()) {
-        let detail = explain_work(&plan, work.id).expect("explain");
+        let detail = explain_work(&plan, work.id, chrono::Utc::now()).expect("explain");
         for decision in plan
             .decisions
             .values()
@@ -130,7 +130,7 @@ fn current_and_deferred_contracts_resolve_context_and_inherited_gates() {
     let plan = fixture();
     for key in ["MVP-10", "TUI-10", "SERVER-10"] {
         let work = plan.find_work_by_key(key).expect("work");
-        let detail = explain_work(&plan, work.id).expect("explain");
+        let detail = explain_work(&plan, work.id, chrono::Utc::now()).expect("explain");
         assert!(!detail.ready);
         assert!(!detail.context.requirements.is_empty());
         assert!(!detail.context.artifacts.is_empty());
@@ -150,7 +150,7 @@ fn current_and_deferred_contracts_resolve_context_and_inherited_gates() {
         }
     }
     let first = plan.find_work_by_key("MVP-10").expect("first contract");
-    let detail = explain_work(&plan, first.id).expect("explain");
+    let detail = explain_work(&plan, first.id, chrono::Utc::now()).expect("explain");
     assert!(detail.why_now.iter().any(|why| why.contains("DEC-EXECUTE")));
 }
 
@@ -183,7 +183,7 @@ fn every_task_exposes_ordered_steps_boundaries_and_checks_without_mutation() {
         assert!(contract.steps.len() >= 3, "{}", work.key);
         assert!(!contract.in_scope.is_empty() && !contract.out_of_scope.is_empty());
         assert!(!contract.verification.is_empty());
-        let detail = explain_work(&plan, work.id).expect("explain");
+        let detail = explain_work(&plan, work.id, chrono::Utc::now()).expect("explain");
         assert_eq!(detail.work.instructions.as_ref(), Some(contract));
         assert_eq!(detail.work.acceptance, work.acceptance);
         assert!(!detail.ready);
@@ -232,7 +232,7 @@ fn mvp_prerequisites_match_the_approved_scope_and_later_work_stays_gated() {
         if expected.contains(&key) || SELF_HOST_CYCLE.contains(&key.as_str()) {
             continue;
         }
-        let detail = explain_work(&plan, work.id).expect("explanation");
+        let detail = explain_work(&plan, work.id, chrono::Utc::now()).expect("explanation");
         assert!(
             detail
                 .context

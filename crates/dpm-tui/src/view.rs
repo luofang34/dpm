@@ -1,4 +1,5 @@
 use crate::gantt::dependencies;
+use chrono::{DateTime, Utc};
 use crossterm::event::{KeyCode, MouseEvent};
 use dpm_engine::{
     EngineError, NextWorkCandidate, NextWorkQuery, ProgressProjection, StatusSummary, completion,
@@ -46,16 +47,18 @@ pub(crate) struct View {
     gantt: crate::gantt::Gantt,
     detail_cache: Option<(usize, String)>,
     text_panel: crate::text_panel::TextPanel,
+    /// Clock reading of the last (re)load; every projection in this snapshot uses it.
+    clock: DateTime<Utc>,
 }
 
 impl View {
-    pub(crate) fn new(plan: &Plan) -> Result<Self, EngineError> {
-        let summary = status(plan, true)?;
-        let candidates = next_work(plan, &NextWorkQuery::default())?;
+    pub(crate) fn new(plan: &Plan, clock: DateTime<Utc>) -> Result<Self, EngineError> {
+        let summary = status(plan, true, clock)?;
+        let candidates = next_work(plan, &NextWorkQuery::default(), clock)?;
         let now = now_text(plan, &summary, candidates);
         let mut work: Vec<_> = plan.work_items.values().cloned().collect();
         work.sort_by_cached_key(|item| hierarchy_path(plan, item));
-        let done = completion(plan);
+        let done = completion(plan, clock);
         for item in &mut work {
             if !item.is_executable() && done.contains(&item.id) {
                 item.status = WorkStatus::Verified;
@@ -78,15 +81,16 @@ impl View {
             work,
             state,
             now,
-            progress: progress(plan)?,
+            progress: progress(plan, clock)?,
             network,
-            gantt: crate::gantt::Gantt::new(plan)?,
+            gantt: crate::gantt::Gantt::new(plan, clock)?,
             detail_cache: None,
             text_panel: crate::text_panel::TextPanel::default(),
+            clock,
         })
     }
 
-    pub(crate) fn refresh(&mut self, plan: &Plan) -> Result<(), EngineError> {
+    pub(crate) fn refresh(&mut self, plan: &Plan, clock: DateTime<Utc>) -> Result<(), EngineError> {
         if plan.workspace.id != self.plan.workspace.id {
             return Err(EngineError::InvalidCommand {
                 entity: plan.workspace.id.to_string(),
@@ -98,7 +102,7 @@ impl View {
             .selected()
             .and_then(|index| self.work.get(index))
             .map(|w| w.id);
-        let mut next = Self::new(plan)?;
+        let mut next = Self::new(plan, clock)?;
         next.page = self.page;
         next.preview = self.preview;
         next.gantt.restore_navigation(&self.gantt);
@@ -260,7 +264,7 @@ impl View {
         let Some(work) = self.state.selected().and_then(|i| self.work.get(i)) else {
             return "No work in this workspace.".into();
         };
-        let text = match explain_work(&self.plan, work.id) {
+        let text = match explain_work(&self.plan, work.id, self.clock) {
             Ok(explanation) => crate::detail::text(&self.plan, &explanation),
             Err(error) => format!("Cannot explain work: {error}"),
         };

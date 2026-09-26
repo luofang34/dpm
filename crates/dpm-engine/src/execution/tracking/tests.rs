@@ -231,9 +231,10 @@ fn projections(plan: &Plan) -> String {
         capabilities: Default::default(),
         use_probabilistic_criticality: false,
     };
-    let next = next_work(&current, &query).expect("next");
-    let status = status(&current, false).expect("status");
-    let schedule = dpm_schedule::deterministic_remaining(&current).expect("schedule");
+    let next = next_work(&current, &query, chrono::Utc::now()).expect("next");
+    let status = status(&current, false, chrono::Utc::now()).expect("status");
+    let schedule =
+        dpm_schedule::deterministic_remaining(&current, chrono::Utc::now()).expect("schedule");
     current.external_references.clear();
     serde_json::to_string(&(next, status, schedule, current)).expect("json")
 }
@@ -260,6 +261,7 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
     assert_eq!(plan.work_items[&b].status, WorkStatus::Planned);
 
     run(&mut plan, "worker", Command::Claim { work: a }).expect("claim");
+    run(&mut plan, "worker", Command::Start { work: a }).expect("start");
     run(
         &mut plan,
         "worker",
@@ -305,7 +307,7 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
         ),
         Err(EngineError::SelfVerification(_))
     ));
-    let explained = explain_work(&plan, a).expect("explain");
+    let explained = explain_work(&plan, a, chrono::Utc::now()).expect("explain");
     assert!(explained.context.artifacts.is_empty());
     let observation = explained.context.external_references[0]
         .observation
@@ -341,10 +343,12 @@ fn explain_exposes_package_references_and_survives_reviewed_renames() {
     )
     .expect("epic");
     let reference = reference_of(&plan, &epic);
-    let context = explain_work(&plan, a).expect("explain").context;
+    let context = explain_work(&plan, a, chrono::Utc::now())
+        .expect("explain")
+        .context;
     assert_eq!(context.external_references[0].id, reference);
     assert!(
-        explain_work(&plan, id(&plan, "TEST-B"))
+        explain_work(&plan, id(&plan, "TEST-B"), chrono::Utc::now())
             .expect("other")
             .context
             .external_references
@@ -375,7 +379,7 @@ fn explain_exposes_package_references_and_survives_reviewed_renames() {
         Utc::now(),
     )
     .expect("apply");
-    let moved = explain_work(&plan, a)
+    let moved = explain_work(&plan, a, chrono::Utc::now())
         .expect("explain")
         .context
         .external_references;

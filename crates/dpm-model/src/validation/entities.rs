@@ -68,6 +68,7 @@ pub(super) fn nonempty(
 
 fn validate_work(plan: &Plan, work: &WorkItem) -> Result<(), ValidationError> {
     nonempty("work title", work.id, &work.title)?;
+    super::events::work(work)?;
     super::instructions::validate(work)?;
     if let Some(review) = &work.last_rejection {
         nonempty("review reason", work.id, &review.reason)?;
@@ -245,6 +246,7 @@ fn validate_context(plan: &Plan) -> Result<(), ValidationError> {
 }
 
 fn validate_decision(plan: &Plan, decision: &Decision) -> Result<(), ValidationError> {
+    super::events::decision(decision)?;
     project_reference(plan, decision.project, decision.id)?;
     nonempty("decision", decision.id, &decision.question)?;
     if decision.status == DecisionStatus::Open && decision.outcome.is_some() {

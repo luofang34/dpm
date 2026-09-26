@@ -15,12 +15,12 @@ fn ratification_requires_independent_authority_and_complete_contract_atomically(
     let work = plan.find_work_by_key("TEST-A").expect("task").id;
     plan.work_items.get_mut(&work).expect("task").status = WorkStatus::Proposed;
     assert!(
-        next_work(&plan, &NextWorkQuery::default())
+        next_work(&plan, &NextWorkQuery::default(), chrono::Utc::now())
             .expect("next")
             .is_empty()
     );
     assert!(
-        explain_work(&plan, work)
+        explain_work(&plan, work, chrono::Utc::now())
             .expect("explain")
             .why_now
             .iter()
@@ -62,7 +62,11 @@ fn ratification_requires_independent_authority_and_complete_contract_atomically(
         Utc::now(),
     )
     .expect("ratify");
-    assert!(crate::is_ready(&plan, &plan.work_items[&work]));
+    assert!(crate::is_ready(
+        &plan,
+        &plan.work_items[&work],
+        chrono::Utc::now()
+    ));
 }
 
 #[test]
@@ -74,6 +78,7 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
     let at = Utc::now();
     for command in [
         Command::Claim { work },
+        Command::Start { work },
         Command::Submit { work, note: None },
     ] {
         apply_command(&mut plan, owner.clone(), command, at).expect("submit");
@@ -109,7 +114,7 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
     assert_eq!(item.owner, Some(owner.clone()));
     assert_eq!(item.last_rejection.as_ref().expect("review").at, at);
     assert!(
-        next_work(&plan, &NextWorkQuery::default())
+        next_work(&plan, &NextWorkQuery::default(), chrono::Utc::now())
             .expect("next")
             .is_empty()
     );

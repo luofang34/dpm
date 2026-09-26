@@ -177,14 +177,16 @@ pub struct NextWorkResult {
     pub outside_scope: OutsideScope,
 }
 
-/// Rank eligible work on the full graph, then partition it by scope and apply the limit.
+/// Rank eligible work on the full graph at an adapter-supplied time, then partition it by scope and
+/// apply the limit.
 pub fn next_in_scope(
     plan: &Plan,
     query: &NextWorkQuery,
     scope: &WorkScope,
     limit: usize,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> Result<NextWorkResult, EngineError> {
-    let ranked = next_work(plan, query)?;
+    let ranked = next_work(plan, query, now)?;
     let eligible_count = ranked.len();
     let mut inside = Vec::new();
     let mut outside = OutsideScope::default();

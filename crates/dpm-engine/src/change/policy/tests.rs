@@ -172,6 +172,7 @@ fn proposals_cannot_record_or_remove_waivers_or_change_started_prerequisites() {
     let gate = plan.find_decision_by_key("TEST-GATE").expect("gate").id;
     for (actor, command) in [
         (ActorId::agent("w"), Command::Claim { work: a }),
+        (ActorId::agent("w"), Command::Start { work: a }),
         (
             ActorId::agent("w"),
             Command::Submit {

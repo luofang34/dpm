@@ -30,9 +30,14 @@ pub enum Command {
         /// Non-empty explanation of unmet acceptance.
         reason: String,
     },
-    /// Reserve a ready task for the calling actor.
+    /// Reserve a ready task for the calling actor; a claim is not a start.
     Claim {
         /// Task to reserve.
+        work: WorkItemId,
+    },
+    /// Begin executing a claimed task, recording its start event at the operation time.
+    Start {
+        /// Claimed task owned by the caller.
         work: WorkItemId,
     },
     /// Suspend a task while preserving any existing owner.
@@ -198,9 +203,19 @@ pub enum EngineError {
         /// Non-executable kind of the target.
         kind: WorkKind,
     },
-    /// Execution prerequisites or lifecycle do not permit this command.
-    #[error("work item {0} is not ready because execution prerequisites are incomplete")]
-    NotReady(WorkItemId),
+    /// Lifecycle or relation gates do not permit this transition at the operation time.
+    #[error("work item {work} is not ready to {transition}: {}", crate::gates::summary(.unmet))]
+    NotReady {
+        /// Affected work.
+        work: WorkItemId,
+        /// Transition that was refused.
+        transition: crate::Transition,
+        /// The same structured conditions the gate report returns for this transition.
+        unmet: Vec<crate::UnmetGate>,
+    },
+    /// Progress and submission follow an explicit start; a claim only reserves work.
+    #[error("work item {0} has not started; start it before reporting progress or submitting")]
+    NotStarted(WorkItemId),
     /// A reported blocker prevents execution.
     #[error("work item {work} is blocked: {reason}")]
     Blocked {

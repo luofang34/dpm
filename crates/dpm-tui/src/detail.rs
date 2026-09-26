@@ -20,11 +20,7 @@ pub(crate) fn text(plan: &Plan, detail: &WorkExplanation) -> String {
         "Acceptance",
         work.acceptance.iter().map(|a| a.text.clone()),
     );
-    section(
-        &mut lines,
-        "Execution gates",
-        detail.why_now.iter().cloned(),
-    );
+    execution(&mut lines, detail);
     if let Some(review) = &work.last_rejection {
         section(
             &mut lines,
@@ -153,6 +149,38 @@ fn append_context(lines: &mut Vec<String>, detail: &WorkExplanation) {
             .artifacts
             .iter()
             .map(|a| format!("{}: {}", a.label, a.uri)),
+    );
+}
+
+/// Recorded events, completion time, gate explanations and every transition's eligibility.
+fn execution(lines: &mut Vec<String>, detail: &WorkExplanation) {
+    let events = [
+        ("started", detail.work.events.started_at),
+        ("submitted", detail.work.events.submitted_at),
+        ("verified", detail.work.events.verified_at),
+    ];
+    section(
+        lines,
+        "Events",
+        events
+            .iter()
+            .filter_map(|(name, at)| at.map(|at| format!("{name} at {at}")))
+            .chain(detail.progress.completed_at.map(|at| match at {
+                dpm_model::EventTime::Recorded(at) => format!("completed at {at}"),
+                dpm_model::EventTime::Unrecorded => "completed at an unrecorded time".into(),
+            })),
+    );
+    section(lines, "Execution gates", detail.why_now.iter().cloned());
+    section(
+        lines,
+        "Transitions",
+        detail.transitions.iter().map(|(transition, report)| {
+            if report.ready {
+                format!("{transition}: permitted now")
+            } else {
+                format!("{transition}: {}", report.reasons().join("; "))
+            }
+        }),
     );
 }
 

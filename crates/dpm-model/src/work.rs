@@ -166,6 +166,9 @@ pub struct WorkItem {
     pub owner: Option<ActorId>,
     /// Explicit read/write needs; an empty set permits work without repository resources.
     pub resources: Vec<crate::ResourceRequirement>,
+    /// Execution event times recorded by lifecycle commands.
+    #[serde(default, skip_serializing_if = "crate::ExecutionEvents::is_empty")]
+    pub events: crate::ExecutionEvents,
     /// Most recent independent rejection; retained across resubmission as review context.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_rejection: Option<ReviewRejection>,

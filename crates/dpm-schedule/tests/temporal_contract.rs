@@ -81,6 +81,7 @@ impl Network {
             artifact_ids: BTreeSet::new(),
             owner: None,
             block_reason: None,
+            events: Default::default(),
             last_rejection: None,
             resources: Vec::new(),
         };

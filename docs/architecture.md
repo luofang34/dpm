@@ -42,9 +42,12 @@ must not become synchronized truth.
 Each activity `i` has a start `S_i` and a finite, non-negative duration `d_i`: the weighted PERT
 expectation of a task's three-point estimate, or 0 for milestones and unestimated tasks. Work
 packages cannot be dependency endpoints. v0.1 uses elapsed hours; working calendars are a future
-input adapter and must not change dependency semantics. Remaining forecasts give completed tasks
-zero duration and remove constraints touching completed tasks or reached milestones, using the same
-completion and decision-gate projection as execution queries. They also drop waived soft constraints;
+input adapter and must not change dependency semantics. Remaining forecasts measure from the
+adapter-supplied clock reading, give completed tasks zero duration and remove constraints into
+completed tasks or reached milestones, using the same completion and decision-gate projection as
+execution queries. A constraint from completed work keeps only the lag the execution gate still
+reports as elapsing, and keeps its whole lag when the event time was never recorded, so the
+forecast waits exactly as long as execution will. They also drop waived soft constraints;
 the baseline projection keeps every constraint.
 
 ### Relations
@@ -129,12 +132,59 @@ an independent relaxation oracle.
 
 ### Temporal bounds are not execution permission
 
-Temporal bounds describe when work could run in the projection; they never authorize a claim.
-Execution readiness is a separate, conservative policy in `dpm-engine`: a task is claimable only
-when the predecessor of every unwaived incoming edge is complete (a verified task or a reached
-milestone), for all four relation kinds, any lag and either policy. A lead that lets B's projected
-start precede A's finish does not make B claimable while A is unverified; `UnmetGate::Dependency`
-reports the edge identity and policy, with the relation and lag as context only.
+Temporal bounds describe when work could run in the projection; they never authorize a transition.
+Execution gates are evaluated in `dpm-engine` from authoritative event facts and a clock reading the
+adapter supplies; the model and engine never read a wall clock. One evaluator,
+`dpm_model::Timeline`, decides every edge release, and the engine's gate report is the only
+readiness check: `next`, `status`, `explain`, the TUI, progress, milestone completion, the remaining
+forecast and every lifecycle command read the same result for the same plan and time.
+
+#### Execution events
+
+A claim reserves work; it is not a start. The lifecycle commands record their own operation
+timestamps as event facts on the task (`events.started_at`, `submitted_at`, `verified_at`), and
+`decide` records `Decision.resolved_at`. No command accepts a caller-chosen event time, plan changes
+cannot add or rewrite these facts, and validation requires `started <= submitted <= verified`, so a
+command stamped before the event it follows is refused with no state change. Progress reports and
+submission require an explicit start. Unblocking started work returns it to `InProgress`; a rejection
+clears the rejected submission time. Queries read these facts from the snapshot, never by scanning
+the operation log, and readiness is never stored.
+
+| Relation | Gates the successor's | Predecessor event it waits for |
+|----------|-----------------------|--------------------------------|
+| FS       | claim and start       | finish: verification (`verified_at`) |
+| SS       | claim and start       | start (`started_at`) |
+| FF       | submission            | finish: verification (`verified_at`) |
+| SF       | submission            | start (`started_at`) |
+
+Verification re-checks every unwaived relation of all four kinds and every decision, so a restored
+waiver applies again before acceptance and a finish is never accepted on an unverified FF
+predecessor. Only verification counts as a predecessor's finish; a submitted predecessor has not
+finished for gating (provisional submission bases are a separate contract). Claim and start share
+the start gates, so only claimable work is recommended by `next`.
+
+A milestone has zero duration: its start and finish are one reach event, and all four relation kinds
+into it gate that event. It is reached when every unwaived incoming edge is released and every
+decision naming it or a containing package is resolved; its completion time is the latest of those
+release and resolution times, so a decision resolved after every prerequisite verification sets the
+time. A work package completes with its children, at the latest child or decision time.
+
+#### Lag
+
+An edge is released at the clock reading `now` when its predecessor event has occurred at time `t`
+and `t + max(L, 0) <= now`. Positive lag is elapsed calendar time and cannot be bypassed: a gate
+24 hours after an event is closed at +23 h and open at +24 h. Negative lag (a lead) shapes the
+schedule projection only; execution still waits for the event itself, and `explain` says so.
+Working-time calendars do not apply to execution lag.
+
+Work completed before event times were recorded keeps its lifecycle but has no time. Such an event
+has occurred at an unknown time: it releases zero or negative lag, while a positive lag that needs it
+stays closed with `release.state = unrecorded_event_time` and an actionable reason (waive a Soft
+edge, or change the lag through a reviewed plan change while the successor is unstarted). A
+milestone or package whose time depends on an unrecorded event has an unrecorded completion time.
+`UnmetGate::Dependency` reports the edge identity, policy, relation, lag, the required predecessor
+event (`requires`) and its `release` state (`awaiting_event`, `elapsing` with `event_at` and
+`opens_at`, `unrecorded_event_time` or `lag_out_of_range`).
 
 ### Dependency identity, policy and waivers
 
@@ -146,11 +196,12 @@ do neither. The waiver's actor, time and reason stay on the edge until restorati
 or restoration is a semantic operation in the history. Plan changes cannot add, alter or remove a
 waiver, and a waived edge must be restored before a reviewed change edits or removes it.
 
-A waived edge no longer gates claims, verification or milestone completion, and no longer bounds
+A waived edge no longer gates any transition or milestone completion, and no longer bounds
 the remaining forecast or simulation. It still counts for cycle validation, the baseline schedule,
 review protection and execution context. A milestone whose every incoming edge is waived has no
 enforced prerequisite and therefore stays unreached. Restoring an edge does not revoke an existing
-claim, but it applies again to the successor's verification.
+claim, start or submission, but it gates the successor's next governed transition and always its
+verification.
 
 Edges written without an `id` receive one derived deterministically from predecessor, successor and
 relation kind, so snapshots and operation logs that predate edge identity load unchanged and every
@@ -213,10 +264,10 @@ and display an error. Detail exposes the same execution contract and review cont
 ## Execution progress
 
 Task `reported_progress_percent` is an authoritative owner report defaulting to zero. `ReportProgress` validates ownership, range and lifecycle and persists a semantic operation.
-It may move Claimed to InProgress but never verifies work. Submission displays 100% execution;
+It requires started work (an explicit `Start`) and never verifies work. Submission displays 100% execution;
 verification remains a separate condition. Reports on blocked work preserve the blocker.
 
-`dpm-engine::progress` derives `{percent_complete, verified}` for tasks, milestones, containers
+`dpm-engine::progress` derives `{percent_complete, verified, completed_at}` for tasks, milestones, containers
 and the workspace. Container/workspace percentages equally weight descendant tasks; milestones
 contribute no task weight and reflect binary prerequisite/gate completion. TUI and application queries
 consume this shared projection. Gantt pan/zoom is viewport state only, and no percentage scales the

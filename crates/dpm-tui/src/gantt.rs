@@ -30,12 +30,15 @@ pub(crate) struct Gantt {
     first_row: usize,
 }
 impl Gantt {
-    pub(crate) fn new(plan: &Plan) -> Result<Self, EngineError> {
-        let schedule = deterministic_remaining(plan)?;
+    pub(crate) fn new(
+        plan: &Plan,
+        clock: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Self, EngineError> {
+        let schedule = deterministic_remaining(plan, clock)?;
         let viewport = Viewport::new(schedule.project_finish_hours);
         Ok(Self {
             schedule,
-            progress: progress(plan)?.work,
+            progress: progress(plan, clock)?.work,
             viewport,
             palette: Palette { enabled: true },
             inspector: TextPanel::default(),

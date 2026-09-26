@@ -6,7 +6,7 @@ mod command;
 mod context;
 mod execution;
 mod gates;
-pub use gates::{GateReport, UnmetGate, gate_report};
+pub use gates::{GateReport, Transition, UnmetGate, gate_report};
 mod progress;
 mod query;
 mod readiness;
@@ -22,7 +22,7 @@ pub use query::{
     NextWorkCandidate, NextWorkQuery, StatusSummary, WorkExplanation, explain_work, next_work,
     status,
 };
-pub use readiness::{completion, decisions_resolved, dependencies_satisfied, is_ready, show_work};
+pub use readiness::{completion, is_ready, show_work};
 
 pub use context::ExecutionContext;
 

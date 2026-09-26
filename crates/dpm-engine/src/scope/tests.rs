@@ -118,7 +118,7 @@ fn query() -> NextWorkQuery {
 fn run(plan: &Plan, projects: &[&str], resources: &[&str], limit: usize) -> NextWorkResult {
     let scope = WorkScope::resolve(plan, projects.iter().copied(), resources.iter().copied())
         .expect("scope");
-    next_in_scope(plan, &query(), &scope, limit).expect("next")
+    next_in_scope(plan, &query(), &scope, limit, chrono::Utc::now()).expect("next")
 }
 
 fn keys(result: &NextWorkResult) -> Vec<String> {
@@ -139,7 +139,7 @@ fn outside(result: &NextWorkResult) -> Vec<String> {
 }
 
 fn global_order(plan: &Plan) -> Vec<String> {
-    next_work(plan, &query())
+    next_work(plan, &query(), chrono::Utc::now())
         .expect("global")
         .into_iter()
         .map(|c| c.work.key.0)
@@ -240,6 +240,10 @@ fn out_of_scope_dependency_never_satisfies_in_scope_work() {
         ),
         (
             ActorId::agent("worker"),
+            Command::Start { work: predecessor },
+        ),
+        (
+            ActorId::agent("worker"),
             Command::Submit {
                 work: predecessor,
                 note: None,
@@ -317,8 +321,14 @@ fn capability_eligibility_is_distinct_from_scope() {
     let result = run(&plan, &[ROOT], &[], 100);
     assert!(!keys(&result).contains(&"CAP".to_string()));
     assert!(!outside(&result).contains(&"CAP".to_string()));
-    let all =
-        next_in_scope(&plan, &NextWorkQuery::default(), &WorkScope::default(), 100).expect("next");
+    let all = next_in_scope(
+        &plan,
+        &NextWorkQuery::default(),
+        &WorkScope::default(),
+        100,
+        chrono::Utc::now(),
+    )
+    .expect("next");
     assert!(keys(&all).contains(&"CAP".to_string()));
 }
 

@@ -45,9 +45,9 @@ fn contextual_decisions_supply_sources_without_gating_or_leaking_to_other_work()
             .artifacts
             .contains(&source)
     );
-    assert!(is_ready(&plan, &plan.work_items[&task]));
+    assert!(is_ready(&plan, &plan.work_items[&task], chrono::Utc::now()));
     assert!(
-        next_work(&plan, &NextWorkQuery::default())
+        next_work(&plan, &NextWorkQuery::default(), chrono::Utc::now())
             .expect("next")
             .iter()
             .any(|candidate| candidate.work.id == task)
@@ -69,7 +69,11 @@ fn contextual_decisions_supply_sources_without_gating_or_leaking_to_other_work()
         .expect("decision")
         .blocks
         .insert(task);
-    assert!(!is_ready(&gated, &gated.work_items[&task]));
+    assert!(!is_ready(
+        &gated,
+        &gated.work_items[&task],
+        chrono::Utc::now()
+    ));
 }
 
 #[test]
@@ -96,5 +100,5 @@ fn context_associations_apply_to_descendants_without_affecting_readiness() {
         execution_context(&plan, &plan.work_items[&task]).decisions[0].id,
         id
     );
-    assert!(is_ready(&plan, &plan.work_items[&task]));
+    assert!(is_ready(&plan, &plan.work_items[&task], chrono::Utc::now()));
 }

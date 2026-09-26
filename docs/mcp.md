@@ -8,7 +8,7 @@ The configured actor is the local principal for every project mutation. A separa
 `--actor human:reviewer` or a service actor. This is a trusted local workspace, not remote authentication.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
-The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:4`
+The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:5`
 and the observed `revision`, so an agent can send `base_revision` with its next mutation. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
 which the store still checks atomically. Presentation text is not the API contract.
@@ -27,12 +27,13 @@ which the store still checks atomically. Presentation text is not the API contra
 | explain KEY | explain_work | Readiness, dependencies, resolved requirements/gates/risks/evidence |
 | ratify KEY | ratify_contract | Human/service approves a complete Proposed contract |
 | reject KEY REASON | reject_work | Independent reviewer returns Submitted work for rework |
-| claim KEY | claim_work | Claim only ready tasks |
+| claim KEY | claim_work | Reserve only ready tasks; a claim is not a start |
+| start KEY | start_work | Owner starts claimed work; records the start event SS/SF successors wait for |
 | block KEY REASON | report_blocker | Record blocker and preserve owner |
 | unblock KEY | unblock_work | Resume without changing owner |
 | progress KEY PERCENT --note TEXT | report_progress | Owner reports 0..100 execution; verification remains separate |
-| submit KEY --note TEXT | submit_work | Request independent verification |
-| verify KEY --note TEXT | verify_work | Reject the submitting actor's self-verification |
+| submit KEY --note TEXT | submit_work | Request independent verification of started work once FF/SF gates are released |
+| verify KEY --note TEXT | verify_work | Reject self-verification; re-check every relation and decision; record the finish event |
 | decide KEY OUTCOME | decide_gate | Resolve an open decision gate |
 | artifact KEY FILE.json | add_artifact | Attach the same Artifact JSON object |
 | attach-git-head KEY --resource KEY | attach_git_head | Capture HEAD for an explicit task resource; locator binding is the default |
@@ -217,17 +218,51 @@ The workflow below applies to an authorized execution workspace; tool availabili
    unfiltered operator view, not a claim that the actor has every skill. Default limit is 5.
 2. Call explain_work. Read `work.objective`, `work.instructions`, `work.acceptance`, predecessor
    evidence and unresolved gates. Steps describe the procedure, not permission to execute it.
-3. Call claim_work using the observed revision. Refresh after a revision_conflict.
-4. Perform the work and acceptance checks. Use report_progress for intermediate execution reports;
+3. Call claim_work using the observed revision. Refresh after a revision_conflict. A claim only
+   reserves the task.
+4. Call start_work when execution begins. Its operation time is the start event that SS/SF
+   successors wait for; report_progress and submit_work are refused until the task has started.
+5. Perform the work and acceptance checks. Use report_progress for intermediate execution reports;
    use add_artifact or attach_git_head to record evidence.
-5. Call submit_work with an evidence summary. Another configured actor verifies the result.
-6. Call report_blocker when blocked; do not silently ignore dependencies or change lifecycle fields.
+6. Call submit_work with an evidence summary once `explain_work.transitions.submit.ready` holds.
+   Another configured actor verifies the result.
+7. Call report_blocker when blocked; do not silently ignore dependencies or change lifecycle fields.
 
 `probabilistic:false` matches CLI `status --no-simulation` or `next --deterministic-only`.
 Capabilities and limit map to repeated `--capability` and `--limit`; `project_keys` and `resource_keys`
 map to repeated `--project-key` and `--resource-key`. Work identifiers in tool arguments
 are human keys; returned records also include stable UUIDs. Domain errors use stable `code` plus
 human-readable `message`; CLI wraps this in `error`, MCP uses `isError:true` and structuredContent.
+A transition refused by its gates also carries `details: {transition, unmet}`, the same structured
+conditions `explain_work` reports for that transition.
+
+## Execution events and elapsed lag
+
+Lifecycle commands record their own operation time: `start_work` sets `work.events.started_at`,
+`submit_work` sets `submitted_at` (cleared by `reject_work`), `verify_work` sets `verified_at`, and
+`decide_gate` sets the decision's `resolved_at`. No tool accepts an event time; plan changes cannot
+add or rewrite these fields (omit `resolved_at` from a replacement decision), and a command whose
+time precedes the event it follows is refused unchanged. Every query evaluates gates at one clock
+reading taken by the adapter for that response.
+
+| Relation | Gates the successor's | Waits for the predecessor's |
+| --- | --- | --- |
+| FS | claim and start | verification (`verified_at`) |
+| SS | claim and start | start (`started_at`) |
+| FF | submission | verification (`verified_at`) |
+| SF | submission | start (`started_at`) |
+
+Verification re-checks all four relation kinds and decisions. Only verification is a predecessor's
+finish. Positive lag must elapse in calendar time after the event (`release.state: elapsing` with
+`event_at` and `opens_at`); negative lag affects the schedule only and never releases work before the
+event, which `why_now` states. Tasks verified or started before event times were recorded, and
+decisions resolved before then, count as having occurred at an unrecorded time: zero or negative lag
+releases, positive lag reports `release.state: unrecorded_event_time` with an actionable reason.
+
+`explain_work.transitions` reports `claim`, `start`, `submit` and `verify` with the same shape as
+`gates` (the claim report). A milestone's `progress.completed_at` is the latest release among its
+incoming edges and gating decisions, so a decision resolved after every prerequisite sets it;
+`{"recorded": TIME}` or `"unrecorded"`.
 
 ## Scoped next
 
@@ -297,11 +332,11 @@ of the task or resolve any other gate. Missing optional fields retain their empt
 ## Progress and schedule indications
 
 `report_progress` takes `key`, integer `percent` (0..100), required `base_revision`, and optional
-`note`. The configured actor must own the claimed/in-progress/blocked task. Reports on planned,
-submitted, verified, container or milestone work are rejected. Reports may correct the percentage
+`note`. The configured actor must own the started (in-progress, or blocked after starting) task.
+Reports on planned, claimed-but-unstarted, submitted, verified, container or milestone work are rejected. Reports may correct the percentage
 downward; blocked reports retain the blocker. Each successful report is a semantic operation.
 
-`status`, `show` and `explain` include `progress: {percent_complete, verified}`. Task percentages
+`status`, `show` and `explain` include `progress: {percent_complete, verified, completed_at}`. Task percentages
 reflect `reported_progress_percent` until submission, when execution displays 100%. Only independent
 verification satisfies successor execution prerequisites. Work-package/workspace percentages equally
 weight descendant leaf tasks; milestone percentages are 0 or 100 according to their derived condition.
@@ -313,9 +348,9 @@ submitted/verified display. Imported reports above 100 or nonzero reports on uno
 are rejected. The report is an additive serialized field; no stored schedule dates are introduced.
 
 `explain.context.dependencies` retains full FS/SS/FF/SF types and signed hour lag; milestone kinds,
-zero-duration schedules and derived states are exposed by the same queries. Temporal constraints
-remain scheduling bounds. Execution still conservatively waits for verified predecessors; reports
-do not implement SS/SF wall-clock timers or automatically shorten the remaining-duration forecast.
+zero-duration schedules and derived states are exposed by the same queries. Execution gates follow
+[execution events and elapsed lag](#execution-events-and-elapsed-lag); progress reports never
+release a gate or shorten the remaining-duration forecast.
 
 ## Protocol
 
@@ -338,7 +373,8 @@ progress reporting, revision conflict, evidence, blocker, decision and independe
 `ratify_contract` approves a complete Proposed task as a human/service; `reject_work` requires
 Submitted work, a different reviewer, and a nonempty `reason`. Rejection retains ownership and
 the latest review in `last_rejection`. Both require `key` and `base_revision`.
-`explain_work.gates` and `project_status.gates` expose the same structured claim conditions.
+`explain_work.gates` and `project_status.gates` expose the same structured claim conditions;
+`explain_work.transitions` adds start, submit and verify.
 
 `workspace_list` and `workspace_register` manage device configuration through the shared registry.
 Registration accepts `database` and optional `replace`; neither tool takes a project revision.

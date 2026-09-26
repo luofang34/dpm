@@ -92,8 +92,14 @@ pub(crate) enum Commands {
         #[arg(long, default_value = "human:local")]
         actor: String,
     },
-    /// Claim a ready work item.
+    /// Reserve a ready work item; a claim is not a start.
     Claim {
+        key: String,
+        #[arg(long, default_value = "agent:local")]
+        actor: String,
+    },
+    /// Start owned claimed work, recording the start event SS/SF successors wait for.
+    Start {
         key: String,
         #[arg(long, default_value = "agent:local")]
         actor: String,
@@ -120,7 +126,7 @@ pub(crate) enum Commands {
         #[arg(long, default_value = "agent:local")]
         actor: String,
     },
-    /// Submit claimed work for verification.
+    /// Submit started work for verification once its FF/SF prerequisites are released.
     Submit {
         key: String,
         #[arg(long)]
@@ -128,7 +134,7 @@ pub(crate) enum Commands {
         #[arg(long, default_value = "agent:local")]
         actor: String,
     },
-    /// Verify submitted work; successors can become ready immediately.
+    /// Verify submitted work, recording the finish event FS/FF successors wait for.
     Verify {
         key: String,
         #[arg(long)]

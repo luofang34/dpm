@@ -205,7 +205,7 @@ fn unsupported_fixture_reports_every_category_and_completes_nothing() {
         (finished.title.as_str(), finished.status),
         ("Finished task", WorkStatus::Proposed)
     );
-    let progress = dpm_engine::progress(&plan).expect("progress");
+    let progress = dpm_engine::progress(&plan, chrono::Utc::now()).expect("progress");
     assert!(!progress.work[&finished.id].verified);
     assert_eq!(finished.reported_progress_percent, 0);
 }

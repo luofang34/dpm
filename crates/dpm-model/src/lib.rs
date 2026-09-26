@@ -1,8 +1,10 @@
 //! Authoritative domain types and structural validation for execution plans.
 
 mod actor;
-mod completion;
-pub use completion::{completion, decisions_resolved};
+mod events;
+pub use events::*;
+mod timeline;
+pub use timeline::{Timeline, completion};
 mod context;
 mod dependency;
 mod identity;

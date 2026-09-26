@@ -523,6 +523,7 @@ dependencies = [
 name = "dpm-schedule"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "dpm-model",
  "serde",
  "serde_json",
@@ -556,6 +557,7 @@ dependencies = [
 name = "dpm-tui"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "crossterm",
  "dpm-engine",
  "dpm-model",

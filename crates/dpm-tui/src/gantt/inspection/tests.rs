@@ -47,7 +47,7 @@ fn hover_reveals_full_title_and_links_without_moving_selection_or_rows() {
     plan.find_work_by_key_mut("TEST-B").expect("b").title =
         "A full task title that is wider than the chart label column 标题尾部".into();
     let before = plan.clone();
-    let mut gantt = Gantt::new(&plan).expect("gantt");
+    let mut gantt = Gantt::new(&plan, chrono::Utc::now()).expect("gantt");
     draw(&mut gantt, &plan, 0, 120, 35);
     let area = gantt.row_area;
     assert_eq!(
@@ -112,7 +112,7 @@ fn wrapped_unicode_title_and_all_offscreen_links_can_be_read_by_scrolling() {
         plan.work_items.insert(child.id, child);
     }
     let before = plan.clone();
-    let mut gantt = Gantt::new(&plan).expect("gantt");
+    let mut gantt = Gantt::new(&plan, chrono::Utc::now()).expect("gantt");
     let index = plan
         .work_items
         .keys()
@@ -139,7 +139,7 @@ fn wrapped_unicode_title_and_all_offscreen_links_can_be_read_by_scrolling() {
 #[test]
 fn hit_testing_tracks_vertical_scroll_resize_and_wheel_focus() {
     let plan = fixture();
-    let mut gantt = Gantt::new(&plan).expect("gantt");
+    let mut gantt = Gantt::new(&plan, chrono::Utc::now()).expect("gantt");
     draw(&mut gantt, &plan, 6, 80, 16);
     assert!(gantt.first_row > 0);
     let area = gantt.row_area;
@@ -192,7 +192,7 @@ fn status_colors_and_symbols_win_over_criticality_and_monochrome_retains_meaning
         if status == WorkStatus::Blocked {
             work.block_reason = Some("waiting".into());
         }
-        let mut gantt = Gantt::new(&plan).expect("gantt");
+        let mut gantt = Gantt::new(&plan, chrono::Utc::now()).expect("gantt");
         let buffer = draw(&mut gantt, &plan, 0, 100, 30);
         let y = gantt.row_area.y;
         let empty_time = &buffer[(96, y)];
@@ -217,7 +217,7 @@ fn status_colors_and_symbols_win_over_criticality_and_monochrome_retains_meaning
 #[test]
 fn help_scroll_and_escape_preserve_chart_focus_and_plan() {
     let plan = fixture();
-    let mut gantt = Gantt::new(&plan).expect("gantt");
+    let mut gantt = Gantt::new(&plan, chrono::Utc::now()).expect("gantt");
     let initial = draw(&mut gantt, &plan, 0, 80, 24);
     assert!(gantt.navigate(KeyCode::Char('?')));
     assert!(text(&draw(&mut gantt, &plan, 0, 80, 24)).contains("keyboard and mouse"));
@@ -245,7 +245,7 @@ fn milestone_name_badge_survives_panning_and_monochrome_and_tracks_completion() 
             }
         }
         let before = plan.clone();
-        let mut gantt = Gantt::new(&plan).expect("gantt");
+        let mut gantt = Gantt::new(&plan, chrono::Utc::now()).expect("gantt");
         gantt.set_colors(false);
         let selected = plan
             .work_items

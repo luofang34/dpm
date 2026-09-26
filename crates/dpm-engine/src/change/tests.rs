@@ -48,7 +48,11 @@ fn proposals_show_semantic_changes_and_apply_as_one_reviewed_operation() {
     let operation = apply(&mut plan, proposal).expect("apply");
     assert_eq!(operation.base_revision, 0);
     assert_eq!(plan.revision, 1);
-    assert!(!crate::is_ready(&plan, &plan.work_items[&added.id]));
+    assert!(!crate::is_ready(
+        &plan,
+        &plan.work_items[&added.id],
+        chrono::Utc::now()
+    ));
     assert_eq!(
         plan.find_work_by_key("TEST-A").expect("work").title,
         "Clarified contract"
@@ -245,6 +249,40 @@ fn dangling_references_and_illegal_milestones_fail_before_any_change() {
             _ => work(&mut proposal, milestone).kind = dpm_model::WorkKind::Task,
         }
         assert!(propose_change(&plan, &proposal).is_err(), "case {case}");
+        assert!(apply(&mut plan, proposal).is_err(), "case {case}");
+        assert_eq!(plan, before, "case {case}");
+    }
+}
+
+#[test]
+fn plan_changes_cannot_author_or_rewrite_event_times() {
+    let mut plan = fixture();
+    let task = plan.find_work_by_key("TEST-A").expect("task").id;
+    let gate = plan.find_decision_by_key("TEST-GATE").expect("gate").id;
+    let worker = ActorId::agent("worker");
+    for command in [Command::Claim { work: task }, Command::Start { work: task }] {
+        apply_command(&mut plan, worker.clone(), command, Utc::now()).expect("execute");
+    }
+    let decide = Command::Decide {
+        decision: gate,
+        outcome: "go".into(),
+    };
+    apply_command(&mut plan, ActorId::human("lead"), decide, Utc::now()).expect("decide");
+    let before = plan.clone();
+    let earlier = Utc::now() - chrono::TimeDelta::days(30);
+    for case in 0..3 {
+        let mut proposal = plan.clone();
+        match case {
+            0 => {
+                let work = proposal.work_items.get_mut(&task).expect("task");
+                work.events.started_at = Some(earlier);
+            }
+            1 => proposal.decisions.get_mut(&gate).expect("gate").resolved_at = Some(earlier),
+            _ => proposal.decisions.get_mut(&gate).expect("gate").resolved_at = None,
+        }
+        proposal
+            .validate()
+            .expect("valid shape; only protection refuses it");
         assert!(apply(&mut plan, proposal).is_err(), "case {case}");
         assert_eq!(plan, before, "case {case}");
     }

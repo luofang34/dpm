@@ -14,7 +14,7 @@ use std::{
 };
 
 /// Application wire contract version, independent of terminal display text.
-pub const API_VERSION: u32 = 4;
+pub const API_VERSION: u32 = 5;
 
 /// Mutation precondition and engine command shared by CLI and agent tools.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -242,6 +242,8 @@ impl Application {
             });
         }
         let plan = self.plan_blocking()?;
+        // One clock reading per response keeps every gate, completion and schedule in it consistent.
+        let now = Utc::now();
         let data = match query {
             Query::History { .. } => {
                 return Err(AppError::InvalidRequest(
@@ -255,7 +257,9 @@ impl Application {
             interchange @ (Query::ImportMspdi { .. } | Query::ExportMspdi { .. }) => {
                 crate::interchange::query(&plan, interchange)?
             }
-            Query::Status { probabilistic } => serde_json::to_value(status(&plan, probabilistic)?)?,
+            Query::Status { probabilistic } => {
+                serde_json::to_value(status(&plan, probabilistic, now)?)?
+            }
             Query::Next {
                 capabilities,
                 probabilistic,
@@ -272,22 +276,22 @@ impl Application {
                     capabilities,
                     use_probabilistic_criticality: probabilistic,
                 };
-                serde_json::to_value(next_in_scope(&plan, &query, &scope, limit)?)?
+                serde_json::to_value(next_in_scope(&plan, &query, &scope, limit, now)?)?
             }
             Query::Show { key } => {
                 let work = plan
                     .find_work_by_key(&key)
                     .ok_or(AppError::UnknownWork(key))?;
-                let mut data = serde_json::to_value(show_work(&plan, work.id)?)?;
+                let mut data = serde_json::to_value(show_work(&plan, work.id, now)?)?;
                 data["progress"] =
-                    serde_json::to_value(dpm_engine::progress(&plan)?.work[&work.id])?;
+                    serde_json::to_value(dpm_engine::progress(&plan, now)?.work[&work.id])?;
                 data
             }
             Query::Explain { key } => {
                 let work = plan
                     .find_work_by_key(&key)
                     .ok_or(AppError::UnknownWork(key))?;
-                serde_json::to_value(explain_work(&plan, work.id)?)?
+                serde_json::to_value(explain_work(&plan, work.id, now)?)?
             }
         };
         Ok(QueryResponse {

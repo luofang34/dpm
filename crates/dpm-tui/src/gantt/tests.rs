@@ -2,7 +2,7 @@
 use super::*;
 use ratatui::{Terminal, backend::TestBackend};
 fn render(plan: &Plan, width: u16, height: u16) -> String {
-    let mut gantt = Gantt::new(plan).expect("schedule");
+    let mut gantt = Gantt::new(plan, chrono::Utc::now()).expect("schedule");
     let work = plan.work_items.values().cloned().collect::<Vec<_>>();
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
     terminal
@@ -60,7 +60,7 @@ fn unicode_labels_fit_and_packages_roll_up_children() {
     let id = package.id;
     plan.work_items.insert(id, package);
     plan.work_items.get_mut(&child).expect("child").parent = Some(id);
-    let gantt = Gantt::new(&plan).expect("schedule");
+    let gantt = Gantt::new(&plan, chrono::Utc::now()).expect("schedule");
     assert_eq!(
         gantt.bounds(&plan, &plan.work_items[&id]),
         gantt.bounds(&plan, &plan.work_items[&child])
@@ -73,7 +73,7 @@ fn panning_clips_bars_without_pinning_offscreen_milestones() {
         "../../../../tests/support/execution-plan.json"
     ))
     .expect("fixture");
-    let mut gantt = Gantt::new(&plan).expect("gantt");
+    let mut gantt = Gantt::new(&plan, chrono::Utc::now()).expect("gantt");
     gantt.viewport.start = 12.0;
     gantt.viewport.span = 24.0;
     assert_eq!(

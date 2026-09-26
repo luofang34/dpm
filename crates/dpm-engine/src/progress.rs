@@ -1,5 +1,6 @@
-use crate::{EngineError, completion};
-use dpm_model::{Plan, WorkItem, WorkItemId, WorkKind, WorkStatus};
+use crate::EngineError;
+use chrono::{DateTime, Utc};
+use dpm_model::{EventTime, Plan, Timeline, WorkItem, WorkItemId, WorkKind, WorkStatus};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -10,6 +11,10 @@ pub struct ProgressSummary {
     pub percent_complete: f64,
     /// Whether all applicable verification and aggregate gate conditions are satisfied.
     pub verified: bool,
+    /// Verification time of a task, or the latest prerequisite or decision release of a milestone
+    /// or package; unrecorded when any contributing event predates recorded event times.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<EventTime>,
 }
 
 /// Derived progress values, never persisted as replacement domain objects.
@@ -22,9 +27,15 @@ pub struct ProgressProjection {
 }
 
 /// Compute execution percentages without inferring work from elapsed time or changing the schedule.
-pub fn progress(plan: &Plan) -> Result<ProgressProjection, EngineError> {
+///
+/// `now` is the adapter's clock reading; it decides only whether lagged milestone gates are reached.
+pub fn progress(plan: &Plan, now: DateTime<Utc>) -> Result<ProgressProjection, EngineError> {
     plan.validate()?;
-    let done = completion(plan);
+    Ok(progress_with(plan, &Timeline::at(plan, now)))
+}
+
+pub(crate) fn progress_with(plan: &Plan, timeline: &Timeline) -> ProgressProjection {
+    let done = timeline.completed();
     let tasks: Vec<_> = plan
         .work_items
         .values()
@@ -56,17 +67,27 @@ pub fn progress(plan: &Plan) -> Result<ProgressProjection, EngineError> {
             ProgressSummary {
                 percent_complete,
                 verified,
+                completed_at: timeline.completed_at(item.id),
             },
         );
     }
     let verified = !plan.work_items.is_empty() && done.len() == plan.work_items.len();
-    Ok(ProgressProjection {
+    let completed_at = verified
+        .then(|| {
+            plan.work_items
+                .keys()
+                .filter_map(|id| timeline.completed_at(*id))
+                .reduce(EventTime::latest)
+        })
+        .flatten();
+    ProgressProjection {
         overall: ProgressSummary {
             percent_complete: average(&tasks, verified),
             verified,
+            completed_at,
         },
         work,
-    })
+    }
 }
 
 fn task_percent(work: &WorkItem) -> f64 {

@@ -88,17 +88,18 @@ def unlink_and_merge(database, worker, reviewer):
     assert {k: v for k, v in graph(after).items() if k != 'revision'} == {k: v for k, v in graph(before).items() if k != 'revision'}
     assert len(after['external_references']) == 2 and after['revision'] == 4
     worker.call('claim_work', {'key': 'TEST-A', 'base_revision': 4})
-    worker.call('submit_work', {'key': 'TEST-A', 'base_revision': 5})
+    worker.call('start_work', {'key': 'TEST-A', 'base_revision': 5})
+    worker.call('submit_work', {'key': 'TEST-A', 'base_revision': 6})
     run_cli(database, 'link-external', 'TEST-A', *flags(PULL), '--observed', 'merged', '--actor', 'agent:parity')
     shown = worker.call('get_work', {'key': 'TEST-A'})['data']
     assert shown == run_cli(database, 'show', 'TEST-A')
     assert shown['status'] == 'Submitted' and shown['artifact_ids'] == [], 'a merged PR is neither evidence nor verification'
-    worker.call('verify_work', {'key': 'TEST-A', 'base_revision': 7}, error='invalid_command')
-    reviewer.call('verify_work', {'key': 'TEST-A', 'base_revision': 7})
+    worker.call('verify_work', {'key': 'TEST-A', 'base_revision': 8}, error='invalid_command')
+    reviewer.call('verify_work', {'key': 'TEST-A', 'base_revision': 8})
     history = worker.call('history', {})['data']
     assert history == run_cli(database, 'history')
     commands = [next(iter(e['operation']['command'])) for e in history['entries']]
-    assert commands == ['LinkExternal', 'LinkExternal', 'LinkExternal', 'UnlinkExternal', 'Claim', 'Submit', 'LinkExternal', 'Verify']
+    assert commands == ['LinkExternal', 'LinkExternal', 'LinkExternal', 'UnlinkExternal', 'Claim', 'Start', 'Submit', 'LinkExternal', 'Verify']
 
 
 def review_and_round_trip(database, directory, worker, reviewer):

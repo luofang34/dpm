@@ -32,6 +32,7 @@ fn fixture() -> (Plan, DecisionId) {
         question: "Which input format?".into(),
         status: DecisionStatus::Decided,
         outcome: Some("JSON".into()),
+        resolved_at: None,
         rationale: Some("Existing tooling reads JSON".into()),
         related_work: BTreeSet::from([work(&plan, "TEST-A"), work(&plan, "TEST-C")]),
         artifact_ids: BTreeSet::from([source.id]),
@@ -84,7 +85,14 @@ fn apply(plan: &mut Plan, proposed: Plan) -> Result<crate::Operation, EngineErro
 fn gates(plan: &Plan) -> Vec<(WorkItemId, bool)> {
     plan.work_items
         .keys()
-        .map(|id| (*id, gate_report(plan, *id).expect("gates").ready))
+        .map(|id| {
+            (
+                *id,
+                gate_report(plan, *id, crate::Transition::Claim, chrono::Utc::now())
+                    .expect("gates")
+                    .ready,
+            )
+        })
         .collect()
 }
 
@@ -122,7 +130,7 @@ fn replacement_preserves_prior_reasoning_lists_affected_work_and_adds_no_gate() 
         (&kept.rationale, &kept.artifact_ids, &kept.outcome),
         (&prior.rationale, &prior.artifact_ids, &prior.outcome)
     );
-    let context = explain_work(&plan, work(&plan, "TEST-A"))
+    let context = explain_work(&plan, work(&plan, "TEST-A"), chrono::Utc::now())
         .expect("explain")
         .context;
     let keys: Vec<_> = context.decisions.iter().map(|d| d.key.0.as_str()).collect();
@@ -214,7 +222,7 @@ fn work_linked_only_to_a_superseded_choice_still_sees_its_replacement() {
     let (proposal, new) = replace(&plan, old);
     assert!(!new.related_work.contains(&work(&plan, "TEST-C")));
     apply(&mut plan, proposal).expect("reviewed replacement");
-    let context = explain_work(&plan, work(&plan, "TEST-C"))
+    let context = explain_work(&plan, work(&plan, "TEST-C"), chrono::Utc::now())
         .expect("explain")
         .context;
     let keys: BTreeSet<_> = context.decisions.iter().map(|d| d.key.0.as_str()).collect();
@@ -225,7 +233,7 @@ fn work_linked_only_to_a_superseded_choice_still_sees_its_replacement() {
             .iter()
             .any(|d| d.id == new.id && d.supersedes == Some(old))
     );
-    let unrelated = explain_work(&plan, work(&plan, "TEST-B"))
+    let unrelated = explain_work(&plan, work(&plan, "TEST-B"), chrono::Utc::now())
         .expect("explain")
         .context;
     assert!(unrelated.decisions.iter().all(|d| d.id != new.id));
@@ -259,7 +267,7 @@ fn chained_replacement_lists_work_that_sees_it_only_through_the_chain() {
     assert_eq!(listed, BTreeSet::from(["TEST-A", "TEST-C", "TEST-F"]));
     apply(&mut plan, proposal).expect("second replacement");
     for key in listed {
-        let context = explain_work(&plan, work(&plan, key))
+        let context = explain_work(&plan, work(&plan, key), chrono::Utc::now())
             .expect("explain")
             .context;
         assert!(context.decisions.iter().any(|d| d.id == third.id), "{key}");

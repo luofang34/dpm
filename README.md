@@ -41,7 +41,7 @@ of the same model.
 - seeded Monte Carlo P50/P80/P95 completion risk and activity criticality;
 - derived readiness plus explicit decision gates;
 - explainable `next` ranking;
-- semantic `claim`, `block`, `unblock`, `submit`, `verify`, and `decide` commands;
+- semantic `claim`, `start`, `block`, `unblock`, `submit`, `verify`, and `decide` commands;
 - SQLite snapshot + append-only semantic operation log;
 - Git HEAD artifact linkage;
 - human CLI plus structured JSON and matching MCP tools;
@@ -151,16 +151,19 @@ quit. Press `r` to reload agent changes while retaining the selected work and Ga
 Detail shows the full steps, scope, acceptance, review and linked context; scroll to read long contracts.
 A failed reload keeps the last valid view and displays its revision with the error.
 
-Only planned tasks can be claimed. Submitted work requires a different actor to verify it. Blocking
-and resuming claimed work retains its owner. Nonempty capability filters are eligibility constraints.
+Only planned tasks can be claimed. A claim reserves work; `start` begins it and records the start
+event, and progress reports and submission require it. Submitted work requires a different actor to
+verify it. Blocking and resuming claimed work retains its owner, and started work resumes started. Nonempty capability filters are eligibility constraints.
 Decision gates on a work package also gate its descendants. Milestones complete when all their
 prerequisites complete; work packages complete when all children complete. These aggregate statuses
 are derived in `status`, `show`, `explain`, and the console, and never written into stored work state.
 An empty package or an unconstrained milestone is not implicitly complete.
 
 FS/SS/FF/SF relationships and positive/negative lag are supported by CPM and simulation. Execution
-uses a conservative policy: all predecessor work must be verified before a successor can be claimed,
-regardless of relationship kind. There are no wall-clock start/finish timers. Remaining projections
+gates follow the relation: FS and SS govern claiming and starting the successor, FF and SF its
+submission, and verification re-checks all four. They wait for the predecessor's recorded start or
+verification plus any positive lag in elapsed time; a lead never releases work before the event. See
+[architecture](docs/architecture.md#temporal-bounds-are-not-execution-permission). Remaining projections
 zero completed task durations and omit their historical dependency constraints, including lag.
 Unfinished dependency constraints retain their lag. Use task or milestone endpoints for temporal
 constraints; work packages group work and do not accept temporal dependency edges.

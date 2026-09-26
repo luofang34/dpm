@@ -96,13 +96,14 @@ pub fn simulate(plan: &Plan, config: SimulationConfig) -> Result<SimulationSumma
     simulate_inner(plan, config, false)
 }
 
-/// Monte Carlo projection of remaining work from the current execution state.
+/// Monte Carlo projection of remaining work from the execution state at an adapter clock reading.
 pub fn simulate_remaining(
     plan: &Plan,
     config: SimulationConfig,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> Result<SimulationSummary, ScheduleError> {
     plan.validate()?;
-    simulate_inner(&crate::cpm::remaining_plan(plan), config, true)
+    simulate_inner(&crate::cpm::remaining_plan(plan, now), config, true)
 }
 
 fn simulate_inner(

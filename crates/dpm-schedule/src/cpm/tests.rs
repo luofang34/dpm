@@ -5,6 +5,16 @@ use dpm_model::{
 };
 use std::collections::BTreeSet;
 
+fn at(hours: i64) -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::UNIX_EPOCH + chrono::TimeDelta::hours(hours)
+}
+
+fn verify(work: &mut WorkItem, hours: Option<i64>) {
+    work.status = WorkStatus::Verified;
+    work.owner = Some(dpm_model::ActorId::agent("owner"));
+    work.events.verified_at = hours.map(at);
+}
+
 fn task(project: ProjectId, key: &str, hours: f64) -> WorkItem {
     WorkItem {
         id: WorkItemId::new(),
@@ -31,6 +41,7 @@ fn task(project: ProjectId, key: &str, hours: f64) -> WorkItem {
         artifact_ids: BTreeSet::new(),
         owner: None,
         block_reason: None,
+        events: Default::default(),
         last_rejection: None,
         resources: Vec::new(),
     }
@@ -182,28 +193,30 @@ fn missing_negative_nonfinite_and_overflowing_durations_are_rejected() {
 }
 
 #[test]
-fn completed_dependencies_do_not_reintroduce_historical_lag() {
+fn completed_dependencies_keep_only_the_lag_still_elapsing() {
     let (mut plan, a, b) = pair(4.0, 3.0);
     plan.dependencies
         .push(Dependency::new(a, b, DependencyKind::FinishStart, 9.0));
-    let item = plan.work_items.get_mut(&a).expect("task");
-    item.status = WorkStatus::Verified;
-    item.owner = Some(dpm_model::ActorId::agent("owner"));
-    assert_eq!(
-        deterministic_remaining(&plan)
+    verify(plan.work_items.get_mut(&a).expect("task"), Some(0));
+    let finish = |plan: &Plan, now| {
+        deterministic_remaining(plan, now)
             .expect("remaining")
-            .project_finish_hours,
-        3.0
-    );
-    let item = plan.work_items.get_mut(&b).expect("task");
-    item.status = WorkStatus::Verified;
-    item.owner = Some(dpm_model::ActorId::agent("owner"));
+            .project_finish_hours
+    };
+    assert_eq!(finish(&plan, at(4)), 5.0 + 3.0, "5h of the 9h lag remain");
     assert_eq!(
-        deterministic_remaining(&plan)
-            .expect("complete")
-            .project_finish_hours,
-        0.0
+        finish(&plan, at(9)),
+        3.0,
+        "an elapsed lag is not reintroduced"
     );
+    verify(plan.work_items.get_mut(&a).expect("task"), None);
+    assert_eq!(
+        finish(&plan, at(1_000)),
+        9.0 + 3.0,
+        "a lag from an unrecorded event is never assumed to have elapsed"
+    );
+    verify(plan.work_items.get_mut(&b).expect("task"), None);
+    assert_eq!(finish(&plan, at(1_000)), 0.0);
     assert_eq!(
         deterministic(&plan).expect("baseline").project_finish_hours,
         16.0
@@ -264,8 +277,7 @@ fn reached_milestones_do_not_reintroduce_historical_lag_in_remaining_forecasts()
         .values_mut()
         .filter(|w| w.is_executable() && w.id != successor)
     {
-        task.status = WorkStatus::Verified;
-        task.owner = Some(dpm_model::ActorId::agent("worker"));
+        verify(task, Some(0));
     }
     // The gate keeps an otherwise completed milestone pending until the choice is made.
     let decision = plan.decisions.values_mut().next().expect("gate");
@@ -285,7 +297,7 @@ fn reached_milestones_do_not_reintroduce_historical_lag_in_remaining_forecasts()
     outgoing.lag_hours = 24.0;
     let duration = plan.work_items[&successor].expected_duration_hours();
     assert_eq!(
-        deterministic_remaining(&plan)
+        deterministic_remaining(&plan, chrono::DateTime::UNIX_EPOCH)
             .expect("pending")
             .project_finish_hours,
         duration + 24.0
@@ -293,10 +305,18 @@ fn reached_milestones_do_not_reintroduce_historical_lag_in_remaining_forecasts()
     let decision = plan.decisions.values_mut().next().expect("gate");
     decision.status = dpm_model::DecisionStatus::Decided;
     decision.outcome = Some("Acceptance condition met".into());
+    decision.resolved_at = Some(at(2));
     let original = plan.clone();
-    assert!(dpm_model::completion(&plan).contains(&milestone));
+    assert!(dpm_model::completion(&plan, at(2)).contains(&milestone));
     assert_eq!(
-        deterministic_remaining(&plan)
+        deterministic_remaining(&plan, at(12))
+            .expect("elapsing")
+            .project_finish_hours,
+        duration + 14.0,
+        "the milestone was reached when the decision resolved"
+    );
+    assert_eq!(
+        deterministic_remaining(&plan, at(26))
             .expect("remaining")
             .project_finish_hours,
         duration
@@ -307,6 +327,7 @@ fn reached_milestones_do_not_reintroduce_historical_lag_in_remaining_forecasts()
             iterations: 32,
             seed: 9,
         },
+        at(26),
     )
     .expect("simulation");
     let estimate = plan.work_items[&successor].estimate.expect("estimate");
