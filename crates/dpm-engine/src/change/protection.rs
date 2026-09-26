@@ -68,7 +68,25 @@ pub(super) fn validate(current: &Plan, proposed: &Plan) -> Result<(), EngineErro
         }
     }
     validate_new_work(current, proposed)?;
+    protect_observations(current, proposed)?;
     super::replacement::validate(current, proposed, &locked)
+}
+
+/// Observations are attributed reports like evidence and reviews, so review cannot author them.
+fn protect_observations(current: &Plan, proposed: &Plan) -> Result<(), EngineError> {
+    for (id, reference) in &proposed.external_references {
+        let recorded = current
+            .external_references
+            .get(id)
+            .and_then(|r| r.observation.as_ref());
+        if reference.observation.as_ref() != recorded {
+            return Err(invalid(
+                id,
+                "observations are recorded by link; plan changes cannot add or rewrite them",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_new_work(current: &Plan, proposed: &Plan) -> Result<(), EngineError> {

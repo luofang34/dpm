@@ -95,6 +95,8 @@ rejected. No connector, token store or assignee write is involved.
 
 References are part of the exported plan, so reviewed plan changes can add, relabel, move or
 remove them under the same validation. `plan diff` reports them under `external_references`.
+Like evidence and reviews, observations are attributed records: a plan change cannot add or
+rewrite one; record it with `link_external`.
 
 `history` returns entries in append order with a `next_after_sequence` cursor (default limit 100,
 capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export

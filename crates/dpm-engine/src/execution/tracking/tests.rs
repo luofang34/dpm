@@ -377,3 +377,51 @@ fn explain_exposes_package_references_and_survives_reviewed_renames() {
     )
     .expect("unlink by id");
 }
+
+#[test]
+fn reviewed_changes_cannot_author_or_rewrite_observations() {
+    let mut plan = fixture();
+    let (a, b) = (id(&plan, "TEST-A"), id(&plan, "TEST-B"));
+    let Command::LinkExternal(mut closed) = request(
+        a,
+        forgejo("git.alpha.example", ExternalObjectKind::Issue),
+        ExternalLinkRole::Tracks,
+    ) else {
+        panic!("link request");
+    };
+    closed.observed = Some(ExternalState::Closed);
+    let recorded = closed.reference;
+    run(&mut plan, "observer", Command::LinkExternal(closed)).expect("observed link");
+    let mut rewritten = plan.clone();
+    let observation = rewritten
+        .external_references
+        .get_mut(&recorded)
+        .and_then(|r| r.observation.as_mut())
+        .expect("observation");
+    observation.state = ExternalState::Open;
+    observation.observed_by = ActorId::human("someone-else");
+    let error = propose_change(&plan, &rewritten).expect_err("rewrite");
+    assert!(
+        error
+            .to_string()
+            .contains("observations are recorded by link"),
+        "{error}"
+    );
+    let mut authored = plan.clone();
+    let mut added = authored.external_references[&recorded].clone();
+    added.id = ExternalReferenceId::new();
+    added.identity = forgejo("git.beta.example", ExternalObjectKind::Issue);
+    added.links = [dpm_model::ExternalLink {
+        work: b,
+        role: ExternalLinkRole::Relates,
+    }]
+    .into();
+    authored.external_references.insert(added.id, added.clone());
+    assert!(
+        propose_change(&plan, &authored).is_err(),
+        "new reference with an observation"
+    );
+    added.observation = None;
+    authored.external_references.insert(added.id, added);
+    propose_change(&plan, &authored).expect("reviewed reference without observation");
+}
