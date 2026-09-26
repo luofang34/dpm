@@ -130,7 +130,9 @@ fn wrapped_unicode_title_and_all_offscreen_links_can_be_read_by_scrolling() {
     }
     assert!(seen.contains("SF start→finish"));
     gantt.navigate(KeyCode::End);
-    assert!(text(&draw(&mut gantt, &plan, index, 120, 38)).contains("Execution waits"));
+    assert!(
+        text(&draw(&mut gantt, &plan, index, 120, 38)).contains("release at this snapshot's clock")
+    );
     gantt.navigate(KeyCode::Home);
     assert!(text(&draw(&mut gantt, &plan, index, 120, 38)).contains("Selected TEST-A"));
     assert_eq!(plan, before);
@@ -270,4 +272,135 @@ fn milestone_name_badge_survives_panning_and_monochrome_and_tracks_completion() 
         }
         assert_eq!(plan, before);
     }
+}
+
+fn at(hour: u32) -> chrono::DateTime<chrono::Utc> {
+    use chrono::TimeZone;
+    chrono::Utc
+        .with_ymd_and_hms(2026, 9, 1, hour, 0, 0)
+        .single()
+        .expect("time")
+}
+
+/// The fixture reduced to one edge TEST-A → TEST-B and no decision gates.
+fn single_edge(kind: dpm_model::DependencyKind, lag: f64) -> (Plan, WorkItemId, WorkItemId) {
+    let mut plan = fixture();
+    plan.decisions.clear();
+    let a = plan.find_work_by_key("TEST-A").expect("a").id;
+    let b = plan.find_work_by_key("TEST-B").expect("b").id;
+    plan.dependencies = vec![dpm_model::Dependency::new(a, b, kind, lag)];
+    (plan, a, b)
+}
+
+fn run(plan: &mut Plan, commands: Vec<dpm_engine::Command>, hour: u32) {
+    for command in commands {
+        dpm_engine::apply_command(plan, ActorId::agent("worker"), command, at(hour))
+            .expect("execute");
+    }
+}
+
+fn begin(work: WorkItemId) -> Vec<dpm_engine::Command> {
+    vec![
+        dpm_engine::Command::Claim { work },
+        dpm_engine::Command::Start { work },
+    ]
+}
+
+fn inspect(plan: &Plan, work: WorkItemId, clock: chrono::DateTime<chrono::Utc>) -> String {
+    let mut gantt = Gantt::new(plan, clock).expect("gantt");
+    let index = plan
+        .work_items
+        .keys()
+        .position(|id| *id == work)
+        .expect("index");
+    text(&draw(&mut gantt, plan, index, 170, 60))
+}
+
+#[test]
+fn inspector_tags_soft_and_waived_edges_like_network_and_detail() {
+    let (mut plan, a, b) = single_edge(dpm_model::DependencyKind::FinishStart, 5.0);
+    plan.dependencies[0].policy = dpm_model::DependencyPolicy::Soft;
+    let soft = inspect(&plan, b, at(1));
+    assert!(soft.contains("TEST-A --FS+5.0h→TEST-B [soft]"), "{soft}");
+    plan.dependencies[0].waiver = Some(dpm_model::DependencyWaiver {
+        actor: ActorId::human("lead"),
+        at: at(1),
+        reason: "overlap accepted".into(),
+    });
+    let waived = inspect(&plan, b, at(2));
+    assert!(
+        waived.contains("TEST-A --FS+5.0h→TEST-B [soft, waived]"),
+        "{waived}"
+    );
+    assert!(waived.contains("waived, not enforced"), "{waived}");
+    assert!(inspect(&plan, a, at(2)).contains("[soft, waived]"));
+}
+
+#[test]
+fn inspector_reports_start_event_releases_for_ss_edges_instead_of_verification() {
+    let (mut plan, a, b) = single_edge(dpm_model::DependencyKind::StartStart, 2.0);
+    let waiting = inspect(&plan, b, at(1));
+    assert!(
+        waiting.contains("gates start: awaiting start of TEST-A"),
+        "{waiting}"
+    );
+    assert!(!waiting.contains("Execution waits for verified prerequisites"));
+    run(&mut plan, begin(a), 1);
+    let elapsing = inspect(&plan, b, at(2));
+    assert!(
+        elapsing.contains("gates start: lag elapses at 2026-09-01 03:00 UTC"),
+        "{elapsing}"
+    );
+    let released = inspect(&plan, b, at(4));
+    assert!(released.contains("gates start: released"), "{released}");
+}
+
+#[test]
+fn inspector_reports_that_ff_edges_gate_submission() {
+    let (plan, _, b) = single_edge(dpm_model::DependencyKind::FinishFinish, 0.0);
+    let screen = inspect(&plan, b, at(1));
+    assert!(
+        screen.contains("gates submit/verify: awaiting verified finish of TEST-A"),
+        "{screen}"
+    );
+}
+
+#[test]
+fn inspector_shows_a_provisional_start_released_on_a_pending_attempt() {
+    let (mut plan, a, b) = single_edge(dpm_model::DependencyKind::FinishStart, 0.0);
+    plan.dependencies[0].start_basis = dpm_model::StartBasis::Provisional;
+    let waiting = inspect(&plan, b, at(1));
+    assert!(waiting.contains("[provisional start]"), "{waiting}");
+    assert!(
+        waiting.contains("awaiting a submitted attempt or verified finish of TEST-A"),
+        "{waiting}"
+    );
+    let mut steps = begin(a);
+    steps.push(dpm_engine::Command::Submit {
+        work: a,
+        note: None,
+    });
+    run(&mut plan, steps, 1);
+    run(&mut plan, begin(b), 2);
+    let started = inspect(&plan, b, at(3));
+    assert!(
+        started.contains("gates start: released provisionally on attempt #1"),
+        "{started}"
+    );
+    assert!(
+        started.contains("gates verify: awaiting verified finish of TEST-A"),
+        "{started}"
+    );
+}
+
+#[test]
+fn inspector_lists_decision_gates_with_their_state() {
+    let mut plan = fixture();
+    let b = plan.find_work_by_key("TEST-B").expect("b").id;
+    plan.dependencies.retain(|d| d.successor == b);
+    let screen = inspect(&plan, b, at(1));
+    assert!(
+        screen.contains("Decision gates: TEST-GATE open"),
+        "{screen}"
+    );
 }

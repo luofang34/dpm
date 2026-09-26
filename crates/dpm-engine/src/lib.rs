@@ -6,7 +6,9 @@ mod command;
 mod context;
 mod execution;
 mod gates;
-pub use gates::{GateReport, ProvisionalRelease, Transition, UnmetGate, gate_report};
+pub use gates::{
+    GateReport, ProvisionalRelease, Transition, UnmetGate, describe_applicability, gate_report,
+};
 mod progress;
 mod query;
 mod readiness;

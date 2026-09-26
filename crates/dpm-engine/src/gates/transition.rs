@@ -129,7 +129,9 @@ pub(super) fn describe_release(
     }
 }
 
-pub(super) fn describe_applicability(applicability: &Applicability) -> String {
+/// Human-readable reason work is outside the active graph, naming decisions and work by key.
+#[must_use]
+pub fn describe_applicability(applicability: &Applicability) -> String {
     match applicability {
         Applicability::Applicable => "work is applicable".into(),
         Applicability::Undecided { decision, option } => {

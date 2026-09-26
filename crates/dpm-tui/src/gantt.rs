@@ -10,6 +10,7 @@ pub(crate) mod dependencies;
 mod inspection;
 mod interaction;
 mod palette;
+mod release;
 mod viewport;
 use palette::Palette;
 use viewport::Viewport;

@@ -221,8 +221,11 @@ its contract, and `q` to quit. With the chart focused, **←/→** pan the time 
 while the timeline moves. The initial window shows up to 48 hours.
 
 The inspector below the chart wraps the **full task title** and lists **all direct predecessors and
-successors**, including their full titles, dependency direction, FS/SS/FF/SF type, signed lag and
-verification state. `Tab` switches focus between chart and inspector; inspector **↑/↓**, `j/k`,
+successors**, including their full titles, dependency direction, FS/SS/FF/SF type, signed lag,
+`[soft]`/`[soft, waived]`/`[provisional start]` tags and each link's release state at the snapshot
+clock, as the shared gate evaluator derives it: which transition it gates (start for FS/SS, submit and verify
+for FF/SF), and whether it awaits an event, has lag elapsing, is released (provisionally on a
+pending attempt), or is waived. Decision gates on the task are listed with their state. `Tab` switches focus between chart and inspector; inspector **↑/↓**, `j/k`,
 `Home/End` scroll its text. `PgUp/PgDn` scroll inspector pages from either focus. A scrollbar and
 line range indicate hidden content. Detail/Network/Now also support `PgUp/PgDn` and `Home/End`.
 

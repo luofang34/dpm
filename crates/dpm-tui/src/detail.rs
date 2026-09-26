@@ -14,9 +14,9 @@ pub(crate) fn text(plan: &Plan, detail: &WorkExplanation) -> String {
     ];
     if !detail.applicability.is_applicable() {
         lines.push(format!(
-            "Applicability: {} — outside the active graph ({:?})",
+            "Applicability: {} — {}",
             crate::open_choices::applicability_label(&detail.applicability),
-            detail.applicability
+            dpm_engine::describe_applicability(&detail.applicability)
         ));
     }
     if let Some(owner) = &work.owner {

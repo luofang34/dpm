@@ -8,6 +8,9 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
+const MIN_INNER_WIDTH: u16 = 36;
+const MIN_INNER_HEIGHT: u16 = 10;
+
 impl Gantt {
     pub(crate) fn render(
         &mut self,
@@ -26,9 +29,23 @@ impl Gantt {
             frame.render_widget(Paragraph::new("No work in this workspace."), inner);
             return;
         }
-        if inner.width < 36 || inner.height < 10 {
+        if inner.width < MIN_INNER_WIDTH || inner.height < MIN_INNER_HEIGHT {
+            // The pane shares the terminal with the header, so the size an operator must set is
+            // the pane minimum plus whatever surrounds the pane now.
+            let frame_area = frame.area();
+            let columns = frame_area
+                .width
+                .saturating_sub(inner.width)
+                .saturating_add(MIN_INNER_WIDTH);
+            let rows = frame_area
+                .height
+                .saturating_sub(inner.height)
+                .saturating_add(MIN_INNER_HEIGHT);
             frame.render_widget(
-                Paragraph::new("Gantt preview needs at least 38 columns and 12 rows."),
+                Paragraph::new(format!(
+                    "Gantt needs a terminal of at least {columns} columns × {rows} rows."
+                ))
+                .wrap(ratatui::widgets::Wrap { trim: true }),
                 inner,
             );
             return;

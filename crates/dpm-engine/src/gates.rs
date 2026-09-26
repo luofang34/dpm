@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 mod provisional;
 mod transition;
-pub use transition::Transition;
+pub use transition::{Transition, describe_applicability};
 
 /// Machine-readable reason preventing a lifecycle transition at the evaluated time.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

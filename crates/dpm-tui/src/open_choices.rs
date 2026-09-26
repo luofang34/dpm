@@ -15,13 +15,24 @@ pub(crate) fn applicability_label(applicability: &Applicability) -> &'static str
     }
 }
 
-/// Short list-row tag for work a choice keeps out of progress.
-pub(crate) fn scope_tag(scope: ProgressScope) -> &'static str {
+/// List-row tag for work a choice keeps out of progress, or that is otherwise outside the
+/// active graph although progress still counts it.
+pub(crate) fn scope_tag(scope: ProgressScope, applicability: &Applicability) -> String {
     match scope {
-        ProgressScope::Counted => "",
-        ProgressScope::NotSelected => " [not selected]",
-        ProgressScope::Undecided => " [undecided]",
+        ProgressScope::NotSelected => " [not selected]".into(),
+        ProgressScope::Undecided => " [undecided]".into(),
+        ProgressScope::Counted if applicability.is_applicable() => String::new(),
+        ProgressScope::Counted => format!(" [{}]", applicability_label(applicability)),
     }
+}
+
+/// Label and engine explanation of why work is outside the active graph.
+pub(crate) fn applicability_text(applicability: &Applicability) -> String {
+    format!(
+        "{}: {}",
+        applicability_label(applicability),
+        dpm_engine::describe_applicability(applicability)
+    )
 }
 
 /// Excluded work and one forecast per open-choice scenario, never a blended percentile.
@@ -45,8 +56,14 @@ pub(crate) fn summary_text(summary: &StatusSummary) -> String {
                 picks.join(" "),
                 scenario.expected_finish_hours
             ));
-            if let Some(p80) = scenario.p80_finish_hours {
-                text.push_str(&format!(" · P80 {p80:.1}h"));
+            for (label, value) in [
+                ("P50", scenario.p50_finish_hours),
+                ("P80", scenario.p80_finish_hours),
+                ("P95", scenario.p95_finish_hours),
+            ] {
+                if let Some(value) = value {
+                    text.push_str(&format!(" · {label} {value:.1}h"));
+                }
             }
             if !scenario.stranded.is_empty() {
                 let stranded: Vec<_> = scenario.stranded.iter().map(|k| k.0.as_str()).collect();
@@ -58,8 +75,16 @@ pub(crate) fn summary_text(summary: &StatusSummary) -> String {
     if !summary.not_applicable.is_empty() {
         text.push_str("\nOutside the active graph:\n");
         for work in &summary.not_applicable {
-            text.push_str(&format!("{} — {:?}\n", work.key, work.applicability));
+            text.push_str(&format!(
+                "{} — {}\n",
+                work.key,
+                applicability_text(&work.applicability)
+            ));
         }
     }
     text
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests;

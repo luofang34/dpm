@@ -354,9 +354,14 @@ fn conditional_work_shows_scenarios_exclusions_and_the_stranded_reason() {
     let now = render(&mut view);
     assert!(now.contains("Open choices DEC-SUPPLIER"), "{now}");
     assert!(now.contains("DEC-SUPPLIER=A") && now.contains("DEC-SUPPLIER=B"));
+    let execution = now
+        .split("Execution:")
+        .nth(1)
+        .and_then(|rest| rest.split("Open choices").next())
+        .expect("execution line");
     assert!(
-        !now.contains("P50"),
-        "no blended percentile while a choice is open"
+        !execution.contains("P50"),
+        "no blended percentile while a choice is open: {execution}"
     );
 
     let decision = plan.decisions.keys().next().copied().expect("decision");
@@ -449,4 +454,34 @@ fn a_package_of_only_unselected_work_reads_its_exclusion_from_the_timeline() {
         detail.contains("Applicability: all children excluded"),
         "{detail}"
     );
+}
+
+fn screen_rows(view: &mut View, width: u16, height: u16) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("test terminal");
+    terminal.draw(|frame| view.render(frame)).expect("render");
+    terminal
+        .backend()
+        .buffer()
+        .content
+        .chunks(usize::from(width))
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn gantt_minimum_size_message_states_the_terminal_size_it_needs() {
+    let mut view = View::new(&fixture(), chrono::Utc::now()).expect("view");
+    view.page = Page::Gantt;
+    for (width, height) in [(37, 15), (38, 14)] {
+        let screen = screen_rows(&mut view, width, height);
+        assert!(
+            screen.contains("38 columns") && screen.contains("15 rows"),
+            "{screen}"
+        );
+    }
+    assert!(!screen_rows(&mut view, 38, 15).contains("15 rows"));
+    view.reload_failed(&"disk unavailable");
+    let screen = screen_rows(&mut view, 38, 17);
+    assert!(screen.contains("18 rows"), "{screen}");
 }

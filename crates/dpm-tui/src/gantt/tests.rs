@@ -36,7 +36,7 @@ fn renders_critical_bars_milestones_and_units_without_changing_plan() {
 fn narrow_and_empty_workspaces_render_safely() {
     let plan = Plan::empty("empty");
     assert!(render(&plan, 80, 10).contains("No work"));
-    assert!(render(&plan, 34, 10).contains("needs at least"));
+    assert!(render(&plan, 34, 10).contains("columns"));
     for width in 0..40 {
         for height in 0..6 {
             render(&plan, width, height);

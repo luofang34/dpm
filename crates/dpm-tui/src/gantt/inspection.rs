@@ -44,12 +44,22 @@ impl Gantt {
             progress.verified,
             self.bounds(plan, work).is_some_and(|b| b.2)
         )));
+        let applicability = self.timeline.applicability(work.id);
+        if !applicability.is_applicable() {
+            lines.push(Line::from(format!(
+                "Outside the active graph — {}",
+                crate::open_choices::applicability_text(applicability)
+            )));
+        }
         self.relationships(&mut lines, plan, work, true);
         self.relationships(&mut lines, plan, work, false);
+        lines.extend(release::decision_gates(plan, &self.timeline, work.id).map(Line::from));
         lines.push(Line::from(
             "FS finish→start · SS start→start · FF finish→finish · SF start→finish",
         ));
-        lines.push(Line::from("+lag delay / -lag lead (hours). Execution waits for verified prerequisites and resolved gates."));
+        lines.push(Line::from(
+            "+lag delay / -lag lead (hours). Each link shows its release at this snapshot's clock.",
+        ));
         let title = if self.inspecting {
             "Inspector FOCUS · Tab chart · ↑↓ scroll"
         } else {
@@ -103,19 +113,19 @@ impl Gantt {
             }];
             let from = &plan.work_items[&link.predecessor].key;
             let to = &plan.work_items[&link.successor].key;
-            let state = if self.progress[&related.id].verified {
-                "verified"
-            } else {
-                "not verified"
-            };
             lines.push(Line::styled(
                 format!(
-                    "  {from} --{}{:+.1}h→{to} [{state}]",
+                    "  {from} --{}{:+.1}h→{to}{}",
                     dependencies::abbreviation(link.kind),
-                    link.lag_hours
+                    link.lag_hours,
+                    dependencies::tags(link)
                 ),
                 self.palette.style(color),
             ));
+            lines.push(Line::from(format!(
+                "    {}",
+                release::state(plan, &self.timeline, link)
+            )));
             lines.push(Line::from(format!("  {} — {}", related.key, related.title)));
         }
     }

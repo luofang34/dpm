@@ -5,7 +5,7 @@ use dpm_engine::{
     EngineError, NextWorkCandidate, NextWorkQuery, ProgressProjection, StatusSummary, completion,
     explain_work, next_work, progress, status,
 };
-use dpm_model::{DecisionStatus, Plan, WorkItem, WorkStatus};
+use dpm_model::{DecisionStatus, Plan, Timeline, WorkItem, WorkStatus};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout},
@@ -43,6 +43,7 @@ pub(crate) struct View {
     state: ListState,
     now: String,
     progress: ProgressProjection,
+    timeline: Timeline,
     network: String,
     gantt: crate::gantt::Gantt,
     detail_cache: Option<(usize, String)>,
@@ -82,6 +83,7 @@ impl View {
             state,
             now,
             progress: progress(plan, clock)?,
+            timeline: Timeline::at(plan, clock),
             network,
             gantt: crate::gantt::Gantt::new(plan, clock)?,
             detail_cache: None,
@@ -231,7 +233,10 @@ impl View {
                     w.status,
                     self.progress.work[&w.id].percent_complete,
                     w.title,
-                    crate::open_choices::scope_tag(self.progress.work[&w.id].scope)
+                    crate::open_choices::scope_tag(
+                        self.progress.work[&w.id].scope,
+                        self.timeline.applicability(w.id)
+                    )
                 ))
             });
             let list = List::new(items)
