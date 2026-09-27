@@ -127,11 +127,12 @@ impl ProjectLocation {
     }
 
     fn open_source_blocking(&self, binding: Option<PathBuf>) -> Result<Application, AppError> {
-        let mut app = match &self.source {
+        let app = match &self.source {
             ProjectSource::Registered => {
-                Application::open_blocking(binding.ok_or(crate::RegistryError::NotBound {
+                let path = binding.ok_or(crate::RegistryError::NotBound {
                     workspace: self.workspace,
-                })?)
+                })?;
+                crate::registry::open_bound_blocking(self.workspace, &path)
             }
             ProjectSource::Database(path) => Application::open_blocking(path),
             ProjectSource::Preview(path) => {
@@ -140,6 +141,10 @@ impl ProjectLocation {
                 Application::preview(plan)
             }
         }?;
+        self.attach_blocking(app)
+    }
+
+    fn attach_blocking(&self, mut app: Application) -> Result<Application, AppError> {
         let plan = app.plan_blocking()?;
         if plan.workspace.id != self.workspace {
             return Err(ProjectError::Invalid {

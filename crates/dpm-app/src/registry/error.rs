@@ -49,6 +49,40 @@ pub enum RegistryError {
         /// Conflicting workspace.
         workspace: WorkspaceId,
     },
+    /// One file holds one store, so a second identity must not be bound to an occupied path.
+    #[error(
+        "{path} is bound to workspace {workspace}, but the store there contains {store}; use --replace to rebind the path"
+    )]
+    PathBound {
+        /// Occupied database path.
+        path: PathBuf,
+        /// Identity already bound to the path.
+        workspace: WorkspaceId,
+        /// Identity the store at the path actually contains.
+        store: WorkspaceId,
+    },
+    /// The bound file no longer exists; opening it would otherwise fail as a raw storage error.
+    #[error(
+        "workspace {workspace} is bound to {path}, which does not exist; run dpm workspace register --replace --database PATH"
+    )]
+    StoreMissing {
+        /// Requested workspace.
+        workspace: WorkspaceId,
+        /// Missing bound path.
+        path: PathBuf,
+    },
+    /// The bound file now holds another workspace, so the binding no longer names its store.
+    #[error(
+        "workspace {workspace} is bound to {path}, but that store contains workspace {found}; run dpm workspace register --replace --database PATH"
+    )]
+    IdentityMismatch {
+        /// Requested workspace.
+        workspace: WorkspaceId,
+        /// Bound path.
+        path: PathBuf,
+        /// Identity found in the store.
+        found: WorkspaceId,
+    },
     /// Binding storage requires an unambiguous Unicode path.
     #[error("database path is not Unicode: {path}")]
     NonUnicode {
@@ -62,6 +96,9 @@ impl RegistryError {
         match self {
             Self::NotBound { .. } => "workspace_not_bound",
             Self::AlreadyBound { .. } => "workspace_already_bound",
+            Self::PathBound { .. } => "workspace_path_bound",
+            Self::StoreMissing { .. } => "workspace_store_missing",
+            Self::IdentityMismatch { .. } => "workspace_identity_mismatch",
             _ => "workspace_registry",
         }
     }

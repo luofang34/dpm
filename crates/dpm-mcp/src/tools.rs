@@ -33,7 +33,10 @@ const NAMES: &[(&str, &str)] = &[
         "history",
         "Read append-only semantic operations in chronological pages",
     ),
-    ("workspace_list", "List device-local workspace bindings"),
+    (
+        "workspace_list",
+        "List device-local workspace bindings with each store's status and any identity sharing its path",
+    ),
     (
         "workspace_register",
         "Bind an existing local database without changing its project state",
@@ -430,7 +433,7 @@ fn identity_schema() -> Value {
 fn registry_tool_blocking(name: &str, args: Arguments) -> Result<Value, AppError> {
     let registry = dpm_app::WorkspaceRegistry::from_environment()?;
     let data = if name == "workspace_list" {
-        serde_json::to_value(registry.list_blocking()?)?
+        serde_json::to_value(registry.inspect_blocking()?)?
     } else {
         let database = required(args.database, "database")?;
         serde_json::to_value(

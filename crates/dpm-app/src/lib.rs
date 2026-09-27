@@ -7,7 +7,7 @@ mod project;
 mod registry;
 mod service;
 mod tracking;
-pub use registry::{RegistryError, WorkspaceBinding, WorkspaceRegistry};
+pub use registry::{BindingReport, RegistryError, StoreState, WorkspaceBinding, WorkspaceRegistry};
 pub use tracking::ExternalLinkInput;
 
 pub use project::{

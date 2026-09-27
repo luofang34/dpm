@@ -424,7 +424,9 @@ fn workspace_command_blocking(
             output::value_blocking(&registry.register_blocking(database, replace)?, json)
         }
         WorkspaceCommand::List => output::value_blocking(
-            &registry.list_blocking().map_err(dpm_app::AppError::from)?,
+            &registry
+                .inspect_blocking()
+                .map_err(dpm_app::AppError::from)?,
             json,
         ),
     }

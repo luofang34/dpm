@@ -8,7 +8,10 @@ use std::{
 };
 
 mod error;
+mod inspection;
 pub use error::RegistryError;
+pub(crate) use inspection::open_bound_blocking;
+pub use inspection::{BindingReport, StoreState};
 
 /// Device-local association, excluded from portable plans and repository locators.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +72,21 @@ impl WorkspaceRegistry {
                 source,
             })?;
         }
+        self.bind_blocking(workspace, text, replace)?;
+        Ok(WorkspaceBinding {
+            workspace,
+            database,
+        })
+    }
+
+    /// Store the association in one immediate transaction. A path holds exactly one store, so any
+    /// other identity bound to it is stale; keeping it would let two workspaces resolve to one file.
+    fn bind_blocking(
+        &self,
+        workspace: WorkspaceId,
+        text: &str,
+        replace: bool,
+    ) -> Result<(), RegistryError> {
         let mut connection = Connection::open(&self.path).map_err(|source| self.sql(source))?;
         connection.execute_batch("CREATE TABLE IF NOT EXISTS bindings (workspace TEXT PRIMARY KEY, database_path TEXT NOT NULL);").map_err(|source| self.sql(source))?;
         let transaction = connection
@@ -83,17 +101,37 @@ impl WorkspaceRegistry {
             .optional()
             .map_err(|source| self.sql(source))?;
         if !replace && existing.as_deref().is_some_and(|p| p != text) {
-            return Err(RegistryError::AlreadyBound { workspace }.into());
+            return Err(RegistryError::AlreadyBound { workspace });
+        }
+        let occupant: Option<String> = transaction
+            .query_row(
+                "SELECT workspace FROM bindings WHERE database_path = ?1 AND workspace <> ?2 ORDER BY workspace",
+                params![text, workspace.to_string()],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|source| self.sql(source))?;
+        if let Some(bound) = occupant {
+            if !replace {
+                return Err(RegistryError::PathBound {
+                    path: text.into(),
+                    workspace: self.identity(bound)?,
+                    store: workspace,
+                });
+            }
+            transaction
+                .execute(
+                    "DELETE FROM bindings WHERE database_path = ?1 AND workspace <> ?2",
+                    params![text, workspace.to_string()],
+                )
+                .map_err(|source| self.sql(source))?;
         }
         transaction.execute("INSERT INTO bindings VALUES (?1, ?2) ON CONFLICT(workspace) DO UPDATE SET database_path=excluded.database_path", params![workspace.to_string(), text]).map_err(|source| self.sql(source))?;
-        transaction.commit().map_err(|source| self.sql(source))?;
-        Ok(WorkspaceBinding {
-            workspace,
-            database,
-        })
+        transaction.commit().map_err(|source| self.sql(source))
     }
 
-    /// Read registered locations without creating configuration files or opening the stores.
+    /// Read registered locations without creating configuration files or opening the stores;
+    /// [`Self::inspect_blocking`] adds the state of each store.
     pub fn list_blocking(&self) -> Result<Vec<WorkspaceBinding>, RegistryError> {
         let Some(connection) = self.open_read_blocking()? else {
             return Ok(Vec::new());
@@ -108,15 +146,8 @@ impl WorkspaceRegistry {
             .map_err(|source| self.sql(source))?;
         rows.map(|row| {
             let (id, database) = row.map_err(|source| self.sql(source))?;
-            let workspace =
-                serde_json::from_value(serde_json::Value::String(id)).map_err(|source| {
-                    RegistryError::Identity {
-                        path: self.path.clone(),
-                        source,
-                    }
-                })?;
             Ok(WorkspaceBinding {
-                workspace,
+                workspace: self.identity(id)?,
                 database: database.into(),
             })
         })
@@ -146,6 +177,15 @@ impl WorkspaceRegistry {
         Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map(Some)
             .map_err(|source| self.sql(source))
+    }
+
+    fn identity(&self, id: String) -> Result<WorkspaceId, RegistryError> {
+        serde_json::from_value(serde_json::Value::String(id)).map_err(|source| {
+            RegistryError::Identity {
+                path: self.path.clone(),
+                source,
+            }
+        })
     }
 
     fn sql(&self, source: rusqlite::Error) -> RegistryError {

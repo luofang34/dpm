@@ -281,11 +281,11 @@ pub(crate) struct ExternalIdentityArgs {
 pub(crate) enum WorkspaceCommand {
     /// Bind an existing database by its workspace identity; use --database PATH.
     Register {
-        /// Explicitly redirect a binding that already points to another store.
+        /// Explicitly redirect a binding, or rebind a path held by another workspace identity.
         #[arg(long)]
         replace: bool,
     },
-    /// List registered workspace identities and device-local store locations.
+    /// List bindings with each store status and any identity sharing its path.
     List,
 }
 

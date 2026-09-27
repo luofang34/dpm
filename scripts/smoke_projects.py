@@ -157,6 +157,53 @@ def bindings(directory):
     assert len(local('workspace', 'list')) == 1
 
 
+def stale_bindings(directory):
+    """A path holds one store: a second identity is refused, and stale bindings are named, not raw storage errors."""
+    env = {**os.environ, 'DPM_CONFIG_DIR': str(directory / 'stale-config')}
+    def local(*args, error=None):
+        result = subprocess.run([str(CLI), '--json', *map(str, with_actor(args))], cwd=directory, env=env,
+                                capture_output=True, text=True, timeout=30)
+        value = json.loads(result.stdout)
+        assert (result.returncode != 0 and value['error']['code'] == error) if error else result.returncode == 0, (args, value)
+        return value
+    def mcp_start(project):
+        return subprocess.run([str(MCP), '--project', str(project), '--actor', 'agent:stale'], cwd=directory, env=env,
+                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    store = directory / 'stale.sqlite'
+    local('--database', store, 'import', ROOT / 'tests/support/execution-plan.json')
+    first = local('workspace', 'register', '--database', store)['workspace']
+    checkout = directory / 'stale-checkout'
+    (checkout / '.dpm').mkdir(parents=True)
+    (checkout / '.dpm/project.toml').write_text(f"version = 2\nworkspace = '{first}'\n")
+    store.unlink()
+    local('--database', store, 'init', 'Unrelated')
+    second = local('--database', store, 'export')['workspace']['id']
+    refused = local('workspace', 'register', '--database', store, error='workspace_path_bound')['error']
+    actor = Agent(None, 'human:device', project=ROOT, env=env)
+    try:
+        mcp = actor.call('workspace_register', {'database': str(store)}, error='workspace_path_bound')
+        assert (mcp['code'], mcp['message']) == (refused['code'], refused['message'])
+        listed = local('workspace', 'list')
+        assert actor.call('workspace_list', {})['data'] == listed
+        assert [(b['workspace'], b['store']) for b in listed] == [(first, {'status': 'identity_mismatch', 'found': second})]
+        local('--project', checkout, 'status', error='workspace_identity_mismatch')
+        started = mcp_start(checkout)
+        assert started.returncode != 0 and 'workspace_identity_mismatch:' in started.stderr, started.stderr
+        assert local('workspace', 'register', '--replace', '--database', store)['workspace'] == second
+        listed = local('workspace', 'list')
+        assert actor.call('workspace_list', {})['data'] == listed
+        assert [(b['workspace'], b['store'], b['shared_with']) for b in listed] == [(second, {'status': 'ok'}, [])]
+        store.unlink()
+        assert actor.call('workspace_list', {})['data'] == local('workspace', 'list')
+        assert local('workspace', 'list')[0]['store'] == {'status': 'missing'}
+    finally:
+        actor.close()
+    (checkout / '.dpm/project.toml').write_text(f"version = 2\nworkspace = '{second}'\n")
+    missing = local('--project', checkout, 'status', error='workspace_store_missing')['error']['message']
+    started = mcp_start(checkout)
+    assert started.returncode != 0 and f'workspace_store_missing: {missing}' in started.stderr, started.stderr
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-projects-') as temporary:
         directory = Path(temporary)
@@ -164,4 +211,5 @@ if __name__ == '__main__':
         normal(directory)
         git_evidence(directory)
         bindings(directory)
-    print('PASS: project discovery/overrides, Git boundaries, read-only preview, CLI/MCP parity, durable operations and scoped Git evidence')
+        stale_bindings(directory)
+    print('PASS: project discovery/overrides, Git boundaries, read-only preview, CLI/MCP parity, durable operations, scoped Git evidence and stale device bindings')

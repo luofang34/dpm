@@ -101,12 +101,19 @@ Omit `resource` for an entry point that does not represent a specific resource. 
 `database` nor `preview`, the locator resolves the workspace through the device registry.
 Missing bindings return `workspace_not_bound` with the workspace UUID and the register command; an
 MCP process started on such a locator exits before serving and prints the same code and message.
-Changed store identities are rejected. Redirecting an existing binding requires
+A bound path that no longer exists returns `workspace_store_missing`, and a bound store that now
+contains another workspace returns `workspace_identity_mismatch`; both name the binding and the
+remedy instead of a raw storage error. One file holds one store, so registering a store at a path
+already bound to another workspace is refused with `workspace_path_bound`. Redirecting an existing
+binding, or rebinding such a path (which removes the stale identity), requires
 `workspace register --replace --database PATH`. Because a locator names the workspace and resource,
 not a path, moving or renaming a checkout directory keeps its bindings and every stable ID.
 
 Bindings live in `DPM_CONFIG_DIR`, otherwise `XDG_CONFIG_HOME/dpm`, otherwise `HOME/.config/dpm`.
-These directories must be absolute. `workspace_list` and `workspace_register` expose identical data
+These directories must be absolute. `workspace list` reports, for each binding, `workspace`,
+`database`, `store.status` (`ok`, `missing`, `identity_mismatch` with the `found` identity, or
+`unreadable` with the `code` and `message` opening it returns) and `shared_with`, the other
+identities bound to the same path. `workspace_list` and `workspace_register` expose identical data
 through MCP; device configuration does not append project operations or change project revisions.
 
 Several local processes may open the same store. A checkout/worktree does not fork task ownership.

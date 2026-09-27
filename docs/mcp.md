@@ -523,5 +523,7 @@ the latest review in `last_rejection`. Both require `key` and `base_revision`.
 
 `workspace_list` and `workspace_register` manage device configuration through the shared registry.
 Registration accepts `database` and optional `replace`; neither tool takes a project revision.
+`workspace_list` reports each store's `store.status` and `shared_with`, and registration refuses a path
+bound to another identity with `workspace_path_bound` (see [project selection](projects.md)).
 Their results contain `local_config: true` and `data`, without a project operation or revision.
 `attach_git_head` accepts an explicit `resource` key when the selected locator does not bind one.
