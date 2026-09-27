@@ -244,7 +244,9 @@ context.
 
 ### Conditional work and joins
 
-A decision may offer structured `options`; a decided outcome is exactly one option key. Work may
+Only a human or service may `decide`, whether the decision gates work or is context: a gate is how
+people authorize execution, and an agent that resolved one would approve its own scope. A decision
+may offer structured `options`; a decided outcome is exactly one option key. Work may
 carry a `condition` naming a decision and option; a condition on a work package applies to all its
 descendants, and every condition in a work item's containment chain must hold. Conditions follow a
 decision's `supersedes` chain, so a reviewed replacement (with the same option keys) is how a made

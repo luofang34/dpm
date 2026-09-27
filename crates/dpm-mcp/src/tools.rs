@@ -88,7 +88,7 @@ const NAMES: &[(&str, &str)] = &[
     ),
     (
         "decide_gate",
-        "Resolve an open decision; a decision with options takes one option key, which selects the work conditioned on it",
+        "Human or service resolves an open decision (agents are refused); a decision with options takes one option key, which selects the work conditioned on it",
     ),
     (
         "link_external",

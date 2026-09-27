@@ -162,6 +162,41 @@ fn milestone_completion_unlocks_successors_without_mutating_authoritative_state(
 }
 
 #[test]
+fn only_humans_and_services_resolve_gating_or_contextual_decisions() {
+    let mut plan = fixture();
+    let gate = plan.find_decision_by_key("TEST-GATE").expect("gate").id;
+    let mut context = plan.decisions[&gate].clone();
+    context.id = dpm_model::DecisionId::new();
+    context.key = Key::new("TEST-CONTEXT");
+    context.blocks.clear();
+    let contextual = context.id;
+    plan.decisions.insert(contextual, context);
+    plan.validate().expect("contextual decision");
+    let decide = |decision| Command::Decide {
+        decision,
+        outcome: "proceed".into(),
+    };
+    for decision in [gate, contextual] {
+        let before = plan.clone();
+        let error = apply_command(
+            &mut plan,
+            ActorId::agent("worker"),
+            decide(decision),
+            Utc::now(),
+        )
+        .expect_err("agents cannot decide");
+        assert!(
+            matches!(error, EngineError::ActorNotAllowed { .. }),
+            "{error:?}"
+        );
+        assert_eq!(plan, before, "a refused decision changes nothing");
+    }
+    apply_command(&mut plan, ActorId::human("lead"), decide(gate), Utc::now()).expect("human");
+    let bot = ActorId::service("policy-bot");
+    apply_command(&mut plan, bot, decide(contextual), Utc::now()).expect("service");
+}
+
+#[test]
 fn empty_commands_and_invalid_plans_do_not_change_state() {
     let mut plan = fixture();
     let work = task(&plan);

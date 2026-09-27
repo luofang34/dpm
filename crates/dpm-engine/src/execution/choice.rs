@@ -3,18 +3,29 @@
 use super::nonempty;
 use crate::EngineError;
 use chrono::{DateTime, Utc};
-use dpm_model::{DecisionId, DecisionStatus, Plan, WorkStatus};
+use dpm_model::{ActorId, ActorKind, DecisionId, DecisionStatus, Plan, WorkStatus};
 
 /// Resolve an open decision; a structured choice must name one of its option keys.
 ///
 /// A choice that would take started or reserved work out of the active graph is refused: that
 /// change needs a reviewed plan change, and in-flight work is never cancelled implicitly.
+///
+/// Only a human or service decides. A gate is how people authorize execution, and even a purely
+/// contextual decision is an organizational record agents read as authoritative; an agent that
+/// could resolve either would be approving its own scope, as ratify, apply and waive forbid.
 pub(super) fn decide(
     plan: &mut Plan,
+    actor: &ActorId,
     decision: DecisionId,
     outcome: &str,
     at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
+    if actor.kind == ActorKind::Agent {
+        return Err(EngineError::ActorNotAllowed {
+            actor: actor.clone(),
+            action: "resolve a decision",
+        });
+    }
     nonempty(&decision.to_string(), "outcome", outcome)?;
     let before = plan.applicability();
     let gate = plan

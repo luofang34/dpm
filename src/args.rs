@@ -137,7 +137,7 @@ pub(crate) enum Commands {
         #[arg(long)]
         actor: String,
     },
-    /// Resolve an open decision; a decision with options takes exactly one option key as outcome.
+    /// Resolve an open decision as a human or service; a decision with options takes exactly one option key as outcome.
     Decide {
         key: String,
         outcome: String,

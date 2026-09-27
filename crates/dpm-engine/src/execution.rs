@@ -70,7 +70,9 @@ fn execute(
             attempt,
             reason,
         } => revalidation::revalidate(plan, actor, *work, *dependency, *attempt, reason, at),
-        Command::Decide { decision, outcome } => choice::decide(plan, *decision, outcome, at),
+        Command::Decide { decision, outcome } => {
+            choice::decide(plan, actor, *decision, outcome, at)
+        }
     }
 }
 

@@ -37,7 +37,7 @@ which the store still checks atomically. Presentation text is not the API contra
 | progress KEY PERCENT --note TEXT | report_progress | Owner reports 0..100 execution; verification remains separate |
 | submit KEY --note TEXT | submit_work | Request independent verification of started work once FF/SF gates are released |
 | verify KEY --note TEXT | verify_work | Reject self-verification; re-check every relation and decision; record the finish event |
-| decide KEY OUTCOME | decide_gate | Resolve an open decision; with `options`, OUTCOME is exactly one option key |
+| decide KEY OUTCOME | decide_gate | Human/service resolves an open decision (agents are refused); with `options`, OUTCOME is exactly one option key |
 | artifact KEY FILE.json | add_artifact | Attach the same Artifact JSON object |
 | attach-git-head KEY --resource KEY | attach_git_head | Capture HEAD for an explicit task resource; locator binding is the default |
 | link-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | link_external | Link work to a provider-scoped external object; context only |

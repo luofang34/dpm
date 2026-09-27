@@ -104,7 +104,6 @@ def smoke(database):
         missing_pairs = [
             ('get_work', {'key': 'missing'}, ('show', 'missing')),
             ('claim_work', {'key': 'missing', 'base_revision': 0}, ('claim', 'missing')),
-            ('decide_gate', {'decision': 'missing', 'outcome': 'choice', 'base_revision': 0}, ('decide', 'missing', 'choice')),
         ]
         # Omitting the actor must never let one caller act as its own independent reviewer.
         before = run_cli(database, 'export')
@@ -116,6 +115,13 @@ def smoke(database):
             agent_error = worker.call(tool, arguments, error='not_found')
             cli_error = run_cli(database, *command, error='not_found')['error']
             assert agent_error['message'] == cli_error['message']
+        missing = reviewer.call('decide_gate', {'decision': 'missing', 'outcome': 'choice', 'base_revision': 0}, error='not_found')
+        assert missing['message'] == run_cli(database, 'decide', 'missing', 'choice', error='not_found')['error']['message']
+        # Resolving a decision is a human or service act; an agent is refused alike and nothing changes.
+        remote = worker.call('decide_gate', {'decision': 'TEST-GATE', 'outcome': 'Proceed', 'base_revision': 0}, error='invalid_command')
+        local = run_cli(database, 'decide', 'TEST-GATE', 'Proceed', '--actor', 'agent:parity', error='invalid_command')['error']
+        assert remote['message'] == local['message'] and 'resolve a decision' in local['message'], local
+        assert run_cli(database, 'export') == before
         context = worker.call('explain_work', {'key': 'TEST-B'})['data']['context']
         assert context['requirements'] and context['decisions'][0]['key'] == 'TEST-GATE'
         gated = worker.call('claim_work', {'key': 'TEST-B', 'base_revision': 0}, error='invalid_command')
