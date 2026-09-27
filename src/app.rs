@@ -1,5 +1,5 @@
 use crate::{
-    args::{Cli, Commands, PlanCommand, WorkspaceCommand},
+    args::{Cli, Commands, PlanCommand, StoreCommand, WorkspaceCommand},
     error::{CliError, io_error},
     output,
 };
@@ -47,6 +47,12 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
             read_plan_blocking(&file)?;
             output::value_blocking(&serde_json::json!({"valid": true, "file": file}), json)
         }
+        Commands::Store(StoreCommand::Restore { from, to }) => {
+            crate::recovery::restore_blocking(&from, &to, json)
+        }
+        Commands::Store(StoreCommand::VerifyStore { path }) => {
+            crate::recovery::verify_blocking(&cwd, path, project, database, json)
+        }
         command => {
             let mut app = open_workspace_blocking(&cwd, project.as_deref(), database.as_deref())?;
             run_open_blocking(&mut app, command, json, base_revision)
@@ -62,10 +68,10 @@ fn run_open_blocking(
 ) -> Result<(), CliError> {
     match command {
         Commands::Plan { command } => plan_command_blocking(app, command, json, base_revision),
-        Commands::History {
+        Commands::Store(StoreCommand::History {
             after_sequence,
             limit,
-        } => query_blocking(
+        }) => query_blocking(
             app,
             Query::History {
                 after_sequence,
@@ -103,6 +109,9 @@ fn run_open_blocking(
         Commands::Show { key } => query_blocking(app, Query::Show { key }, json),
         Commands::Explain { key } => query_blocking(app, Query::Explain { key }, json),
         Commands::Export => query_blocking(app, Query::Export, true),
+        Commands::Store(StoreCommand::Backup { to }) => {
+            crate::recovery::backup_blocking(app, &to, json)
+        }
         Commands::Tui => {
             let plan = app.plan_blocking()?;
             dpm_tui::run_reloading_blocking(&plan, app.is_read_only(), || {

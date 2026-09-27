@@ -31,7 +31,54 @@ unsupported formats fail explicitly. A portable plan contains no device bindings
 An existing locator requires the imported workspace identity to match. `export` produces a snapshot,
 not a backup of operation history. Edit that export and use `plan diff` / `plan apply --reason`
 to maintain live state through reviewed commands; the file revision is an atomic precondition.
-`history` reads committed operations. Keep consistent database backups for recovery.
+`history` reads committed operations.
+
+## Backup, restore and verification
+
+JSON export is not a backup: it omits the operation history. Copying `state.sqlite` while any
+process has it open is not a backup either, because committed pages may still live in
+`state.sqlite-wal`. Use the commands below. `backup` and `verify-store` without a path use the store selected by
+`--database`, `--project` or discovery; `restore` and `verify-store PATH` take explicit files.
+None of them appends operations or changes revisions.
+
+```sh
+dpm backup --to /backups/plan-2026-09-26.sqlite
+dpm verify-store /backups/plan-2026-09-26.sqlite
+dpm restore --from /backups/plan-2026-09-26.sqlite --to /path/to/new/state.sqlite
+dpm verify-store            # the selected workspace's live store
+```
+
+- `backup` copies one consistent snapshot of the live store with SQLite's online backup API while
+  other processes keep writing. The file holds the snapshot, the full operation history and the
+  schema version in one self-contained file (no `-wal`), and is verified before the command succeeds.
+- `restore` verifies the backup, copies it to a path that must not exist yet, and verifies the
+  result. It never overwrites live state and never changes locators or device bindings: point a
+  locator's `database` at the restored file, or run `dpm workspace register --replace --database
+  NEW_PATH`, once you have checked the reported workspace identity and revision.
+- `verify-store [PATH]` opens the file read-only and checks SQLite page integrity, the schema
+  version and layout, that the snapshot loads and validates, that operation revisions form one
+  consecutive chain, and that the snapshot revision equals the last operation's result. It reports
+  the workspace identity, revision and operation count.
+
+Any destination that already exists, including a leftover `-wal`, `-shm` or `-journal` side file,
+fails with `target_exists`; damaged files fail with `corrupt_store`. These are device-local operator
+commands, so they are CLI-only; MCP tools do not read or write arbitrary local paths.
+
+## Store schema version
+
+The store records its layout version in SQLite's `user_version` header. Every open checks it
+before writing anything:
+
+- a newer version than this binary supports fails with `unsupported_schema_version` and leaves the
+  file untouched; use the release that wrote it, and take a backup with that release before
+  upgrading or downgrading;
+- version 1 is the current layout; a store created before versioning (header 0 with exactly the
+  version 1 tables) opens normally, read-only commands leave it untouched, and its next write
+  records version 1 in the same transaction;
+- an SQLite file with other tables is refused rather than modified.
+
+A future layout change will migrate a known older version in one transaction when the store is
+opened for writing; an older version without a migration is refused with instructions.
 
 ## One workspace, several entry points
 

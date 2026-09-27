@@ -296,6 +296,15 @@ Operations already include actor, timestamp, command, base revision, and resulti
 operation replay, semantic merge, CRDT text collaboration, and remote synchronization are future
 milestones.
 
+The store records its layout version in SQLite's `user_version` header and checks it on every
+open before any write: newer versions are refused untouched, the unversioned baseline layout is
+stamped by its next write transaction, and layout migrations run in one transaction or are refused.
+Recovery uses `dpm backup` (SQLite online backup of one consistent snapshot, full operation history
+and schema version into a new file), `dpm restore` (into a new path only) and read-only
+`dpm verify-store` (page integrity, layout, snapshot validation, contiguous history ending at the
+snapshot revision). JSON export is not a backup, and copying a live WAL database file is unsafe;
+see [backup and restore](projects.md#backup-restore-and-verification).
+
 SQLite is durable operational state, not a disposable cache of an exported plan. A workspace can
 span multiple repositories and non-code projects; Git roots affect discovery, not domain scope.
 Resources have stable IDs and explicit task requirements. Device-local workspace bindings select

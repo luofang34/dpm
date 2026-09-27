@@ -109,6 +109,11 @@ impl AppError {
             Self::Engine(dpm_engine::EngineError::TrackingOwned { .. }) => "tracking_conflict",
             Self::Engine(_) => "invalid_command",
             Self::Interchange(error) => error.code(),
+            Self::Store(dpm_store::StoreError::UnsupportedSchemaVersion { .. }) => {
+                "unsupported_schema_version"
+            }
+            Self::Store(dpm_store::StoreError::TargetExists { .. }) => "target_exists",
+            Self::Store(error) if error.is_corruption() => "corrupt_store",
             Self::Store(_) => "storage_error",
             Self::Json(_) | Self::InvalidRequest(_) => "invalid_request",
         }

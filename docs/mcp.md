@@ -132,7 +132,8 @@ rewrite one; record it with `link_external`.
 
 `history` returns entries in append order with a `next_after_sequence` cursor (default limit 100,
 capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export
-is not an operation backup; retain consistent SQLite backups for recovery.
+is not an operation backup; use the CLI's `backup`, `restore` and `verify-store`
+([recovery](projects.md#backup-restore-and-verification)).
 
 ## Microsoft Project XML interchange
 
@@ -500,6 +501,7 @@ Specification:
 
 `python3 scripts/smoke_tracking.py` covers external links through both adapters.
 `python3 scripts/smoke_interchange.py` covers MSPDI import/export parity, refused applies and round trips.
+`python3 scripts/smoke_store.py` covers schema-version refusal, backups during writes, restore and verification.
 `python3 scripts/smoke_agent.py` verifies real-process CLI/MCP query equality and shared execution,
 progress reporting, revision conflict, evidence, blocker, decision and independent-verification behavior.
 It includes `scripts/smoke_conditional.py`, which covers conditional-work parity and choice changes.

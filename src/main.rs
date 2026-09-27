@@ -5,6 +5,7 @@ mod args;
 mod error;
 mod interchange;
 mod output;
+mod recovery;
 mod tracking;
 
 use clap::Parser;

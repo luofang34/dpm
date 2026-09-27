@@ -1,4 +1,4 @@
-use crate::{StoreError, error::database_error};
+use crate::{StoreError, error::database_error, schema};
 use dpm_engine::{Operation, apply_command};
 use dpm_model::Plan;
 use rusqlite::{Connection, OpenFlags, TransactionBehavior, params};
@@ -8,7 +8,9 @@ use std::{
 };
 
 mod history;
+mod recovery;
 pub use history::{HistoryEntry, HistoryPage};
+pub use recovery::{IntegrityReport, restore_store_blocking, verify_store_blocking};
 mod snapshot;
 use snapshot::{load_blocking, revision_to_sql};
 
@@ -26,7 +28,8 @@ impl SqliteStore {
         Self::prepare_blocking(connection, path, true)
     }
 
-    /// Open an existing database without creating a new file or modifying its schema.
+    /// Open an existing database without creating a new file or writing to it; an unversioned
+    /// baseline store is stamped with the current schema version by its next write.
     pub fn open_existing_blocking(path: impl AsRef<Path>) -> Result<Self, StoreError> {
         let path = path.as_ref().to_path_buf();
         let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE)
@@ -43,42 +46,22 @@ impl SqliteStore {
     }
 
     fn prepare_blocking(
-        connection: Connection,
+        mut connection: Connection,
         path: PathBuf,
-        migrate: bool,
+        create: bool,
     ) -> Result<Self, StoreError> {
         connection
             .busy_timeout(Duration::from_secs(5))
             .map_err(database_error(&path, "set busy timeout"))?;
-        let store = Self { connection, path };
-        if migrate {
-            store.migrate_blocking()?;
+        // Runs before any write, so an unsupported store is left byte-for-byte untouched.
+        schema::check_blocking(&connection, &path)?;
+        if create {
+            connection
+                .execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")
+                .map_err(database_error(&path, "configure database"))?;
+            schema::create_blocking(&mut connection, &path)?;
         }
-        Ok(store)
-    }
-
-    fn migrate_blocking(&self) -> Result<(), StoreError> {
-        self.connection
-            .execute_batch(
-                "PRAGMA foreign_keys = ON;
-             PRAGMA journal_mode = WAL;
-             CREATE TABLE IF NOT EXISTS plan_state (
-                 singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                 revision INTEGER NOT NULL,
-                 plan_json TEXT NOT NULL
-             );
-             CREATE TABLE IF NOT EXISTS operations (
-                 sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-                 operation_id TEXT NOT NULL UNIQUE,
-                 base_revision INTEGER NOT NULL,
-                 resulting_revision INTEGER NOT NULL,
-                 actor_json TEXT NOT NULL,
-                 timestamp TEXT NOT NULL,
-                 command_json TEXT NOT NULL
-             );",
-            )
-            .map_err(database_error(&self.path, "initialize schema"))?;
-        Ok(())
+        Ok(Self { connection, path })
     }
 
     /// Read and validate the authoritative snapshot, if initialized.
@@ -104,6 +87,7 @@ impl SqliteStore {
         if occupied {
             return Err(StoreError::AlreadyInitialized(self.path.clone()));
         }
+        schema::stamp_blocking(&transaction, &self.path)?;
         transaction
             .execute(
                 "INSERT INTO plan_state(singleton, revision, plan_json) VALUES(1, ?1, ?2)",
@@ -136,6 +120,7 @@ impl SqliteStore {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(database_error(&self.path, "begin operation"))?;
+        schema::stamp_blocking(&transaction, &self.path)?;
         let mut expected = load_blocking(&transaction, &self.path)?
             .ok_or_else(|| StoreError::NotInitialized(self.path.clone()))?;
         if expected.revision != operation.base_revision {

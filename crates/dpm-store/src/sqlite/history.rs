@@ -3,6 +3,7 @@ use crate::{StoreError, error::database_error};
 use dpm_engine::Operation;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// One immutable operation addressed by its local append order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,10 +40,11 @@ impl SqliteStore {
             .ok_or_else(|| StoreError::NotInitialized(self.path.clone()))?;
         let mut entries = Vec::new();
         if let Ok(cursor) = i64::try_from(after_sequence) {
-            let mut statement = transaction.prepare(
-                "SELECT sequence, operation_id, base_revision, resulting_revision, actor_json, timestamp, command_json
-                 FROM operations WHERE sequence > ?1 ORDER BY sequence LIMIT ?2"
-            ).map_err(database_error(&self.path, "prepare history query"))?;
+            let mut statement = transaction
+                .prepare(&format!(
+                    "{OPERATION_COLUMNS} WHERE sequence > ?1 ORDER BY sequence LIMIT ?2"
+                ))
+                .map_err(database_error(&self.path, "prepare history query"))?;
             let mut rows = statement
                 .query(params![cursor, limit.min(1000)])
                 .map_err(database_error(&self.path, "query history"))?;
@@ -50,30 +52,7 @@ impl SqliteStore {
                 .next()
                 .map_err(database_error(&self.path, "read history"))?
             {
-                let get_string = |index| {
-                    row.get::<_, String>(index)
-                        .map_err(database_error(&self.path, "read operation field"))
-                };
-                let get_revision = |index| {
-                    row.get::<_, i64>(index)
-                        .map(|n| u64::from_ne_bytes(n.to_ne_bytes()))
-                        .map_err(database_error(&self.path, "read operation revision"))
-                };
-                entries.push(HistoryEntry {
-                    sequence: row
-                        .get(0)
-                        .map_err(database_error(&self.path, "read history cursor"))?,
-                    operation: Operation {
-                        id: serde_json::from_value(serde_json::Value::String(get_string(1)?))?,
-                        base_revision: get_revision(2)?,
-                        resulting_revision: get_revision(3)?,
-                        actor: serde_json::from_str(&get_string(4)?)?,
-                        timestamp: serde_json::from_value(serde_json::Value::String(get_string(
-                            5,
-                        )?))?,
-                        command: serde_json::from_str(&get_string(6)?)?,
-                    },
-                });
+                entries.push(read_entry(row, &self.path)?);
             }
         }
         transaction
@@ -87,6 +66,36 @@ impl SqliteStore {
             entries,
         })
     }
+}
+
+/// Selects the columns [`read_entry`] expects, in its order.
+pub(crate) const OPERATION_COLUMNS: &str = "SELECT sequence, operation_id, base_revision, \
+     resulting_revision, actor_json, timestamp, command_json FROM operations";
+
+/// Decode one row selected with [`OPERATION_COLUMNS`].
+pub(crate) fn read_entry(row: &rusqlite::Row<'_>, path: &Path) -> Result<HistoryEntry, StoreError> {
+    let get_string = |index| {
+        row.get::<_, String>(index)
+            .map_err(database_error(path, "read operation field"))
+    };
+    let get_revision = |index| {
+        row.get::<_, i64>(index)
+            .map(|n| u64::from_ne_bytes(n.to_ne_bytes()))
+            .map_err(database_error(path, "read operation revision"))
+    };
+    Ok(HistoryEntry {
+        sequence: row
+            .get(0)
+            .map_err(database_error(path, "read history cursor"))?,
+        operation: Operation {
+            id: serde_json::from_value(serde_json::Value::String(get_string(1)?))?,
+            base_revision: get_revision(2)?,
+            resulting_revision: get_revision(3)?,
+            actor: serde_json::from_str(&get_string(4)?)?,
+            timestamp: serde_json::from_value(serde_json::Value::String(get_string(5)?))?,
+            command: serde_json::from_str(&get_string(6)?)?,
+        },
+    })
 }
 
 #[cfg(test)]

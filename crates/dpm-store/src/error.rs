@@ -63,6 +63,105 @@ pub enum StoreError {
         /// Revision inside the plan JSON.
         json: u64,
     },
+    /// The store was written by a binary with a different, unsupported layout version.
+    #[error(
+        "store at {path} has schema version {found}, but this dpm supports up to {supported}; \
+         nothing was written: open it with the dpm release that wrote it, or back it up with that \
+         release before upgrading"
+    )]
+    UnsupportedSchemaVersion {
+        /// Database carrying the version.
+        path: PathBuf,
+        /// Version recorded in the store header.
+        found: i64,
+        /// Newest version this binary understands.
+        supported: i64,
+    },
+    /// The file is SQLite but its tables are not a DPM store layout.
+    #[error("{path} is not a DPM store: {detail}")]
+    UnrecognizedSchema {
+        /// Inspected database.
+        path: PathBuf,
+        /// First layout difference found.
+        detail: String,
+    },
+    /// Backup and restore only ever create new files.
+    #[error("{path} already exists; choose a new path, existing files are never overwritten")]
+    TargetExists {
+        /// Existing file or SQLite side file at the target location.
+        path: PathBuf,
+    },
+    /// A filesystem operation outside SQLite failed.
+    #[error("{action} {path}: {source}")]
+    Io {
+        /// Failed filesystem action.
+        action: &'static str,
+        /// Affected location.
+        path: PathBuf,
+        /// Original I/O error.
+        #[source]
+        source: std::io::Error,
+    },
+    /// The online backup did not copy every page in one step.
+    #[error("backup into {path} did not complete: {state}")]
+    BackupIncomplete {
+        /// Destination being written.
+        path: PathBuf,
+        /// SQLite step result that ended the copy.
+        state: String,
+    },
+    /// SQLite's page-level integrity check reported damage.
+    #[error("integrity check failed for {path}: {}", problems.join("; "))]
+    IntegrityCheckFailed {
+        /// Damaged database.
+        path: PathBuf,
+        /// First reported problems.
+        problems: Vec<String>,
+    },
+    /// Operation revisions do not form one consecutive chain.
+    #[error(
+        "history of {path} breaks at sequence {sequence}: expected revision {expected}, found {found}"
+    )]
+    HistoryDiscontinuity {
+        /// Inspected database.
+        path: PathBuf,
+        /// Local append sequence of the offending operation.
+        sequence: u64,
+        /// Revision the chain requires.
+        expected: u64,
+        /// Revision the operation records.
+        found: u64,
+    },
+    /// The snapshot is not the state produced by the last recorded operation.
+    #[error(
+        "snapshot of {path} is at revision {snapshot}, but the last operation produced {last_operation}"
+    )]
+    SnapshotRevisionMismatch {
+        /// Inspected database.
+        path: PathBuf,
+        /// Revision of the stored snapshot.
+        snapshot: u64,
+        /// Resulting revision of the last operation.
+        last_operation: u64,
+    },
+}
+
+impl StoreError {
+    /// Whether the stored data itself is damaged or inconsistent, as opposed to a refused request.
+    pub fn is_corruption(&self) -> bool {
+        match self {
+            Self::IntegrityCheckFailed { .. }
+            | Self::HistoryDiscontinuity { .. }
+            | Self::SnapshotRevisionMismatch { .. }
+            | Self::CorruptSnapshot { .. }
+            | Self::UnrecognizedSchema { .. } => true,
+            Self::Database { source, .. } => matches!(
+                source.sqlite_error_code(),
+                Some(rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase)
+            ),
+            _ => false,
+        }
+    }
 }
 
 pub(crate) fn database_error(

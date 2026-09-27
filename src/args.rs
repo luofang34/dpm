@@ -30,13 +30,8 @@ pub(crate) enum Commands {
         #[command(subcommand)]
         command: PlanCommand,
     },
-    /// Read append-only semantic operations in chronological pages.
-    History {
-        #[arg(long, default_value_t = 0)]
-        after_sequence: u64,
-        #[arg(long, default_value_t = 100)]
-        limit: u16,
-    },
+    #[command(flatten)]
+    Store(StoreCommand),
     /// Manage device-local bindings to existing workspaces.
     Workspace {
         #[command(subcommand)]
@@ -227,6 +222,38 @@ pub(crate) enum Commands {
         reason: String,
         #[arg(long)]
         actor: String,
+    },
+}
+
+/// Operation log and store-file commands, flattened into the top-level command list.
+#[derive(Debug, Subcommand)]
+pub(crate) enum StoreCommand {
+    /// Read append-only semantic operations in chronological pages.
+    History {
+        #[arg(long, default_value_t = 0)]
+        after_sequence: u64,
+        #[arg(long, default_value_t = 100)]
+        limit: u16,
+    },
+    /// Write a consistent, verified copy of the store, including all history, to a new file.
+    Backup {
+        /// New backup file; an existing file is never overwritten.
+        #[arg(long)]
+        to: PathBuf,
+    },
+    /// Restore a verified backup into a new store file, then verify it; never overwrites.
+    Restore {
+        /// Backup written by `dpm backup`.
+        #[arg(long)]
+        from: PathBuf,
+        /// New store location; point a locator or binding at it explicitly afterwards.
+        #[arg(long)]
+        to: PathBuf,
+    },
+    /// Check pages, schema version, snapshot and history continuity without writing.
+    VerifyStore {
+        /// Store or backup file; defaults to the selected workspace's store.
+        path: Option<PathBuf>,
     },
 }
 

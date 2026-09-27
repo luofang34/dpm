@@ -1,0 +1,182 @@
+use super::*;
+use crate::SqliteStore;
+use chrono::Utc;
+use dpm_engine::{Command, Operation, apply_command};
+use dpm_model::{ActorId, Plan};
+use std::path::PathBuf;
+
+/// The layout written by stores created before the version header was introduced.
+const BASELINE_DDL: &str = "CREATE TABLE plan_state (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    revision INTEGER NOT NULL,
+    plan_json TEXT NOT NULL
+);
+CREATE TABLE operations (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    operation_id TEXT NOT NULL UNIQUE,
+    base_revision INTEGER NOT NULL,
+    resulting_revision INTEGER NOT NULL,
+    actor_json TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    command_json TEXT NOT NULL
+);";
+
+fn fixture() -> Plan {
+    serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture")
+}
+
+fn claim(plan: &mut Plan) -> Operation {
+    let work = plan.find_work_by_key("TEST-A").expect("task").id;
+    apply_command(
+        plan,
+        ActorId::agent("owner"),
+        Command::Claim { work },
+        Utc::now(),
+    )
+    .expect("claim")
+}
+
+fn version(path: &Path) -> i64 {
+    let connection = Connection::open(path).expect("raw connection");
+    stored_version_blocking(&connection, path).expect("version")
+}
+
+fn baseline_store(dir: &Path) -> (PathBuf, Plan) {
+    let path = dir.join("baseline.sqlite");
+    let plan = fixture();
+    let connection = Connection::open(&path).expect("raw connection");
+    connection
+        .execute_batch(&format!("PRAGMA journal_mode = WAL; {BASELINE_DDL}"))
+        .expect("baseline layout");
+    connection
+        .execute(
+            "INSERT INTO plan_state(singleton, revision, plan_json) VALUES(1, 0, ?1)",
+            [serde_json::to_string(&plan).expect("json")],
+        )
+        .expect("baseline snapshot");
+    (path, plan)
+}
+
+#[test]
+fn new_stores_record_the_current_schema_version() {
+    let dir = tempfile::tempdir().expect("directory");
+    let path = dir.path().join("new.sqlite");
+    SqliteStore::open_blocking(&path)
+        .expect("store")
+        .initialize_blocking(&fixture())
+        .expect("initialize");
+    assert_eq!(version(&path), SCHEMA_VERSION);
+}
+
+#[test]
+fn unversioned_baseline_stores_open_read_only_and_are_stamped_by_the_next_write() {
+    let dir = tempfile::tempdir().expect("directory");
+    let (path, mut plan) = baseline_store(dir.path());
+    let mut store = SqliteStore::open_existing_blocking(&path).expect("open baseline");
+    assert_eq!(store.load_blocking().expect("load"), Some(plan.clone()));
+    assert_eq!(version(&path), 0, "reads must not write");
+    let mut stale = plan.clone();
+    let mut conflicting = claim(&mut stale);
+    conflicting.base_revision = 7;
+    conflicting.resulting_revision = 8;
+    stale.revision = 8;
+    assert!(matches!(
+        store.persist_blocking(&stale, &conflicting),
+        Err(StoreError::RevisionConflict { .. })
+    ));
+    assert_eq!(
+        version(&path),
+        0,
+        "the stamp rolls back with a refused write"
+    );
+    let operation = claim(&mut plan);
+    store.persist_blocking(&plan, &operation).expect("persist");
+    assert_eq!(version(&path), SCHEMA_VERSION);
+    drop(store);
+    let reopened = SqliteStore::open_blocking(&path).expect("reopen for writing");
+    assert_eq!(reopened.load_blocking().expect("load"), Some(plan));
+    assert_eq!(reopened.operation_count_blocking().expect("count"), 1);
+}
+
+#[test]
+fn opening_a_baseline_store_for_writing_stamps_it_without_touching_data() {
+    let dir = tempfile::tempdir().expect("directory");
+    let (path, plan) = baseline_store(dir.path());
+    let store = SqliteStore::open_blocking(&path).expect("open baseline");
+    assert_eq!(version(&path), SCHEMA_VERSION);
+    assert_eq!(store.load_blocking().expect("load"), Some(plan));
+}
+
+#[test]
+fn newer_schema_versions_are_refused_without_any_write() {
+    let dir = tempfile::tempdir().expect("directory");
+    let path = dir.path().join("future.sqlite");
+    SqliteStore::open_blocking(&path)
+        .expect("store")
+        .initialize_blocking(&fixture())
+        .expect("initialize");
+    Connection::open(&path)
+        .expect("raw connection")
+        .execute_batch("PRAGMA journal_mode = DELETE; PRAGMA user_version = 99;")
+        .expect("future version");
+    let before = std::fs::read(&path).expect("bytes");
+    let refused = |result: Result<SqliteStore, StoreError>| {
+        assert!(matches!(
+            result,
+            Err(StoreError::UnsupportedSchemaVersion {
+                found: 99,
+                supported: SCHEMA_VERSION,
+                ..
+            })
+        ));
+    };
+    refused(SqliteStore::open_existing_blocking(&path));
+    refused(SqliteStore::open_blocking(&path));
+    assert!(matches!(
+        crate::verify_store_blocking(&path),
+        Err(StoreError::UnsupportedSchemaVersion { found: 99, .. })
+    ));
+    assert_eq!(std::fs::read(&path).expect("bytes"), before);
+    assert!(!dir.path().join("future.sqlite-wal").exists());
+}
+
+#[test]
+fn a_version_raised_by_another_process_after_open_is_never_downgraded() {
+    let dir = tempfile::tempdir().expect("directory");
+    let path = dir.path().join("raced.sqlite");
+    let mut store = SqliteStore::open_blocking(&path).expect("store");
+    let mut plan = fixture();
+    store.initialize_blocking(&plan).expect("initialize");
+    Connection::open(&path)
+        .expect("raw connection")
+        .execute_batch("PRAGMA user_version = 2")
+        .expect("newer binary");
+    let operation = claim(&mut plan);
+    assert!(matches!(
+        store.persist_blocking(&plan, &operation),
+        Err(StoreError::UnsupportedSchemaVersion { found: 2, .. })
+    ));
+    assert_eq!(version(&path), 2);
+    assert_eq!(store.operation_count_blocking().expect("count"), 0);
+}
+
+#[test]
+fn foreign_sqlite_files_are_refused_and_left_unchanged() {
+    let dir = tempfile::tempdir().expect("directory");
+    let path = dir.path().join("foreign.sqlite");
+    Connection::open(&path)
+        .expect("raw connection")
+        .execute_batch("CREATE TABLE notes(body TEXT)")
+        .expect("foreign table");
+    let before = std::fs::read(&path).expect("bytes");
+    for result in [
+        SqliteStore::open_blocking(&path),
+        SqliteStore::open_existing_blocking(&path),
+    ] {
+        assert!(matches!(result, Err(StoreError::UnrecognizedSchema { .. })));
+    }
+    assert_eq!(std::fs::read(&path).expect("bytes"), before);
+}

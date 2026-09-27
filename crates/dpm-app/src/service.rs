@@ -318,5 +318,8 @@ impl Application {
     }
 }
 
+mod recovery;
+pub use recovery::{restore_store_blocking, store_path_blocking, verify_store_blocking};
+
 #[cfg(test)]
 mod tests;
