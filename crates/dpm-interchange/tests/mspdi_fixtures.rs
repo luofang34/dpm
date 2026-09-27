@@ -70,6 +70,7 @@ fn release_fixture_maps_outline_durations_and_links() {
     let plan = workspace();
     let result = import(&plan, RELEASE);
     let candidate = &result.candidate;
+    assert!(result.report.source.scope.contains("not calendar dates"));
     assert_eq!(result.report.items[0].outcome, ItemOutcome::Skipped);
     let kinds: Vec<_> = result.report.items[1..]
         .iter()
@@ -240,6 +241,38 @@ fn applied_fixture_reimports_and_exports_without_semantic_changes() {
             .links
             .iter()
             .all(|l| l.outcome == LinkOutcome::Preserved)
+    );
+}
+
+#[test]
+fn cjk_names_survive_export_and_repeated_imports_never_duplicate() {
+    let source = RELEASE
+        .replace(
+            "<Name>Write specification</Name>",
+            "<Name>编写规格说明</Name>",
+        )
+        .replace("<Name>Design approved</Name>", "<Name>设计批准</Name>");
+    let mut plan = workspace();
+    let first = import(&plan, &source).candidate;
+    apply(&mut plan, first);
+    let count = plan.work_items.len();
+    for xml in [
+        source.clone(),
+        export_mspdi(&plan, "REL").expect("export").xml,
+    ] {
+        assert!(xml.contains("编写规格说明") && xml.contains("设计批准"));
+        let again = import(&plan, &xml);
+        assert_eq!(again.candidate.work_items.len(), count);
+        assert!(
+            propose_change(&plan, &again.candidate)
+                .expect("preview")
+                .changes
+                .is_empty()
+        );
+    }
+    assert_eq!(
+        plan.find_work_by_key("REL-3").expect("spec").title,
+        "编写规格说明"
     );
 }
 

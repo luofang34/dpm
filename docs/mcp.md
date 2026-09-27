@@ -140,7 +140,7 @@ The supported external format is the documented Microsoft Project XML schema (MS
 Microsoft Project, ProjectLibre, OmniPlan and MPXJ read and write. Binary `.mpp` and Primavera
 files are not supported; convert them to MSPDI with another tool first. Tests read documents
 written by MPXJ and check that MPXJ reads DPM's export back unchanged; acceptance by Microsoft
-Project itself is not verified. `dpm-interchange` parses
+Project or OmniPlan itself is not verified. `dpm-interchange` parses
 and writes the subset without network access and never touches the store.
 
 `plan import-mspdi FILE --project-key KEY [--key-prefix P] [--candidate OUT.json]` and
@@ -162,6 +162,11 @@ revision and operation history unchanged.
 | `Duration` `PTnHnMnS` | Single-point estimate O=M=P in hours; zero means unestimated |
 | `PredecessorLink` `Type` 0/1/2/3 | FF/FS/SF/SS dependency |
 | `LinkLag` | `lag_hours = LinkLag / 600` (tenths of a minute) |
+
+Interchange preserves plan structure, not calendar dates. Source start and finish dates are ignored
+because DPM derives dates from the graph; working-time durations and lags become continuous elapsed
+hours; calendars (including resource calendars), resources, assignments and date constraints are
+reported as not imported. `report.source.scope` states this boundary in every import report.
 
 DPM schedules elapsed hours. Elapsed duration/lag formats (`em`, `eh`, `ed`, `ew`, `emo`) convert
 exactly. Working-time formats (`m`, `h`, `d`, `w`, `mo`) keep their hour value but lose the

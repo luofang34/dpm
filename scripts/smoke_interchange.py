@@ -29,6 +29,7 @@ def check_imports(database, worker):
         local = run_cli(database, *import_args(FIXTURES / fixture))
         assert remote['data'] == local and remote['revision'] == before['revision'], fixture
         assert local['preview']['base_revision'] == before['revision']
+        assert 'not calendar dates' in local['report']['source']['scope'], fixture
         for item in local['report']['items']:
             work = item['work']
             assert work is None or work['status'] in ('Proposed', 'Planned'), item

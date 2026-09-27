@@ -41,6 +41,8 @@ pub struct SourceSummary {
     pub project_guid: Option<String>,
     /// Source project name, when present.
     pub name: Option<String>,
+    /// What an import carries: plan structure, never calendar dates.
+    pub scope: String,
 }
 
 /// Local work that a source task maps to in the candidate.

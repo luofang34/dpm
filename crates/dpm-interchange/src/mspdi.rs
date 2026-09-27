@@ -26,6 +26,15 @@ pub use report::{
     WorkReference,
 };
 
+/// Stated in every import report so no reader mistakes the candidate for a dated schedule.
+const IMPORT_SCOPE: &str = concat!(
+    "Imports plan structure (outline, kinds, names, notes, priority, durations, relations and ",
+    "lags), not calendar dates. Working-time durations and lags become continuous elapsed hours; ",
+    "calendars (including resource calendars), resources, assignments and date constraints are ",
+    "reported as not imported; source start and finish dates are ignored because DPM derives ",
+    "dates from the graph."
+);
+
 /// Where imported work goes and how new work is keyed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -85,6 +94,7 @@ pub fn import_mspdi(
                 format: "mspdi".into(),
                 project_guid: source.guid.map(encoding::format_guid),
                 name: source.name.clone(),
+                scope: IMPORT_SCOPE.into(),
             },
             target_project: dpm_model::Key::new(options.project_key.clone()),
             items: outline.reports,
