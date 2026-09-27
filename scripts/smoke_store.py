@@ -171,6 +171,17 @@ def retired(directory, backup):
         assert not list(directory.glob(f'retired-{version}.sqlite-*'))
 
 
+def golden(directory):
+    """The checked-in store an earlier build wrote must still verify, replay included."""
+    path = directory / 'golden.sqlite'
+    with sqlite3.connect(path) as connection:
+        connection.executescript((ROOT / 'tests/support/golden-v3-store.sql').read_text())
+    report = cli('verify-store', path)
+    assert report['schema_version'] == 3 and report['operation_count'] >= 10, report
+    entries = history(path)
+    assert any('ApplyChange' in entry['operation']['command'] for entry in entries), entries
+
+
 def discovered(directory):
     root = directory / 'project'
     root.mkdir()
@@ -199,8 +210,10 @@ if __name__ == '__main__':
         backup = round_trip(directory, live)
         damage(directory, backup)
         versions(directory, backup)
+        golden(directory)
         discovered(directory)
     print('PASS: newer and retired schema versions refused unchanged with guidance, consistent backups '
           'during writes, verified restore to new paths only, exact-layout corruption detection, '
           'replay from genesis reproducing the snapshot with divergence reported and never restored, '
+          'the checked-in golden store still replaying, '
           'side-file target refusal and read-only verification through the CLI')

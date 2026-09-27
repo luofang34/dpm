@@ -272,5 +272,6 @@ fn verification_is_read_only() {
     assert_eq!(std::fs::read(&backup).expect("bytes"), before);
 }
 
+mod golden;
 mod replay_history;
 mod tampering;
