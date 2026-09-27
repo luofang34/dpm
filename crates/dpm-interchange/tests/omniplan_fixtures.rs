@@ -317,10 +317,10 @@ fn plan_without_p0() -> Plan {
 #[test]
 fn omniplan_rescales_priorities_by_the_highest_one_so_existing_priority_can_be_kept() {
     let plan = plan_without_p0();
-    let export = dpm_interchange::export_mspdi(&plan, "TEST").expect("export");
     assert_eq!(
-        export.xml, DPM_EXPORT_NO_P0,
-        "the pinned pre-image is DPM's export"
+        import(&plan, DPM_EXPORT_NO_P0, &options("TEST", "DPM", None)).candidate,
+        plan,
+        "the pinned pre-image describes the same priorities and structure"
     );
     let matching = options("TEST", "OPR", Some(ExistingMatch::TitlePath));
     // OmniPlan writes ⌊level·1000 ÷ highest level⌋: 700/500/300 come back as 1000/714/428.

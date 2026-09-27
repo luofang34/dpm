@@ -21,7 +21,7 @@ const CONSTRAINTS: [&str; 8] = [
 const PROGRESS: &str =
     "not imported; source progress never completes, submits or verifies local work";
 
-pub(crate) fn task_findings(node: Node) -> Vec<Finding> {
+pub(crate) fn task_findings(node: Node, metadata_field: Option<&str>) -> Vec<Finding> {
     let mut findings = Vec::new();
     let number = |name: &'static str| {
         text(node, name)
@@ -75,7 +75,7 @@ pub(crate) fn task_findings(node: Node) -> Vec<Finding> {
         ));
     }
     count(&mut findings, node, "Baseline", "baselines");
-    count(&mut findings, node, "ExtendedAttribute", "custom_fields");
+    custom_findings(&mut findings, node, metadata_field);
     count(&mut findings, node, "OutlineCode", "outline_codes");
     count(&mut findings, node, "TimephasedData", "timephased_data");
     if flag(node, "Manual") {
@@ -111,4 +111,21 @@ fn count(findings: &mut Vec<Finding>, node: Node, element: &'static str, field: 
 
 fn is_zero_duration(value: &str) -> bool {
     super::encoding::parse_duration(value) == Ok(0)
+}
+
+fn custom_findings(findings: &mut Vec<Finding>, node: Node, metadata_field: Option<&str>) {
+    let count = children(node, "ExtendedAttribute")
+        .filter(|n| metadata_field.is_none() || text(*n, "FieldID") != metadata_field)
+        .count();
+    if count > 0 {
+        findings.push(Finding::new(
+            "custom_fields",
+            format!("{count} ExtendedAttribute element(s) not imported"),
+        ));
+    }
+    if let Some(wbs) = text(node, "WBS")
+        && Some(wbs) != text(node, "OutlineNumber")
+    {
+        findings.push(Finding::new("wbs", format!("WBS {wbs:?} differs from outline {:?}; hierarchy follows OutlineLevel and document order", text(node, "OutlineNumber"))));
+    }
 }

@@ -67,3 +67,9 @@ In the other direction, DPM's export of the imported `omniplan-native.xml` opene
 with the same groups, milestones, relation kinds, lead times and CJK names (that export listed
 top-level items in text key order); OmniPlan's MSPDI export of that document imports back with no changes under
 `--match-existing-by title-path`.
+
+`dpm-metadata-roundtrip.xml` is the CLI export of `tests/support/execution-plan.json`.
+`omniplan-metadata-roundtrip.xml` was imported, renamed at TEST-A, saved and exported by
+OmniPlan 4.10.3 Pro. `mpxj-metadata-roundtrip.xml` is the independent MPXJ 16.9.0 rewrite
+using `MpxjRewrite.java`. Both retain the Text1 alias `DPM.Metadata.v1` and its identity/key/O-M-P
+payload. The tests read the saved external files; they do not simulate those writers.

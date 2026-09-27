@@ -315,13 +315,15 @@ revision and operation history unchanged.
 
 | MSPDI | DPM candidate |
 | --- | --- |
-| Task `GUID` | Work identity. Without one, an identity derived from the project `GUID` and task `UID`; without either, one derived from the target project, the explicit key prefix and the task `UID` (see [identity without GUIDs](#identity-without-guids)) |
+| `DPM.Metadata.v1` custom field | Versioned ID, key and O/M/P, carried in Text1 (FieldID 188743731). The alias identifies the field even if a writer changes its number. Metadata identity survives renamed titles and replaced/dropped GUIDs. Existing local keys stay local; new work uses the carried key. Duplicate identities or invalid metadata refuse import. |
+| Task `GUID` | Work identity when DPM metadata is absent. Without one, an identity derived from the project `GUID` and task `UID`; without either, one derived from the target project, the explicit key prefix and the task `UID` (see [identity without GUIDs](#identity-without-guids)) |
 | `OutlineLevel` order | `parent`; a summary task (or any task with children) becomes a WorkPackage |
 | `Milestone=1` | Milestone; a nonzero source duration is dropped and reported. Without the element, existing work keeps its kind (reported as `kept`) and new work defaults to Task (reported as approximated) |
 | other tasks | Task, `Proposed`, empty acceptance: never executable until ratified. A zero-duration task without the flag stays an unestimated Task, so exported unestimated tasks keep their kind |
 | `Name`, `Notes` | `title`, `objective`; an empty name or absent notes keep the local value. Trailing line breaks in `Notes` are not content (OmniPlan ends every note with one) and are dropped |
 | `Priority` 0..1000 | P0 ≥800, P1 ≥600, P2 ≥400, P3 ≥200, else P4; export writes 900/700/500/300/100. Absent: existing work keeps its priority; new work gets the MSPDI default 500 (P2), reported as approximated. OmniPlan rescales on export: it writes ⌊level·1000 ÷ highest level in the document⌋ with level = priority ÷ 100 (the `UID` 0 summary does not count), so the highest priority always comes back as 1000. With a P0 in the plan, DPM's 900/700/500/300/100 come back as 1000/777/555/333/111 in the same bands; a plan without P0 comes back one band higher (700/500/300 as 1000/714/428); groups may come back as 0 (P4). `--keep-existing-priority` / `keep_existing_priority: true` keeps the priority of existing work, lists `priority` as `kept` and reports the differing source value as approximated; new work still maps its source value |
-| `Duration` `PTnHnMnS` | Single-point estimate O=M=P in hours; zero means unestimated |
+| `Duration` `PTnHnMnS` | Restore carried O/M/P when its rounded expectation equals this duration; otherwise external duration wins as O=M=P, with an explicit report. Without metadata, single-point hours; zero means unestimated |
+| `WBS` | A value different from `OutlineNumber` is reported as unsupported; hierarchy follows levels and document order |
 | `PredecessorLink` `Type` 0/1/2/3 | FF/FS/SF/SS dependency |
 | `LinkLag` | `lag_hours = LinkLag / 600` (tenths of a minute) |
 
@@ -360,7 +362,7 @@ source omits never count as preserved: `kept` names them, and existing work keep
 `report.links` has one entry per `PredecessorLink` with `outcome` (`Preserved`, `Changed`,
 `Approximated`, `Rejected`), notes, `changes` to existing local dependencies and the resulting
 dependency IDs. Rejected data includes constraints,
-deadlines, calendars, resources and assignments, baselines, custom fields and outline codes,
+deadlines, calendars, resources and assignments, baselines, custom fields other than DPM metadata and outline codes,
 manual scheduling, recurrence, cost, timephased data, and percent complete or actuals. Source
 progress never submits, verifies or completes local work. Inactive, blank, external and subproject
 tasks are skipped with a reason; `report.rejected` covers document-level data and
@@ -784,3 +786,7 @@ Registration accepts `database` and optional `replace`; neither tool takes a pro
 bound to another identity with `workspace_path_bound` (see [project selection](projects.md)).
 Their results contain `local_config: true` and `data`, without a project operation or revision.
 `attach_git_head` accepts an explicit `asset` key when the selected locator does not bind one.
+
+The saved OmniPlan and MPXJ regression files preserve DPM metadata. Files without the metadata
+still follow the GUID/source-scope/title-path rules above; title-path matching cannot track renames.
+This is a bounded MSPDI exchange, not native `.mpp` support or calendar/resource scheduling.

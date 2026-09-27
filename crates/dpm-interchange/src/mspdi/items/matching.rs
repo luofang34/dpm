@@ -100,7 +100,7 @@ fn source_paths(source: &SourceProject) -> BTreeMap<i64, Path> {
             stack.pop();
         }
         stack.push((task.outline_level, task.name.as_str()));
-        if task.guid.is_none() && task.exclusion.is_none() {
+        if task.guid.is_none() && task.metadata.is_none() && task.exclusion.is_none() {
             let titles = stack.iter().map(|(_, name)| (*name).to_owned()).collect();
             paths.insert(task.uid, titles);
         }

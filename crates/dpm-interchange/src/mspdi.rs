@@ -1,7 +1,7 @@
 //! Microsoft Project XML (MSPDI) subset.
 //!
 //! Supported: tasks, summary tasks, milestones, outline hierarchy, names, notes, priority,
-//! durations as single-point estimates, and FS/SS/FF/SF predecessor links with hour-based lags.
+//! durations and carried three-point estimates, and FS/SS/FF/SF predecessor links with hour-based lags.
 //! Everything else found in a document is reported per item and not imported.
 
 mod conditional;
@@ -9,6 +9,7 @@ mod encoding;
 mod export;
 mod items;
 mod links;
+mod metadata;
 mod refusal;
 mod report;
 mod source;
@@ -79,7 +80,7 @@ pub struct ImportResult {
 
 /// Build a candidate plan that maps an MSPDI document onto `current` without changing it.
 ///
-/// Work identity is the task GUID; without one, an identity derived from the project GUID and task
+/// Namespaced DPM metadata preserves identity, keys and estimates. Otherwise identity is the task GUID; without one, an identity derived from the project GUID and task
 /// UID; without either GUID, one derived from the target project, the explicit key prefix and the
 /// task UID. Importing the same document again (with the same prefix) updates the same work. Lifecycle,
 /// ownership, progress, evidence and acceptance of existing work are never touched, and new
@@ -152,7 +153,12 @@ fn require_source_scope(
     let anonymous: Vec<i64> = source
         .tasks
         .iter()
-        .filter(|t| t.guid.is_none() && t.exclusion.is_none() && !t.is_project_summary())
+        .filter(|t| {
+            t.guid.is_none()
+                && t.metadata.is_none()
+                && t.exclusion.is_none()
+                && !t.is_project_summary()
+        })
         .map(|t| t.uid)
         .collect();
     match anonymous.first() {

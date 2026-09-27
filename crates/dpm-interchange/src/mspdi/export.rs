@@ -54,6 +54,15 @@ pub fn export_mspdi(plan: &Plan, project_key: &str) -> Result<ExportResult, Inte
     push_line(&mut xml, 1, &format!("<Name>{title}</Name>"));
     push_line(&mut xml, 1, &format!("<GUID>{project_guid}</GUID>"));
     push_line(&mut xml, 1, &format!("<Title>{title}</Title>"));
+    push_line(
+        &mut xml,
+        1,
+        &format!(
+            "<ExtendedAttributes><ExtendedAttribute><FieldID>{}</FieldID><FieldName>Text1</FieldName><Alias>{}</Alias></ExtendedAttribute></ExtendedAttributes>",
+            super::metadata::FIELD_ID,
+            super::metadata::ALIAS
+        ),
+    );
     push_line(&mut xml, 1, "<Tasks>");
     let mut items = Vec::new();
     for row in &rows {
@@ -176,6 +185,15 @@ fn write_task(
             &format!("<Notes>{}</Notes>", escape(&work.contract.objective)?),
         );
     }
+    let metadata = escape(&super::metadata::encode(work)?)?;
+    push_line(
+        xml,
+        3,
+        &format!(
+            "<ExtendedAttribute><FieldID>{}</FieldID><Value>{metadata}</Value></ExtendedAttribute>",
+            super::metadata::FIELD_ID
+        ),
+    );
     write_links(xml, plan, work.id, uids);
     push_line(xml, 2, "</Task>");
     Ok(())
@@ -218,6 +236,8 @@ fn item_report(
     let work = row.work;
     let mut preserved = vec![
         "identity".to_string(),
+        "key".into(),
+        "dpm_metadata".into(),
         "title".into(),
         "kind".into(),
         "outline".into(),
@@ -236,7 +256,7 @@ fn item_report(
             Some(e) if !exact => approximated.push(Finding::new(
                 "estimate",
                 format!(
-                    "three-point estimate {}/{}/{} h written as its PERT expectation, rounded to whole seconds",
+                    "three-point estimate {}/{}/{} h retained in DPM.Metadata.v1; display duration is its PERT expectation rounded to whole seconds",
                     e.optimistic_hours, e.likely_hours, e.pessimistic_hours
                 ),
             )),

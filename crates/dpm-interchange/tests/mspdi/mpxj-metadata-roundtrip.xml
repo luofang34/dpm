@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Project xmlns="http://schemas.microsoft.com/project">
     <SaveVersion>14</SaveVersion>
-    <Name>Release</Name>
-    <GUID>7D6A0C1E-5B0F-4F53-9D51-2F0B3C7C9A01</GUID>
-    <Title>Release</Title>
+    <Name>Synthetic execution graph</Name>
+    <GUID>00000009-0000-4000-8000-000000000001</GUID>
+    <Title>Synthetic execution graph</Title>
     <ScheduleFromStart>0</ScheduleFromStart>
     <FYStartDate>1</FYStartDate>
     <CriticalSlackLimit>0</CriticalSlackLimit>
@@ -147,9 +147,9 @@
     <Tasks>
         <Task>
             <UID>1</UID>
-            <GUID>A1000000-0000-4000-8000-000000000001</GUID>
+            <GUID>00000007-0000-4000-8000-000000000001</GUID>
             <ID>1</ID>
-            <Name>Design</Name>
+            <Name>Contract A</Name>
             <Active>1</Active>
             <Manual>0</Manual>
             <Type>0</Type>
@@ -157,180 +157,42 @@
             <WBS>1</WBS>
             <OutlineNumber>1</OutlineNumber>
             <OutlineLevel>1</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT0H0M0S</Duration>
-            <DurationFormat>5</DurationFormat>
+            <Priority>900</Priority>
+            <Duration>PT4H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
             <ResumeValid>0</ResumeValid>
             <EffortDriven>0</EffortDriven>
             <Recurring>0</Recurring>
             <OverAllocated>0</OverAllocated>
             <Estimated>0</Estimated>
             <Milestone>0</Milestone>
-            <Summary>1</Summary>
+            <Summary>0</Summary>
             <Critical>0</Critical>
             <IsSubproject>0</IsSubproject>
             <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
             <ExternalTask>0</ExternalTask>
             <FixedCostAccrual>3</FixedCostAccrual>
+            <RemainingDuration>PT4H0M0S</RemainingDuration>
             <ConstraintType>0</ConstraintType>
             <CalendarUID>-1</CalendarUID>
             <LevelAssignments>0</LevelAssignments>
             <LevelingCanSplit>0</LevelingCanSplit>
             <LevelingDelayFormat>5</LevelingDelayFormat>
             <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <Notes>Produce observable result A for the test graph.</Notes>
             <HideBar>0</HideBar>
             <Rollup>0</Rollup>
             <EarnedValueMethod>0</EarnedValueMethod>
             <ExtendedAttribute>
                 <FieldID>188743731</FieldID>
-                <Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000001","key":"REL-2","estimate":null}</Value>
+                <Value>{"version":1,"id":"00000007-0000-4000-8000-000000000001","key":"TEST-A","estimate":{"optimistic_hours":2.0,"likely_hours":4.0,"pessimistic_hours":6.0}}</Value>
             </ExtendedAttribute>
         </Task>
         <Task>
             <UID>2</UID>
-            <GUID>A1000000-0000-4000-8000-000000000002</GUID>
+            <GUID>00000007-0000-4000-8000-000000000002</GUID>
             <ID>2</ID>
-            <Name>Write specification</Name>
-            <Active>1</Active>
-            <Manual>0</Manual>
-            <Type>0</Type>
-            <IsNull>0</IsNull>
-            <WBS>1.1</WBS>
-            <OutlineNumber>1.1</OutlineNumber>
-            <OutlineLevel>2</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT16H0M0S</Duration>
-            <DurationFormat>6</DurationFormat>
-            <ResumeValid>0</ResumeValid>
-            <EffortDriven>0</EffortDriven>
-            <Recurring>0</Recurring>
-            <OverAllocated>0</OverAllocated>
-            <Estimated>0</Estimated>
-            <Milestone>0</Milestone>
-            <Summary>0</Summary>
-            <Critical>0</Critical>
-            <IsSubproject>0</IsSubproject>
-            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
-            <ExternalTask>0</ExternalTask>
-            <FixedCostAccrual>3</FixedCostAccrual>
-            <RemainingDuration>PT16H0M0S</RemainingDuration>
-            <ConstraintType>0</ConstraintType>
-            <CalendarUID>-1</CalendarUID>
-            <LevelAssignments>0</LevelAssignments>
-            <LevelingCanSplit>0</LevelingCanSplit>
-            <LevelingDelayFormat>5</LevelingDelayFormat>
-            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
-            <Notes>Specify the release scope and interfaces.</Notes>
-            <HideBar>0</HideBar>
-            <Rollup>0</Rollup>
-            <EarnedValueMethod>0</EarnedValueMethod>
-            <ExtendedAttribute>
-                <FieldID>188743731</FieldID>
-                <Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000002","key":"REL-3","estimate":{"optimistic_hours":16.0,"likely_hours":16.0,"pessimistic_hours":16.0}}</Value>
-            </ExtendedAttribute>
-        </Task>
-        <Task>
-            <UID>3</UID>
-            <GUID>A1000000-0000-4000-8000-000000000003</GUID>
-            <ID>3</ID>
-            <Name>Review specification</Name>
-            <Active>1</Active>
-            <Manual>0</Manual>
-            <Type>0</Type>
-            <IsNull>0</IsNull>
-            <WBS>1.2</WBS>
-            <OutlineNumber>1.2</OutlineNumber>
-            <OutlineLevel>2</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT8H0M0S</Duration>
-            <DurationFormat>6</DurationFormat>
-            <ResumeValid>0</ResumeValid>
-            <EffortDriven>0</EffortDriven>
-            <Recurring>0</Recurring>
-            <OverAllocated>0</OverAllocated>
-            <Estimated>0</Estimated>
-            <Milestone>0</Milestone>
-            <Summary>0</Summary>
-            <Critical>0</Critical>
-            <IsSubproject>0</IsSubproject>
-            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
-            <ExternalTask>0</ExternalTask>
-            <FixedCostAccrual>3</FixedCostAccrual>
-            <RemainingDuration>PT8H0M0S</RemainingDuration>
-            <ConstraintType>0</ConstraintType>
-            <CalendarUID>-1</CalendarUID>
-            <LevelAssignments>0</LevelAssignments>
-            <LevelingCanSplit>0</LevelingCanSplit>
-            <LevelingDelayFormat>5</LevelingDelayFormat>
-            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
-            <HideBar>0</HideBar>
-            <Rollup>0</Rollup>
-            <EarnedValueMethod>0</EarnedValueMethod>
-            <PredecessorLink>
-                <PredecessorUID>2</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>0</LinkLag>
-                <LagFormat>5</LagFormat>
-            </PredecessorLink>
-            <ExtendedAttribute>
-                <FieldID>188743731</FieldID>
-                <Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000003","key":"REL-4","estimate":{"optimistic_hours":8.0,"likely_hours":8.0,"pessimistic_hours":8.0}}</Value>
-            </ExtendedAttribute>
-        </Task>
-        <Task>
-            <UID>4</UID>
-            <GUID>A1000000-0000-4000-8000-000000000004</GUID>
-            <ID>4</ID>
-            <Name>Design approved</Name>
-            <Active>1</Active>
-            <Manual>0</Manual>
-            <Type>0</Type>
-            <IsNull>0</IsNull>
-            <WBS>1.3</WBS>
-            <OutlineNumber>1.3</OutlineNumber>
-            <OutlineLevel>2</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT0H0M0S</Duration>
-            <DurationFormat>6</DurationFormat>
-            <ResumeValid>0</ResumeValid>
-            <EffortDriven>0</EffortDriven>
-            <Recurring>0</Recurring>
-            <OverAllocated>0</OverAllocated>
-            <Estimated>0</Estimated>
-            <Milestone>1</Milestone>
-            <Summary>0</Summary>
-            <Critical>0</Critical>
-            <IsSubproject>0</IsSubproject>
-            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
-            <ExternalTask>0</ExternalTask>
-            <FixedCostAccrual>3</FixedCostAccrual>
-            <ConstraintType>0</ConstraintType>
-            <CalendarUID>-1</CalendarUID>
-            <LevelAssignments>0</LevelAssignments>
-            <LevelingCanSplit>0</LevelingCanSplit>
-            <LevelingDelayFormat>5</LevelingDelayFormat>
-            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
-            <HideBar>0</HideBar>
-            <Rollup>0</Rollup>
-            <EarnedValueMethod>0</EarnedValueMethod>
-            <PredecessorLink>
-                <PredecessorUID>3</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>1200</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <ExtendedAttribute>
-                <FieldID>188743731</FieldID>
-                <Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000004","key":"REL-5","estimate":null}</Value>
-            </ExtendedAttribute>
-        </Task>
-        <Task>
-            <UID>5</UID>
-            <GUID>A1000000-0000-4000-8000-000000000005</GUID>
-            <ID>5</ID>
-            <Name>Build</Name>
+            <Name>Contract B</Name>
             <Active>1</Active>
             <Manual>0</Manual>
             <Type>0</Type>
@@ -338,47 +200,56 @@
             <WBS>2</WBS>
             <OutlineNumber>2</OutlineNumber>
             <OutlineLevel>1</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT0H0M0S</Duration>
-            <DurationFormat>5</DurationFormat>
+            <Priority>700</Priority>
+            <Duration>PT20H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
             <ResumeValid>0</ResumeValid>
             <EffortDriven>0</EffortDriven>
             <Recurring>0</Recurring>
             <OverAllocated>0</OverAllocated>
             <Estimated>0</Estimated>
             <Milestone>0</Milestone>
-            <Summary>1</Summary>
+            <Summary>0</Summary>
             <Critical>0</Critical>
             <IsSubproject>0</IsSubproject>
             <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
             <ExternalTask>0</ExternalTask>
             <FixedCostAccrual>3</FixedCostAccrual>
+            <RemainingDuration>PT20H0M0S</RemainingDuration>
             <ConstraintType>0</ConstraintType>
             <CalendarUID>-1</CalendarUID>
             <LevelAssignments>0</LevelAssignments>
             <LevelingCanSplit>0</LevelingCanSplit>
             <LevelingDelayFormat>5</LevelingDelayFormat>
             <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <Notes>Produce observable result B for the test graph.</Notes>
             <HideBar>0</HideBar>
             <Rollup>0</Rollup>
             <EarnedValueMethod>0</EarnedValueMethod>
+            <PredecessorLink>
+                <PredecessorUID>1</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>5</LagFormat>
+            </PredecessorLink>
             <ExtendedAttribute>
                 <FieldID>188743731</FieldID>
-                <Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000005","key":"REL-6","estimate":null}</Value>
+                <Value>{"version":1,"id":"00000007-0000-4000-8000-000000000002","key":"TEST-B","estimate":{"optimistic_hours":10.0,"likely_hours":20.0,"pessimistic_hours":30.0}}</Value>
             </ExtendedAttribute>
         </Task>
         <Task>
-            <UID>6</UID>
-            <GUID>A1000000-0000-4000-8000-000000000006</GUID>
-            <ID>6</ID>
-            <Name>Implement</Name>
+            <UID>3</UID>
+            <GUID>00000007-0000-4000-8000-000000000003</GUID>
+            <ID>3</ID>
+            <Name>Contract C</Name>
             <Active>1</Active>
             <Manual>0</Manual>
             <Type>0</Type>
             <IsNull>0</IsNull>
-            <WBS>2.1</WBS>
-            <OutlineNumber>2.1</OutlineNumber>
-            <OutlineLevel>2</OutlineLevel>
+            <WBS>3</WBS>
+            <OutlineNumber>3</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
             <Priority>700</Priority>
             <Duration>PT40H0M0S</Duration>
             <DurationFormat>6</DurationFormat>
@@ -401,6 +272,7 @@
             <LevelingCanSplit>0</LevelingCanSplit>
             <LevelingDelayFormat>5</LevelingDelayFormat>
             <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <Notes>Produce observable result C for the test graph.</Notes>
             <HideBar>0</HideBar>
             <Rollup>0</Rollup>
             <EarnedValueMethod>0</EarnedValueMethod>
@@ -408,181 +280,184 @@
                 <PredecessorUID>2</PredecessorUID>
                 <Type>1</Type>
                 <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
+                <LinkLag>0</LinkLag>
+                <LagFormat>5</LagFormat>
             </PredecessorLink>
+            <ExtendedAttribute>
+                <FieldID>188743731</FieldID>
+                <Value>{"version":1,"id":"00000007-0000-4000-8000-000000000003","key":"TEST-C","estimate":{"optimistic_hours":20.0,"likely_hours":40.0,"pessimistic_hours":60.0}}</Value>
+            </ExtendedAttribute>
+        </Task>
+        <Task>
+            <UID>4</UID>
+            <GUID>00000007-0000-4000-8000-000000000004</GUID>
+            <ID>4</ID>
+            <Name>Contract D</Name>
+            <Active>1</Active>
+            <Manual>0</Manual>
+            <Type>0</Type>
+            <IsNull>0</IsNull>
+            <WBS>4</WBS>
+            <OutlineNumber>4</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>700</Priority>
+            <Duration>PT32H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <ResumeValid>0</ResumeValid>
+            <EffortDriven>0</EffortDriven>
+            <Recurring>0</Recurring>
+            <OverAllocated>0</OverAllocated>
+            <Estimated>0</Estimated>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Critical>0</Critical>
+            <IsSubproject>0</IsSubproject>
+            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
+            <ExternalTask>0</ExternalTask>
+            <FixedCostAccrual>3</FixedCostAccrual>
+            <RemainingDuration>PT32H0M0S</RemainingDuration>
+            <ConstraintType>0</ConstraintType>
+            <CalendarUID>-1</CalendarUID>
+            <LevelAssignments>0</LevelAssignments>
+            <LevelingCanSplit>0</LevelingCanSplit>
+            <LevelingDelayFormat>5</LevelingDelayFormat>
+            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <Notes>Produce observable result D for the test graph.</Notes>
+            <HideBar>0</HideBar>
+            <Rollup>0</Rollup>
+            <EarnedValueMethod>0</EarnedValueMethod>
+            <PredecessorLink>
+                <PredecessorUID>1</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>5</LagFormat>
+            </PredecessorLink>
+            <ExtendedAttribute>
+                <FieldID>188743731</FieldID>
+                <Value>{"version":1,"id":"00000007-0000-4000-8000-000000000004","key":"TEST-D","estimate":{"optimistic_hours":16.0,"likely_hours":32.0,"pessimistic_hours":48.0}}</Value>
+            </ExtendedAttribute>
+        </Task>
+        <Task>
+            <UID>5</UID>
+            <GUID>00000007-0000-4000-8000-000000000005</GUID>
+            <ID>5</ID>
+            <Name>Contract E</Name>
+            <Active>1</Active>
+            <Manual>0</Manual>
+            <Type>0</Type>
+            <IsNull>0</IsNull>
+            <WBS>5</WBS>
+            <OutlineNumber>5</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>700</Priority>
+            <Duration>PT8H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <ResumeValid>0</ResumeValid>
+            <EffortDriven>0</EffortDriven>
+            <Recurring>0</Recurring>
+            <OverAllocated>0</OverAllocated>
+            <Estimated>0</Estimated>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Critical>0</Critical>
+            <IsSubproject>0</IsSubproject>
+            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
+            <ExternalTask>0</ExternalTask>
+            <FixedCostAccrual>3</FixedCostAccrual>
+            <RemainingDuration>PT8H0M0S</RemainingDuration>
+            <ConstraintType>0</ConstraintType>
+            <CalendarUID>-1</CalendarUID>
+            <LevelAssignments>0</LevelAssignments>
+            <LevelingCanSplit>0</LevelingCanSplit>
+            <LevelingDelayFormat>5</LevelingDelayFormat>
+            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <Notes>Produce observable result E for the test graph.</Notes>
+            <HideBar>0</HideBar>
+            <Rollup>0</Rollup>
+            <EarnedValueMethod>0</EarnedValueMethod>
             <PredecessorLink>
                 <PredecessorUID>3</PredecessorUID>
                 <Type>1</Type>
                 <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
+                <LinkLag>0</LinkLag>
+                <LagFormat>5</LagFormat>
             </PredecessorLink>
             <PredecessorLink>
                 <PredecessorUID>4</PredecessorUID>
                 <Type>1</Type>
                 <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
+                <LinkLag>0</LinkLag>
+                <LagFormat>5</LagFormat>
             </PredecessorLink>
             <ExtendedAttribute>
                 <FieldID>188743731</FieldID>
-                <Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000006","key":"REL-7","estimate":{"optimistic_hours":40.0,"likely_hours":40.0,"pessimistic_hours":40.0}}</Value>
+                <Value>{"version":1,"id":"00000007-0000-4000-8000-000000000005","key":"TEST-E","estimate":{"optimistic_hours":4.0,"likely_hours":8.0,"pessimistic_hours":12.0}}</Value>
+            </ExtendedAttribute>
+        </Task>
+        <Task>
+            <UID>6</UID>
+            <GUID>00000007-0000-4000-8000-000000000006</GUID>
+            <ID>6</ID>
+            <Name>Contract F</Name>
+            <Active>1</Active>
+            <Manual>0</Manual>
+            <Type>0</Type>
+            <IsNull>0</IsNull>
+            <WBS>6</WBS>
+            <OutlineNumber>6</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>900</Priority>
+            <Duration>PT4H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <ResumeValid>0</ResumeValid>
+            <EffortDriven>0</EffortDriven>
+            <Recurring>0</Recurring>
+            <OverAllocated>0</OverAllocated>
+            <Estimated>0</Estimated>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Critical>0</Critical>
+            <IsSubproject>0</IsSubproject>
+            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
+            <ExternalTask>0</ExternalTask>
+            <FixedCostAccrual>3</FixedCostAccrual>
+            <RemainingDuration>PT4H0M0S</RemainingDuration>
+            <ConstraintType>0</ConstraintType>
+            <CalendarUID>-1</CalendarUID>
+            <LevelAssignments>0</LevelAssignments>
+            <LevelingCanSplit>0</LevelingCanSplit>
+            <LevelingDelayFormat>5</LevelingDelayFormat>
+            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <Notes>Produce observable result F for the test graph.</Notes>
+            <HideBar>0</HideBar>
+            <Rollup>0</Rollup>
+            <EarnedValueMethod>0</EarnedValueMethod>
+            <PredecessorLink>
+                <PredecessorUID>5</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>5</LagFormat>
+            </PredecessorLink>
+            <ExtendedAttribute>
+                <FieldID>188743731</FieldID>
+                <Value>{"version":1,"id":"00000007-0000-4000-8000-000000000006","key":"TEST-F","estimate":{"optimistic_hours":2.0,"likely_hours":4.0,"pessimistic_hours":6.0}}</Value>
             </ExtendedAttribute>
         </Task>
         <Task>
             <UID>7</UID>
-            <GUID>A1000000-0000-4000-8000-000000000007</GUID>
+            <GUID>00000007-0000-4000-8000-000000000007</GUID>
             <ID>7</ID>
-            <Name>Write documentation</Name>
+            <Name>Verified join</Name>
             <Active>1</Active>
             <Manual>0</Manual>
             <Type>0</Type>
             <IsNull>0</IsNull>
-            <WBS>2.2</WBS>
-            <OutlineNumber>2.2</OutlineNumber>
-            <OutlineLevel>2</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT12H0M0S</Duration>
-            <DurationFormat>6</DurationFormat>
-            <ResumeValid>0</ResumeValid>
-            <EffortDriven>0</EffortDriven>
-            <Recurring>0</Recurring>
-            <OverAllocated>0</OverAllocated>
-            <Estimated>0</Estimated>
-            <Milestone>0</Milestone>
-            <Summary>0</Summary>
-            <Critical>0</Critical>
-            <IsSubproject>0</IsSubproject>
-            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
-            <ExternalTask>0</ExternalTask>
-            <FixedCostAccrual>3</FixedCostAccrual>
-            <RemainingDuration>PT12H0M0S</RemainingDuration>
-            <ConstraintType>0</ConstraintType>
-            <CalendarUID>-1</CalendarUID>
-            <LevelAssignments>0</LevelAssignments>
-            <LevelingCanSplit>0</LevelingCanSplit>
-            <LevelingDelayFormat>5</LevelingDelayFormat>
-            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
-            <HideBar>0</HideBar>
-            <Rollup>0</Rollup>
-            <EarnedValueMethod>0</EarnedValueMethod>
-            <PredecessorLink>
-                <PredecessorUID>2</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>3</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>4</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>6</PredecessorUID>
-                <Type>3</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>2400</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <ExtendedAttribute>
-                <FieldID>188743731</FieldID>
-                <Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000007","key":"REL-8","estimate":{"optimistic_hours":12.0,"likely_hours":12.0,"pessimistic_hours":12.0}}</Value>
-            </ExtendedAttribute>
-        </Task>
-        <Task>
-            <UID>8</UID>
-            <GUID>A1000000-0000-4000-8000-000000000008</GUID>
-            <ID>8</ID>
-            <Name>Integration test</Name>
-            <Active>1</Active>
-            <Manual>0</Manual>
-            <Type>0</Type>
-            <IsNull>0</IsNull>
-            <WBS>2.3</WBS>
-            <OutlineNumber>2.3</OutlineNumber>
-            <OutlineLevel>2</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT16H0M0S</Duration>
-            <DurationFormat>6</DurationFormat>
-            <ResumeValid>0</ResumeValid>
-            <EffortDriven>0</EffortDriven>
-            <Recurring>0</Recurring>
-            <OverAllocated>0</OverAllocated>
-            <Estimated>0</Estimated>
-            <Milestone>0</Milestone>
-            <Summary>0</Summary>
-            <Critical>0</Critical>
-            <IsSubproject>0</IsSubproject>
-            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
-            <ExternalTask>0</ExternalTask>
-            <FixedCostAccrual>3</FixedCostAccrual>
-            <RemainingDuration>PT16H0M0S</RemainingDuration>
-            <ConstraintType>0</ConstraintType>
-            <CalendarUID>-1</CalendarUID>
-            <LevelAssignments>0</LevelAssignments>
-            <LevelingCanSplit>0</LevelingCanSplit>
-            <LevelingDelayFormat>5</LevelingDelayFormat>
-            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
-            <HideBar>0</HideBar>
-            <Rollup>0</Rollup>
-            <EarnedValueMethod>0</EarnedValueMethod>
-            <PredecessorLink>
-                <PredecessorUID>2</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>3</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>4</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>6</PredecessorUID>
-                <Type>0</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>-1800</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <ExtendedAttribute>
-                <FieldID>188743731</FieldID>
-                <Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000008","key":"REL-9","estimate":{"optimistic_hours":16.0,"likely_hours":16.0,"pessimistic_hours":16.0}}</Value>
-            </ExtendedAttribute>
-        </Task>
-        <Task>
-            <UID>9</UID>
-            <GUID>A1000000-0000-4000-8000-000000000009</GUID>
-            <ID>9</ID>
-            <Name>Release</Name>
-            <Active>1</Active>
-            <Manual>0</Manual>
-            <Type>0</Type>
-            <IsNull>0</IsNull>
-            <WBS>3</WBS>
-            <OutlineNumber>3</OutlineNumber>
+            <WBS>7</WBS>
+            <OutlineNumber>7</OutlineNumber>
             <OutlineLevel>1</OutlineLevel>
-            <Priority>500</Priority>
+            <Priority>900</Priority>
             <Duration>PT0H0M0S</Duration>
             <DurationFormat>6</DurationFormat>
             <ResumeValid>0</ResumeValid>
@@ -603,18 +478,12 @@
             <LevelingCanSplit>0</LevelingCanSplit>
             <LevelingDelayFormat>5</LevelingDelayFormat>
             <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <Notes>Check the verified dependency condition.</Notes>
             <HideBar>0</HideBar>
             <Rollup>0</Rollup>
             <EarnedValueMethod>0</EarnedValueMethod>
             <PredecessorLink>
-                <PredecessorUID>7</PredecessorUID>
-                <Type>2</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>14400</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>8</PredecessorUID>
+                <PredecessorUID>6</PredecessorUID>
                 <Type>1</Type>
                 <CrossProject>0</CrossProject>
                 <LinkLag>0</LinkLag>
@@ -622,7 +491,7 @@
             </PredecessorLink>
             <ExtendedAttribute>
                 <FieldID>188743731</FieldID>
-                <Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000009","key":"REL-10","estimate":null}</Value>
+                <Value>{"version":1,"id":"00000007-0000-4000-8000-000000000007","key":"TEST-M1","estimate":null}</Value>
             </ExtendedAttribute>
         </Task>
     </Tasks>

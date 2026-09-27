@@ -30,7 +30,7 @@ def without_guids(xml):
 def check_imports(database, worker):
     """Both adapters return the same candidate and report, and importing changes nothing."""
     before, count = run_cli(database, 'export'), operations(database)
-    for fixture in ['mpxj-release-plan.xml', 'mpxj-unsupported-features.xml', 'omniplan-native.xml']:
+    for fixture in ['mpxj-release-plan.xml', 'mpxj-unsupported-features.xml', 'omniplan-native.xml', 'omniplan-metadata-roundtrip.xml', 'mpxj-metadata-roundtrip.xml']:
         remote = worker.call('import_mspdi', {'xml': (FIXTURES / fixture).read_text(), 'project_key': 'TEST', 'key_prefix': 'MSP'})
         local = run_cli(database, *import_args(FIXTURES / fixture))
         assert remote['data'] == local and remote['revision'] == before['revision'], fixture
@@ -87,6 +87,13 @@ def check_apply_and_round_trip(database, worker, directory):
     assert written.read_text() == local['xml']
     assert run_cli(database, 'plan', 'import-mspdi', str(written), '--project-key', 'TEST')['preview']['changes'] == []
     check_guidless_round_trip(database, worker, directory, local['xml'])
+    metadata_xml = without_guids(local['xml']).replace('Write specification', 'Renamed in external scheduler')
+    written.write_text(metadata_xml)
+    args = {'xml': metadata_xml, 'project_key': 'TEST'}
+    imported_metadata = run_cli(database, 'plan', 'import-mspdi', str(written), '--project-key', 'TEST')
+    assert imported_metadata == worker.call('import_mspdi', args)['data']
+    assert all(i['outcome'] != 'Created' for i in imported_metadata['report']['items'])
+    assert any(i['name'] == 'Renamed in external scheduler' for i in imported_metadata['report']['items'])
     imported = {w['key'] for w in run_cli(database, 'export')['work_items'].values() if w['key'].startswith('MSP-')}
     assert imported and not imported & {c['work']['key'] for c in worker.call('next_work', {'limit': 100})['data']['candidates']}
 
@@ -94,7 +101,7 @@ def check_apply_and_round_trip(database, worker, directory):
 def check_guidless_round_trip(database, worker, directory, exported):
     """A GUID-less copy of DPM's export maps back onto the same work only when asked, identically in both adapters."""
     returned = directory / 'returned.xml'
-    returned.write_text(without_guids(exported))
+    returned.write_text(re.sub(r'<ExtendedAttributes>.*?</ExtendedAttributes>|<ExtendedAttribute>.*?</ExtendedAttribute>', '', without_guids(exported), flags=re.S))
     arguments = {'xml': returned.read_text(), 'project_key': 'TEST', 'key_prefix': 'OPR'}
     remote = worker.call('import_mspdi', {**arguments, 'match_existing_by': 'title-path'})['data']
     local = run_cli(database, 'plan', 'import-mspdi', str(returned), '--project-key', 'TEST', '--key-prefix', 'OPR',
@@ -151,4 +158,4 @@ def smoke(directory):
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory() as directory:
         smoke(Path(directory))
-    print('PASS: MSPDI import/export CLI/MCP parity, reports keep imported tasks Proposed, failed imports and refused applies change nothing, human apply, export re-imports without changes, a GUID-less copy maps back only with --match-existing-by title-path, rescaled OmniPlan priorities stay local only with --keep-existing-priority')
+    print('PASS: MSPDI import/export CLI/MCP parity, reports keep imported tasks Proposed, failed imports and refused applies change nothing, human apply, export re-imports without changes, carried metadata preserves renamed GUID-less work and O/M/P; files without metadata support explicit title-path matching, rescaled OmniPlan priorities stay local only with --keep-existing-priority')

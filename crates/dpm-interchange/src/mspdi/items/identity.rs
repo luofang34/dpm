@@ -1,6 +1,6 @@
 //! Work identity of a source task, and how the report states it.
 //!
-//! A task GUID is the identity. Without one, the identity is derived from the project GUID and the
+//! DPM metadata supplies identity when present; otherwise a task GUID is the identity. Without one, the identity is derived from the project GUID and the
 //! UID, or, when the document has no project GUID either, from the target project, the explicit
 //! key prefix that names the source, and the UID. Only when the import opts in does a task without
 //! a GUID match existing work by title path instead.
@@ -16,6 +16,7 @@ use uuid::Uuid;
 /// Where a task's work identity comes from.
 pub(super) enum Basis {
     TaskGuid,
+    Metadata,
     ProjectGuid,
     SourceScope,
     /// Existing work whose title path equals the task's outline path.
@@ -53,7 +54,11 @@ impl<'a> Resolver<'a> {
             return Ok(resolver);
         };
         let (matcher, mut ambiguities) = Matcher::new(current, source, project);
-        for task in source.tasks.iter().filter(|t| t.guid.is_none()) {
+        for task in source
+            .tasks
+            .iter()
+            .filter(|t| t.guid.is_none() && t.metadata.is_none())
+        {
             let derived = resolver.derived(task);
             if let Some(id) = matcher.find(task.uid)
                 && id != derived
@@ -88,6 +93,9 @@ impl<'a> Resolver<'a> {
     /// A derived identity that already names local work wins over a match: that work came from
     /// this very source, and the constructor refused any case where the two disagree.
     pub(super) fn resolve(&self, task: &SourceTask) -> (WorkItemId, Basis) {
+        if let Some(metadata) = &task.metadata {
+            return (metadata.id, Basis::Metadata);
+        }
         if let Some(guid) = task.guid {
             return (WorkItemId(guid), Basis::TaskGuid);
         }
@@ -116,6 +124,11 @@ impl<'a> Resolver<'a> {
         let uid = task.uid;
         let path = self.matcher.as_ref().and_then(|m| m.path(uid));
         let mut detail = match basis {
+            Basis::Metadata => {
+                report.preserved.insert(0, "dpm_metadata".into());
+                report.preserved.insert(0, "identity".into());
+                return;
+            }
             Basis::TaskGuid => {
                 report.preserved.insert(0, "identity".into());
                 return;

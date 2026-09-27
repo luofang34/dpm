@@ -43,6 +43,20 @@ pub(super) fn build(
         Parent::TopLevel | Parent::NotImported(_) => None,
     };
     report.preserved.push("outline".into());
+    if let Some(metadata) = &task.metadata {
+        if metadata.key == work.key {
+            report.preserved.push("key".into());
+        } else {
+            report.kept.push("key".into());
+            report.approximated.push(Finding::new(
+                "key",
+                format!(
+                    "carried key {} not applied; existing key {} kept",
+                    metadata.key, work.key
+                ),
+            ));
+        }
+    }
     map_title(task, existing, &mut work, &mut report);
     map_objective(task, existing, &mut work, &mut report);
     match existing {
@@ -291,6 +305,15 @@ fn task_estimate(
     work: &mut WorkItem,
     report: &mut ItemReport,
 ) {
+    if let Some(metadata) = &task.metadata {
+        if metadata.matches_duration(seconds) {
+            work.schedule.estimate = metadata.estimate;
+            report.preserved.push("estimate".into());
+            report.preserved.push("duration".into());
+            return;
+        }
+        report.approximated.push(Finding::new("estimate", "source duration differs from the carried DPM estimate; external duration wins over O/M/P"));
+    }
     let unchanged = existing
         .filter(|e| e.kind == WorkKind::Task)
         .is_some_and(|e| duration_seconds(e.schedule.estimate) == seconds);

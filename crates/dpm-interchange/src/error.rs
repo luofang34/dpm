@@ -6,6 +6,15 @@ use thiserror::Error;
 /// a candidate for review.
 #[derive(Debug, Error)]
 pub enum InterchangeError {
+    /// A namespaced DPM metadata value is malformed.
+    #[error("MSPDI task at position {position}: invalid DPM metadata: {source}")]
+    Metadata {
+        /// One-based task position.
+        position: usize,
+        /// Original JSON diagnostic.
+        #[source]
+        source: serde_json::Error,
+    },
     /// The document is not well-formed XML.
     #[error("MSPDI document is not well-formed XML: {source}")]
     Xml {
@@ -154,7 +163,8 @@ impl InterchangeError {
             | Self::AmbiguousMatch { .. }
             | Self::Refused { .. }
             | Self::RefusedLink { .. } => "invalid_command",
-            Self::Xml { .. }
+            Self::Metadata { .. }
+            | Self::Xml { .. }
             | Self::NotMspdi { .. }
             | Self::MalformedProject { .. }
             | Self::MalformedTask { .. }

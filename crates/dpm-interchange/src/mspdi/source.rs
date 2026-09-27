@@ -23,6 +23,7 @@ pub(crate) struct SourceProject {
 /// Supported fields of one task element, plus unsupported fields found on it.
 #[derive(Debug)]
 pub(crate) struct SourceTask {
+    pub(crate) metadata: Option<super::metadata::Metadata>,
     pub(crate) position: usize,
     pub(crate) uid: i64,
     pub(crate) guid: Option<Uuid>,
@@ -71,6 +72,7 @@ pub(crate) fn parse(xml: &str) -> Result<SourceProject, InterchangeError> {
             ),
         });
     }
+    let metadata_field = super::metadata::field(root)?;
     let resources = resource_names(root);
     let assignments = assignments(root, &resources);
     let mut tasks = Vec::new();
@@ -78,7 +80,7 @@ pub(crate) fn parse(xml: &str) -> Result<SourceProject, InterchangeError> {
         .flat_map(|tasks| children(tasks, "Task"))
         .enumerate()
     {
-        let mut task = parse_task(node, index + 1)?;
+        let mut task = parse_task(node, index + 1, metadata_field.as_deref())?;
         if let Some(found) = assignments.get(&task.uid) {
             task.rejected.extend(found.iter().cloned());
         }
@@ -115,6 +117,7 @@ fn document_findings(root: Node, resources: usize) -> Vec<Finding> {
     }
     let definitions = children(root, "ExtendedAttributes")
         .flat_map(|c| children(c, "ExtendedAttribute"))
+        .filter(|n| text(*n, "Alias") != Some(super::metadata::ALIAS))
         .count();
     if definitions > 0 {
         findings.push(Finding::new(
@@ -155,7 +158,11 @@ fn assignments(root: Node, resources: &BTreeMap<i64, String>) -> BTreeMap<i64, V
     found
 }
 
-fn parse_task(node: Node, position: usize) -> Result<SourceTask, InterchangeError> {
+fn parse_task(
+    node: Node,
+    position: usize,
+    metadata_field: Option<&str>,
+) -> Result<SourceTask, InterchangeError> {
     let malformed = |reason: String| InterchangeError::MalformedTask { position, reason };
     let integer = |name: &'static str| -> Result<Option<i64>, InterchangeError> {
         text(node, name)
@@ -182,6 +189,7 @@ fn parse_task(node: Node, position: usize) -> Result<SourceTask, InterchangeErro
         links.push(parse_link(link).map_err(malformed)?);
     }
     Ok(SourceTask {
+        metadata: super::metadata::parse(node, metadata_field, position)?,
         position,
         uid,
         guid: optional_guid(text(node, "GUID")).map_err(malformed)?,
@@ -198,7 +206,7 @@ fn parse_task(node: Node, position: usize) -> Result<SourceTask, InterchangeErro
             .filter(|n| !n.trim().is_empty())
             .map(str::to_owned),
         exclusion: exclusion(node),
-        rejected: super::unsupported::task_findings(node),
+        rejected: super::unsupported::task_findings(node, metadata_field),
         links,
     })
 }

@@ -233,7 +233,10 @@ fn key_for(
     if let Some(work) = existing {
         return Ok(work.key.clone());
     }
-    let key = format!("{prefix}-{}", task.uid);
+    let key = task
+        .metadata
+        .as_ref()
+        .map_or_else(|| format!("{prefix}-{}", task.uid), |m| m.key.0.clone());
     if !keys.insert(key.clone()) {
         return Err(InterchangeError::KeyCollision { key, uid: task.uid });
     }

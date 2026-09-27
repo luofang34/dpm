@@ -4,6 +4,7 @@
     <Name>Release</Name>
     <GUID>7D6A0C1E-5B0F-4F53-9D51-2F0B3C7C9A01</GUID>
     <Title>Release</Title>
+    <ExtendedAttributes><ExtendedAttribute><FieldID>188743731</FieldID><FieldName>Text1</FieldName><Alias>DPM.Metadata.v1</Alias></ExtendedAttribute></ExtendedAttributes>
     <Tasks>
         <Task>
             <UID>1</UID>
@@ -15,6 +16,7 @@
             <Priority>500</Priority>
             <Milestone>0</Milestone>
             <Summary>1</Summary>
+            <ExtendedAttribute><FieldID>188743731</FieldID><Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000001","key":"REL-2","estimate":null}</Value></ExtendedAttribute>
         </Task>
         <Task>
             <UID>2</UID>
@@ -29,6 +31,7 @@
             <Milestone>0</Milestone>
             <Summary>0</Summary>
             <Notes>Specify the release scope and interfaces.</Notes>
+            <ExtendedAttribute><FieldID>188743731</FieldID><Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000002","key":"REL-3","estimate":{"optimistic_hours":16.0,"likely_hours":16.0,"pessimistic_hours":16.0}}</Value></ExtendedAttribute>
         </Task>
         <Task>
             <UID>3</UID>
@@ -42,6 +45,7 @@
             <DurationFormat>6</DurationFormat>
             <Milestone>0</Milestone>
             <Summary>0</Summary>
+            <ExtendedAttribute><FieldID>188743731</FieldID><Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000003","key":"REL-4","estimate":{"optimistic_hours":8.0,"likely_hours":8.0,"pessimistic_hours":8.0}}</Value></ExtendedAttribute>
             <PredecessorLink>
                 <PredecessorUID>2</PredecessorUID>
                 <Type>1</Type>
@@ -62,6 +66,7 @@
             <DurationFormat>6</DurationFormat>
             <Milestone>1</Milestone>
             <Summary>0</Summary>
+            <ExtendedAttribute><FieldID>188743731</FieldID><Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000004","key":"REL-5","estimate":null}</Value></ExtendedAttribute>
             <PredecessorLink>
                 <PredecessorUID>3</PredecessorUID>
                 <Type>1</Type>
@@ -80,6 +85,7 @@
             <Priority>500</Priority>
             <Milestone>0</Milestone>
             <Summary>1</Summary>
+            <ExtendedAttribute><FieldID>188743731</FieldID><Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000005","key":"REL-6","estimate":null}</Value></ExtendedAttribute>
         </Task>
         <Task>
             <UID>6</UID>
@@ -93,6 +99,7 @@
             <DurationFormat>6</DurationFormat>
             <Milestone>0</Milestone>
             <Summary>0</Summary>
+            <ExtendedAttribute><FieldID>188743731</FieldID><Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000006","key":"REL-7","estimate":{"optimistic_hours":40.0,"likely_hours":40.0,"pessimistic_hours":40.0}}</Value></ExtendedAttribute>
             <PredecessorLink>
                 <PredecessorUID>2</PredecessorUID>
                 <Type>1</Type>
@@ -127,6 +134,7 @@
             <DurationFormat>6</DurationFormat>
             <Milestone>0</Milestone>
             <Summary>0</Summary>
+            <ExtendedAttribute><FieldID>188743731</FieldID><Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000007","key":"REL-8","estimate":{"optimistic_hours":12.0,"likely_hours":12.0,"pessimistic_hours":12.0}}</Value></ExtendedAttribute>
             <PredecessorLink>
                 <PredecessorUID>2</PredecessorUID>
                 <Type>1</Type>
@@ -168,6 +176,7 @@
             <DurationFormat>6</DurationFormat>
             <Milestone>0</Milestone>
             <Summary>0</Summary>
+            <ExtendedAttribute><FieldID>188743731</FieldID><Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000008","key":"REL-9","estimate":{"optimistic_hours":16.0,"likely_hours":16.0,"pessimistic_hours":16.0}}</Value></ExtendedAttribute>
             <PredecessorLink>
                 <PredecessorUID>2</PredecessorUID>
                 <Type>1</Type>
@@ -209,6 +218,7 @@
             <DurationFormat>6</DurationFormat>
             <Milestone>1</Milestone>
             <Summary>0</Summary>
+            <ExtendedAttribute><FieldID>188743731</FieldID><Value>{"version":1,"id":"a1000000-0000-4000-8000-000000000009","key":"REL-10","estimate":null}</Value></ExtendedAttribute>
             <PredecessorLink>
                 <PredecessorUID>7</PredecessorUID>
                 <Type>2</Type>
