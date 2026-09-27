@@ -106,6 +106,8 @@ def run_cli(database, *args, error=None):
 
 
 def smoke(database):
+    usage = subprocess.run([str(MCP), '--help'], capture_output=True, text=True, timeout=15, check=True).stdout
+    assert all(f in usage for f in ('--database <PATH>', '--project <DIR>', '--actor <KIND:NAME>', 'human:NAME, agent:NAME or service:NAME')), usage
     run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
     worker = Agent(database, 'agent:parity')
     reviewer = Agent(database, 'human:reviewer')
