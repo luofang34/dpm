@@ -1,14 +1,34 @@
 #!/usr/bin/env python3
 """Verify real CLI/MCP processes share structured queries and mutation behavior."""
 import json
+import os
 import subprocess
 import tempfile
 import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = ROOT / 'target/release/dpm'
-MCP = ROOT / 'target/release/dpm-mcp'
+
+
+def release_binary(name, override):
+    """Locate a release binary the way Cargo placed it, so reviewers need no symlinks.
+
+    An explicit override variable wins; otherwise CARGO_TARGET_DIR (relative to the current
+    directory, as Cargo resolves it) or the workspace target directory.
+    """
+    explicit = os.environ.get(override)
+    if explicit:
+        path = Path(explicit)
+    else:
+        path = Path(os.environ.get('CARGO_TARGET_DIR') or ROOT / 'target') / 'release' / name
+    path = path.resolve()
+    if not path.is_file():
+        raise SystemExit(f'{path}: missing {name}; run cargo build --workspace --release or set {override} / CARGO_TARGET_DIR')
+    return path
+
+
+CLI = release_binary('dpm', 'DPM_BIN')
+MCP = release_binary('dpm-mcp', 'DPM_MCP_BIN')
 
 
 class Agent:

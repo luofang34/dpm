@@ -47,6 +47,10 @@ for path in paths:
         failures.append(f'{relative}: OS metadata in publication set')
     if path.name in {'.env', 'credentials.toml'} or path.name.endswith(('.pem', '.key', '.pyc')):
         failures.append(f'{relative}: private/generated file in publication set')
+    # Reviewers build into their own CARGO_TARGET_DIR; smoke_agent.release_binary resolves it.
+    if relative.parts[0] == 'scripts' and path.suffix == '.py' and path != Path(__file__).resolve() \
+            and 'target/release' in path.read_text():
+        failures.append(f'{relative}: hard-coded target/release; use smoke_agent.release_binary')
     if path.suffix != '.md':
         continue
     for target in re.findall(r'\[[^\]\n]*\]\(([^)\s]+)\)', path.read_text()):

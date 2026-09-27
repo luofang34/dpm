@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from smoke_agent import CLI
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -116,7 +118,7 @@ def smoke(binary, directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--binary', type=Path, default=ROOT / 'target/release/dpm')
+    parser.add_argument('--binary', type=Path, default=CLI)
     parser.add_argument('--report', type=Path)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='dpm-smoke-') as temporary:
