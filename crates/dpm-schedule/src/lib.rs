@@ -2,6 +2,7 @@
 
 mod cpm;
 mod error;
+mod network;
 mod projection;
 mod simulation;
 

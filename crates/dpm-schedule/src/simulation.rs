@@ -1,8 +1,8 @@
-use crate::{ScheduleError, deterministic_with_durations};
+use crate::ScheduleError;
+use crate::network::{EPSILON, Network};
 use dpm_model::{Plan, WorkItemId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-const EPSILON: f64 = 1e-8;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 /// Reproducible Monte Carlo sampling configuration.
 pub struct SimulationConfig {
@@ -113,6 +113,12 @@ pub fn simulate_remaining(
     Ok(summary)
 }
 
+/// Duration source of one activity across all iterations.
+enum Activity {
+    Fixed(f64),
+    Sampled(dpm_model::ThreePointEstimate),
+}
+
 fn simulate_inner(
     plan: &Plan,
     config: SimulationConfig,
@@ -122,52 +128,60 @@ fn simulate_inner(
     if config.iterations == 0 {
         return Err(ScheduleError::NoSimulationIterations);
     }
+    let network = Network::compile(plan)?;
     let mut rng = XorShift64::new(config.seed);
     let mut finishes = Vec::with_capacity(config.iterations);
-    let mut critical_counts = plan
-        .work_items
-        .keys()
-        .map(|id| (*id, 0_usize))
-        .collect::<BTreeMap<_, _>>();
-
-    for _ in 0..config.iterations {
-        let mut durations = BTreeMap::new();
-        for (id, work) in &plan.work_items {
-            let duration = if !work.is_executable()
-                || (remaining_only && work.status.satisfies_dependency())
-            {
-                0.0
+    let mut critical_counts = vec![0_usize; network.order().len()];
+    let mut durations = vec![0.0; network.order().len()];
+    // Sampling follows work-item id order, so a seed draws the same numbers for the same plan.
+    let mut sampled = Vec::with_capacity(plan.work_items.len());
+    for (id, work) in &plan.work_items {
+        let at = network
+            .position(id)
+            .ok_or(ScheduleError::MissingWorkItem(*id))?;
+        let activity =
+            if !work.is_executable() || (remaining_only && work.status.satisfies_dependency()) {
+                Activity::Fixed(0.0)
+            } else if let Some(estimate) = work.estimate {
+                estimate
+                    .validate()
+                    .map_err(|_| ScheduleError::InvalidDuration(*id))?;
+                Activity::Sampled(estimate)
             } else {
-                match work.estimate {
-                    Some(estimate) => {
-                        estimate
-                            .validate()
-                            .map_err(|_| ScheduleError::InvalidDuration(*id))?;
-                        sample_triangular(
-                            &mut rng,
-                            estimate.optimistic_hours,
-                            estimate.likely_hours,
-                            estimate.pessimistic_hours,
-                        )
-                    }
-                    None => work.expected_duration_hours(),
-                }
+                Activity::Fixed(work.expected_duration_hours())
             };
-            durations.insert(*id, duration);
+        sampled.push((at, *id, activity));
+    }
+    for _ in 0..config.iterations {
+        for (at, id, activity) in &sampled {
+            durations[*at] = match activity {
+                Activity::Fixed(hours) => *hours,
+                Activity::Sampled(estimate) => sample_triangular(
+                    &mut rng,
+                    estimate.optimistic_hours,
+                    estimate.likely_hours,
+                    estimate.pessimistic_hours,
+                ),
+            };
+            if !durations[*at].is_finite() || durations[*at] < 0.0 {
+                return Err(ScheduleError::InvalidDuration(*id));
+            }
         }
-
-        let schedule = deterministic_with_durations(plan, &durations)?;
-        finishes.push(schedule.project_finish_hours);
-        for id in schedule.critical_activities {
-            let count = critical_counts.entry(id).or_default();
-            *count = count.wrapping_add(1);
+        let times = network.times(&durations)?;
+        finishes.push(times.finish);
+        for (at, count) in critical_counts.iter_mut().enumerate() {
+            if network.total_float(&times, at)? <= EPSILON {
+                *count = count.wrapping_add(1);
+            }
         }
     }
 
     finishes.sort_by(f64::total_cmp);
-    let criticality = critical_counts
-        .into_iter()
-        .map(|(id, count)| (id, count as f64 / config.iterations as f64))
+    let criticality = network
+        .order()
+        .iter()
+        .zip(critical_counts)
+        .map(|(id, count)| (*id, count as f64 / config.iterations as f64))
         .collect();
 
     Ok(SimulationSummary {

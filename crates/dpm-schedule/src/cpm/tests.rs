@@ -1,7 +1,8 @@
 use super::*;
+use crate::network::relation_weight;
 use dpm_model::{
-    AcceptanceCriterion, Dependency, Key, Priority, Project, ProjectId, ThreePointEstimate,
-    WorkItem, WorkKind, WorkStatus,
+    AcceptanceCriterion, Dependency, DependencyKind, Key, Priority, Project, ProjectId,
+    ThreePointEstimate, WorkItem, WorkKind, WorkStatus,
 };
 use std::collections::BTreeSet;
 
