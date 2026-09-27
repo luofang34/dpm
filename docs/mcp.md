@@ -63,7 +63,9 @@ New tasks must be Proposed, without execution/evidence. Existing work keys/kinds
 progress, reviews and artifacts cannot be changed through this route. Started work, its
 prerequisites and containing packages, and the projects, requirements and resources it names are
 protected, and no new gate may block them; add follow-up work instead. Unstarted contracts,
-dependencies, projects, requirements, resources and risks can be maintained after review. New
+dependencies, projects, requirements, resources and risks can be maintained after review, but no
+actor may apply a change that relaxes a constraint on work it owns or on the work waiting for it
+(see dependency policy below). New
 decisions are Open questions; decision replacement below may list started work for reassessment.
 Git remotes in a shared plan cannot embed `user:password@` credentials. Undo is not part of this route.
 
@@ -295,7 +297,15 @@ omit `id` on new edges, which then receive a deterministic identity from predece
 kind. Duplicate identities or relations, missing endpoints, cycles and stale revisions reject the
 whole proposal.
 
-Policy, kind, lag and rationale change only through reviewed `apply_change`; proposals cannot add,
+Policy, kind, lag and rationale change only through reviewed `apply_change`, and never by an owner of
+either endpoint in the relaxing direction: removing the edge (also by deleting its other endpoint),
+Hard to Soft, a lower lag, a relation that no longer implies the old one (FS implies SS and FF, each
+implies SF) or a provisional start basis is refused as `invalid_command` with
+`details = {work, relaxed: {type: "dependency", dependency, predecessor, successor, relaxation}}`;
+a change that would release a gate unmet at apply time on the actor's own work, or on a direct
+successor because of it, reports `relaxed: {type: "gate", work, transition, gate}`. An equally strict
+or stricter edge under any identity is accepted, and another human or service may apply the same
+proposal. Proposals cannot add,
 alter or remove waivers, nor edit or remove a waived edge, which must be restored first. `waive_dependency` and `restore_dependency` take `dependency`, a nonempty
 `reason` and `base_revision`. Only human/service actors that neither hold nor have held (before a handoff) either endpoint task may use them, only Soft edges can be waived,
 and restoring requires a current waiver. The waiver's actor, time and reason stay on the edge until

@@ -416,6 +416,21 @@ def owner_endpoint_refusal(database, edge):
                         error='invalid_command')
         assert remote['message'] == local['error']['message'] and 'its own work' in remote['message'], remote
         assert run_cli(database, 'export')['revision'] == revision
+        # A reviewed change is no side door: the owner may not remove the edge out of its own work.
+        current = run_cli(database, 'export')
+        current['dependencies'] = [d for d in current['dependencies'] if d['id'] != edge]
+        candidate = database.parent / 'own-relaxation.json'
+        candidate.write_text(json.dumps(current))
+        arguments = {'plan': current, 'reason': 'my result no longer gates B', 'base_revision': revision}
+        remote = owner.call('apply_change', arguments, error='invalid_command')
+        local = run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'my result no longer gates B',
+                        '--actor', 'human:owner', error='invalid_command')['error']
+        assert remote['message'] == local['message'] and remote['details'] == local['details'], (remote, local)
+        assert remote['details'] == {'work': 'TEST-A', 'relaxed': {
+            'type': 'dependency', 'dependency': edge, 'predecessor': 'TEST-A', 'successor': 'TEST-B',
+            'relaxation': 'removed'}}, remote
+        after = run_cli(database, 'export')
+        assert after['revision'] == revision and any(d['id'] == edge for d in after['dependencies'])
     finally:
         owner.close()
 

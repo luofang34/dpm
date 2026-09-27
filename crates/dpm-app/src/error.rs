@@ -128,6 +128,9 @@ impl AppError {
             Self::Engine(dpm_engine::EngineError::NotReady {
                 transition, unmet, ..
             }) => Some(serde_json::json!({"transition": transition, "unmet": unmet})),
+            Self::Engine(dpm_engine::EngineError::OwnGateRelaxed { work, relaxed, .. }) => {
+                Some(serde_json::json!({"work": work, "relaxed": relaxed}))
+            }
             _ => None,
         }
     }

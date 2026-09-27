@@ -220,11 +220,22 @@ A dependency's `policy` is `Hard` (the default) or `Soft`, with an optional `rat
 kind, lag and rationale change only through a reviewed plan change; edges into started work stay
 protected like the rest of its prerequisite basis. A human or service may waive an unwaived `Soft`
 edge, or restore a waived one, with a nonempty reason; `Hard` edges cannot be waived and agents may
-do neither. Like verification and basis revalidation, the actor must not hold, or have held before a
-handoff, either endpoint task, so
-no owner relaxes a gate on its own work or on the result it hands on. The waiver's actor, time and reason stay on the edge until restoration, and each waiver
+do neither. The actor must not hold, or have held before a handoff, either endpoint task, so no
+owner relaxes a gate on its own work or on the result it hands on. The waiver's actor, time and reason stay on the edge until restoration, and each waiver
 or restoration is a semantic operation in the history. Plan changes cannot add, alter or remove a
 waiver, and a waived edge must be restored before a reviewed change edits or removes it.
+
+A reviewed plan change is held to the same rule. `ApplyChange` refuses, with
+`OwnGateRelaxed` naming the actor's work and a typed `RelaxedConstraint`, an actor that owns either
+endpoint of an edge the change removes (also by deleting the other endpoint) or weakens: Hard to
+Soft, a lower lag, a relation that no longer implies the old one (FS implies SS and FF, each of which
+implies SF), a verified start basis made provisional, or any other difference. An edge between the
+same two tasks that is at least as strict, under any identity, keeps the constraint, and tightening
+is always allowed. The shared gate evaluator is also run before and after the change at the apply
+time: any gate unmet on the actor's own work that the change would release (for example a
+replacement re-selecting its excluded work), or any gate on a direct successor that waits on the
+actor's work (for example a join changed to release work stranded behind it), refuses the whole
+change. Another human or service may apply the same proposal.
 
 A waived edge no longer gates any transition or milestone completion, and no longer bounds
 the remaining forecast or simulation, or the downstream count `next` and `explain` rank by. It still

@@ -292,6 +292,17 @@ pub enum EngineError {
     /// Verification must be independent of the owner.
     #[error("the submitting actor cannot verify its own work {0}")]
     SelfVerification(WorkItemId),
+    /// A reviewed change would relax a gate on the applying actor's own work or on the work
+    /// waiting for its result.
+    #[error("actor {actor} owns {work} and cannot apply a change that relaxes {relaxed}")]
+    OwnGateRelaxed {
+        /// Principal applying the change.
+        actor: ActorId,
+        /// The actor's own work the constraint concerns.
+        work: Key,
+        /// The constraint the change would relax.
+        relaxed: Box<crate::RelaxedConstraint>,
+    },
     /// A revalidation names a predecessor attempt that is not its current pending or verified one.
     #[error(
         "cannot revalidate {work} on dependency {dependency} against attempt #{requested}: the predecessor's current unrejected attempt is {}",

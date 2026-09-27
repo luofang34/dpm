@@ -1,7 +1,10 @@
 //! Validated commands and consistent execution projections for humans and agents.
 
 mod change;
-pub use change::{AffectedWork, ApplicabilityChange, ChangePreview, EntityChange, propose_change};
+pub use change::{
+    AffectedWork, ApplicabilityChange, ChangePreview, EdgeRelaxation, EntityChange,
+    RelaxedConstraint, propose_change,
+};
 mod command;
 mod context;
 mod execution;

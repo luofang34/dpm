@@ -1,0 +1,239 @@
+use super::{EdgeRelaxation, RelaxedConstraint};
+use crate::{Command, EngineError, Operation, UnmetGate, apply_command};
+use chrono::{DateTime, TimeDelta, TimeZone, Utc};
+use dpm_model::{
+    ActorId, Applicability, DecisionId, DecisionStatus, Dependency, DependencyId, DependencyKind,
+    DependencyPolicy, JoinPolicy, Key, Plan, StartBasis, WorkItemId,
+};
+
+fn t(hours: i64) -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 9, 1, 0, 0, 0)
+        .single()
+        .expect("fixed time")
+        + TimeDelta::hours(hours)
+}
+
+fn id(plan: &Plan, key: &str) -> WorkItemId {
+    plan.find_work_by_key(key).expect("work").id
+}
+
+fn owner() -> ActorId {
+    ActorId::human("owner")
+}
+
+fn reviewer() -> ActorId {
+    ActorId::human("reviewer")
+}
+
+fn run(plan: &mut Plan, actor: ActorId, command: Command, at: DateTime<Utc>) -> Operation {
+    let label = format!("{command:?}");
+    apply_command(plan, actor, command, at).unwrap_or_else(|e| panic!("{label}: {e}"))
+}
+
+fn apply(plan: &mut Plan, actor: ActorId, proposal: Plan) -> Result<Operation, EngineError> {
+    let change = Command::ApplyChange {
+        plan: Box::new(proposal),
+        reason: "reviewed".into(),
+    };
+    apply_command(plan, actor, change, t(5))
+}
+
+fn edge<'a>(plan: &'a mut Plan, from: &str, to: &str) -> &'a mut Dependency {
+    let (a, b) = (id(plan, from), id(plan, to));
+    plan.dependencies
+        .iter_mut()
+        .find(|d| d.predecessor == a && d.successor == b)
+        .expect("edge")
+}
+
+/// TEST-A -FS 24h Hard-> TEST-B, with TEST-A claimed by a human owner.
+fn owned_predecessor() -> (Plan, DependencyId) {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let mut proposal = plan.clone();
+    edge(&mut proposal, "TEST-A", "TEST-B").lag_hours = 24.0;
+    apply(&mut plan, reviewer(), proposal).expect("reviewer sets the lag");
+    let work = id(&plan, "TEST-A");
+    run(&mut plan, owner(), Command::Claim { work }, t(1));
+    let dependency = edge(&mut plan, "TEST-A", "TEST-B").id;
+    (plan, dependency)
+}
+
+fn refused_as(plan: &mut Plan, proposal: Plan) -> RelaxedConstraint {
+    let before = plan.clone();
+    let refused = apply(plan, owner(), proposal);
+    assert_eq!(*plan, before, "a refused change leaves the plan unchanged");
+    match refused {
+        Err(EngineError::OwnGateRelaxed { actor, relaxed, .. }) => {
+            assert_eq!(actor, owner());
+            *relaxed
+        }
+        other => panic!("expected an own-gate refusal, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_owner_cannot_remove_or_weaken_an_edge_out_of_its_own_work() {
+    let (mut plan, dependency) = owned_predecessor();
+    type Edit = fn(&mut Plan);
+    let edits: [(EdgeRelaxation, Edit); 6] = [
+        (EdgeRelaxation::Removed, |p| {
+            let b = id(p, "TEST-B");
+            p.dependencies
+                .retain(|d| !(d.successor == b && d.lag_hours > 0.0));
+        }),
+        (EdgeRelaxation::Lag, |p| {
+            edge(p, "TEST-A", "TEST-B").lag_hours = 1.0;
+        }),
+        (EdgeRelaxation::Policy, |p| {
+            edge(p, "TEST-A", "TEST-B").policy = DependencyPolicy::Soft;
+        }),
+        (EdgeRelaxation::Kind, |p| {
+            edge(p, "TEST-A", "TEST-B").kind = DependencyKind::StartStart;
+        }),
+        (EdgeRelaxation::StartBasis, |p| {
+            edge(p, "TEST-A", "TEST-B").start_basis = StartBasis::Provisional;
+        }),
+        (EdgeRelaxation::Lag, |p| {
+            let replaced = edge(p, "TEST-A", "TEST-B");
+            replaced.id = DependencyId::new();
+            replaced.lag_hours = 2.0;
+        }),
+    ];
+    for (expected, edit) in edits {
+        let mut proposal = plan.clone();
+        edit(&mut proposal);
+        let relaxed = refused_as(&mut plan, proposal);
+        assert_eq!(
+            relaxed,
+            RelaxedConstraint::Dependency {
+                dependency,
+                predecessor: Key::new("TEST-A"),
+                successor: Key::new("TEST-B"),
+                relaxation: expected,
+            }
+        );
+    }
+    let mut proposal = plan.clone();
+    edge(&mut proposal, "TEST-A", "TEST-B").lag_hours = 1.0;
+    apply(&mut plan, reviewer(), proposal).expect("an independent reviewer may relax it");
+}
+
+#[test]
+fn an_owner_may_tighten_its_edges_or_give_one_a_new_identity() {
+    let (mut plan, _) = owned_predecessor();
+    let mut proposal = plan.clone();
+    edge(&mut proposal, "TEST-A", "TEST-B").lag_hours = 48.0;
+    edge(&mut proposal, "TEST-A", "TEST-D").rationale = Some("D consumes A".into());
+    apply(&mut plan, owner(), proposal).expect("tightening");
+    let mut proposal = plan.clone();
+    edge(&mut proposal, "TEST-A", "TEST-B").id = DependencyId::new();
+    apply(&mut plan, owner(), proposal).expect("an equally strict edge under a new identity");
+    let mut proposal = plan.clone();
+    let (b, c) = (id(&plan, "TEST-B"), id(&plan, "TEST-C"));
+    let mut tighter = Dependency::new(id(&plan, "TEST-A"), c, DependencyKind::FinishStart, 0.0);
+    tighter.id = DependencyId::new();
+    proposal.dependencies.push(tighter);
+    edge(&mut proposal, "TEST-B", "TEST-C").lag_hours = 0.5;
+    assert_ne!(b, c);
+    apply(&mut plan, owner(), proposal).expect("unrelated edges are not the owner's");
+}
+
+/// Supplier A is chosen and SUP-A-QUOTE started by the owner; the lead then switches to B, so the
+/// quote is excluded in flight and SUP-A-AUDIT, an ordinary successor, is stranded behind it.
+fn excluded_in_flight() -> (Plan, DecisionId) {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../../tests/support/conditional-plan.json"
+    ))
+    .expect("fixture");
+    let supplier = plan
+        .find_decision_by_key("DEC-SUPPLIER")
+        .expect("decision")
+        .id;
+    let decide = Command::Decide {
+        decision: supplier,
+        outcome: "A".into(),
+    };
+    run(&mut plan, reviewer(), decide, t(0));
+    let design = id(&plan, "SUP-DESIGN");
+    run(&mut plan, owner(), Command::Claim { work: design }, t(0));
+    run(&mut plan, owner(), Command::Start { work: design }, t(0));
+    let submit = Command::Submit {
+        work: design,
+        note: None,
+    };
+    run(&mut plan, owner(), submit, t(0));
+    let verify = Command::Verify {
+        work: design,
+        note: None,
+    };
+    run(&mut plan, reviewer(), verify, t(1));
+    let quote = id(&plan, "SUP-A-QUOTE");
+    run(&mut plan, owner(), Command::Claim { work: quote }, t(2));
+    run(&mut plan, owner(), Command::Start { work: quote }, t(2));
+    let proposal = replace(&plan, supplier, "B");
+    let replacement = *proposal
+        .decisions
+        .keys()
+        .find(|d| !plan.decisions.contains_key(d))
+        .expect("replacement");
+    apply(&mut plan, reviewer(), proposal).expect("switch to B");
+    (plan, replacement)
+}
+
+fn replace(plan: &Plan, standing: DecisionId, option: &str) -> Plan {
+    let mut proposal = plan.clone();
+    let old = proposal.decisions.get_mut(&standing).expect("decision");
+    old.status = DecisionStatus::Superseded;
+    let mut new = old.clone();
+    new.id = DecisionId::new();
+    new.key = Key::new(format!("DEC-SUPPLIER-{option}"));
+    new.status = DecisionStatus::Decided;
+    new.outcome = Some(option.into());
+    new.resolved_at = None;
+    new.rationale = Some("revisited".into());
+    new.supersedes = Some(standing);
+    proposal.decisions.insert(new.id, new);
+    proposal
+}
+
+#[test]
+fn an_owner_cannot_release_a_successor_stranded_behind_its_excluded_work() {
+    let (mut plan, _) = excluded_in_flight();
+    let audit = id(&plan, "SUP-A-AUDIT");
+    let mut proposal = plan.clone();
+    proposal.work_items.get_mut(&audit).expect("audit").join =
+        JoinPolicy::ActiveBranches { allow_empty: true };
+    match refused_as(&mut plan, proposal.clone()) {
+        RelaxedConstraint::Gate { work, gate, .. } => {
+            assert_eq!(work, Key::new("SUP-A-AUDIT"));
+            assert!(matches!(
+                gate,
+                UnmetGate::Dependency { .. } | UnmetGate::Applicability { .. }
+            ));
+        }
+        other => panic!("expected a released gate, got {other:?}"),
+    }
+    apply(&mut plan, reviewer(), proposal).expect("an independent reviewer may");
+}
+
+#[test]
+fn an_owner_cannot_reselect_its_own_excluded_work() {
+    let (mut plan, standing) = excluded_in_flight();
+    let proposal = replace(&plan, standing, "A");
+    match refused_as(&mut plan, proposal.clone()) {
+        RelaxedConstraint::Gate { work, gate, .. } => {
+            assert_eq!(work, Key::new("SUP-A-QUOTE"));
+            assert!(matches!(
+                gate,
+                UnmetGate::Applicability {
+                    applicability: Applicability::NotSelected { .. }
+                }
+            ));
+        }
+        other => panic!("expected a released gate, got {other:?}"),
+    }
+    apply(&mut plan, reviewer(), proposal).expect("an independent reviewer may");
+}

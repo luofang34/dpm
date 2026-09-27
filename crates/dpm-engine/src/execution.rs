@@ -1,10 +1,7 @@
 use crate::{Command, EngineError, Operation};
 use chrono::{DateTime, Utc};
-use dpm_model::{
-    ActorId, Artifact, DecisionId, DecisionStatus, OperationId, Plan, WorkItem, WorkItemId,
-};
+use dpm_model::{ActorId, Artifact, DecisionStatus, OperationId, Plan, WorkItem, WorkItemId};
 use lifecycle::{block, claim, report_progress, start, submit, unblock, verify};
-use std::collections::BTreeSet;
 
 /// Apply one validated semantic command atomically and return its audit operation.
 ///
@@ -114,17 +111,18 @@ fn apply_change(
             reason: "proposal has no semantic changes".into(),
         });
     }
-    let existing: BTreeSet<DecisionId> = plan.decisions.keys().copied().collect();
-    *plan = proposed.clone();
+    let mut candidate = proposed.clone();
     // Applying the review is what makes a replacement's choice, so, as with decide, the command
     // records its own time; the proposal cannot carry one (see propose_change).
-    for decision in plan
+    for decision in candidate
         .decisions
         .values_mut()
-        .filter(|d| !existing.contains(&d.id) && d.status != DecisionStatus::Open)
+        .filter(|d| !plan.decisions.contains_key(&d.id) && d.status != DecisionStatus::Open)
     {
         decision.resolved_at = Some(at);
     }
+    crate::change::refuse_own_relaxation(plan, &candidate, actor, at)?;
+    *plan = candidate;
     Ok(())
 }
 

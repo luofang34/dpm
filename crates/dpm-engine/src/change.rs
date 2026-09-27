@@ -6,6 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 mod applicability;
 pub use applicability::ApplicabilityChange;
+mod independence;
+pub(crate) use independence::refuse_own_relaxation;
+pub use independence::{EdgeRelaxation, RelaxedConstraint};
 mod policy;
 mod protection;
 mod replacement;
