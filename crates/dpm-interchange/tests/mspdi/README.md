@@ -54,3 +54,8 @@ importer needs an explicit key prefix for them.
 - `omniplan-export-of-dpm.xml`: OmniPlan's MSPDI export after opening `dpm-export-cjk.xml`. OmniPlan
   dropped every GUID, wrote priority 0 for groups, added a line break to every note, and rewrote
   the SF link into the zero-duration Release milestone as SS (the same bound for a milestone).
+
+In the other direction, DPM's export of the imported `omniplan-native.xml` opened in OmniPlan 4.10.3
+with the same groups, milestones, relation kinds, lead times and CJK names (top-level items in DPM
+key order); OmniPlan's MSPDI export of that document imports back with no changes under
+`--match-existing-by title-path`.

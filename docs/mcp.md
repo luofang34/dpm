@@ -295,7 +295,7 @@ revision and operation history unchanged.
 | `Milestone=1` | Milestone; a nonzero source duration is dropped and reported. Without the element, existing work keeps its kind (reported as `kept`) and new work defaults to Task (reported as approximated) |
 | other tasks | Task, `Proposed`, empty acceptance: never executable until ratified. A zero-duration task without the flag stays an unestimated Task, so exported unestimated tasks keep their kind |
 | `Name`, `Notes` | `title`, `objective`; an empty name or absent notes keep the local value. Trailing line breaks in `Notes` are not content (OmniPlan ends every note with one) and are dropped |
-| `Priority` 0..1000 | P0 ≥800, P1 ≥600, P2 ≥400, P3 ≥200, else P4; export writes 900/700/500/300/100. Absent: existing work keeps its priority; new work gets the MSPDI default 500 (P2), reported as approximated |
+| `Priority` 0..1000 | P0 ≥800, P1 ≥600, P2 ≥400, P3 ≥200, else P4; export writes 900/700/500/300/100. Absent: existing work keeps its priority; new work gets the MSPDI default 500 (P2), reported as approximated. OmniPlan writes its nine priority steps as ⌊n·1000/9⌋ (111, 333, 555, 777, 1000 for DPM's 100..900), which fall in the same bands, and 0 for every group, which becomes P4 and is reported as a change on existing packages |
 | `Duration` `PTnHnMnS` | Single-point estimate O=M=P in hours; zero means unestimated |
 | `PredecessorLink` `Type` 0/1/2/3 | FF/FS/SF/SS dependency |
 | `LinkLag` | `lag_hours = LinkLag / 600` (tenths of a minute) |
