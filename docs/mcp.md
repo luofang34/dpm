@@ -271,7 +271,8 @@ is not an operation backup; use the CLI's `backup`, `restore` and `verify-store`
 ## Microsoft Project XML interchange
 
 The supported external format is the documented Microsoft Project XML schema (MSPDI), which
-Microsoft Project, ProjectLibre, OmniPlan and MPXJ read and write. Binary `.mpp` and Primavera
+Microsoft Project, ProjectLibre, OmniPlan Pro and MPXJ read and write. OmniPlan requires its Pro
+license for XML import/export. Binary `.mpp` and Primavera
 files are not supported; convert them to MSPDI with another tool first. Tests read documents
 written by MPXJ and check that MPXJ reads DPM's export back unchanged; acceptance by Microsoft
 Project or OmniPlan itself is not verified. `dpm-interchange` parses
