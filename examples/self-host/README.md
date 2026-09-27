@@ -26,6 +26,11 @@ their prerequisites `CORE-20` and `SCH-10`, are part of the MVP: `M0-MVP` requir
 phase. A regression test pins the exact MVP prerequisite set, so changing it is a deliberate plan
 change. Implementation boundaries and edge-case scenarios live in the task contracts.
 
+`CORE-40` (a replayable operation log) and `CORE-50` (one plan-format freeze) must land before the
+store and plan formats are published. `DEC-OP-ENVELOPE`, `DEC-PRINCIPAL`, `DEC-CALENDAR`,
+`DEC-PORTFOLIO` and `DEC-TRACKER-ID` name the design questions that later phases depend on; they
+are context for those tasks and gate nothing by themselves.
+
 ## Execution and evidence
 
 The prepared tasks remain Planned, unowned and at zero reported progress. All authorization gates

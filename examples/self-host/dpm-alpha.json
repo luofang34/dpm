@@ -2980,6 +2980,389 @@
           "access": "Write"
         }
       ]
+    },
+    "2cf9a33a-0e8d-5f25-a626-b68116b6d608": {
+      "id": "2cf9a33a-0e8d-5f25-a626-b68116b6d608",
+      "key": "CORE-40",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
+      "kind": "Task",
+      "title": "Adopt a replayable operation log before the store format is published",
+      "objective": "Make the operation log sufficient to rebuild and verify state: plan changes are logged as entity deltas, a genesis snapshot anchors replay, verify-store replays every operation, and operation ids come from the caller rather than the engine.",
+      "acceptance": [
+        {
+          "text": "A one-field edit on a large plan logs a delta proportional to the edit, not the plan."
+        },
+        {
+          "text": "verify-store rebuilds the snapshot from genesis plus every operation and reports any divergence without repairing it."
+        },
+        {
+          "text": "A store in an older layout is refused unchanged with guidance to back up and re-initialize from a plan export."
+        },
+        {
+          "text": "Protection, independence and agent refusals of plan changes behave identically through CLI and MCP."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 6,
+        "likely_hours": 12,
+        "pessimistic_hours": 24
+      },
+      "capabilities": [
+        "review",
+        "rust",
+        "storage"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "c79a01b2-9102-5dce-9b1b-f67d67972424",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "c28035da-dc5a-5058-a8fb-bd375aa71bda",
+        "d13caef3-2df2-5630-9ac8-083b37f85063"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Review the prepared delta/genesis/replay implementation branch against AGENTS.md and the storage requirements.",
+            "expected_result": "Findings name each behaviour change, the schema version and the effect on existing stores."
+          },
+          {
+            "action": "Obtain an explicit user decision on re-initializing live stores that hold the older layout.",
+            "expected_result": "The decision and the backup/archive procedure are recorded before any live store is touched."
+          },
+          {
+            "action": "Merge the reviewed change, run ./ci.sh and re-initialize authorized stores from their plan exports.",
+            "expected_result": "Replay verification passes on every re-initialized store and the archived originals stay readable by the previous build."
+          }
+        ],
+        "in_scope": [
+          "Operation log shape, genesis snapshot, replay verification and caller-supplied operation ids."
+        ],
+        "out_of_scope": [
+          "Sync transport, replicas, CRDT merging or any hosted server."
+        ],
+        "verification": [
+          "Property test: applying the logged delta to the prior state reproduces the proposed plan for every fixture.",
+          "Replay equals snapshot after every lifecycle command kind; ./ci.sh passes."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
+    },
+    "dbf3bbfe-6850-5233-ab5e-c790d969bafa": {
+      "id": "dbf3bbfe-6850-5233-ab5e-c790d969bafa",
+      "key": "CORE-50",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
+      "kind": "Task",
+      "title": "Freeze the publishable plan format",
+      "objective": "Settle the plan format once before publication: split WorkItem into contract, execution record and schedule inputs, give siblings an explicit order, name repository/folder references so they cannot be confused with labor resources, and bump format_version exactly once.",
+      "acceptance": [
+        {
+          "text": "WorkItem has room below the member limit and groups contract, execution record and schedule inputs separately."
+        },
+        {
+          "text": "Siblings carry an explicit order that survives MSPDI import and export and merges without renumbering."
+        },
+        {
+          "text": "Bundled plans, plan.schema.json and fixtures move directly to the new format with no legacy reader."
+        },
+        {
+          "text": "Protection rules compare the execution record as a whole and still refuse edits to executed work."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P1",
+      "estimate": {
+        "optimistic_hours": 8,
+        "likely_hours": 16,
+        "pessimistic_hours": 32
+      },
+      "capabilities": [
+        "design",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "2d5a1316-0b52-5ddc-aecc-23d92a73ec8b",
+        "f334b834-595d-5136-af46-0b308c643c81"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "c28035da-dc5a-5058-a8fb-bd375aa71bda"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Inventory every WorkItem field, its owner (author, executor, scheduler) and every reader across crates.",
+            "expected_result": "A field table assigns each field to one group and lists affected adapters and fixtures."
+          },
+          {
+            "action": "Implement the split, sibling order and reference renaming in one format bump with no other worktrees open.",
+            "expected_result": "The workspace builds with the new types and the schema guard matches the model."
+          },
+          {
+            "action": "Regenerate bundled plans and fixtures, update docs and run ./ci.sh.",
+            "expected_result": "Every smoke and fixture passes on the new format; the old format is refused with guidance."
+          }
+        ],
+        "in_scope": [
+          "WorkItem grouping, sibling order, reference naming and one format_version bump."
+        ],
+        "out_of_scope": [
+          "Calendars, labor resources, custom-field values or any new scheduling semantics."
+        ],
+        "verification": [
+          "Schema/model comparison test passes; plan export and import round-trips every fixture.",
+          "MSPDI export of reordered siblings keeps source order; ./ci.sh passes."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
+    },
+    "ecb79224-1746-510c-bc2d-a0c2048310f1": {
+      "id": "ecb79224-1746-510c-bc2d-a0c2048310f1",
+      "key": "QA-40",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "87eb53a0-5839-51bf-bdb2-47371bf50315",
+      "kind": "Task",
+      "title": "Keep default queries fast on large plans",
+      "objective": "Index the plan once per query so gate evaluation, downstream counts and key lookups stop scanning every edge or item per work item, and keep a warm plan between commands so a mutation does not reload and revalidate the whole store twice.",
+      "acceptance": [
+        {
+          "text": "Default next, status and explain on a 5k-task synthetic plan each finish within 1 s in a release build."
+        },
+        {
+          "text": "Outputs are byte-identical to the unindexed implementation on the same plans and seeds."
+        },
+        {
+          "text": "A release-mode timing check with a generous budget runs in the smoke stage."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 4,
+        "likely_hours": 8,
+        "pessimistic_hours": 16
+      },
+      "capabilities": [
+        "performance",
+        "rust"
+      ],
+      "requirement_ids": [
+        "087248db-f9e4-5c27-968d-c2b539178037",
+        "6138f172-2971-5cd1-8515-520f6b61be0a",
+        "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "c28035da-dc5a-5058-a8fb-bd375aa71bda"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Profile next, status, explain and one mutation on generated 1k/5k/20k plans.",
+            "expected_result": "A profile attributes time to gates, downstream counts, lookups, persistence and simulation."
+          },
+          {
+            "action": "Introduce a per-query index shared by Timeline, gates and CPM, and compute downstream counts only for candidates.",
+            "expected_result": "Hot paths read only the edges of the item at hand."
+          },
+          {
+            "action": "Compare outputs with the previous binary and add the timing check to the smoke stage.",
+            "expected_result": "Byte-identical outputs and the timing budget are recorded as evidence."
+          }
+        ],
+        "in_scope": [
+          "Engine and application query performance without API changes."
+        ],
+        "out_of_scope": [
+          "Changing ranking factors, simulation defaults or the storage format."
+        ],
+        "verification": [
+          "Old/new output comparison on generated plans; timing budget in smoke; ./ci.sh passes."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
+    },
+    "0a56edde-c1d2-51ba-8e5d-cb300b45a512": {
+      "id": "0a56edde-c1d2-51ba-8e5d-cb300b45a512",
+      "key": "IO-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "87eb53a0-5839-51bf-bdb2-47371bf50315",
+      "kind": "Task",
+      "title": "Carry estimates, keys and display order through MSPDI round trips",
+      "objective": "Stop losing three-point estimates and DPM keys when a plan passes through another scheduler: write them to MSPDI custom fields, read them back when the source did not change the duration, and report WBS values that differ from the outline.",
+      "acceptance": [
+        {
+          "text": "Export then import restores optimistic/likely/pessimistic hours and keys for every fixture."
+        },
+        {
+          "text": "An edited duration in the other tool wins over the carried range and is reported as such."
+        },
+        {
+          "text": "Behaviour through OmniPlan and one MPXJ writer is pinned with saved fixtures."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P2",
+      "estimate": {
+        "optimistic_hours": 4,
+        "likely_hours": 8,
+        "pessimistic_hours": 14
+      },
+      "capabilities": [
+        "interchange",
+        "rust"
+      ],
+      "requirement_ids": [
+        "2d5a1316-0b52-5ddc-aecc-23d92a73ec8b",
+        "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
+      ],
+      "artifact_ids": [
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89",
+        "c28035da-dc5a-5058-a8fb-bd375aa71bda"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Choose the custom fields and check which of OmniPlan, ProjectLibre and MPXJ keep them.",
+            "expected_result": "A table records, per tool, whether each carried field survives a save."
+          },
+          {
+            "action": "Write and read the fields in the MSPDI adapter with reports for every approximation.",
+            "expected_result": "Import reports say when a carried range was used or overridden."
+          },
+          {
+            "action": "Pin saved fixtures from each tool and add regression tests and CLI/MCP parity.",
+            "expected_result": "Fixtures and parity checks pass in ./ci.sh."
+          }
+        ],
+        "in_scope": [
+          "MSPDI export/import of estimates, keys, sibling order hints and WBS reporting."
+        ],
+        "out_of_scope": [
+          "Calendars, resources, .mpp parsing or linking LGPL code into DPM binaries."
+        ],
+        "verification": [
+          "Round-trip tests on pinned fixtures from each tool; smoke_interchange parity; ./ci.sh passes."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
+    },
+    "fbc7b449-1cf3-5b2f-a04c-55243540e7c4": {
+      "id": "fbc7b449-1cf3-5b2f-a04c-55243540e7c4",
+      "key": "UI-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Task",
+      "title": "Prepare the application facade for native clients",
+      "objective": "Make the application layer usable from a native client without moving rules into it: one facade crate, thread-safe access, a stable result encoding and a revision-change notification so views refresh without polling.",
+      "acceptance": [
+        {
+          "text": "The public facade re-exports the application layer used by CLI and MCP, not only engine types."
+        },
+        {
+          "text": "Application access is safe from a background thread and documented for FFI callers."
+        },
+        {
+          "text": "A revision-change notification reaches a subscriber after every committed operation."
+        }
+      ],
+      "status": "Planned",
+      "reported_progress_percent": 0,
+      "priority": "P3",
+      "estimate": {
+        "optimistic_hours": 4,
+        "likely_hours": 8,
+        "pessimistic_hours": 16
+      },
+      "capabilities": [
+        "design",
+        "rust",
+        "swift"
+      ],
+      "requirement_ids": [
+        "50625c7b-d065-5188-a522-bb9fb78eb203",
+        "bf2a0e85-cd71-5fff-87ad-f66a8591a269"
+      ],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89"
+      ],
+      "owner": null,
+      "block_reason": null,
+      "instructions": {
+        "steps": [
+          {
+            "action": "Choose typed records or JSON across the FFI boundary with a prototype call from Swift.",
+            "expected_result": "The choice and its error mapping are recorded as a design note linked to this task."
+          },
+          {
+            "action": "Expose the facade, thread-safe access and the notification hook with tests.",
+            "expected_result": "Unit and integration tests cover concurrent reads and notification after commit."
+          },
+          {
+            "action": "Document the facade contract and run ./ci.sh.",
+            "expected_result": "Docs name the supported calls, threading rules and error codes."
+          }
+        ],
+        "in_scope": [
+          "Rust facade, threading contract, result encoding and change notification."
+        ],
+        "out_of_scope": [
+          "SwiftUI screens, CloudKit, accounts or any hosted service."
+        ],
+        "verification": [
+          "Facade integration tests and ./ci.sh pass; a Swift prototype call is recorded as evidence."
+        ]
+      },
+      "resources": [
+        {
+          "resource": "df61c87b-3509-539e-a70d-47a3b56bf328",
+          "access": "Write"
+        }
+      ]
     }
   },
   "requirements": {
@@ -3432,6 +3815,70 @@
         "b6805961-ff6d-5d4e-9b95-82a46e79170c",
         "cd3eed21-6613-5c8e-a874-5d62002f0c9b"
       ]
+    },
+    "72d89401-5244-5f4b-bb15-fac9c791ea22": {
+      "id": "72d89401-5244-5f4b-bb15-fac9c791ea22",
+      "key": "DEC-OP-ENVELOPE",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "Which operation envelope fields (caller-supplied time-ordered ids usable as idempotency keys, workspace and replica ids) does the operation log carry before any sync work begins?",
+      "status": "Open",
+      "outcome": null,
+      "related_work": [
+        "2cf9a33a-0e8d-5f25-a626-b68116b6d608",
+        "973bf299-2998-54fa-a1dc-a58d2f66eff8"
+      ],
+      "blocks": []
+    },
+    "c880941a-bed2-5235-91ec-00a45e9a8c94": {
+      "id": "c880941a-bed2-5235-91ec-00a45e9a8c94",
+      "key": "DEC-PRINCIPAL",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "How do operations record an authenticated principal with a stable id beside the claimed actor, so renames and credentials never split one person and independence checks compare principals?",
+      "status": "Open",
+      "outcome": null,
+      "related_work": [
+        "0752410b-cd82-5af0-b289-e88a6138c82e",
+        "2cf9a33a-0e8d-5f25-a626-b68116b6d608"
+      ],
+      "blocks": []
+    },
+    "b5a016e6-100a-50a8-836d-c4ba29630f9e": {
+      "id": "b5a016e6-100a-50a8-836d-c4ba29630f9e",
+      "key": "DEC-CALENDAR",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "How do calendars, an explicit project start and time zone, percent lags and summary links enter scheduling while stored hours stay elapsed hours?",
+      "status": "Open",
+      "outcome": null,
+      "related_work": [
+        "40063ef5-e801-5876-9888-3bff011e437c",
+        "dbf3bbfe-6850-5233-ab5e-c790d969bafa"
+      ],
+      "blocks": []
+    },
+    "296d0b8a-bf96-551d-ac52-68a13afa4f2c": {
+      "id": "296d0b8a-bf96-551d-ac52-68a13afa4f2c",
+      "key": "DEC-PORTFOLIO",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "Is a portfolio one plan with nested projects or many plans with stable cross-plan references?",
+      "status": "Open",
+      "outcome": null,
+      "related_work": [
+        "973bf299-2998-54fa-a1dc-a58d2f66eff8",
+        "dbf3bbfe-6850-5233-ab5e-c790d969bafa"
+      ],
+      "blocks": []
+    },
+    "88a4e6fd-59eb-53df-8447-525e72806a54": {
+      "id": "88a4e6fd-59eb-53df-8447-525e72806a54",
+      "key": "DEC-TRACKER-ID",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "Which immutable tracker ids identify Jira, Linear and OpenProject objects, with human keys kept as aliases, and which raw status and remote version do observations record?",
+      "status": "Open",
+      "outcome": null,
+      "related_work": [
+        "0a56edde-c1d2-51ba-8e5d-cb300b45a512"
+      ],
+      "blocks": []
     }
   },
   "risks": {
@@ -3953,6 +4400,46 @@
       "id": "33e61873-818b-81be-b5dc-b721abb0d905",
       "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
       "successor": "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "aaeef251-0b76-57bc-8d82-587505191088",
+      "predecessor": "2cf9a33a-0e8d-5f25-a626-b68116b6d608",
+      "successor": "f31377c3-739b-53b1-962c-bdcb9609af27",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "e78422d3-4f41-5b41-8428-0f53d5c3de48",
+      "predecessor": "dbf3bbfe-6850-5233-ab5e-c790d969bafa",
+      "successor": "f31377c3-739b-53b1-962c-bdcb9609af27",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "b7b3156a-07a0-51e5-9d90-a0b3e5f7a50b",
+      "predecessor": "ecb79224-1746-510c-bc2d-a0c2048310f1",
+      "successor": "93fd3281-1b7c-5ef5-a379-39ffc39e9843",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "15d823c2-1e2b-58f4-beae-3cf988e0b6c0",
+      "predecessor": "0a56edde-c1d2-51ba-8e5d-cb300b45a512",
+      "successor": "93fd3281-1b7c-5ef5-a379-39ffc39e9843",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "891707d9-152d-5a12-9bb0-0b2cf84014c8",
+      "predecessor": "fbc7b449-1cf3-5b2f-a04c-55243540e7c4",
+      "successor": "17391553-5a97-5278-a8b7-472eca8a3992",
       "kind": "FinishStart",
       "lag_hours": 0.0,
       "policy": "Hard"
