@@ -134,7 +134,7 @@ fn layered(count: usize) -> Plan {
 }
 
 /// The simulation computed step by step through the public deterministic projection.
-fn reference(plan: &Plan, config: SimulationConfig) -> SimulationSummary {
+fn reference(plan: &Plan, config: SimulationConfig, remaining_only: bool) -> SimulationSummary {
     let mut rng = XorShift64::new(config.seed);
     let mut finishes = Vec::new();
     let mut counts: BTreeMap<_, usize> = plan.work_items.keys().map(|id| (*id, 0)).collect();
@@ -143,7 +143,9 @@ fn reference(plan: &Plan, config: SimulationConfig) -> SimulationSummary {
             .work_items
             .iter()
             .map(|(id, work)| {
+                let done = remaining_only && work.status.satisfies_dependency();
                 let hours = match work.estimate {
+                    _ if done => 0.0,
                     Some(e) if work.is_executable() => sample_triangular(
                         &mut rng,
                         e.optimistic_hours,
@@ -183,7 +185,7 @@ fn simulation_equals_one_deterministic_projection_per_sample() {
             seed: 7,
         };
         let fast = simulate(&plan, config).expect("simulate");
-        let slow = reference(&plan, config);
+        let slow = reference(&plan, config, false);
         assert_eq!(fast.p50_finish_hours, slow.p50_finish_hours);
         assert_eq!(fast.p80_finish_hours, slow.p80_finish_hours);
         assert_eq!(fast.p95_finish_hours, slow.p95_finish_hours);
@@ -208,4 +210,35 @@ fn simulation_cost_is_linear_in_the_graph_per_iteration() {
         elapsed < std::time::Duration::from_secs(20),
         "3000 activities x 200 samples took {elapsed:?}"
     );
+}
+
+#[test]
+fn remaining_simulation_equals_one_projection_of_the_remaining_graph_per_sample() {
+    let mut plan = layered(80);
+    let at = |hours| chrono::DateTime::UNIX_EPOCH + chrono::TimeDelta::hours(hours);
+    for n in 0..20 {
+        let key = dpm_model::Key::new(format!("S-{n}"));
+        let work = plan
+            .work_items
+            .values_mut()
+            .find(|w| w.key == key)
+            .expect("layered task");
+        work.status = WorkStatus::Verified;
+        work.owner = Some(ActorId::agent("owner"));
+        work.events.started_at = Some(at(n));
+        work.events.verified_at = Some(at(n + 1));
+    }
+    let config = SimulationConfig {
+        iterations: 200,
+        seed: 3,
+    };
+    for now in [at(10), at(25), at(400)] {
+        let fast = simulate_remaining(&plan, config, now).expect("remaining");
+        let remaining = crate::cpm::remaining_plan(&plan, now);
+        assert!(remaining.excluded.is_empty());
+        let slow = reference(&remaining.plan, config, true);
+        assert_eq!(fast.p50_finish_hours, slow.p50_finish_hours);
+        assert_eq!(fast.p95_finish_hours, slow.p95_finish_hours);
+        assert_eq!(fast.criticality, slow.criticality);
+    }
 }
