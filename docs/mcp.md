@@ -370,7 +370,8 @@ headline percentiles are null: branches without a probability model are never bl
 criticality in `next` and `explain` are likewise computed over committed work. Lifecycle counts
 (`in_flight`, `blocked`, `awaiting_verification`) cover the same scope as `complete` and progress:
 work whose own conditions are selected. Claimed, started, blocked or submitted work whose lifecycle
-a reviewed choice change kept outside that scope is counted only in `excluded_in_flight`. A replacement decision carries
+a reviewed choice change kept outside that scope is counted only in `excluded_in_flight`; the TUI Now
+page scopes its blocked and needs-review lists the same way and lists that work apart. A replacement decision carries
 no `blocks`, as for any replacement.
 
 `decide` refuses a choice that would exclude claimed or started work. Changing a made choice is a

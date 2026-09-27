@@ -113,17 +113,7 @@ pub fn status(
             &[WorkStatus::Claimed, WorkStatus::InProgress],
         ),
         awaiting_verification: count(plan, &timeline, true, &[WorkStatus::Submitted]),
-        excluded_in_flight: count(
-            plan,
-            &timeline,
-            false,
-            &[
-                WorkStatus::Claimed,
-                WorkStatus::InProgress,
-                WorkStatus::Blocked,
-                WorkStatus::Submitted,
-            ],
-        ),
+        excluded_in_flight: excluded_in_flight(plan, &timeline).len(),
         basis_invalidated: plan
             .work_items
             .values()
@@ -144,14 +134,38 @@ pub fn status(
     })
 }
 
-/// Tasks in one of `statuses`, inside (`counted`) or outside the scope progress counts: work whose
-/// own conditions are selected, read from the same timeline.
+/// Tasks in one of `statuses`, inside (`counted`) or outside the status scope.
 fn count(plan: &Plan, timeline: &Timeline, counted: bool, statuses: &[WorkStatus]) -> usize {
     plan.work_items
         .values()
         .filter(|w| statuses.contains(&w.status))
-        .filter(|w| timeline.applicability(w.id).condition_selected() == counted)
+        .filter(|w| in_status_scope(timeline, w.id) == counted)
         .count()
+}
+
+/// Whether work's lifecycle counts in `status` lifecycle counts, `complete` and progress: its own
+/// conditions are selected. Views that list work behind those counts use this scope, so a list
+/// never shows work its count leaves out.
+#[must_use]
+pub fn in_status_scope(timeline: &Timeline, work: WorkItemId) -> bool {
+    timeline.applicability(work).condition_selected()
+}
+
+/// Claimed, started, blocked or submitted work outside the status scope: a reviewed choice change
+/// excluded it, so it takes no transition until the plan changes again. `status` counts it as
+/// `excluded_in_flight`.
+#[must_use]
+pub fn excluded_in_flight<'a>(plan: &'a Plan, timeline: &Timeline) -> Vec<&'a WorkItem> {
+    const IN_FLIGHT: [WorkStatus; 4] = [
+        WorkStatus::Claimed,
+        WorkStatus::InProgress,
+        WorkStatus::Blocked,
+        WorkStatus::Submitted,
+    ];
+    plan.work_items
+        .values()
+        .filter(|w| IN_FLIGHT.contains(&w.status) && !in_status_scope(timeline, w.id))
+        .collect()
 }
 
 /// Transitive successors that completing work could still release; excluded or stranded work

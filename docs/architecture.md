@@ -326,7 +326,10 @@ would exclude claimed or started work; a reviewed replacement may do so, keeps t
 lifecycle and evidence, reports it in the preview, and the work then takes no transition until the
 plan changes. Automatic cancellation is not part of this model. `status` lifecycle counts
 (`in_flight`, `blocked`, `awaiting_verification`) use the scope progress counts, so such kept work
-appears only in `excluded_in_flight`.
+appears only in `excluded_in_flight`. `dpm_engine::in_status_scope` and
+`dpm_engine::excluded_in_flight` expose that scope, and the TUI Now page uses them: its blocked and
+needs-review lists match their counts, and excluded in-flight work is listed apart with its
+lifecycle and the reason it is excluded.
 
 ### Release and handoff
 

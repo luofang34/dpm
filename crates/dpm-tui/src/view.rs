@@ -2,10 +2,10 @@ use crate::gantt::dependencies;
 use chrono::{DateTime, Utc};
 use crossterm::event::{KeyCode, MouseEvent};
 use dpm_engine::{
-    EngineError, NextWorkCandidate, NextWorkQuery, ProgressProjection, StatusSummary, completion,
-    explain_work, next_work, progress, status,
+    EngineError, NextWorkQuery, ProgressProjection, completion, explain_work, next_work, progress,
+    status,
 };
-use dpm_model::{DecisionStatus, Plan, Timeline, WorkItem, WorkStatus};
+use dpm_model::{Plan, Timeline, WorkItem, WorkStatus};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout},
@@ -56,7 +56,8 @@ impl View {
     pub(crate) fn new(plan: &Plan, clock: DateTime<Utc>) -> Result<Self, EngineError> {
         let summary = status(plan, true, clock)?;
         let candidates = next_work(plan, &NextWorkQuery::default(), clock)?;
-        let now = now_text(plan, &summary, candidates);
+        let timeline = Timeline::at(plan, clock);
+        let now = crate::now::text(plan, &summary, &timeline, candidates);
         let mut work: Vec<_> = plan.work_items.values().cloned().collect();
         work.sort_by_cached_key(|item| hierarchy_path(plan, item));
         let done = completion(plan, clock);
@@ -83,7 +84,7 @@ impl View {
             state,
             now,
             progress: progress(plan, clock)?,
-            timeline: Timeline::at(plan, clock),
+            timeline,
             network,
             gantt: crate::gantt::Gantt::new(plan, clock)?,
             detail_cache: None,
@@ -291,78 +292,6 @@ impl View {
         }
         text
     }
-}
-
-fn now_text(plan: &Plan, summary: &StatusSummary, candidates: Vec<NextWorkCandidate>) -> String {
-    let mut now = format!(
-        "Ready {} · Blocked {} · In flight {} · Awaiting review {} · Complete {} / {} · Decisions {}\nExpected remaining: {:.1}h",
-        summary.ready,
-        summary.blocked,
-        summary.in_flight,
-        summary.awaiting_verification,
-        summary.complete,
-        summary.total_work,
-        summary.open_decisions,
-        summary.expected_finish_hours
-    );
-    now.push_str(&format!(
-        "\nExecution: {:.1}% · verified={}",
-        summary.progress.percent_complete, summary.progress.verified
-    ));
-    if let (Some(p50), Some(p80)) = (summary.p50_finish_hours, summary.p80_finish_hours) {
-        now.push_str(&format!(" · P50 {p50:.1}h · P80 {p80:.1}h"));
-    }
-    if let Some(p95) = summary.p95_finish_hours {
-        now.push_str(&format!(" · P95 {p95:.1}h"));
-    }
-    now.push_str(&crate::open_choices::summary_text(summary));
-    now.push_str("\n\nNeeds decision:\n");
-    for decision in plan
-        .decisions
-        .values()
-        .filter(|d| d.status == DecisionStatus::Open)
-    {
-        now.push_str(&format!("{}: {}\n", decision.key, decision.question));
-    }
-    for (title, state) in [
-        ("Blocked work", WorkStatus::Blocked),
-        ("Needs review", WorkStatus::Submitted),
-    ] {
-        now.push_str(&format!("\n{title}:\n"));
-        for work in plan.work_items.values().filter(|w| w.status == state) {
-            now.push_str(&format!(
-                "{} — {} {}\n",
-                work.key,
-                work.title,
-                work.block_reason.as_deref().unwrap_or("")
-            ));
-        }
-    }
-    now.push_str("\nRisks:\n");
-    for risk in plan.risks.values() {
-        now.push_str(&format!(
-            "{} ({:?}): {}\n",
-            risk.key, risk.impact, risk.description
-        ));
-    }
-    now.push_str("\nRecommended ready work:\n");
-    if candidates.is_empty() {
-        now.push_str("No ready work. Inspect Work or Detail for blockers and gates.\n");
-    }
-    for candidate in candidates {
-        now.push_str(&format!(
-            "{}  {}  score {:.1}{}\n",
-            candidate.work.key,
-            candidate.work.title,
-            candidate.score,
-            if candidate.critical {
-                " [critical]"
-            } else {
-                ""
-            }
-        ));
-    }
-    now
 }
 
 fn hierarchy_path(plan: &Plan, work: &WorkItem) -> Vec<String> {

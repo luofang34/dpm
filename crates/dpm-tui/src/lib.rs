@@ -4,6 +4,7 @@ mod console;
 mod detail;
 mod gantt;
 mod notice;
+mod now;
 mod open_choices;
 mod text_panel;
 mod view;
