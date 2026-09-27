@@ -189,7 +189,9 @@ fn parse_task(node: Node, position: usize) -> Result<SourceTask, InterchangeErro
         milestone: text(node, "Milestone").map(|v| matches!(v.trim(), "1" | "true")),
         summary: flag(node, "Summary"),
         priority: integer("Priority")?,
+        // Trailing line breaks are not content; OmniPlan ends every note with one.
         notes: text(node, "Notes")
+            .map(str::trim_end)
             .filter(|n| !n.trim().is_empty())
             .map(str::to_owned),
         exclusion: exclusion(node),

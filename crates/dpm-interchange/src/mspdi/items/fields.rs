@@ -152,7 +152,9 @@ fn map_objective(
     report: &mut ItemReport,
 ) {
     if let Some(notes) = &task.notes {
-        work.objective = notes.clone();
+        if !existing.is_some_and(|e| e.objective.trim_end() == notes) {
+            work.objective = notes.clone();
+        }
         report.preserved.push("notes".into());
     } else if existing.is_some() {
         report.kept.push("notes".into());

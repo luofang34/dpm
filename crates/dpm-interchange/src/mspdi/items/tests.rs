@@ -38,6 +38,19 @@ fn empty_name_keeps_the_local_title() {
 }
 
 #[test]
+fn trailing_line_breaks_in_notes_are_not_content() {
+    // OmniPlan ends every exported note with a line break.
+    let trailing =
+        |xml: String| xml.replace("<Notes>Write it</Notes>", "<Notes>Write it\n</Notes>");
+    let (_, result) = reimport(trailing);
+    assert_eq!(work(&result.candidate, "MSP-2").objective, "Write it");
+    assert_eq!(result.report.items[1].outcome, ItemOutcome::Unchanged);
+    assert!(preserved(&result, 2).contains(&"notes".to_string()));
+    let created = import(&workspace(), &trailing(outline_document("")));
+    assert_eq!(work(&created.candidate, "MSP-2").objective, "Write it");
+}
+
+#[test]
 fn absent_milestone_flag_keeps_the_local_kind() {
     let (_, result) = reimport(|xml| xml.replace("<Milestone>1</Milestone>", ""));
     assert_eq!(work(&result.candidate, "MSP-4").kind, WorkKind::Milestone);
