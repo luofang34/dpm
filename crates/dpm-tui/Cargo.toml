@@ -14,7 +14,8 @@ crossterm.workspace = true
 dpm-engine = { path = "../dpm-engine", version = "0.1.0" }
 dpm-model = { path = "../dpm-model", version = "0.1.0" }
 dpm-schedule = { path = "../dpm-schedule", version = "0.1.0" }
-ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }
+ratatui.workspace = true
+unicode-width = "0.2"
 
 [lints]
 workspace = true

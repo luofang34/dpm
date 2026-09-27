@@ -7,5 +7,6 @@ mod open_choices;
 mod text_panel;
 mod view;
 mod work_label;
+mod wrap;
 
 pub use console::{TuiError, run_blocking, run_preview_blocking, run_reloading_blocking};

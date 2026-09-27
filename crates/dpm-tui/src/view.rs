@@ -124,6 +124,11 @@ impl View {
         ));
     }
 
+    #[cfg(test)]
+    pub(crate) fn inspector_area(&self) -> ratatui::layout::Rect {
+        self.gantt.inspector_area()
+    }
+
     pub(crate) fn set_colors(&mut self, enabled: bool) {
         self.gantt.set_colors(enabled);
     }

@@ -4,7 +4,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::Text,
-    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
 #[derive(Default)]
@@ -51,8 +51,9 @@ impl TextPanel {
         };
         let block = Block::bordered().border_style(style);
         let inner = block.inner(area);
-        let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
-        let count = paragraph.line_count(inner.width);
+        let rows = crate::wrap::rows(text, inner.width);
+        let count = rows.len();
+        let paragraph = Paragraph::new(rows);
         self.height = usize::from(inner.height);
         self.maximum = count.saturating_sub(self.height).min(usize::from(u16::MAX));
         self.offset = self.offset.min(self.maximum);
@@ -80,3 +81,7 @@ impl TextPanel {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic)]
+mod tests;

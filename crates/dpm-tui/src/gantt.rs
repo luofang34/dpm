@@ -58,6 +58,10 @@ impl Gantt {
         self.viewport.restore(&previous.viewport);
         self.palette.enabled = previous.palette.enabled;
     }
+    #[cfg(test)]
+    pub(crate) fn inspector_area(&self) -> Rect {
+        self.inspector.area
+    }
     pub(crate) fn set_colors(&mut self, enabled: bool) {
         self.palette.enabled = enabled;
     }
