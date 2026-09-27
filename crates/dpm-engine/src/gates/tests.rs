@@ -151,14 +151,11 @@ fn the_hard_edge_remedy_names_the_claim_that_already_locks_its_lag() {
     assert!(reasons.contains("was not recorded"), "{reasons}");
     let mut relaxed = plan.clone();
     relaxed.dependencies[0].lag_hours = 0.0;
-    let change = Command::ApplyChange {
-        plan: Box::new(relaxed),
-        reason: "drop the lag".into(),
-    };
-    let refused = apply_command(
+    let refused = crate::apply_plan_change(
         &mut plan,
         ActorId::human("lead"),
-        change,
+        &relaxed,
+        "drop the lag",
         now,
         dpm_model::OperationId::new(),
     );

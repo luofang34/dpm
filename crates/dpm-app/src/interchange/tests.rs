@@ -43,13 +43,11 @@ fn apply(
     candidate: &serde_json::Value,
 ) -> Result<(), AppError> {
     let plan: Plan = serde_json::from_value(candidate.clone()).expect("candidate");
-    app.execute_blocking(CommandRequest {
+    app.apply_plan_change_blocking(crate::PlanChangeRequest {
         actor,
         base_revision: base,
-        command: Command::ApplyChange {
-            plan: Box::new(plan),
-            reason: "Import the release schedule".into(),
-        },
+        plan: Box::new(plan),
+        reason: "Import the release schedule".into(),
     })
     .map(|_| ())
 }

@@ -32,11 +32,14 @@ fn run(plan: &mut Plan, actor: ActorId, command: Command, at: DateTime<Utc>) -> 
 }
 
 fn apply(plan: &mut Plan, actor: ActorId, proposal: Plan) -> Result<Operation, EngineError> {
-    let change = Command::ApplyChange {
-        plan: Box::new(proposal),
-        reason: "reviewed".into(),
-    };
-    apply_command(plan, actor, change, t(5), dpm_model::OperationId::new())
+    crate::apply_plan_change(
+        plan,
+        actor,
+        &proposal,
+        "reviewed",
+        t(5),
+        dpm_model::OperationId::new(),
+    )
 }
 
 fn edge<'a>(plan: &'a mut Plan, from: &str, to: &str) -> &'a mut Dependency {

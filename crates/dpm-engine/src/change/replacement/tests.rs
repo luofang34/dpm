@@ -73,13 +73,11 @@ fn replace(plan: &Plan, old: DecisionId) -> (Plan, Decision) {
 }
 
 fn apply(plan: &mut Plan, proposed: Plan) -> Result<crate::Operation, EngineError> {
-    apply_command(
+    crate::apply_plan_change(
         plan,
         ActorId::human("planner"),
-        Command::ApplyChange {
-            plan: Box::new(proposed),
-            reason: "revise the input format".into(),
-        },
+        &proposed,
+        "revise the input format",
         Utc::now(),
         dpm_model::OperationId::new(),
     )

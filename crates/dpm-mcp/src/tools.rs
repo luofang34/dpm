@@ -1,5 +1,5 @@
 use dpm_app::ExternalLinkInput;
-use dpm_app::{AppError, Application, CommandRequest, Query};
+use dpm_app::{AppError, Application, CommandRequest, PlanChangeRequest, Query};
 use dpm_engine::Command;
 use dpm_model::{ActorId, Artifact, ExternalIdentity, ExternalLinkRole, ExternalState};
 use serde::Deserialize;
@@ -287,12 +287,22 @@ pub(crate) fn call_tool_blocking(
         return Ok(serde_json::to_value(app.query_blocking(query)?)?);
     }
     let base_revision = required(args.base_revision, "base_revision")?;
-    let command = mutation_blocking(app, actor, name, args)?;
-    let operation = app.execute_blocking(CommandRequest {
-        actor: actor.clone(),
-        base_revision,
-        command,
-    })?;
+    let operation = if name == "apply_change" {
+        app.ensure_writable()?;
+        app.apply_plan_change_blocking(PlanChangeRequest {
+            actor: actor.clone(),
+            base_revision,
+            plan: required(args.plan, "plan")?,
+            reason: required(args.reason, "reason")?,
+        })?
+    } else {
+        let command = mutation_blocking(app, actor, name, args)?;
+        app.execute_blocking(CommandRequest {
+            actor: actor.clone(),
+            base_revision,
+            command,
+        })?
+    };
     Ok(
         json!({"api_version":dpm_app::API_VERSION,"revision":operation.resulting_revision,"data":operation}),
     )
@@ -305,12 +315,6 @@ fn mutation_blocking(
     args: Arguments,
 ) -> Result<Command, AppError> {
     app.ensure_writable()?;
-    if name == "apply_change" {
-        return Ok(Command::ApplyChange {
-            plan: required(args.plan, "plan")?,
-            reason: required(args.reason, "reason")?,
-        });
-    }
     if name == "decide_gate" {
         let key = required(args.decision, "decision")?;
         let decision = app.decision_id_blocking(&key)?;

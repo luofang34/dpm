@@ -1,6 +1,5 @@
 use super::*;
 use chrono::Utc;
-use dpm_engine::{Command, apply_command};
 use dpm_model::{ActorId, Plan};
 
 #[test]
@@ -13,13 +12,11 @@ fn chronological_pages_preserve_operation_identity_across_revision_wrap() {
     for name in ["First", "Second"] {
         let mut proposed = plan.clone();
         proposed.workspace.name = name.into();
-        let operation = apply_command(
+        let operation = dpm_engine::apply_plan_change(
             &mut plan,
             ActorId::human("planner"),
-            Command::ApplyChange {
-                plan: Box::new(proposed),
-                reason: "rename".into(),
-            },
+            &proposed,
+            "rename",
             Utc::now(),
             dpm_model::OperationId::new(),
         )

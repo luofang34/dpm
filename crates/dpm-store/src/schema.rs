@@ -92,8 +92,5 @@ pub(crate) fn upgrade_blocking(connection: &Connection, path: &Path) -> Result<(
 }
 
 #[cfg(test)]
-pub(crate) use layout::{OPERATIONS as TEST_OPERATIONS_DDL, PLAN_STATE as TEST_PLAN_STATE_DDL};
-
-#[cfg(test)]
 #[allow(clippy::expect_used, clippy::panic)]
 mod tests;

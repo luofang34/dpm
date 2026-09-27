@@ -8,8 +8,11 @@ mod applicability;
 mod external;
 pub use applicability::ApplicabilityChange;
 mod independence;
+mod patch;
 pub(crate) use independence::refuse_own_relaxation;
 pub use independence::{EdgeRelaxation, RelaxedConstraint};
+pub(crate) use patch::authorize;
+pub use patch::{apply_plan_change, patch, plan_change};
 mod policy;
 mod protection;
 mod replacement;
@@ -17,6 +20,7 @@ pub use replacement::AffectedWork;
 
 /// One entity-level semantic difference, including explicit additions and removals.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EntityChange {
     /// Domain collection such as `external_references`, `dependencies` per edge, or the workspace-wide
     /// `workspace` / `links`.
@@ -53,6 +57,34 @@ pub fn propose_change(current: &Plan, proposed: &Plan) -> Result<ChangePreview, 
     current.validate()?;
     proposed.validate()?;
     protection::validate(current, proposed)?;
+    let changes = differences(current, proposed)?;
+    Ok(ChangePreview {
+        base_revision: current.revision,
+        changes,
+        affected_work: replacement::affected_work(current, proposed),
+        applicability_changes: applicability::changes(current, proposed),
+    })
+}
+
+/// Collections serialized as maps keyed by stable identity, compared entity by entity.
+const KEYED_COLLECTIONS: [&str; 7] = [
+    "projects",
+    "resources",
+    "work_items",
+    "requirements",
+    "decisions",
+    "risks",
+    "external_references",
+];
+
+/// The entity-level differences between two plans in canonical order, without validation.
+///
+/// Artifacts, the revision and the format version are not compared: protection refuses a proposal
+/// that changes them, so they never appear in a reviewed change.
+pub(crate) fn differences(
+    current: &Plan,
+    proposed: &Plan,
+) -> Result<Vec<EntityChange>, EngineError> {
     let before = serde_json::to_value(current)?;
     let after = serde_json::to_value(proposed)?;
     let mut changes = Vec::new();
@@ -63,15 +95,7 @@ pub fn propose_change(current: &Plan, proposed: &Plan) -> Result<ChangePreview, 
         &before["workspace"],
         &after["workspace"],
     );
-    for collection in [
-        "projects",
-        "resources",
-        "work_items",
-        "requirements",
-        "decisions",
-        "risks",
-        "external_references",
-    ] {
+    for collection in KEYED_COLLECTIONS {
         let ids: BTreeSet<_> = current_keys(&before[collection])
             .chain(current_keys(&after[collection]))
             .collect();
@@ -107,12 +131,7 @@ pub fn propose_change(current: &Plan, proposed: &Plan) -> Result<ChangePreview, 
         &sorted_links(current)?,
         &sorted_links(proposed)?,
     );
-    Ok(ChangePreview {
-        base_revision: current.revision,
-        changes,
-        affected_work: replacement::affected_work(current, proposed),
-        applicability_changes: applicability::changes(current, proposed),
-    })
+    Ok(changes)
 }
 
 fn current_keys(value: &Value) -> impl Iterator<Item = String> + '_ {

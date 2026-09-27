@@ -379,13 +379,11 @@ fn explain_exposes_package_references_and_survives_reviewed_renames() {
         .find(|c| c.collection == "external_references")
         .expect("reference diff");
     assert_eq!(change.fields, ["identity", "label"]);
-    apply_command(
+    crate::apply_plan_change(
         &mut plan,
         ActorId::human("reviewer"),
-        Command::ApplyChange {
-            plan: Box::new(proposal),
-            reason: "Repository moved".into(),
-        },
+        &proposal,
+        "Repository moved",
         Utc::now(),
         dpm_model::OperationId::new(),
     )

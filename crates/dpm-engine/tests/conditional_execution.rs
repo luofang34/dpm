@@ -299,19 +299,17 @@ fn changing_a_choice_after_work_starts_requires_a_reviewed_change_and_keeps_the_
         change.after,
         Some(Applicability::NotSelected { .. })
     ));
-    let command = || Command::ApplyChange {
-        plan: Box::new(proposed.clone()),
-        reason: "Supplier A withdrew".into(),
-    };
-    let agent = apply_command(
+    let agent = dpm_engine::apply_plan_change(
         &mut plan.clone(),
         worker(),
-        command(),
+        &proposed,
+        "Supplier A withdrew",
         t(4),
         dpm_model::OperationId::new(),
     );
     assert!(matches!(agent, Err(EngineError::ActorNotAllowed { .. })));
-    run(&mut plan, lead(), command(), t(4));
+    let command = dpm_engine::plan_change(&plan, &proposed, "Supplier A withdrew").expect("delta");
+    run(&mut plan, lead(), command, t(4));
     let work = &plan.work_items[&quote];
     assert_eq!(work.status, WorkStatus::InProgress, "not cancelled");
     assert_eq!(work.owner, Some(worker()));

@@ -160,13 +160,11 @@ fn moving_a_checkout_or_renaming_its_repository_keeps_every_identity() {
             remotes: vec!["https://example.invalid/renamed.git".into()],
         };
     }
-    app.execute_blocking(CommandRequest {
+    app.apply_plan_change_blocking(crate::PlanChangeRequest {
         actor: ActorId::human("maintainer"),
         base_revision: 0,
-        command: Command::ApplyChange {
-            plan: Box::new(renamed),
-            reason: "repository renamed upstream".into(),
-        },
+        plan: Box::new(renamed),
+        reason: "repository renamed upstream".into(),
     })
     .expect("reviewed rename");
     let moved = temp.path().join("elsewhere/moved-checkout");

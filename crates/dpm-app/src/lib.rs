@@ -21,5 +21,7 @@ pub use authoring::plan_schema;
 pub use dpm_interchange::ExistingMatch;
 pub use dpm_store::IntegrityReport;
 pub use error::{AppError, ErrorResponse};
-pub use service::{API_VERSION, Application, CommandRequest, Query, QueryResponse};
+pub use service::{
+    API_VERSION, Application, CommandRequest, PlanChangeRequest, Query, QueryResponse,
+};
 pub use service::{restore_store_blocking, store_path_blocking, verify_store_blocking};

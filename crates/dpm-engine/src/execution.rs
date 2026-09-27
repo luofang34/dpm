@@ -1,4 +1,4 @@
-use crate::{Command, EngineError, Operation};
+use crate::{Command, EngineError, EntityChange, Operation};
 use chrono::{DateTime, Utc};
 use dpm_model::{ActorId, Artifact, DecisionStatus, OperationId, Plan, WorkItem, WorkItemId};
 use lifecycle::{block, claim, report_progress, start, submit, unblock, verify};
@@ -40,10 +40,7 @@ fn execute(
     at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     match command {
-        Command::ApplyChange {
-            plan: proposed,
-            reason,
-        } => apply_change(plan, actor, proposed, reason, at),
+        Command::ApplyChange { changes, reason } => apply_change(plan, actor, changes, reason, at),
         Command::RatifyContract { work } => review::ratify(plan, actor, *work),
         Command::Reject { work, reason } => review::reject(plan, actor, *work, reason, at),
         Command::Claim { work } => claim(plan, actor, *work, at),
@@ -96,25 +93,27 @@ fn execute(
 fn apply_change(
     plan: &mut Plan,
     actor: &ActorId,
-    proposed: &Plan,
+    changes: &[EntityChange],
     reason: &str,
     at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
-    nonempty("plan change", "reason", reason)?;
-    if actor.kind == dpm_model::ActorKind::Agent {
-        return Err(EngineError::ActorNotAllowed {
-            actor: actor.clone(),
-            action: "approve plan scope",
-        });
-    }
-    let preview = crate::propose_change(plan, proposed)?;
+    crate::change::authorize(actor, reason)?;
+    let mut candidate = crate::patch(plan, changes)?;
+    let preview = crate::propose_change(plan, &candidate)?;
     if preview.changes.is_empty() {
         return Err(EngineError::InvalidCommand {
             entity: "plan".into(),
             reason: "proposal has no semantic changes".into(),
         });
     }
-    let mut candidate = proposed.clone();
+    // Only the canonical difference is recorded, so the log reads the same as `plan diff` and a
+    // reordered or padded change list cannot replay to the same state under another description.
+    if preview.changes != changes {
+        return Err(EngineError::InvalidCommand {
+            entity: "plan".into(),
+            reason: "changes must be the canonical difference plan_change computes".into(),
+        });
+    }
     // Applying the review is what makes a replacement's choice, so, as with decide, the command
     // records its own time; the proposal cannot carry one (see propose_change).
     for decision in candidate

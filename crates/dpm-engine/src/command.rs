@@ -10,11 +10,14 @@ use thiserror::Error;
 
 /// A semantic state change; adapters must use the engine to apply it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub enum Command {
-    /// Apply a reviewed plan proposal without bypassing execution history.
+    /// Apply a reviewed plan proposal without bypassing execution history; built from a full
+    /// proposal by [`crate::plan_change`].
     ApplyChange {
-        /// Full proposed graph at the observed revision, validated against protected state.
-        plan: Box<dpm_model::Plan>,
+        /// The canonical entity-level difference from the operation's base revision, in the
+        /// order [`crate::propose_change`] reports it; every `before` must match that state.
+        changes: Vec<crate::EntityChange>,
         /// Human-readable purpose of the accepted scope change.
         reason: String,
     },
@@ -169,6 +172,7 @@ pub struct ExternalLinkRequest {
 
 /// Audit envelope for one successfully applied command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Operation {
     /// Unique identity of this operation.
     pub id: OperationId,
@@ -194,6 +198,17 @@ pub enum EngineError {
         expected: u64,
         /// Current revision.
         actual: u64,
+    },
+    /// A recorded plan change names an entity whose state differs from the change's `before`.
+    #[error(
+        "plan change to {collection}{} was computed against a different state; diff the proposal again",
+        .id.as_ref().map_or_else(String::new, |id| format!(" {id}"))
+    )]
+    StaleChange {
+        /// Collection of the entity.
+        collection: String,
+        /// Entity identity, absent for workspace-wide values.
+        id: Option<String>,
     },
     /// A semantic difference could not be serialized.
     #[error(transparent)]

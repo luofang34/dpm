@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Application, CommandRequest, Query};
+use crate::{Application, Query};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use dpm_engine::{Command, apply_command};
 use dpm_model::{ActorId, DependencyPolicy, ExecutionEvents, StartBasis, WorkStatus};
@@ -401,13 +401,11 @@ fn the_template_applies_to_an_empty_workspace_and_is_refused_elsewhere() {
         })
         .expect("diff");
     assert_eq!(preview.revision, 0);
-    app.execute_blocking(CommandRequest {
+    app.apply_plan_change_blocking(crate::PlanChangeRequest {
         actor: ActorId::human("reviewer"),
         base_revision: 0,
-        command: Command::ApplyChange {
-            plan: Box::new(template),
-            reason: "start from the template".into(),
-        },
+        plan: Box::new(template),
+        reason: "start from the template".into(),
     })
     .expect("apply");
     let applied = app.plan_blocking().expect("plan");

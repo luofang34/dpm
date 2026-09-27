@@ -26,13 +26,13 @@ fn run(plan: &mut Plan, actor: ActorId, command: Command) -> Result<Operation, E
 }
 
 fn apply(plan: &mut Plan, proposal: Plan) -> Result<Operation, EngineError> {
-    run(
+    crate::apply_plan_change(
         plan,
         ActorId::human("reviewer"),
-        Command::ApplyChange {
-            plan: Box::new(proposal),
-            reason: "reviewed dependency policy".into(),
-        },
+        &proposal,
+        "reviewed dependency policy",
+        Utc::now(),
+        dpm_model::OperationId::new(),
     )
 }
 
@@ -116,13 +116,13 @@ fn policy_changes_are_reviewed_plan_changes_and_agents_cannot_approve_them() {
     assert_eq!(preview.changes.len(), 1);
     assert_eq!(preview.changes[0].fields, ["policy", "rationale"]);
     let before = plan.clone();
-    let refused = run(
+    let refused = crate::apply_plan_change(
         &mut plan,
         ActorId::agent("planner"),
-        Command::ApplyChange {
-            plan: Box::new(proposal.clone()),
-            reason: "self-approve".into(),
-        },
+        &proposal,
+        "self-approve",
+        Utc::now(),
+        dpm_model::OperationId::new(),
     );
     assert!(matches!(refused, Err(EngineError::ActorNotAllowed { .. })));
     assert_eq!(plan, before);

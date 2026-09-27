@@ -478,11 +478,17 @@ fn a_plan_change_cannot_move_owners_or_rewrite_handoffs() {
 fn reviewed_edit_refused(plan: &mut Plan, work: WorkItemId, edit: fn(&mut dpm_model::WorkItem)) {
     let mut proposed = plan.clone();
     edit(proposed.work_items.get_mut(&work).expect("work"));
-    let change = Command::ApplyChange {
-        plan: Box::new(proposed),
-        reason: "reassign".into(),
-    };
-    let error = refused(plan, &lead(), change, 4);
+    let before = plan.clone();
+    let error = crate::apply_plan_change(
+        plan,
+        lead(),
+        &proposed,
+        "reassign",
+        t(4),
+        dpm_model::OperationId::new(),
+    )
+    .expect_err("refused");
+    assert_eq!(*plan, before, "a refused change alters nothing");
     assert!(
         matches!(error, EngineError::InvalidCommand { .. }),
         "{error:?}"

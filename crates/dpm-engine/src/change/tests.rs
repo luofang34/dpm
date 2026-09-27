@@ -11,13 +11,11 @@ fn fixture() -> Plan {
 }
 
 fn apply(plan: &mut Plan, proposed: Plan) -> Result<crate::Operation, EngineError> {
-    apply_command(
+    crate::apply_plan_change(
         plan,
         ActorId::human("planner"),
-        Command::ApplyChange {
-            plan: Box::new(proposed),
-            reason: "clarify remaining work".into(),
-        },
+        &proposed,
+        "clarify remaining work",
         Utc::now(),
         dpm_model::OperationId::new(),
     )
@@ -71,13 +69,11 @@ fn agent_approval_empty_reason_stale_revision_and_noop_fail_atomically() {
         (ActorId::human("lead"), " "),
     ] {
         assert!(
-            apply_command(
+            crate::apply_plan_change(
                 &mut plan,
                 actor,
-                Command::ApplyChange {
-                    plan: Box::new(proposal.clone()),
-                    reason: reason.into()
-                },
+                &proposal.clone(),
+                reason,
                 Utc::now(),
                 dpm_model::OperationId::new()
             )

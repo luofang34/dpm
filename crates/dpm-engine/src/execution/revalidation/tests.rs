@@ -473,17 +473,26 @@ fn reviewed_changes_set_the_basis_policy_only_before_execution_and_never_author_
     let mut p = provisional(0.0, DependencyPolicy::Hard);
     let mut verified = p.plan.clone();
     verified.dependencies[0].start_basis = StartBasis::Verified;
-    let change = |plan: &Plan| Command::ApplyChange {
-        plan: Box::new(plan.clone()),
-        reason: "B waits for verified A".into(),
-    };
+    let reason = "B waits for verified A";
     let mut probe = p.plan.clone();
-    ok(&mut probe, &reviewer(), change(&verified), 0);
+    let change = crate::plan_change(&probe, &verified, reason).expect("delta");
+    ok(&mut probe, &reviewer(), change, 0);
     started_on_first_attempt(&mut p);
     verified = p.plan.clone();
     verified.dependencies[0].start_basis = StartBasis::Verified;
-    refused(&mut p.plan, &reviewer(), change(&verified), 4);
     let mut forged = p.plan.clone();
     forged.work_items.get_mut(&p.b).expect("b").basis.clear();
-    refused(&mut p.plan, &reviewer(), change(&forged), 4);
+    for proposal in [verified, forged] {
+        let before = p.plan.clone();
+        crate::apply_plan_change(
+            &mut p.plan,
+            reviewer(),
+            &proposal,
+            reason,
+            t(4),
+            dpm_model::OperationId::new(),
+        )
+        .expect_err("refused");
+        assert_eq!(p.plan, before, "a refused change alters nothing");
+    }
 }

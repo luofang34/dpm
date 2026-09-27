@@ -78,10 +78,7 @@ fn switched_under_started_work() -> (Plan, DecisionId) {
         .keys()
         .find(|d| !plan.decisions.contains_key(d))
         .expect("replacement");
-    let change = Command::ApplyChange {
-        plan: Box::new(proposed),
-        reason: "Supplier A withdrew".into(),
-    };
+    let change = dpm_engine::plan_change(&plan, &proposed, "Supplier A withdrew").expect("delta");
     run(&mut plan, &lead(), change, t(4));
     (plan, replacement_id)
 }
@@ -145,15 +142,12 @@ fn a_proposal_still_cannot_author_a_replacement_resolution_time() {
         }
     }
     let before = plan.clone();
-    let change = Command::ApplyChange {
-        plan: Box::new(proposed),
-        reason: "backdated".into(),
-    };
     assert!(
-        apply_command(
+        dpm_engine::apply_plan_change(
             &mut plan,
             lead(),
-            change,
+            &proposed,
+            "backdated",
             t(2),
             dpm_model::OperationId::new()
         )
@@ -220,10 +214,7 @@ fn reaffirming_a_choice_does_not_move_a_reached_join_or_reclose_claimed_work() {
             decision.rationale = Some("Supplier A renewed its quote".into());
         }
     }
-    let change = Command::ApplyChange {
-        plan: Box::new(proposed),
-        reason: "reaffirm supplier A".into(),
-    };
+    let change = dpm_engine::plan_change(&plan, &proposed, "reaffirm supplier A").expect("delta");
     run(&mut plan, &lead(), change, t(9));
     let after = progress(&plan, t(9)).expect("progress").work[&merge].completed_at;
     assert_eq!(

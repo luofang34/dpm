@@ -28,6 +28,20 @@ pub struct CommandRequest {
     pub command: Command,
 }
 
+/// A reviewed full proposal submitted by an adapter; the engine records only its difference.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlanChangeRequest {
+    /// Principal applying the reviewed change; agents are refused.
+    pub actor: ActorId,
+    /// Last observed revision; storage rechecks it atomically.
+    pub base_revision: u64,
+    /// Full proposed graph at the observed revision.
+    pub plan: Box<Plan>,
+    /// Human-readable purpose of the accepted scope change.
+    pub reason: String,
+}
+
 /// Read contracts; all views remain derived from the execution graph.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "query", rename_all = "snake_case", deny_unknown_fields)]
@@ -315,21 +329,48 @@ impl Application {
     }
     /// Apply and atomically persist one command. Any failure leaves the database unchanged.
     pub fn execute_blocking(&mut self, request: CommandRequest) -> Result<Operation, AppError> {
+        let CommandRequest {
+            actor,
+            base_revision,
+            command,
+        } = request;
+        self.commit_blocking(base_revision, |plan, at, id| {
+            apply_command(plan, actor, command, at, id)
+        })
+    }
+    /// Apply a reviewed full proposal; the operation records only its entity-level difference.
+    pub fn apply_plan_change_blocking(
+        &mut self,
+        request: PlanChangeRequest,
+    ) -> Result<Operation, AppError> {
+        let PlanChangeRequest {
+            actor,
+            base_revision,
+            plan: proposed,
+            reason,
+        } = request;
+        self.commit_blocking(base_revision, |plan, at, id| {
+            dpm_engine::apply_plan_change(plan, actor, &proposed, reason, at, id)
+        })
+    }
+    fn commit_blocking(
+        &mut self,
+        base_revision: u64,
+        apply: impl FnOnce(
+            &mut Plan,
+            chrono::DateTime<Utc>,
+            dpm_model::OperationId,
+        ) -> Result<Operation, dpm_engine::EngineError>,
+    ) -> Result<Operation, AppError> {
         self.ensure_writable()?;
         let mut plan = self.plan_blocking()?;
-        if request.base_revision != plan.revision {
+        if base_revision != plan.revision {
             return Err(AppError::Conflict {
-                expected: request.base_revision,
+                expected: base_revision,
                 actual: plan.revision,
             });
         }
-        let operation = apply_command(
-            &mut plan,
-            request.actor,
-            request.command,
-            Utc::now(),
-            dpm_model::OperationId::new(),
-        )?;
+        let operation = apply(&mut plan, Utc::now(), dpm_model::OperationId::new())?;
         if let Backing::Database(store) = &mut self.backing {
             store.persist_blocking(&plan, &operation)?;
         }

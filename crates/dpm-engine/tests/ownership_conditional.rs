@@ -83,10 +83,9 @@ fn excluded_quote(started: bool) -> (Plan, WorkItemId) {
     if started {
         run(&mut plan, &worker(), Command::Start { work: quote }, 3);
     }
-    let change = Command::ApplyChange {
-        plan: Box::new(switch_to_b(&plan, supplier)),
-        reason: "Supplier A withdrew".into(),
-    };
+    let change =
+        dpm_engine::plan_change(&plan, &switch_to_b(&plan, supplier), "Supplier A withdrew")
+            .expect("delta");
     run(&mut plan, &lead(), change, 4);
     assert_eq!(
         status(&plan, false, t(4))

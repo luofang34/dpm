@@ -63,10 +63,9 @@ fn switched_with_blocked_work() -> Plan {
         reason: "supplier A stopped answering".into(),
     };
     run(&mut plan, "worker", block, 3);
-    let change = Command::ApplyChange {
-        plan: Box::new(switch_to_b(&plan, supplier)),
-        reason: "Supplier A withdrew".into(),
-    };
+    let change =
+        dpm_engine::plan_change(&plan, &switch_to_b(&plan, supplier), "Supplier A withdrew")
+            .expect("delta");
     run(&mut plan, "lead", change, 4);
     let b_quote = id(&plan, "SUP-B-QUOTE");
     run(&mut plan, "other", Command::Claim { work: b_quote }, 5);

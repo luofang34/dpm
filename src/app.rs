@@ -4,7 +4,8 @@ use crate::{
     output,
 };
 use dpm_app::{
-    Application, CommandRequest, Query, initialize_project_blocking, open_workspace_blocking,
+    Application, CommandRequest, PlanChangeRequest, Query, initialize_project_blocking,
+    open_workspace_blocking,
 };
 use dpm_engine::{Command, NextWorkResult};
 use dpm_model::{ActorId, ActorKind, Plan};
@@ -459,13 +460,11 @@ fn plan_command_blocking(
         } => {
             app.ensure_writable()?;
             let plan = read_candidate_blocking(&file)?;
-            let operation = app.execute_blocking(CommandRequest {
+            let operation = app.apply_plan_change_blocking(PlanChangeRequest {
                 actor: actor(&who)?,
                 base_revision: base_revision.unwrap_or(plan.revision),
-                command: Command::ApplyChange {
-                    plan: Box::new(plan),
-                    reason,
-                },
+                plan: Box::new(plan),
+                reason,
             })?;
             output::value_blocking(&operation, json)
         }

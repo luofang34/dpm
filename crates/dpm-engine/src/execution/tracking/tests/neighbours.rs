@@ -81,13 +81,11 @@ fn edited(plan: &Plan, identity: ExternalIdentity) -> Result<(), EngineError> {
     record.identity = identity;
     let preview = propose_change(plan, &proposal).map(|_| ());
     let mut applied = plan.clone();
-    let result = apply_command(
+    let result = crate::apply_plan_change(
         &mut applied,
         ActorId::human("reviewer"),
-        Command::ApplyChange {
-            plan: Box::new(proposal),
-            reason: "edit the record".into(),
-        },
+        &proposal,
+        "edit the record",
         Utc::now(),
         dpm_model::OperationId::new(),
     );
@@ -150,13 +148,11 @@ fn rekeyed(
     let preview = propose_change(plan, &proposal).map(|_| ());
     // Applying is the reviewed path that mutates; it must decide exactly as the preview does.
     let mut applied = plan.clone();
-    let result = apply_command(
+    let result = crate::apply_plan_change(
         &mut applied,
         ActorId::human("reviewer"),
-        Command::ApplyChange {
-            plan: Box::new(proposal),
-            reason: "re-add the object".into(),
-        },
+        &proposal,
+        "re-add the object",
         Utc::now(),
         dpm_model::OperationId::new(),
     );

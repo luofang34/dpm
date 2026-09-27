@@ -51,11 +51,15 @@ fn apply(plan: &mut Plan, candidate: Plan) {
         .with_ymd_and_hms(2026, 9, 26, 12, 0, 0)
         .single()
         .expect("time");
-    let command = Command::ApplyChange {
-        plan: Box::new(candidate),
-        reason: "Import reviewed schedule".into(),
-    };
-    apply_command(plan, reviewer, command, at, dpm_model::OperationId::new()).expect("apply");
+    dpm_engine::apply_plan_change(
+        plan,
+        reviewer,
+        &candidate,
+        "Import reviewed schedule",
+        at,
+        dpm_model::OperationId::new(),
+    )
+    .expect("apply");
 }
 
 fn edge_lags(plan: &Plan, from: &str, to: &str) -> Vec<(DependencyKind, f64)> {

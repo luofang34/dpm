@@ -3,7 +3,7 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
 use chrono::{TimeZone, Utc};
-use dpm_engine::{Command, apply_command, propose_change};
+use dpm_engine::propose_change;
 use dpm_interchange::{
     ExistingMatch, Finding, ImportOptions, ImportResult, ItemOutcome, ItemReport, LinkOutcome,
     import_mspdi,
@@ -55,11 +55,15 @@ fn apply(plan: &mut Plan, candidate: Plan) {
         .with_ymd_and_hms(2026, 9, 27, 12, 0, 0)
         .single()
         .expect("time");
-    let command = Command::ApplyChange {
-        plan: Box::new(candidate),
-        reason: "Import reviewed OmniPlan schedule".into(),
-    };
-    apply_command(plan, reviewer, command, at, dpm_model::OperationId::new()).expect("apply");
+    dpm_engine::apply_plan_change(
+        plan,
+        reviewer,
+        &candidate,
+        "Import reviewed OmniPlan schedule",
+        at,
+        dpm_model::OperationId::new(),
+    )
+    .expect("apply");
 }
 
 fn item(result: &ImportResult, uid: i64) -> &ItemReport {
