@@ -92,7 +92,8 @@ pub struct Decision {
     pub status: DecisionStatus,
     /// Non-empty resolution for a decided gate.
     pub outcome: Option<String>,
-    /// When the decide command resolved the gate; absent for decisions resolved before this was recorded.
+    /// When `decide`, or the reviewed change that created this replacement, resolved it; absent for
+    /// decisions resolved before this was recorded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_at: Option<DateTime<Utc>>,
     /// Reason for the choice or for raising the question.

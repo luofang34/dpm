@@ -161,7 +161,7 @@ def superseding(plan, old, related):
     new = {**proposal['decisions'][old], 'id': str(uuid.uuid4()), 'key': 'TEST-CHOICE-2',
            'status': 'Decided', 'outcome': 'TOML', 'rationale': 'Reviewers edit TOML by hand',
            'related_work': related, 'blocks': [], 'supersedes': old}
-    # Only decide records a resolution time; a reviewed replacement carries none of its own.
+    # A proposal carries no resolution time; apply_change records the replacement's own.
     new.pop('resolved_at', None)
     proposal['decisions'][new['id']] = new
     return proposal
