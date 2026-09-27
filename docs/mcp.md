@@ -198,7 +198,10 @@ ownership, progress, evidence and acceptance stay local. The document owns only 
 between work it imports; other edges are kept. An unchanged source duration or lag (compared in the
 exported encoding) keeps the richer local three-point estimate, exact lag, policy, rationale and
 waiver. Local work the document omits is retained, not deleted. Changes that touch protected
-(started) work are refused by `propose_change` as with any reviewed change.
+(started) work are refused by `propose_change` as with any reviewed change; when the refused work is
+an imported task, the error also names the source `UID` and `GUID` and the attempted field and
+dependency changes. A document that would change the kind of existing work (a task gaining children,
+a milestone flag flipped) fails the import with the same source context.
 
 `plan export-mspdi --project-key KEY [--output FILE]` and `export_mspdi` (`project_key`) return
 `{xml, report}`; without `--json` the CLI prints the document itself. Output is deterministic:

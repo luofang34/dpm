@@ -134,6 +134,7 @@ pub(crate) fn map(
                         identity: id.to_string(),
                     });
                 }
+                check_kind(task, existing, placement.has_children)?;
                 let key = key_for(existing, task, prefix, &mut keys)?;
                 let (work, report) = fields::build(task, existing, id, key, &placement);
                 outline.work.insert(task.uid, work);
@@ -189,6 +190,29 @@ fn place<'a>(
         )));
     }
     Ok(Ok((id, existing)))
+}
+
+/// Review never changes the kind of existing work, so the importer names the source task and the
+/// attempted change instead of leaving review to refuse the local key alone.
+fn check_kind(
+    task: &SourceTask,
+    existing: Option<&WorkItem>,
+    has_children: bool,
+) -> Result<(), InterchangeError> {
+    let Some(work) = existing else {
+        return Ok(());
+    };
+    let kind = fields::resolve_kind(task, existing, has_children);
+    if kind == work.kind {
+        return Ok(());
+    }
+    Err(InterchangeError::KindChange {
+        uid: task.uid,
+        guid: task.guid.map(format_guid),
+        key: work.key.0.clone(),
+        from: work.kind,
+        to: kind,
+    })
 }
 
 fn key_for(

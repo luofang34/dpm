@@ -1,3 +1,5 @@
+use crate::SourceChange;
+use dpm_model::WorkKind;
 use thiserror::Error;
 
 /// Interchange failure; every variant leaves the workspace untouched because imports only build
@@ -65,6 +67,32 @@ pub enum InterchangeError {
         /// Source task UID.
         uid: i64,
     },
+    /// A source task would change the kind of existing work, which reviewed plan changes forbid.
+    #[error(
+        "MSPDI task UID {uid} (GUID {}) would change {key} from {from:?} to {to:?}; the kind of existing work is fixed, so restore the source outline or milestone flag, or plan new work",
+        guid.as_deref().unwrap_or("none")
+    )]
+    KindChange {
+        /// Source task UID.
+        uid: i64,
+        /// Source task GUID, when present.
+        guid: Option<String>,
+        /// Existing work key.
+        key: String,
+        /// Local kind.
+        from: WorkKind,
+        /// Kind the source implies.
+        to: WorkKind,
+    },
+    /// Review refused the candidate at work that a source task maps to.
+    #[error("{change}; refused: {source}")]
+    Refused {
+        /// Source task and the changes it attempts.
+        change: SourceChange,
+        /// Review refusal naming only local work.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync + 'static>,
+    },
     /// A value cannot be written as MSPDI.
     #[error("work {key} cannot be exported as MSPDI: {reason}")]
     Unrepresentable {
@@ -81,7 +109,10 @@ impl InterchangeError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::UnknownProject { .. } => "not_found",
-            Self::KeyCollision { .. } | Self::Unrepresentable { .. } => "invalid_command",
+            Self::KeyCollision { .. }
+            | Self::Unrepresentable { .. }
+            | Self::KindChange { .. }
+            | Self::Refused { .. } => "invalid_command",
             Self::Xml { .. }
             | Self::NotMspdi { .. }
             | Self::MalformedProject { .. }

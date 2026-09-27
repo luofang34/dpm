@@ -12,5 +12,5 @@ pub use error::InterchangeError;
 pub use mspdi::{
     DependencyExportReport, ExportReport, ExportResult, FieldChange, Finding, ImportOptions,
     ImportReport, ImportResult, ItemExportReport, ItemOutcome, ItemReport, LinkOutcome, LinkReport,
-    RemovedDependency, SourceSummary, WorkReference, export_mspdi, import_mspdi,
+    RemovedDependency, SourceChange, SourceSummary, WorkReference, export_mspdi, import_mspdi,
 };

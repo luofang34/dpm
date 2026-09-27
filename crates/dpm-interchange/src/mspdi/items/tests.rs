@@ -114,6 +114,32 @@ fn a_top_level_source_task_reports_its_kept_local_parent() {
     assert_eq!(item.outcome, ItemOutcome::Unchanged);
 }
 
+#[test]
+fn kind_changes_name_the_source_task_and_the_attempted_change() {
+    let current = import(&workspace(), &outline_document("")).candidate;
+    // Approved moves under Review, which would turn the Review task into a work package.
+    let edited = outline_document("").replace(
+        "Approved</Name><OutlineLevel>2",
+        "Approved</Name><OutlineLevel>3",
+    );
+    let error = crate::import_mspdi(&current, &edited, &crate::mspdi::tests::options())
+        .expect_err("kind change");
+    assert_eq!(error.code(), "invalid_command");
+    let message = error.to_string();
+    for expected in [
+        "UID 3",
+        "22222222-2222-4222-8222-000000000003",
+        "MSP-3",
+        "Task",
+        "WorkPackage",
+    ] {
+        assert!(
+            message.to_uppercase().contains(&expected.to_uppercase()),
+            "{expected} missing from: {message}"
+        );
+    }
+}
+
 /// Source field whose value a changed DPM field comes from.
 fn source_field(changed: &str) -> &str {
     match changed {

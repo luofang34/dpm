@@ -82,6 +82,45 @@ fn failed_imports_and_refused_applies_leave_revision_and_history_unchanged() {
 }
 
 #[test]
+fn refusals_of_started_work_name_the_source_task_and_attempted_change() {
+    let mut app = application();
+    let work = app.work_id_blocking("TEST-A").expect("task");
+    app.execute_blocking(CommandRequest {
+        actor: ActorId::agent("worker"),
+        base_revision: 0,
+        command: Command::Claim { work },
+    })
+    .expect("claim");
+    let exported = app
+        .query_blocking(Query::ExportMspdi {
+            project_key: "TEST".into(),
+        })
+        .expect("export")
+        .data;
+    let xml = exported["xml"].as_str().expect("xml").replace(
+        "<Name>Contract A</Name>",
+        "<Name>Contract A, renamed</Name>",
+    );
+    let error = import(&app, &xml, "TEST").expect_err("claimed work is protected");
+    assert_eq!(error.code(), "invalid_command");
+    let message = error.to_string();
+    for expected in [
+        "UID 1",
+        "00000007-0000-4000-8000-000000000001",
+        "TEST-A",
+        "title",
+        "Contract A, renamed",
+        "protected",
+    ] {
+        assert!(
+            message.to_uppercase().contains(&expected.to_uppercase()),
+            "{expected} missing from: {message}"
+        );
+    }
+    assert_eq!(state(&app), (1, 1));
+}
+
+#[test]
 fn export_query_returns_the_document_and_report() {
     let app = application();
     let data = app

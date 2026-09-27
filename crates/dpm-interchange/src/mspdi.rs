@@ -9,6 +9,7 @@ mod encoding;
 mod export;
 mod items;
 mod links;
+mod refusal;
 mod report;
 mod source;
 mod unsupported;
@@ -18,6 +19,7 @@ use dpm_model::{Plan, ProjectId};
 use serde::{Deserialize, Serialize};
 
 pub use export::{ExportResult, export_mspdi};
+pub use refusal::SourceChange;
 pub use report::{
     DependencyExportReport, ExportReport, FieldChange, Finding, ImportReport, ItemExportReport,
     ItemOutcome, ItemReport, LinkOutcome, LinkReport, RemovedDependency, SourceSummary,
