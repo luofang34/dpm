@@ -56,7 +56,7 @@ fn only_outstanding_tasks_without_an_estimate_are_listed_in_key_order() {
     }
     assert_eq!(listed(&plan), ["TEST-A", "TEST-C", "TEST-E"]);
 
-    // Submitted work keeps its full duration until verification, so it still counts as 0 h.
+    // Submitted work keeps its full duration until verification; unestimated, that duration is 0 h.
     set_status(&mut plan, "TEST-A", WorkStatus::Submitted);
     set_status(&mut plan, "TEST-C", WorkStatus::Verified);
     set_status(&mut plan, "TEST-E", WorkStatus::Done);

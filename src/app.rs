@@ -6,7 +6,7 @@ use crate::{
 use dpm_app::{
     Application, CommandRequest, Query, initialize_project_blocking, open_workspace_blocking,
 };
-use dpm_engine::{Command, NextWorkResult, StatusSummary};
+use dpm_engine::{Command, NextWorkResult};
 use dpm_model::{ActorId, ActorKind, Plan};
 use std::{fs, path::Path};
 
@@ -90,8 +90,9 @@ fn run_open_blocking(
             if json {
                 return output::json_blocking(&response.data);
             }
-            let summary: StatusSummary = serde_json::from_value(response.data.clone())?;
-            if let Some(line) = output::unestimated_line(&summary.unestimated) {
+            let unestimated: Vec<dpm_model::Key> =
+                serde_json::from_value(response.data["unestimated"].clone()).unwrap_or_default();
+            if let Some(line) = output::unestimated_line(&unestimated) {
                 output::text_blocking(&line)?;
             }
             output::text_blocking(&serde_json::to_string_pretty(&response.data)?)

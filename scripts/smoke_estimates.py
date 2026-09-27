@@ -64,7 +64,27 @@ def estimates_smoke(directory):
         assert agent.call('explain_work', {'key': 'TEST-A'})['data']['unestimated'] is False
     finally:
         agent.close()
-    print('PASS: CLI/MCP unestimated work in status, explain and next; text notice; verification removes it')
+    check_scenarios(directory)
+    print('PASS: CLI/MCP unestimated work in status, explain, next and open-choice scenarios; text notice; verification removes it')
+
+
+def check_scenarios(directory):
+    """Undecided branches are named only by the scenarios that select them, identically in both adapters."""
+    plan = json.loads((ROOT / 'tests/support/conditional-plan.json').read_text())
+    for work in plan['work_items'].values():
+        if work['key'] in ('SUP-DESIGN', 'SUP-A-QUOTE', 'SUP-B-QUOTE'):
+            work['estimate'] = None
+    fixture, database = directory / 'estimates-conditional.json', directory / 'estimates-conditional.sqlite'
+    fixture.write_text(json.dumps(plan))
+    run_cli(database, 'import', str(fixture))
+    agent = Agent(database, 'agent:estimator')
+    try:
+        status = same_status(agent, database)
+        assert status['unestimated'] == ['SUP-DESIGN'], status['unestimated']
+        listed = {tuple(sorted(s['unestimated'])) for s in status['open_choices']['scenarios']}
+        assert ('SUP-A-QUOTE', 'SUP-DESIGN') in listed and ('SUP-B-QUOTE', 'SUP-DESIGN') in listed, listed
+    finally:
+        agent.close()
 
 
 if __name__ == '__main__':

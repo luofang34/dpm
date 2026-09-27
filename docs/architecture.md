@@ -45,8 +45,9 @@ Each activity `i` has a start `S_i` and a finite, non-negative duration `d_i`: t
 expectation of a task's three-point estimate, or 0 for milestones and unestimated tasks. The 0 h of
 an unestimated task is not a claim about its duration, so `dpm-engine` names every outstanding
 applicable unestimated task beside each forecast (`unestimated`) instead of leaving it optimistic
-in silence. Work packages cannot be dependency endpoints. v0.1 uses elapsed hours; working calendars are a future
-input adapter and must not change dependency semantics. Remaining forecasts measure from the
+in silence; an explicit 0/0/0 estimate is a stated duration and is not listed. Work packages cannot
+be dependency endpoints. v0.1 uses elapsed hours; working calendars are a future input adapter and
+must not change dependency semantics. Remaining forecasts measure from the
 adapter-supplied clock reading, give completed tasks zero duration and remove constraints into
 completed tasks or reached milestones, using the same completion and decision-gate projection as
 execution queries. A constraint from completed work, or a start-based (SS, SF) constraint from
