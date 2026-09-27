@@ -176,6 +176,12 @@ def change_after_start(database, worker, reviewer, revision):
     kept = cli(database, 'show', 'SUP-B-QUAL')
     assert kept['status'] == 'InProgress' and kept['owner'] == {'kind': 'Agent', 'name': 'parity'}
     assert kept['progress']['scope'] == 'not_selected'
+    history = cli(database, 'history')['entries']
+    applied = history[-1]['operation']
+    assert 'ApplyChange' in applied['command'], applied
+    exported = cli(database, 'export')
+    assert call(worker, 'export_plan', {})['data'] == exported
+    assert exported['decisions'][new_id]['resolved_at'] == applied['timestamp'], exported['decisions'][new_id]
     counts = cli(database, 'status')
     assert call(worker, 'project_status', {})['data'] == counts and counts['excluded_in_flight'] == 1, counts
     refused_alike(database, worker, 'submit_work', {'key': 'SUP-B-QUAL', 'base_revision': revision + 1},

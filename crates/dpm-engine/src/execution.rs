@@ -1,7 +1,10 @@
 use crate::{Command, EngineError, Operation};
 use chrono::{DateTime, Utc};
-use dpm_model::{ActorId, Artifact, OperationId, Plan, WorkItem, WorkItemId};
+use dpm_model::{
+    ActorId, Artifact, DecisionId, DecisionStatus, OperationId, Plan, WorkItem, WorkItemId,
+};
 use lifecycle::{block, claim, report_progress, start, submit, unblock, verify};
+use std::collections::BTreeSet;
 
 /// Apply one validated semantic command atomically and return its audit operation.
 ///
@@ -40,24 +43,7 @@ fn execute(
         Command::ApplyChange {
             plan: proposed,
             reason,
-        } => {
-            nonempty("plan change", "reason", reason)?;
-            if actor.kind == dpm_model::ActorKind::Agent {
-                return Err(EngineError::ActorNotAllowed {
-                    actor: actor.clone(),
-                    action: "approve plan scope",
-                });
-            }
-            let preview = crate::propose_change(plan, proposed)?;
-            if preview.changes.is_empty() {
-                return Err(EngineError::InvalidCommand {
-                    entity: "plan".into(),
-                    reason: "proposal has no semantic changes".into(),
-                });
-            }
-            *plan = proposed.as_ref().clone();
-            Ok(())
-        }
+        } => apply_change(plan, actor, proposed, reason, at),
         Command::RatifyContract { work } => review::ratify(plan, actor, *work),
         Command::Reject { work, reason } => review::reject(plan, actor, *work, reason, at),
         Command::Claim { work } => claim(plan, actor, *work, at),
@@ -86,6 +72,41 @@ fn execute(
         } => revalidation::revalidate(plan, actor, *work, *dependency, *attempt, reason, at),
         Command::Decide { decision, outcome } => choice::decide(plan, *decision, outcome, at),
     }
+}
+
+fn apply_change(
+    plan: &mut Plan,
+    actor: &ActorId,
+    proposed: &Plan,
+    reason: &str,
+    at: DateTime<Utc>,
+) -> Result<(), EngineError> {
+    nonempty("plan change", "reason", reason)?;
+    if actor.kind == dpm_model::ActorKind::Agent {
+        return Err(EngineError::ActorNotAllowed {
+            actor: actor.clone(),
+            action: "approve plan scope",
+        });
+    }
+    let preview = crate::propose_change(plan, proposed)?;
+    if preview.changes.is_empty() {
+        return Err(EngineError::InvalidCommand {
+            entity: "plan".into(),
+            reason: "proposal has no semantic changes".into(),
+        });
+    }
+    let existing: BTreeSet<DecisionId> = plan.decisions.keys().copied().collect();
+    *plan = proposed.clone();
+    // Applying the review is what makes a replacement's choice, so, as with decide, the command
+    // records its own time; the proposal cannot carry one (see propose_change).
+    for decision in plan
+        .decisions
+        .values_mut()
+        .filter(|d| !existing.contains(&d.id) && d.status != DecisionStatus::Open)
+    {
+        decision.resolved_at = Some(at);
+    }
+    Ok(())
 }
 
 fn task_mut(plan: &mut Plan, work: WorkItemId) -> Result<&mut WorkItem, EngineError> {

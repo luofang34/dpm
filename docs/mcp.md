@@ -338,7 +338,8 @@ ownership, return only `code` and `message`; read `explain_work` `transitions` f
 Lifecycle commands record their own operation time: `start_work` sets `work.events.started_at`,
 `submit_work` sets `submitted_at` (cleared by `reject_work`), `verify_work` sets `verified_at`, and
 `decide_gate` sets the decision's `resolved_at`. No tool accepts an event time; plan changes cannot
-add or rewrite these fields (omit `resolved_at` from a replacement decision), and a command whose
+add or rewrite these fields (omit `resolved_at` from a replacement decision: `apply_change` records
+the operation's own time as its `resolved_at`), and a command whose
 time precedes the event it follows is refused unchanged. `report_blocker` on work that started
 before start times were recorded sets `work.events.start_unrecorded`: the work still counts as
 started for its SS/SF successors and `unblock_work` returns it to `InProgress`, while positive lag

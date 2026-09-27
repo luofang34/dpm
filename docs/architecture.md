@@ -145,8 +145,8 @@ forecast and every lifecycle command read the same result for the same plan and 
 
 A claim reserves work; it is not a start. The lifecycle commands record their own operation
 timestamps as event facts on the task (`events.started_at`, `submitted_at`, `verified_at`), and
-`decide` records `Decision.resolved_at`. No command accepts a caller-chosen event time, plan changes
-cannot add or rewrite these facts, and validation requires `started <= submitted <= verified`, so a
+`decide` records `Decision.resolved_at`, as does applying a reviewed replacement decision. No
+command accepts a caller-chosen event time, plan changes cannot add or rewrite these facts, and validation requires `started <= submitted <= verified`, so a
 command stamped before the event it follows is refused with no state change. Progress reports and
 submission require an explicit start. Unblocking started work returns it to `InProgress`; a rejection
 clears the rejected submission time. Work that started before start times were recorded has no
@@ -279,8 +279,9 @@ recommended by `next`, or enters the remaining projections; excluded activities 
 `deterministic_remaining` and `simulate_remaining` output. Stranded and awaiting work stays
 outstanding in progress, so a plan that can no longer finish never reports completion. A milestone
 or package time includes the resolution times of the choices that selected it or skipped its
-branches; a replacement created by a plan change has no recorded resolution time, so a completion
-that depends on it has an unrecorded time.
+branches; a replacement created by a reviewed plan change is resolved at the time of the
+`ApplyChange` operation that records it, so completions and lag that depend on it have a recorded
+time.
 
 While open decisions condition work, `status` reports one forecast per option combination instead
 of a single percentile: with no probability model, blending mutually exclusive branches would be a

@@ -2,8 +2,8 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
-use dpm_engine::{Command, apply_command, progress, status};
-use dpm_model::{ActorId, DecisionId, DecisionStatus, Key, Plan, WorkItemId};
+use dpm_engine::{Command, Transition, apply_command, gate_report, progress, status};
+use dpm_model::{ActorId, DecisionId, DecisionStatus, EventTime, Key, Plan, WorkItemId};
 
 fn fixture() -> Plan {
     serde_json::from_str(include_str!("../../../tests/support/conditional-plan.json"))
@@ -43,8 +43,15 @@ fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
 }
 
 /// Supplier A is chosen at +1h and its quote is started at +3h; the lead switches to B at +4h.
+/// SUP-BUILD waits one hour after the SUP-MERGE join.
 fn switched_under_started_work() -> (Plan, DecisionId) {
     let mut plan = fixture();
+    let (merge, build) = (id(&plan, "SUP-MERGE"), id(&plan, "SUP-BUILD"));
+    plan.dependencies
+        .iter_mut()
+        .find(|d| d.predecessor == merge && d.successor == build)
+        .expect("merge edge")
+        .lag_hours = 1.0;
     let supplier = plan
         .find_decision_by_key("DEC-SUPPLIER")
         .expect("decision")
@@ -58,6 +65,22 @@ fn switched_under_started_work() -> (Plan, DecisionId) {
     let quote = id(&plan, "SUP-A-QUOTE");
     run(&mut plan, &worker(), Command::Claim { work: quote }, t(3));
     run(&mut plan, &worker(), Command::Start { work: quote }, t(3));
+    let proposed = switch_to_b(&plan, supplier);
+    let replacement_id = *proposed
+        .decisions
+        .keys()
+        .find(|d| !plan.decisions.contains_key(d))
+        .expect("replacement");
+    let change = Command::ApplyChange {
+        plan: Box::new(proposed),
+        reason: "Supplier A withdrew".into(),
+    };
+    run(&mut plan, &lead(), change, t(4));
+    (plan, replacement_id)
+}
+
+/// A reviewed replacement selecting supplier B; like any proposal it carries no event time.
+fn switch_to_b(plan: &Plan, supplier: DecisionId) -> Plan {
     let mut proposed = plan.clone();
     let old = proposed.decisions.get_mut(&supplier).expect("decision");
     old.status = DecisionStatus::Superseded;
@@ -69,14 +92,58 @@ fn switched_under_started_work() -> (Plan, DecisionId) {
     replacement.resolved_at = None;
     replacement.rationale = Some("Supplier A withdrew its quote".into());
     replacement.supersedes = Some(old.id);
-    let replacement_id = replacement.id;
     proposed.decisions.insert(replacement.id, replacement);
+    proposed
+}
+
+#[test]
+fn a_replacement_is_resolved_at_its_apply_time_so_lag_from_it_elapses() {
+    let (mut plan, replacement) = switched_under_started_work();
+    complete(&mut plan, "SUP-B-QUOTE", t(5));
+    complete(&mut plan, "SUP-B-QUAL", t(6));
+    let merge = id(&plan, "SUP-MERGE");
+    let merged = progress(&plan, t(6)).expect("progress").work[&merge].completed_at;
+    assert_eq!(merged, Some(EventTime::Recorded(t(6))));
+    let build = id(&plan, "SUP-BUILD");
+    let claim = |hour| {
+        gate_report(&plan, build, Transition::Claim, t(hour))
+            .expect("gates")
+            .ready
+    };
+    assert!(
+        !claim(6),
+        "the hour of lag after the join is still elapsing"
+    );
+    assert!(claim(7), "lag from a replacement-dependent join elapses");
+    let resolved = plan.decisions[&replacement].resolved_at;
+    assert_eq!(resolved, Some(t(4)), "the apply command's own time");
+}
+
+#[test]
+fn a_proposal_still_cannot_author_a_replacement_resolution_time() {
+    let mut plan = fixture();
+    let supplier = plan
+        .find_decision_by_key("DEC-SUPPLIER")
+        .expect("decision")
+        .id;
+    let decide = Command::Decide {
+        decision: supplier,
+        outcome: "A".into(),
+    };
+    run(&mut plan, &lead(), decide, t(1));
+    let mut proposed = switch_to_b(&plan, supplier);
+    for decision in proposed.decisions.values_mut() {
+        if decision.supersedes == Some(supplier) {
+            decision.resolved_at = Some(t(0));
+        }
+    }
+    let before = plan.clone();
     let change = Command::ApplyChange {
         plan: Box::new(proposed),
-        reason: "Supplier A withdrew".into(),
+        reason: "backdated".into(),
     };
-    run(&mut plan, &lead(), change, t(4));
-    (plan, replacement_id)
+    assert!(apply_command(&mut plan, lead(), change, t(2)).is_err());
+    assert_eq!(plan, before);
 }
 
 #[test]
