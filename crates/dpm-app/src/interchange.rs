@@ -23,10 +23,12 @@ pub(crate) fn query(plan: &Plan, query: Query) -> Result<Value, AppError> {
             xml,
             project_key,
             key_prefix,
+            match_existing_by,
         } => {
             let options = ImportOptions {
                 project_key,
                 key_prefix,
+                match_existing_by,
             };
             let result = dpm_interchange::import_mspdi(plan, &xml, &options)?;
             let preview = dpm_engine::propose_change(plan, &result.candidate)

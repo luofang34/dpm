@@ -60,6 +60,9 @@ pub enum Query {
         /// document without GUIDs, which requires it.
         #[serde(default)]
         key_prefix: Option<String>,
+        /// Opt-in rule matching GUID-less tasks to existing work; absent never matches.
+        #[serde(default)]
+        match_existing_by: Option<dpm_interchange::ExistingMatch>,
     },
     /// Write one project's work as the supported Microsoft Project XML subset.
     ExportMspdi {

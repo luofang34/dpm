@@ -44,6 +44,7 @@ pub(crate) fn options() -> ImportOptions {
     ImportOptions {
         project_key: "REL".into(),
         key_prefix: Some("MSP".into()),
+        match_existing_by: None,
     }
 }
 
@@ -339,6 +340,7 @@ fn work_in_another_project_is_never_moved() {
         &ImportOptions {
             project_key: "OTHER".into(),
             key_prefix: None,
+            match_existing_by: None,
         },
     )
     .expect("import")
@@ -371,6 +373,7 @@ fn malformed_documents_fail_with_context() {
     let unknown = ImportOptions {
         project_key: "NOPE".into(),
         key_prefix: None,
+        match_existing_by: None,
     };
     let error = import_mspdi(&plan, &outline_document(""), &unknown).expect_err("project");
     assert_eq!(error.code(), "not_found");

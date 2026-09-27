@@ -3,6 +3,7 @@
 mod changes;
 mod fields;
 mod identity;
+mod matching;
 
 pub(crate) use identity::Resolver;
 
@@ -141,7 +142,7 @@ pub(crate) fn map(
                 check_kind(task, existing, placement.has_children)?;
                 let key = key_for(existing, task, prefix, &mut keys)?;
                 let (work, mut report) = fields::build(task, existing, id, key, &placement);
-                resolver.record(task, &basis, &mut report);
+                resolver.record(task, (id, &basis), &mut report);
                 outline.work.insert(task.uid, work);
                 outline.reports.push(report);
             }

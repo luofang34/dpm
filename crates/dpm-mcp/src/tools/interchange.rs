@@ -18,6 +18,10 @@ pub(super) fn schema(name: &str, properties: &mut Map<String, Value>, needed: &m
             "key_prefix".into(),
             json!({"type":"string","minLength":1,"description":"Prefix for keys of new work (PREFIX-UID); defaults to the project key. Required for a document without GUIDs (such as OmniPlan's), where it names the source"}),
         );
+        properties.insert(
+            "match_existing_by".into(),
+            json!({"type":"string","enum":["title-path"],"description":"Opt-in: match tasks without a GUID to the one existing work item in the project with the same title path (titles from the project root down); ambiguity refuses the import. Absent: never match"}),
+        );
         needed.push("xml");
     }
 }
@@ -29,6 +33,7 @@ pub(super) fn query(name: &str, args: &Arguments) -> Result<Query, AppError> {
             xml: required(args.xml.clone(), "xml")?,
             project_key,
             key_prefix: args.key_prefix.clone(),
+            match_existing_by: args.match_existing_by,
         }
     } else {
         Query::ExportMspdi { project_key }

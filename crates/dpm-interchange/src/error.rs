@@ -63,6 +63,15 @@ pub enum InterchangeError {
         /// First such task UID in document order.
         first_uid: i64,
     },
+    /// Matching GUID-less tasks to existing work by title path is not unique.
+    #[error(
+        "matching existing work by title path is ambiguous, so nothing is matched: {}",
+        ambiguities.join("; ")
+    )]
+    AmbiguousMatch {
+        /// Every ambiguous task or path, with the local work keys involved.
+        ambiguities: Vec<String>,
+    },
     /// The requested project key does not exist in the workspace.
     #[error("unknown project key {key}")]
     UnknownProject {
@@ -132,6 +141,7 @@ impl InterchangeError {
             Self::KeyCollision { .. }
             | Self::Unrepresentable { .. }
             | Self::KindChange { .. }
+            | Self::AmbiguousMatch { .. }
             | Self::Refused { .. }
             | Self::RefusedLink { .. } => "invalid_command",
             Self::Xml { .. }

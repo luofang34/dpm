@@ -35,6 +35,7 @@ fn import(plan: &Plan, xml: &str) -> ImportResult {
     let options = ImportOptions {
         project_key: "REL".into(),
         key_prefix: None,
+        match_existing_by: None,
     };
     import_mspdi(plan, xml, &options).expect("import")
 }
@@ -289,6 +290,7 @@ fn dpm_plans_export_and_reimport_unchanged() {
             let options = ImportOptions {
                 project_key: project.key.0.clone(),
                 key_prefix: None,
+                match_existing_by: None,
             };
             let result = import_mspdi(&plan, &exported.xml, &options).expect("import");
             assert_eq!(result.candidate, plan, "{}", project.key);

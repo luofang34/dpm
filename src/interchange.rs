@@ -17,6 +17,7 @@ pub(crate) fn plan_command_blocking(
             file,
             project_key,
             key_prefix,
+            match_existing_by,
             candidate,
         } => {
             let xml = fs::read_to_string(&file).map_err(io_error("read MSPDI document", &file))?;
@@ -24,6 +25,7 @@ pub(crate) fn plan_command_blocking(
                 xml,
                 project_key,
                 key_prefix,
+                match_existing_by,
             })?;
             if let Some(path) = candidate {
                 let text = serde_json::to_string_pretty(&response.data["candidate"])?;
@@ -50,6 +52,12 @@ pub(crate) fn plan_command_blocking(
         }
         _ => Err(CliError::Input("expected an MSPDI plan command".into())),
     }
+}
+
+/// Parse `--match-existing-by` with the same spelling the agent tool accepts.
+pub(crate) fn existing_match(value: &str) -> Result<dpm_app::ExistingMatch, String> {
+    serde_json::from_value(serde_json::Value::String(value.into()))
+        .map_err(|_| format!("unknown rule {value:?}; expected title-path"))
 }
 
 fn present_blocking(data: &serde_json::Value, json: bool) -> Result<(), CliError> {

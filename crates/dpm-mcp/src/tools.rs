@@ -224,6 +224,7 @@ struct Arguments {
     xml: Option<String>,
     project_key: Option<String>,
     key_prefix: Option<String>,
+    match_existing_by: Option<dpm_app::ExistingMatch>,
 }
 
 fn default_true() -> bool {

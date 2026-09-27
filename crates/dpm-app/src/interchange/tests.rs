@@ -18,6 +18,7 @@ fn import(app: &Application, xml: &str, project_key: &str) -> Result<serde_json:
         xml: xml.into(),
         project_key: project_key.into(),
         key_prefix: Some("MSP".into()),
+        match_existing_by: None,
     })
     .map(|response| response.data)
 }

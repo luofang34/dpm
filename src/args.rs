@@ -346,6 +346,10 @@ pub(crate) enum PlanCommand {
         /// document without GUIDs (such as OmniPlan's), where it names the source.
         #[arg(long)]
         key_prefix: Option<String>,
+        /// Opt-in: match tasks without a GUID to the one existing work item in the project with
+        /// the same title path (titles from the project root down); ambiguity refuses the import.
+        #[arg(long, value_name = "RULE", value_parser = crate::interchange::existing_match)]
+        match_existing_by: Option<dpm_app::ExistingMatch>,
         /// Also write the candidate plan here for review and `plan apply`.
         #[arg(long)]
         candidate: Option<PathBuf>,

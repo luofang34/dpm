@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check Microsoft Project XML import/export through the real CLI and agent transport."""
 import json
+import re
 import sqlite3
 import subprocess
 import tempfile
@@ -19,6 +20,11 @@ def operations(database):
 
 def import_args(path, *extra):
     return ('plan', 'import-mspdi', str(path), '--project-key', 'TEST', '--key-prefix', 'MSP', *extra)
+
+
+def without_guids(xml):
+    """The document as a GUID-dropping tool (OmniPlan) writes it back."""
+    return re.sub(r'<GUID>[^<]*</GUID>', '', xml)
 
 
 def check_imports(database, worker):
@@ -44,7 +50,8 @@ def check_failures(database, worker, directory):
     """Failed imports return the same code and message from both adapters and change nothing."""
     before, count = run_cli(database, 'export'), operations(database)
     cases = [('<Project/>', 'TEST', 'invalid_request'), ('<unterminated', 'TEST', 'invalid_request'),
-             (RELEASE.read_text(), 'NOPE', 'not_found')]
+             (RELEASE.read_text(), 'NOPE', 'not_found'),
+             (without_guids(RELEASE.read_text()), 'TEST', 'invalid_request')]
     for index, (xml, project, code) in enumerate(cases):
         path = directory / f'bad-{index}.xml'
         path.write_text(xml)
@@ -79,8 +86,26 @@ def check_apply_and_round_trip(database, worker, directory):
     run_cli(database, 'plan', 'export-mspdi', '--project-key', 'TEST', '--output', str(written))
     assert written.read_text() == local['xml']
     assert run_cli(database, 'plan', 'import-mspdi', str(written), '--project-key', 'TEST')['preview']['changes'] == []
+    check_guidless_round_trip(database, worker, directory, local['xml'])
     imported = {w['key'] for w in run_cli(database, 'export')['work_items'].values() if w['key'].startswith('MSP-')}
     assert imported and not imported & {c['work']['key'] for c in worker.call('next_work', {'limit': 100})['data']['candidates']}
+
+
+def check_guidless_round_trip(database, worker, directory, exported):
+    """A GUID-less copy of DPM's export maps back onto the same work only when asked, identically in both adapters."""
+    returned = directory / 'returned.xml'
+    returned.write_text(without_guids(exported))
+    arguments = {'xml': returned.read_text(), 'project_key': 'TEST', 'key_prefix': 'OPR'}
+    remote = worker.call('import_mspdi', {**arguments, 'match_existing_by': 'title-path'})['data']
+    local = run_cli(database, 'plan', 'import-mspdi', str(returned), '--project-key', 'TEST', '--key-prefix', 'OPR',
+                    '--match-existing-by', 'title-path')
+    assert remote == local and local['preview']['changes'] == [], local['preview']
+    assert all(i['approximated'][0]['detail'].startswith('no task GUID; matched existing work ') for i in local['report']['items'])
+    separate = run_cli(database, 'plan', 'import-mspdi', str(returned), '--project-key', 'TEST', '--key-prefix', 'OPR')
+    assert separate == worker.call('import_mspdi', arguments)['data']
+    assert {i['outcome'] for i in separate['report']['items']} == {'Created'}
+    bad = worker.call('import_mspdi', {**arguments, 'match_existing_by': 'fuzzy'}, error='invalid_request')
+    assert 'fuzzy' in bad['message'] or 'title-path' in bad['message'], bad
 
 
 def smoke(directory):
@@ -101,4 +126,4 @@ def smoke(directory):
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory() as directory:
         smoke(Path(directory))
-    print('PASS: MSPDI import/export CLI/MCP parity, reports keep imported tasks Proposed, failed imports and refused applies change nothing, human apply, export re-imports without changes')
+    print('PASS: MSPDI import/export CLI/MCP parity, reports keep imported tasks Proposed, failed imports and refused applies change nothing, human apply, export re-imports without changes, a GUID-less copy maps back only with --match-existing-by title-path')

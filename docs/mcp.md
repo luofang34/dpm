@@ -274,12 +274,14 @@ The supported external format is the documented Microsoft Project XML schema (MS
 Microsoft Project, ProjectLibre, OmniPlan Pro and MPXJ read and write. OmniPlan requires its Pro
 license for XML import/export. Binary `.mpp` and Primavera
 files are not supported; convert them to MSPDI with another tool first. Tests read documents
-written by MPXJ and check that MPXJ reads DPM's export back unchanged; acceptance by Microsoft
-Project or OmniPlan itself is not verified. `dpm-interchange` parses
+written by MPXJ and by OmniPlan 4.10.3, check that MPXJ reads DPM's export back unchanged, and
+record OmniPlan's reading of DPM's export (fixtures README); acceptance by Microsoft Project itself
+is not verified. `dpm-interchange` parses
 and writes the subset without network access and never touches the store.
 
-`plan import-mspdi FILE --project-key KEY [--key-prefix P] [--candidate OUT.json]` and
-`import_mspdi` (`xml`, `project_key`, optional `key_prefix`) return `{report, preview, candidate}`.
+`plan import-mspdi FILE --project-key KEY [--key-prefix P] [--match-existing-by title-path]
+[--candidate OUT.json]` and `import_mspdi` (`xml`, `project_key`, optional `key_prefix` and
+`match_existing_by`) return `{report, preview, candidate}`.
 `candidate` is a full plan at the observed revision, `preview` is its `propose_change` result, and
 `--candidate` also writes it to a file. Importing is a query: nothing is persisted until a human or
 service applies the candidate with `plan apply` / `apply_change`, which re-validates it against
@@ -352,6 +354,20 @@ asserts that it is the same source, and every item's `identity` finding says so.
 used by an import that carried GUIDs cannot be reused: the new `PREFIX-UID` key collides and the
 import is refused. Renumbered `UID`s import as new work. The `UID` 0 / `OutlineLevel` 0 task
 summarizes the whole document; the target project stands for it and it is reported as skipped.
+
+A round trip through such a tool (DPM export, edit in OmniPlan, import) loses the GUIDs DPM wrote,
+so by default the file comes back as a new source and plans new work beside the original. Mapping it
+back onto the original work is an explicit request, never a heuristic applied silently:
+`--match-existing-by title-path` / `match_existing_by: "title-path"` matches each task without a
+`GUID` to the one work item in the target project whose titles from the project root down equal the
+task's outline path of names. Every match is an `identity` approximation naming the matched key and
+path; a task without a match keeps its derived identity and says that no work has its path. A path
+shared by several local items, or by several GUID-less tasks that could match, or a task whose
+derived identity already names other work than its path matches, refuses the whole import
+(`invalid_command`) listing every ambiguity, because a partial or guessed merge would silently move
+history, evidence and ownership onto the wrong work. Titles are the one thing every tool round-trips;
+outline numbers and `UID`s are renumbered freely, and dates and durations are exactly what an edit
+changes. Renaming a task in the other tool therefore turns it into new work, and the report says so.
 
 Re-importing updates work with the same identity and never duplicates it. Keys, lifecycle,
 ownership, progress, evidence and acceptance stay local. The document owns only the dependencies

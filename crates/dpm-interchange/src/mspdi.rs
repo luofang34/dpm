@@ -45,6 +45,21 @@ pub struct ImportOptions {
     /// any GUID requires it: it names the source, and GUID-less identities derive from it.
     #[serde(default)]
     pub key_prefix: Option<String>,
+    /// How a task without a GUID may match existing work in the target project; `None` never
+    /// matches, so such a task always maps to its derived identity.
+    #[serde(default)]
+    pub match_existing_by: Option<ExistingMatch>,
+}
+
+/// Explicit rule for mapping GUID-less source tasks onto existing work, for files that went
+/// through a tool which drops GUIDs (OmniPlan) and come back to the plan they were exported from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExistingMatch {
+    /// A task matches the one work item in the target project whose titles from the project root
+    /// down equal the task's outline path of names; a path shared by several local items, or by
+    /// several GUID-less tasks that could match, refuses the import.
+    TitlePath,
 }
 
 /// Candidate plan and its report; the candidate is reviewed and applied through the plan-change
@@ -76,7 +91,13 @@ pub fn import_mspdi(
         .key_prefix
         .clone()
         .unwrap_or_else(|| options.project_key.clone());
-    let resolver = items::Resolver::new(&source, project, &options.project_key, &prefix);
+    let resolver = items::Resolver::new(
+        current,
+        &source,
+        (project, &options.project_key),
+        &prefix,
+        options.match_existing_by,
+    )?;
     let outline = items::map(current, &source, &resolver, project, &prefix)?;
     let mut candidate = current.clone();
     for mapped in outline.mapped() {
