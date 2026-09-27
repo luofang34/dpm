@@ -9,13 +9,48 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }} / ${{ matrix.toolchain }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, macos-15-intel]
+        toolchain: [msrv, stable]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - name: Install declared Rust toolchain
-        run: rustup show active-toolchain
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install selected Rust toolchain
+        shell: bash
+        env:
+          TOOLCHAIN_KIND: ${{ matrix.toolchain }}
+        run: |
+          toolchain=stable
+          if [ "$TOOLCHAIN_KIND" = msrv ]; then
+            toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["rust-version"])')
+          fi
+          rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy
+          echo "RUSTUP_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.toolchain }}
       - name: Install dependency checker
         run: cargo install cargo-deny --locked --version 0.19.8
       - name: Full local quality gates
         run: ./ci.sh
+      - name: Package native binaries and corresponding source
+        if: matrix.toolchain == 'stable'
+        run: python3 scripts/package_release.py --output "$RUNNER_TEMP/dpm-release"
+      - name: Test extracted binaries outside the checkout
+        if: matrix.toolchain == 'stable'
+        run: python3 scripts/smoke_release.py "$RUNNER_TEMP"/dpm-release/*.tar.gz
+      - name: Retain qualified archives and checksums
+        if: matrix.toolchain == 'stable'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpm-${{ matrix.os }}-${{ github.sha }}
+          path: ${{ runner.temp }}/dpm-release/*
+          if-no-files-found: error
+          compression-level: 0

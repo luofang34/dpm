@@ -190,6 +190,20 @@ The declared minimum and CI toolchain are **Rust 1.98.1**, using Rust edition 20
 The quality gate checks formatting, source limits, repository hygiene, Clippy, all targets, API documentation,
 release compilation, and a disposable-database CLI workflow and project-discovery/preview parity.
 
+CI runs the full gate on Linux and both macOS architectures with stable Rust and the declared
+MSRV. Its stable jobs also build and test native qualification archives; these are unsigned build
+artifacts, not published installers. A clean committed checkout can produce the same archive:
+
+```sh
+python3 scripts/package_release.py --output /tmp/dpm-release
+python3 scripts/smoke_release.py /tmp/dpm-release/*.tar.gz
+```
+
+Each archive includes `dpm`, `dpm-mcp`, AGPL licensing, the exact corresponding source and a build
+manifest. An adjacent SHA-256 file verifies the archive. The smoke check runs extracted binaries
+outside the checkout with isolated local state, tests CLI/MCP parity and verifies history recovery.
+Use a new output directory for each build. Package-manager publication and signing remain separate.
+
 The self-host integration checks are read-only and require revision 0 with an empty operation log.
 The internal synthetic graph exercises the agent/human mutation loop, gates and downstream work.
 Read-only checks compare every self-host task contract through actual CLI and MCP processes.

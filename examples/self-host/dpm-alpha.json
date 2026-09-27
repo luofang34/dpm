@@ -1791,6 +1791,10 @@
           {
             "action": "Review available dependency audit/license reports and publish unresolved findings with evidence.",
             "expected_result": "A qualification record traces each claim to a check or explicitly documented limitation."
+          },
+          {
+            "action": "Build a native qualification archive from a clean committed checkout with scripts/package_release.py, then run scripts/smoke_release.py against that archive outside the source checkout.",
+            "expected_result": "Both extracted binaries run with isolated state; checksums, corresponding source, CLI/MCP parity and history recovery pass on each actually tested target."
           }
         ],
         "in_scope": [
@@ -1802,7 +1806,8 @@
         "verification": [
           "./ci.sh on the declared toolchain; record stable/MSRV and platform results individually.",
           "Run required cargo-deny license/advisory gates and inspect their output; unavailable or failed checks are not a clean audit.",
-          "Measure representative graph sizes before claiming scale; preserve revision-consistent queries and complete graph validation when optimizing."
+          "Measure representative graph sizes before claiming scale; preserve revision-consistent queries and complete graph validation when optimizing.",
+          "python3 scripts/package_release.py --output <new-directory>; python3 scripts/smoke_release.py <archive>. Retain the manifest, checksum and actual target result; packaging does not publish a release."
         ]
       },
       "resources": [
