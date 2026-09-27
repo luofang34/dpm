@@ -160,7 +160,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 properties.insert("identity".into(),identity_schema()); required.push("identity");
                 if *name == "link_external" {
                     properties.insert("label".into(),json!({"type":"string","minLength":1}));
-                    properties.insert("url".into(),json!({"type":"string","description":"http(s) URL on the identity instance, without credentials"}));
+                    properties.insert("url".into(),json!({"type":"string","description":"http(s) URL on the identity instance: no userinfo, a plain path, only tab/page/view/plain/diff/w/focusedCommentId query names and a plain fragment"}));
                     properties.insert("role".into(),json!({"type":"string","enum":["Tracks","Relates"],"default":"Tracks"}));
                     properties.insert("observed".into(),json!({"type":"string","enum":["Open","Closed","Merged"],"description":"Reported external state; an observation only"}));
                 }

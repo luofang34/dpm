@@ -269,7 +269,8 @@ pub(crate) struct ExternalIdentityArgs {
     /// Tenant, owner/repository or project namespace where the provider scopes identifiers.
     #[arg(long)]
     pub(crate) namespace: Option<String>,
-    /// Object kind: issue, pull_request or another name.
+    /// Object kind: issue or pull_request (aliases such as pr, mr, pulls); GitHub also discussion,
+    /// GitLab also epic; other kinds are refused on shared-number forges.
     #[arg(long, default_value = "issue")]
     pub(crate) kind: String,
     /// Stable provider identifier, such as an issue number.
