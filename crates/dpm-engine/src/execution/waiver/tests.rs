@@ -353,3 +353,30 @@ fn a_successor_owner_cannot_waive_away_its_own_invalidated_provisional_basis() {
     run(&mut plan, reviewer, waive(edge, "B no longer uses A")).expect("independent waiver");
     assert!(!invalidated(&plan));
 }
+
+#[test]
+fn downstream_counts_ignore_waived_edges_like_gates_and_the_remaining_schedule() {
+    let (mut plan, edge, _) = soft_edge_plan();
+    let a = key(&plan, "TEST-A");
+    let counts = |plan: &Plan| {
+        let explained = crate::explain_work(plan, a, Utc::now()).expect("explain");
+        let query = NextWorkQuery {
+            use_probabilistic_criticality: false,
+            ..NextWorkQuery::default()
+        };
+        let ranked = next_work(plan, &query, Utc::now())
+            .expect("next")
+            .into_iter()
+            .find(|c| c.work.id == a)
+            .expect("A is claimable")
+            .downstream_count;
+        assert_eq!(ranked, explained.downstream_count);
+        ranked
+    };
+    let enforced = counts(&plan);
+    run(&mut plan, ActorId::human("lead"), waive(edge, "prototype")).expect("waive");
+    let mut unlinked = plan.clone();
+    unlinked.dependencies.retain(|d| d.id != edge);
+    assert_eq!(counts(&plan), counts(&unlinked));
+    assert!(counts(&plan) < enforced, "the waived edge released nothing");
+}

@@ -221,9 +221,10 @@ or restoration is a semantic operation in the history. Plan changes cannot add, 
 waiver, and a waived edge must be restored before a reviewed change edits or removes it.
 
 A waived edge no longer gates any transition or milestone completion, and no longer bounds
-the remaining forecast or simulation. It still counts for cycle validation, the baseline schedule,
-review protection and execution context. A milestone whose every incoming edge is waived has no
-enforced prerequisite and therefore stays unreached. Restoring an edge does not revoke an existing
+the remaining forecast or simulation, or the downstream count `next` and `explain` rank by. It still
+counts for cycle validation, the baseline schedule, review protection and execution context.
+A milestone whose every incoming edge is waived has no enforced prerequisite and therefore stays
+unreached. Restoring an edge does not revoke an existing
 claim, start or submission, but it gates the successor's next governed transition and always its
 verification.
 

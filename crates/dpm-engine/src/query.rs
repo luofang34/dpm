@@ -134,10 +134,11 @@ pub fn status(
 }
 
 /// Transitive successors that completing work could still release; excluded or stranded work
-/// is not counted because no completion releases it.
+/// is not counted because no completion releases it. Only enforced edges count: a waived edge
+/// gates nothing, so ranking must not reward releasing it.
 fn downstream_counts(plan: &Plan, timeline: &Timeline) -> BTreeMap<WorkItemId, usize> {
     let mut outgoing = BTreeMap::<WorkItemId, Vec<WorkItemId>>::new();
-    for dep in plan.dependencies.iter().filter(|d| {
+    for dep in plan.enforced_dependencies().filter(|d| {
         let state = timeline.applicability(d.successor);
         !(state.is_not_selected()
             || matches!(
