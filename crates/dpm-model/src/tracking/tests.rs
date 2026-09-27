@@ -1,14 +1,14 @@
 use super::*;
 use crate::{Key, Plan};
 
-fn fixture() -> Plan {
+pub(super) fn fixture() -> Plan {
     serde_json::from_str(include_str!(
         "../../../../tests/support/execution-plan.json"
     ))
     .expect("fixture")
 }
 
-fn work(plan: &Plan, key: &str) -> WorkItemId {
+pub(super) fn work(plan: &Plan, key: &str) -> WorkItemId {
     plan.find_work_by_key(key).expect("work").id
 }
 
@@ -22,7 +22,7 @@ fn identity(provider: ExternalProvider, instance: &str, namespace: &str) -> Exte
     }
 }
 
-fn reference(
+pub(super) fn reference(
     identity: ExternalIdentity,
     work: WorkItemId,
     role: ExternalLinkRole,
@@ -37,7 +37,7 @@ fn reference(
     }
 }
 
-fn insert(plan: &mut Plan, reference: ExternalReference) -> ExternalReferenceId {
+pub(super) fn insert(plan: &mut Plan, reference: ExternalReference) -> ExternalReferenceId {
     let id = reference.id;
     plan.external_references.insert(id, reference);
     id
@@ -197,11 +197,8 @@ fn credentials_are_rejected_in_every_shared_field() {
         r.url = Some("https://github.com/ops/dpm/issues/42?tab=activity#issuecomment-1".into())
     })
     .expect("allowlisted view parameters");
-    assert!(
-        check(&|r| r.url = Some("https://github.com/ops/dpm/issues/42?author=me".into()))
-            .expect_err("unlisted query parameter")
-            .contains("query")
-    );
+    check(&|r| r.url = Some("https://github.com/ops/dpm/issues/42?author=me".into()))
+        .expect("any query parameter the detector does not flag");
     for url in [
         "https://ghp_secret@github.com/ops/dpm/issues/42",
         "https://user:pass@github.com/ops/dpm/issues/42",
@@ -383,8 +380,8 @@ fn linear_keys_workspaces_and_forge_spellings_collapse() {
     jira.namespace = None;
     assert_eq!(
         jira.canonical().external_id,
-        "ENG-0042",
-        "keys are not numbers"
+        "ENG-42",
+        "a key's number loses leading zeros"
     );
 }
 
@@ -415,3 +412,5 @@ fn forgejo_and_gitea_on_one_instance_are_one_object_family() {
         plan.external_references.remove(&id);
     }
 }
+
+mod neighbours;

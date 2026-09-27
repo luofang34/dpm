@@ -1,11 +1,19 @@
 use super::{check_text, check_url};
 
-const INSTANCE: &str = "github.com";
+fn github() -> crate::ExternalIdentity {
+    crate::ExternalIdentity {
+        provider: crate::ExternalProvider::GitHub,
+        instance: "github.com".into(),
+        namespace: Some("o/r".into()),
+        kind: crate::ExternalObjectKind::Issue,
+        external_id: "6".into(),
+    }
+}
 
 /// Both decisions must reject: the URL field may be stricter than a label, never looser.
 fn rejected_by_both(text: &str) {
     assert!(check_text(text).is_err(), "label accepted {text}");
-    assert!(check_url(text, INSTANCE).is_err(), "url accepted {text}");
+    assert!(check_url(text, &github()).is_err(), "url accepted {text}");
 }
 
 #[test]
@@ -60,15 +68,14 @@ fn ordinary_names_anchors_and_ssh_remotes_are_not_credentials() {
         "https://github.com:0443/ops/dpm/issues/42",
     ] {
         assert_eq!(check_text(url), Ok(()), "label {url}");
-        assert_eq!(check_url(url, INSTANCE), Ok(()), "url {url}");
+        assert_eq!(check_url(url, &github()), Ok(()), "url {url}");
     }
 }
 
 #[test]
-fn urls_accept_only_the_structural_allowlist() {
+fn urls_follow_the_structural_rules() {
     for url in [
         "https://github.com/x?%74oken=x",
-        "https://github.com/x?max_tokens=1",
         "https://github.com/o/r;v=1",
         "https://github.com/o/r#a=b",
         "https:///github.com/o/r",
@@ -76,7 +83,7 @@ fn urls_accept_only_the_structural_allowlist() {
         "https://github.com.evil.example/o/r",
         "https://github.com/o/r/%40x",
     ] {
-        assert!(check_url(url, INSTANCE).is_err(), "accepted {url}");
+        assert!(check_url(url, &github()).is_err(), "accepted {url}");
     }
 }
 
@@ -233,7 +240,7 @@ fn generated_benign_links_are_accepted_by_label_and_url() {
                 ] {
                     let url = format!("{scheme}{host}{path}{suffix}");
                     assert_eq!(check_text(&url), Ok(()), "label {url}");
-                    assert_eq!(check_url(&url, INSTANCE), Ok(()), "url {url}");
+                    assert_eq!(check_url(&url, &github()), Ok(()), "url {url}");
                 }
             }
         }

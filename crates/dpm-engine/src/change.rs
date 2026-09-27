@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 mod applicability;
+mod external;
 pub use applicability::ApplicabilityChange;
 mod independence;
 pub(crate) use independence::refuse_own_relaxation;

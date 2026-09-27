@@ -162,7 +162,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 properties.insert("identity".into(),identity_schema()); required.push("identity");
                 if *name == "link_external" {
                     properties.insert("label".into(),json!({"type":"string","minLength":1}));
-                    properties.insert("url".into(),json!({"type":"string","description":"http(s) URL on the identity instance: no userinfo, a plain path, only tab/page/view/plain/diff/w/focusedCommentId query names and a plain fragment"}));
+                    properties.insert("url".into(),json!({"type":"string","description":"http(s) URL on the identity instance (www.github.com is github.com): no userinfo, a plain path, any query parameter the credential detector does not flag, and a plain fragment"}));
                     properties.insert("role".into(),json!({"type":"string","enum":["Tracks","Relates"],"default":"Tracks"}));
                     properties.insert("observed".into(),json!({"type":"string","enum":["Open","Closed","Merged"],"description":"Reported external state; an observation only"}));
                 }
@@ -440,8 +440,8 @@ fn identity_schema() -> Value {
         "provider":{"oneOf":[{"type":"string","enum":["GitHub","GitLab","Forgejo","Gitea","Jira","Linear"]},other]},
         "instance":{"type":"string","minLength":1,"description":"host[:port] of the hosted or self-hosted instance"},
         "namespace":{"type":"string","description":"Tenant, owner/repository or project namespace; required for forges and Linear"},
-        "kind":{"oneOf":[{"type":"string","enum":["Issue","PullRequest"]},other]},
-        "external_id":{"type":"string","minLength":1}
+        "kind":{"oneOf":[{"type":"string","enum":["Issue","PullRequest"]},other],"description":"Kind from the provider table; kinds sharing a number space (GitHub issue/pull request/discussion, GitLab issue/incident/task, any Jira or Linear issue type) name one object"},
+        "external_id":{"type":"string","minLength":1,"description":"A number on GitHub, GitLab, Forgejo and Gitea; a PROJECT-N key on Jira and Linear"}
     }})
 }
 

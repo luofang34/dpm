@@ -13,7 +13,7 @@ fn github(kind: ExternalObjectKind) -> ExternalIdentity {
 }
 
 /// Link as the application does: reuse the reference already recorded for the object.
-fn linked(
+pub(super) fn linked(
     plan: &mut Plan,
     work: WorkItemId,
     identity: ExternalIdentity,

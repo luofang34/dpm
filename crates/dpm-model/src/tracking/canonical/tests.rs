@@ -90,7 +90,7 @@ fn canonical_is_idempotent_over_generated_spellings() {
             once,
             "canonical is not idempotent for {spelling:?}"
         );
-        assert_eq!(once.object_key().canonical(), once.object_key());
+        assert_eq!(once.canonical().object_key(), once.object_key());
         // The spelling a rejection suggests must itself be accepted as canonical.
         if let Err(error) = once.validate(ExternalReferenceId::new()) {
             assert!(

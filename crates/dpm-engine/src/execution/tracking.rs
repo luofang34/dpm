@@ -4,8 +4,8 @@
 use crate::{EngineError, ExternalLinkRequest};
 use chrono::{DateTime, Utc};
 use dpm_model::{
-    ActorId, ExternalLink, ExternalLinkRole, ExternalObjectKind, ExternalObservation,
-    ExternalReference, ExternalReferenceId, Plan, WorkItemId,
+    ActorId, ExternalLink, ExternalLinkRole, ExternalObservation, ExternalReference,
+    ExternalReferenceId, Plan, WorkItemId,
 };
 use std::collections::BTreeSet;
 
@@ -33,13 +33,13 @@ pub(super) fn link(
             observation: None,
             links: BTreeSet::new(),
         });
-    // Only a tracking link refines the recorded kind, so context links cannot restate what the
-    // tracked object is. Relinking with the same role may only refine; any other repeat is a
-    // duplicate.
-    let upgrade = request.role == ExternalLinkRole::Tracks
+    // Only a tracking link restates the recorded kind, so context links cannot restate what the
+    // tracked object is. Relinking with the same role may only restate the kind within the
+    // provider table's kind-change rule; any other repeat is a duplicate.
+    let restates = request.role == ExternalLinkRole::Tracks
         && request.identity.refines_kind_of(&reference.identity);
     if let Some(existing) = reference.links.iter().find(|l| l.work == request.work)
-        && !(upgrade && existing.role == request.role)
+        && !(restates && existing.role == request.role)
     {
         return Err(EngineError::DuplicateExternalLink {
             work: request.work,
@@ -70,8 +70,8 @@ pub(super) fn link(
             ),
         });
     }
-    if upgrade {
-        reference.identity.kind = ExternalObjectKind::PullRequest;
+    if restates {
+        reference.identity.kind = request.identity.kind.clone();
     }
     reference.label.clone_from(&request.label);
     reference.url.clone_from(&request.url);

@@ -293,6 +293,71 @@ def one_decision_per_rule(directory):
         worker.close()
 
 
+def one_table_for_every_path(directory):
+    """The provider table decides kinds, keys, URLs and reviewed re-keys alike through both adapters."""
+    database = directory / 'table.sqlite'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    worker = Agent(database, 'agent:table')
+    try:
+        def conflict(key, identity, code='tracking_conflict'):
+            return refused(database, worker, 'link_external',
+                           {'key': key, 'identity': mcp_identity(identity), 'base_revision': revision(database)},
+                           ['link-external', key, *flags(identity)], code)
+
+        gitlab = {'provider': 'GitLab', 'instance': 'gitlab.example', 'namespace': 'o/r', 'kind': 'Issue', 'external_id': '6'}
+        worker.call('link_external', {'key': 'TEST-A', 'identity': gitlab, 'base_revision': revision(database)})
+        for kind in ['incident', 'work_item', 'Work Items', 'Tasks']:
+            conflict('TEST-B', {**gitlab, 'kind': kind})
+        epics = {**gitlab, 'kind': 'epics'}
+        worker.call('link_external', {'key': 'TEST-B', 'identity': mcp_identity(epics), 'base_revision': revision(database)})
+        run_cli(database, 'link-external', 'TEST-C', *flags({**gitlab, 'kind': 'MRs'}), '--actor', 'agent:table')
+        conflict('TEST-D', {**gitlab, 'kind': 'epic'})
+        message = conflict('TEST-D', {**gitlab, 'kind': 'widget'}, 'invalid_command')
+        assert 'number space' in message, message
+        kinds = sorted(str(r['identity']['kind']) for r in run_cli(database, 'export')['external_references'].values())
+        assert kinds == ["Issue", "PullRequest", "{'Other': 'epic'}"], kinds
+
+        jira = {'provider': 'Jira', 'instance': 'acme.atlassian.net', 'kind': 'Issue', 'external_id': 'PROJ-6'}
+        permalink = ('https://acme.atlassian.net/browse/PROJ-6?focusedCommentId=10&page=com.atlassian.jira.plugin.'
+                     'system.issuetabpanels:comment-tabpanel#comment-10')
+        run_cli(database, 'link-external', 'TEST-D', *flags({**jira, 'kind': 'bug'}), '--url', permalink,
+                '--label', 'Ask @alice@mastodon.social', '--actor', 'agent:table')
+        for variant in [{**jira, 'kind': 'Story'}, jira, {**jira, 'external_id': 'proj-06'}]:
+            conflict('TEST-E', variant)
+
+        github = {'provider': 'GitHub', 'instance': 'www.github.com', 'namespace': 'o/r', 'kind': 'PullRequest', 'external_id': '9'}
+        notification = 'https://github.com/o/r/pull/9/checks?check_run_id=1&notification_referrer_id=NT_x&utm_source=email'
+        worker.call('link_external', {'key': 'TEST-E', 'identity': github, 'url': notification, 'observed': 'Merged',
+                                      'base_revision': revision(database)})
+        leaked = {**github, 'external_id': '10'}
+        for name in ['token2', 'tokenValue', 'PHPSESSID', 'code', 'bearer']:
+            url = f'https://github.com/o/r/pull/10?{name}=abc'
+            message = refused(database, worker, 'link_external',
+                              {'key': 'TEST-F', 'identity': leaked, 'url': url, 'base_revision': revision(database)},
+                              ['link-external', 'TEST-F', *flags(leaked), '--url', url], 'invalid_command')
+            assert 'secret' in message, (name, message)
+
+        current = run_cli(database, 'export')
+        stored = next(r for r in current['external_references'].values() if r['identity']['provider'] == 'GitHub')
+        assert stored['identity']['instance'] == 'github.com', stored
+        for kind, expected in [('Issue', 'kind'), ('PullRequest', 'observation')]:
+            proposal = copy.deepcopy(current)
+            record = proposal['external_references'].pop(stored['id'])
+            record['id'] = '00000000-0000-4000-8000-00000000c0de'
+            record['identity']['kind'] = kind
+            record.pop('observation')
+            proposal['external_references'][record['id']] = record
+            candidate = directory / f'rekey-{kind}.json'
+            candidate.write_text(json.dumps(proposal))
+            remote = worker.call('propose_change', {'plan': proposal}, error='invalid_command')
+            local = run_cli(database, 'plan', 'diff', str(candidate), error='invalid_command')['error']
+            assert remote['message'] == local['message'], (remote, local)
+            assert expected in remote['message'], remote
+        assert run_cli(database, 'export') == current
+    finally:
+        worker.close()
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-tracking-') as temporary:
         directory = Path(temporary)
@@ -310,6 +375,7 @@ if __name__ == '__main__':
             forge_family(directory)
             issue_then_pull(directory)
             one_decision_per_rule(directory)
+            one_table_for_every_path(directory)
         finally:
             worker.close()
             reviewer.close()
@@ -318,4 +384,4 @@ if __name__ == '__main__':
             assert reopened.call('export_plan', {})['data'] == final
         finally:
             reopened.close()
-    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, one Forgejo/Gitea object family per instance, scheme-less and percent-encoded credential rejection, one credential detector for labels and URLs, issue-to-pull-request kind upgrade by the owner only, final merged observations, kind/port/namespace spellings with one owner, reviewed changes never downgrade kinds, reviewed rename and export/import round trip')
+    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, one Forgejo/Gitea object family per instance, scheme-less and percent-encoded credential rejection, one credential detector for labels and URLs, issue-to-pull-request kind upgrade by the owner only, final merged observations, kind/port/namespace spellings with one owner, reviewed changes never downgrade kinds, one provider table for GitLab/Jira kinds and keys, real provider URLs, fediverse labels, suffixed secret names and reviewed re-keys, reviewed rename and export/import round trip')

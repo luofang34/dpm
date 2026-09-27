@@ -103,53 +103,77 @@ See [the decision log](architecture.md#release-and-handoff).
 ## External tracking references
 
 An external reference records an issue, pull request or other tracker object without making its
-state authoritative. Its identity is the tuple provider family (`GitHub`, `GitLab`, `Forgejo`,
-`Gitea`, `Jira`, `Linear` or `{"Other":"name"}`), `instance` (lowercase `host[:port]` of the hosted
-or self-hosted server), `namespace` (owner/repository, group path, tenant or project; required for
-repository forges and Linear; rejected for Jira, whose keys such as `PROJ-1` are unique per
-instance), `kind` (`Issue`, `PullRequest` or `{"Other":"name"}`) and
-`external_id`. Equal IDs on another instance or namespace are different objects. Forgejo is a fork
-of Gitea with the same repository paths and issue/pull numbering, so on one instance `Forgejo` and
-`Gitea` name the same objects and collide; the first recorded family is kept for display. Every
-other family stays distinct, even on one host (GitHub and GitLab on `codeberg.org` do not collide),
-and each instance is separate (`github.com` and a GitHub Enterprise host never collide).
+state authoritative. Its identity is provider family (`GitHub`, `GitLab`, `Forgejo`, `Gitea`,
+`Jira`, `Linear` or `{"Other":"name"}`), `instance` (lowercase `host[:port]` of the hosted or
+self-hosted server), `namespace` (owner/repository, group path, tenant or project), `kind`
+(`Issue`, `PullRequest` or `{"Other":"name"}`) and `external_id`.
 
-Kind names are compared ignoring case, separators and one plural `s`: `pull_requests`,
-`pull-requests`, `PRs`, `pulls`, `merge_request` and `mr` are `PullRequest`; `issues` is `Issue`;
-`Discussions` is `{"Other":"discussion"}`. GitHub, Forgejo and Gitea number issues and pull
-requests in one repository sequence, and GitHub numbers discussions in the same sequence, so on
-those forges every kind of that sequence names one object and `#5` has one record and one owner
-whichever kind is named. Their kind set is closed: `Issue`, `PullRequest` and, on GitHub only,
-`discussion`; any other kind is rejected, so no spelling can give one number a second identity.
-GitLab numbers issues, merge requests and other objects (such as epics) separately, so kind keeps
-them apart there. A pull request is the more specific kind of an issue-sequence object: a `Tracks`
-link naming `PullRequest` for a record kept as `Issue` refines the record in the same operation
-(so a `Merged` observation is accepted with it). `Relates` links never change the recorded kind,
-because only the tracking owner states what the tracked object is, and no link or reviewed plan
-change downgrades a pull request or swaps one kind for another; link the other object instead.
+### Provider table
 
-The label and URL are display data. Adapters canonicalize equivalent spellings before lookup, and
-validation rejects any other form: host and forge namespace case, `https://` prefixes, a trailing
-`/` or root `.` on the host, port leading zeros and the default ports `443`/`80` (`:0443` is no
-port), empty and `.` namespace segments (`./ops//dpm` is `ops/dpm`; `..` is rejected), `#`/`!` ID
-prefixes, a `.git` repository suffix in any case, leading zeros in forge numbers, and Jira and
-Linear key and Linear workspace case. Ports must be 1-65535. Each rule is applied until nothing
-more changes (`o/r.git.git`, `##5`), so canonicalizing a canonical identity leaves it unchanged
-and a suggested spelling is always accepted. Commands check the requested identity itself, even
-when it resolves to an existing record.
+One closed table decides, per provider, which kinds are accepted, the number space of each kind,
+the identifier spelling and the namespace rule. Canonical spelling, validation, the collision
+check, `link_external`/`unlink_external` lookup, the kind-change rule and reviewed plan changes
+all read this table and nothing else. Two identities name one object exactly when their object
+keys are equal: (provider family, instance, namespace, number space, normalized id).
+
+| Provider | Namespace | Id | Kinds and number spaces |
+|---|---|---|---|
+| GitHub | owner/repo, required | number | `issue`, `pull_request`, `discussion`: one space |
+| Forgejo, Gitea | owner/repo, required | number | `issue`, `pull_request`: one space |
+| GitLab | project or group path, required | number | issue space: `issue`, `incident`, `task`, `test_case`, `ticket`, `objective`, `key_result`, `work_item`; `pull_request` (merge request) space; `epic` space |
+| Jira | forbidden (keys name the project) | `PROJECT-N` | every issue type (`bug`, `story`, `sub_task`, `epic`, ...): one key space |
+| Linear | workspace, required | `PROJECT-N` | every issue type: one key space |
+| Other | optional | opaque | each kind is its own space |
+
+GitHub numbers issues, pull requests and discussions in one repository sequence, and Forgejo
+(a fork of Gitea that keeps its paths and numbering) numbers issues and pull requests in one
+sequence, so `#5` there has one record and one owner whichever kind is named. Forgejo and Gitea
+are one family on one instance; the first recorded family is kept for display. GitLab work items
+of project-level types (issue, incident, task, test case, Service Desk ticket, objective, key
+result) share the project's issue IID sequence, merge requests have their own project sequence,
+and epics have a group-scoped IID (`GET /groups/:id/epics/:epic_iid`); legacy requirements keep a
+separate IID and are rejected. Jira and Linear number every issue type in one key sequence, so the
+kind is a label there and never part of the key. On GitHub, Forgejo, Gitea and GitLab any kind
+outside the table is rejected (`invalid_command`, naming the accepted kinds), so no spelling can
+give one number a second identity; Jira and Linear accept any kind name, and have no pull requests.
+Every family stays distinct from the others, even on one host, and each instance is separate
+(`github.com` and a GitHub Enterprise host never collide).
+
+Kind names are folded by one normalizer: case and separators are ignored and one plural ending is
+dropped (`ies` reads as `y`; `ss` is kept). So `pull_requests`, `Pull Requests`, `PRs`, `pulls`,
+`merge_request` and `MRs` are `PullRequest`; `issues` is `Issue`; `Work Items` is GitLab's
+`work_item`; `epics` is `epic`; `Stories` is `story`. Unlisted kinds keep their folded name.
+
+Identifiers are normalized per provider: forge numbers drop `#`, `!` and `&` prefixes and leading
+zeros (`#006` is `6`) and must be positive numbers, so a GraphQL node ID cannot become a second
+identity of the same issue; Jira and Linear keys upper-case the project and drop leading zeros of
+the number (`proj-06` is `PROJ-6`) and must look like `PROJECT-N` (a letter, then letters, digits
+or `_`). Adapters canonicalize equivalent spellings before lookup, and validation rejects any
+other form: host and forge namespace case, `https://` prefixes, a trailing `/` or root `.` on the
+host, port leading zeros and the default ports `443`/`80` (`:0443` is no port), `www.github.com`
+for `github.com`, empty and `.` namespace segments (`./ops//dpm` is `ops/dpm`; `..` is rejected), a
+`.git` repository suffix in any case, and Linear workspace case. Ports must be 1-65535. Each rule is
+applied until nothing more changes, so canonicalizing a canonical identity leaves it unchanged and
+a suggested spelling is always accepted. Commands check the requested identity itself, even when it
+resolves to an existing record.
+
+### Linking
 
 `link_external` takes `key`, `identity`, `base_revision` and optional `label`, `url`, `role`
 (`Tracks` by default, or `Relates`) and `observed` (`Open`, `Closed` or `Merged`). The CLI uses
-lowercase flag values. Each identity is recorded once, under a stable reference ID that survives
+lowercase flag values. Each object is recorded once, under a stable reference ID that survives
 relabeling and namespace moves; links name work by stable ID, so key changes keep them. One work
-item may track an identity (`tracking_conflict` otherwise); any number may relate to it. A work item
-links an identity at most once; the owner may relink with `Tracks` only to refine an issue record
-to a pull request, and records its label, URL and observation with the refinement. `Merged` is
-final: a merged pull request can neither reopen nor close, so after a `Merged` observation any
-link reporting `Open` or `Closed` is rejected (`invalid_command`); link without `observed` to add
-context. `unlink_external` removes one link, and removing the last one removes the record. Unknown
-work, identities or links are `not_found`; stale revisions are `revision_conflict`. Every failure
-leaves the snapshot and revision unchanged.
+item may track an object (`tracking_conflict` otherwise); any number may relate to it. A work item
+links an object at most once; the owner may relink with `Tracks` only to restate the kind, and
+records its label, URL and observation with it. The kind-change rule is the table's: a kind may
+change to another kind of the same number space (an issue refined to a pull request, a GitLab issue
+restated as an incident, a Jira bug relabelled as a story), except that a pull request is the most
+specific kind of its number and is never restated as anything else. `Relates` links never change
+the recorded kind. `Merged` is final: a merged pull request can neither reopen nor close, so after
+a `Merged` observation any link reporting `Open` or `Closed` is rejected (`invalid_command`); link
+without `observed` to add context. `unlink_external` removes one link, and removing the last one
+removes the record. Unknown work, identities or links are `not_found`; stale revisions are
+`revision_conflict`. Every failure leaves the snapshot and revision unchanged.
 
 Links are never evidence, dependency satisfaction, gates or verification. `observed` is an
 attributed report: a closed issue does not complete work, and a merged pull request does not
@@ -158,37 +182,67 @@ evidence; a separate verifier still decides. `explain.context.external_reference
 linked to the work or its containing packages, while `next`, `status` and schedules ignore them.
 No connector, token store or assignee write is involved.
 
+### Credentials, labels and URLs
+
 Credentials are rejected by one detector, applied to every label word and to the whole URL. Each
 word is percent-decoded until stable (deeper nesting is rejected) and `\` is read as `/`. Then:
 
 - Userinfo: after an optional `scheme:` and any number of slashes (`https://`, `https:/`,
   `https:\\`, `//`, or none as in `user:secret@host`), the authority runs to the next `/`, `?` or
-  `#`, and any `@` in it is userinfo. Without a scheme or leading slash, an `@` followed by a host
-  (a dotted name, `localhost`, `[IPv6]` or `name:port`) is userinfo (`tok@github.com/o/r`,
-  `tok@[2001:db8::1]/o/r`). Userinfo is rejected unless it is exactly `git`, the public SSH user of
-  every forge (`git@github.com:o/r.git`). A bare address with no scheme, path, query, fragment or
-  port (`user@example.com`, also after `mailto:`) is an email and allowed; this includes a
-  token-shaped local part such as `ghp_x@github.com`, which carries no host path to authenticate.
+  `#`, and any `@` in it is userinfo. Anywhere else in the word (a query value, a URL nested in a
+  query, a word without a scheme) an `@` after a name and before a host (a dotted name,
+  `localhost`, `[IPv6]` or `name:port`) is userinfo unless it is a bare address: nothing but the
+  end of the word or another parameter right after the host, no port, no `:` in the name
+  (`tok@github.com/o/r`, `?next=https://tok@evil.example/x` and `user:pw@host` are rejected;
+  `?jql=reporter=alice@corp.example` is accepted). Userinfo is rejected unless it is exactly `git`,
+  the public SSH user of every forge (`git@github.com:o/r.git`). An email address
+  (`user@example.com`, also after `mailto:`) and a fediverse handle (`@alice@mastodon.social`) are
+  allowed; this includes a token-shaped local part such as `ghp_x@github.com`, which carries no host
+  path to authenticate.
 - Secret parameters: the word is split at `?`, `&`, `;`, `/` and `#`, and a `name=value` piece
-  with a nonempty value is rejected when its name, split into words at `_`, `-`, `.`, `:` and
-  lower-to-upper case changes, ends in the word `key`, `apikey`, `sig`, `pwd`, `pass`, `jwt`,
-  `auth` or `sid`, or in a word ending with `token`, `secret`, `password`, `passwd`, `signature`,
-  `session`, `credential(s)` or `authorization`. So `access_token`, `accessToken`, `API.KEY`,
-  `client_secret`, `private_token`, `X-Amz-Signature`, `--token` and `%74oken` are secrets, while
-  `max_tokens`, `secret_santa` and anchors such as `#token-refresh` or
-  `#api-key-setup` are not. Any `*_key` name (`sort_key`) counts as a secret.
+  with a nonempty value is rejected when its name is a secret name. The name is split into words at
+  `_`, `-`, `.`, `:` and lower-to-upper case changes; trailing digits of each word are dropped
+  (`token2`, `password1`), and trailing qualifier words (`value`, `val`, `str`, `string`, `id`,
+  `data`, `raw`, `hex`, `b64`, `base64`, `text`) are dropped while a word remains before them
+  (`tokenValue`, `session_id`). The last remaining word is a secret when it is `key`, `apikey`,
+  `sig`, `pwd`, `pass`, `jwt`, `auth`, `sid` or `bearer`, or ends with `token`, `secret`,
+  `password`, `passwd`, `signature`, `session`, `sessionid`, `sessid` (`PHPSESSID`, `JSESSIONID`),
+  `credential(s)` or `authorization`, or is the OAuth `code` alone or after `auth`, `oauth`,
+  `access`, `authorization`, `device` or `verification` (`auth_code`). So `access_token`,
+  `accessToken`, `API.KEY`, `client_secret`, `private_token`, `X-Amz-Signature`, `--token` and
+  `%74oken` are secrets, while `max_tokens`, `secret_santa`, `language_code`, `user_id` and anchors
+  such as `#token-refresh` or `#api-key-setup` are not. Any `*_key` name (`sort_key`) counts as a
+  secret.
+- Intentional misses: a secret value under an ordinary name (`?q=ghp_abc`), a bare token in a
+  label (`ghp_abc`), a secret in a path segment without `=` (`/token/abc`), one-letter or
+  unrelated names (`?k=`, `?x=`), OAuth `state`, and a `name@host` pair with no path, port or `:`
+  inside a query value (`?next=tok@evil.example`), which reads as an address. The detector recognizes credential syntax, not credential
+  content; it is a guard against pasting live links, not a secret scanner.
 
-The URL must also pass a structural allowlist, so it is never looser than a label: `http://` or
+The URL must also pass structural rules, so it is never looser than a label: `http://` or
 `https://` followed directly by an authority equal to the identity's instance after the same
-canonicalization (no userinfo, no encoding); a decoded path of letters, digits and `-._~/` only
-(no `;` parameters, `=` or `@`); an optional query of `&`-separated pairs named `tab`, `page`,
-`view`, `plain`, `diff`, `w` or `focusedCommentId` with plain values; and an optional fragment that
-is a plain anchor (letters, digits, `-._~`).
+canonicalization (no userinfo, no encoding; `www.github.com` is `github.com`); a decoded path of
+letters, digits and `-._~/:+,` only (no `;` parameters, `=` or `@`); any query the detector does not
+flag, with values that may contain `:` and parameters that may be empty; and an optional fragment
+that is a plain anchor (letters, digits, `-._~`). Real provider links such as
+`?notification_referrer_id=…&utm_source=email`, `checks?check_run_id=1`, GitLab
+`diffs?commit_id=…`, Forgejo `files?style=split&whitespace=`, Jira `boards/1?selectedIssue=PROJ-6`
+and the Jira comment permalink
+`?focusedCommentId=10&page=com.atlassian.jira.plugin.system.issuetabpanels:comment-tabpanel#comment-10`
+are accepted.
+
+### Reviewed plan changes
 
 References are part of the exported plan, so reviewed plan changes can add, relabel, move or
 remove them under the same validation. `plan diff` reports them under `external_references`.
-Like evidence and reviews, observations are attributed records: a plan change cannot add or
-rewrite one; record it with `link_external`.
+A proposed record is compared with every current record it continues: the one with its reference
+ID (a relabel or namespace move) and the one with its object key (a removal and re-addition under a
+new ID). Either way it is an edit of that object, so it follows the link rules: the kind may only
+change as linking would change it (a pull request is never downgraded), and, like evidence and
+reviews, observations are attributed records that a plan change cannot add, rewrite or drop;
+record them with `link_external`. A removal in one reviewed change followed by a re-addition in a
+later one is indistinguishable from unlinking the last link and linking again, which starts a new
+record without history.
 
 `history` returns entries in append order with a `next_after_sequence` cursor (default limit 100,
 capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export

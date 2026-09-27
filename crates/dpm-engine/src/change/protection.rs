@@ -84,29 +84,7 @@ fn protect_observations(current: &Plan, proposed: &Plan) -> Result<(), EngineErr
             ));
         }
     }
-    for (id, reference) in &proposed.external_references {
-        let recorded = current
-            .external_references
-            .get(id)
-            .and_then(|r| r.observation.as_ref());
-        if reference.observation.as_ref() != recorded {
-            return Err(invalid(
-                id,
-                "observations are recorded by link; plan changes cannot add or rewrite them",
-            ));
-        }
-        // Review follows the link rule: a kind is only refined, never downgraded or swapped.
-        if let Some(current) = current.external_references.get(id)
-            && !current.identity.permits_kind_change_to(&reference.identity)
-        {
-            return Err(invalid(
-                id,
-                "a recorded kind may only be refined from issue to pull request on a \
-                 shared-number forge; link the other object instead",
-            ));
-        }
-    }
-    Ok(())
+    super::external::protect_references(current, proposed)
 }
 
 fn validate_new_work(current: &Plan, proposed: &Plan) -> Result<(), EngineError> {

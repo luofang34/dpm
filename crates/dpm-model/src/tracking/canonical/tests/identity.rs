@@ -67,7 +67,7 @@ fn object_spellings(provider: &ExternalProvider, kinds: &[&str]) -> Vec<External
 }
 
 /// Every spelling is valid and every spelling shares one object key.
-fn one_key(spellings: &[ExternalIdentity]) -> ExternalIdentity {
+fn one_key(spellings: &[ExternalIdentity]) -> crate::ObjectKey {
     let key = spellings[0].object_key();
     for spelling in spellings {
         spelling

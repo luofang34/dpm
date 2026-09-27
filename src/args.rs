@@ -296,11 +296,14 @@ pub(crate) struct ExternalIdentityArgs {
     /// Tenant, owner/repository or project namespace where the provider scopes identifiers.
     #[arg(long)]
     pub(crate) namespace: Option<String>,
-    /// Object kind: issue or pull_request (aliases such as pr, mr, pulls); GitHub also discussion,
-    /// GitLab also epic; other kinds are refused on shared-number forges.
+    /// Object kind from the provider table (case, separators and one plural ignored): issue or
+    /// pull_request (pr, mr, pulls) everywhere they exist; GitHub also discussion; GitLab also
+    /// incident, task, test_case, ticket, objective, key_result, work_item and epic; any Jira or
+    /// Linear issue type. Unlisted kinds are refused on GitHub, GitLab, Forgejo and Gitea.
     #[arg(long, default_value = "issue")]
     pub(crate) kind: String,
-    /// Stable provider identifier, such as an issue number.
+    /// Provider identifier: a number on forges (#42, !42 and 042 are 42), a PROJECT-N key on
+    /// Jira and Linear (proj-06 is PROJ-6).
     #[arg(long = "id")]
     pub(crate) external_id: String,
 }

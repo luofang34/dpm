@@ -450,5 +450,7 @@ fn reviewed_changes_cannot_author_or_rewrite_observations() {
     propose_change(&plan, &authored).expect("reviewed reference without observation");
 }
 
+mod generated;
 mod kind;
+mod neighbours;
 mod rules;

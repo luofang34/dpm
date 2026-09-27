@@ -1,14 +1,18 @@
 use crate::{ActorId, ExternalReferenceId, ValidationError, WorkItemId, validation::invalid};
 use chrono::{DateTime, Utc};
+use provider::{IdForm, NamespaceRule};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 mod canonical;
 mod credentials;
+mod provider;
 mod validation;
+pub use canonical::ObjectKey;
 pub(crate) use validation::validate;
 
-/// Tracker or forge family; it decides which identity parts are required.
+/// Tracker or forge family; its row in the provider table decides namespaces, kinds, number
+/// spaces and identifier spelling.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ExternalProvider {
     /// GitHub, hosted or Enterprise Server.
@@ -42,81 +46,21 @@ impl ExternalProvider {
         }
     }
 
-    /// Repository forges number issues per repository and Linear per workspace, so the
-    /// namespace is part of identity there; Jira keys are unique per instance.
-    fn requires_namespace(&self) -> bool {
-        matches!(
-            self,
-            Self::GitHub | Self::GitLab | Self::Forgejo | Self::Gitea | Self::Linear
-        )
-    }
-
-    /// A Jira key already names its project (`PROJ-1`) and is unique per instance, so a separate
-    /// namespace would let one issue appear under several identities.
-    fn forbids_namespace(&self) -> bool {
-        matches!(self, Self::Jira)
-    }
-
-    /// Jira and Linear resolve issue keys (`PROJ-1`, `ENG-1`) case-insensitively and display them
-    /// upper-case.
-    fn folds_id_to_upper(&self) -> bool {
-        matches!(self, Self::Jira | Self::Linear)
-    }
-
-    /// Forges route owner/repository paths and Linear routes workspace slugs case-insensitively,
-    /// so case must not split identity.
-    fn folds_namespace_case(&self) -> bool {
-        matches!(
-            self,
-            Self::GitHub | Self::GitLab | Self::Forgejo | Self::Gitea | Self::Linear
-        )
-    }
-
-    /// Repository forges whose objects carry plain numbers, where leading zeros and a `.git`
-    /// repository suffix address the same object.
-    fn numbers_repository_objects(&self) -> bool {
-        matches!(
-            self,
-            Self::GitHub | Self::GitLab | Self::Forgejo | Self::Gitea
-        )
-    }
-
-    /// These forges number issues and pull requests in one sequence, so `#5` is one object
-    /// whichever kind a caller names; GitLab numbers merge requests separately.
-    fn shares_issue_and_review_numbers(&self) -> bool {
-        matches!(self, Self::GitHub | Self::Forgejo | Self::Gitea)
-    }
-
-    fn hosts_code_review(&self) -> bool {
-        !matches!(self, Self::Jira | Self::Linear)
-    }
-
-    /// Kinds numbered in one repository's shared issue sequence. GitHub also numbers discussions
-    /// there, so a discussion and an issue with one number cannot coexist.
-    fn numbers_in_issue_sequence(&self, kind: &ExternalObjectKind) -> bool {
-        match kind {
-            ExternalObjectKind::Issue | ExternalObjectKind::PullRequest => {
-                self.shares_issue_and_review_numbers()
-            }
-            ExternalObjectKind::Other(name) => *self == Self::GitHub && name == DISCUSSION,
-        }
-    }
-
-    /// Shared-number forges accept only the kinds of their one sequence, so no unknown kind can
-    /// give one number a second identity; other providers accept any kind they host.
-    fn accepts_kind(&self, kind: &ExternalObjectKind) -> bool {
-        if self.shares_issue_and_review_numbers() {
-            self.numbers_in_issue_sequence(kind)
-        } else {
-            *kind != ExternalObjectKind::PullRequest || self.hosts_code_review()
+    fn display_name(&self) -> &str {
+        match self {
+            Self::Other(name) => name,
+            Self::GitHub => "GitHub",
+            Self::GitLab => "GitLab",
+            Self::Forgejo => "Forgejo",
+            Self::Gitea => "Gitea",
+            Self::Jira => "Jira",
+            Self::Linear => "Linear",
         }
     }
 }
 
-/// The GitHub discussion kind name.
-const DISCUSSION: &str = "discussion";
-
-/// Category of external object; GitLab issues and merge requests have separate numbering.
+/// Category of external object. The provider table maps each kind to a number space, so a kind
+/// separates identity only where the provider numbers it separately.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ExternalObjectKind {
     /// An issue or ticket.
@@ -128,25 +72,27 @@ pub enum ExternalObjectKind {
 }
 
 impl ExternalObjectKind {
-    /// Kind name compared ignoring case, separators and one plural `s`: `pull_requests`, `PRs`
-    /// and `merge-request` are `PullRequest`, `issues` is `Issue`, `Discussions` is the
-    /// `discussion` kind. Any other name becomes a lowercase `Other` kind.
+    /// Provider-neutral kind, folded by the one kind normalizer: case, separators and one plural
+    /// ending are ignored, so `pull_requests`, `PRs` and `merge-request` are `PullRequest`,
+    /// `issues` is `Issue` and `Work Items` is `{"Other":"workitem"}`. Canonicalization then maps
+    /// the name onto the provider's own kind table.
     pub fn parse(name: &str) -> Self {
-        let name = name.trim().to_lowercase();
-        let folded: String = name.chars().filter(|c| c.is_alphanumeric()).collect();
-        match folded.strip_suffix('s').unwrap_or(&folded) {
-            "issue" => Self::Issue,
-            "pullrequest" | "pull" | "pr" | "mergerequest" | "mr" => Self::PullRequest,
-            DISCUSSION => Self::Other(DISCUSSION.into()),
-            _ => Self::Other(name),
+        provider::neutral_kind(name)
+    }
+
+    fn name(&self) -> &str {
+        match self {
+            Self::Issue => "issue",
+            Self::PullRequest => "pull_request",
+            Self::Other(name) => name,
         }
     }
 }
 
 /// Identity of an external object, independent of its display label and URL.
 ///
-/// Two references are the same object only when every part is equal, so equal numbers from
-/// different instances, namespaces or object kinds never collide.
+/// Two references name one object when their [`ObjectKey`]s are equal, so equal numbers from
+/// different instances, namespaces or number spaces never collide.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExternalIdentity {
@@ -157,9 +103,9 @@ pub struct ExternalIdentity {
     /// Tenant, owner/repository or project namespace where the provider scopes identifiers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub namespace: Option<String>,
-    /// Object category within the namespace.
+    /// Object category; it splits identity only between number spaces.
     pub kind: ExternalObjectKind,
-    /// Stable provider identifier, such as an issue number or node ID.
+    /// Provider identifier: a number on forges, a `PROJECT-N` key on Jira and Linear.
     pub external_id: String,
 }
 
@@ -204,33 +150,40 @@ impl ExternalIdentity {
         {
             return fail("object kind name must be a lowercase word");
         }
-        match self.namespace.as_deref() {
-            None if self.provider.requires_namespace() => {
+        let rules = self.provider.rules();
+        match (self.namespace.as_deref(), rules.namespace) {
+            (None, NamespaceRule::Required) => {
                 return fail("this provider scopes identifiers by namespace; supply it");
             }
-            Some(_) if self.provider.forbids_namespace() => {
+            (Some(_), NamespaceRule::Forbidden) => {
                 return fail("this provider's keys are unique per instance; omit the namespace");
             }
-            Some(namespace) if !valid_namespace(namespace) => {
+            (Some(namespace), _) if !valid_namespace(namespace) => {
                 return fail("namespace must be slash-separated names without `..` or credentials");
             }
             _ => {}
         }
-        if !self.provider.accepts_kind(&self.kind) {
-            return fail(if self.provider.shares_issue_and_review_numbers() {
-                "this forge numbers issues and pull requests (and GitHub discussions) in one \
-                 sequence; use kind Issue, PullRequest or, on GitHub, discussion"
-            } else {
-                "this provider has no pull requests"
-            });
+        if self.kind == ExternalObjectKind::PullRequest && !rules.reviews {
+            return fail("this provider has no pull requests");
         }
-        if self.external_id.is_empty()
-            || !self
-                .external_id
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '~' | '-'))
-        {
-            return fail("external id must be a nonempty provider identifier");
+        if rules.space(&self.kind).is_none() {
+            return Err(invalid(
+                "external identity",
+                id,
+                format!(
+                    "{} has no {} kind with a known number space; use {}",
+                    self.provider.display_name(),
+                    self.kind.name(),
+                    rules.accepted_kinds()
+                ),
+            ));
+        }
+        if !valid_external_id(rules.ids, &self.external_id) {
+            return fail(match rules.ids {
+                IdForm::Number => "this provider numbers objects; use a positive number such as 42",
+                IdForm::Key => "this provider keys objects as PROJECT-N, such as PROJ-6",
+                IdForm::Raw => "external id must be a nonempty provider identifier",
+            });
         }
         Ok(())
     }
@@ -238,25 +191,11 @@ impl ExternalIdentity {
 
 impl std::fmt::Display for ExternalIdentity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let provider = match &self.provider {
-            ExternalProvider::Other(name) => name.as_str(),
-            ExternalProvider::GitHub => "GitHub",
-            ExternalProvider::GitLab => "GitLab",
-            ExternalProvider::Forgejo => "Forgejo",
-            ExternalProvider::Gitea => "Gitea",
-            ExternalProvider::Jira => "Jira",
-            ExternalProvider::Linear => "Linear",
-        };
-        let kind = match &self.kind {
-            ExternalObjectKind::Issue => "issue",
-            ExternalObjectKind::PullRequest => "pull_request",
-            ExternalObjectKind::Other(name) => name.as_str(),
-        };
-        write!(f, "{provider}:{}", self.instance)?;
+        write!(f, "{}:{}", self.provider.display_name(), self.instance)?;
         if let Some(namespace) = &self.namespace {
             write!(f, "/{namespace}")?;
         }
-        write!(f, ":{kind}:{}", self.external_id)
+        write!(f, ":{}:{}", self.kind.name(), self.external_id)
     }
 }
 
@@ -339,6 +278,29 @@ impl ExternalReference {
             .iter()
             .find(|link| link.role == ExternalLinkRole::Tracks)
             .map(|link| link.work)
+    }
+}
+
+fn valid_external_id(form: IdForm, id: &str) -> bool {
+    let positive = |digits: &str| {
+        digits.starts_with(|c: char| ('1'..='9').contains(&c))
+            && digits.chars().all(|c| c.is_ascii_digit())
+    };
+    match form {
+        IdForm::Number => positive(id),
+        IdForm::Key => id.rsplit_once('-').is_some_and(|(project, number)| {
+            project.starts_with(|c: char| c.is_ascii_uppercase())
+                && project
+                    .chars()
+                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+                && positive(number)
+        }),
+        IdForm::Raw => {
+            !id.is_empty()
+                && id
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '~' | '-'))
+        }
     }
 }
 

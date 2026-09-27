@@ -37,7 +37,7 @@ fn validate_display(reference: &ExternalReference) -> Result<(), ValidationError
     credentials::check_text(&reference.label)
         .map_err(|reason| invalid("external reference label", id, reason))?;
     if let Some(url) = &reference.url {
-        credentials::check_url(url, &reference.identity.instance)
+        credentials::check_url(url, &reference.identity)
             .map_err(|reason| invalid("external reference url", id, reason))?;
     }
     if let Some(observation) = &reference.observation {

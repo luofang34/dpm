@@ -1,27 +1,28 @@
 //! Rejection of credentials in shared tracking data; plans are exported, diffed and committed.
 //!
 //! One detector decides for labels and URLs. A URL is first checked exactly as a label word, then
-//! against a structural allowlist, so the URL field can be stricter than a label but never looser.
+//! against structural rules, so the URL field can be stricter than a label but never looser.
 //!
 //! Each word is percent-decoded until stable, and `\` is read as `/`, before either rule runs:
 //!
 //! - **Userinfo.** After an optional `scheme:` and any number of slashes, the authority runs to the
-//!   next `/`, `?` or `#`; any `@` in it is userinfo. Without a scheme or leading slash, an `@`
-//!   followed by a host (dotted name, `localhost`, `[IPv6]`, or `name:port`) is userinfo. Userinfo
-//!   is rejected unless it is exactly `git`, the public SSH user of every forge
-//!   (`git@github.com:o/r.git`). A bare address with no scheme, path, query, fragment or port
-//!   (`user@example.com`, also after `mailto:`) is an email, not userinfo.
+//!   next `/`, `?` or `#`; any `@` in it is userinfo. Anywhere else in the word (a query value, a
+//!   nested URL, a word without a scheme), an `@` preceded by a name and followed by a host
+//!   (dotted name, `localhost`, `[IPv6]`, or `name:port`) is userinfo when a path, a port or a
+//!   `:` in the name makes it more than an address. Userinfo is rejected unless it is exactly
+//!   `git`, the public SSH user of every forge (`git@github.com:o/r.git`). A bare address
+//!   (`user@example.com`, also after `mailto:`, in a query value, or as a fediverse handle
+//!   `@alice@mastodon.social`) is not userinfo.
 //! - **Secret parameters.** The word is split at `?`, `&`, `;`, `/` and `#`. A piece `name=value`
-//!   with a nonempty value is a secret when the name, split into words at `_`, `-`, `.`, `:` and
-//!   lower-to-upper case changes, has a last word in [`SECRET_WORDS`] or ending with one of
-//!   [`SECRET_SUFFIXES`]. Whole words decide, so `max_tokens` and `secret_santa` are ordinary, and
-//!   an anchor such as `#token-refresh` has no value and is ordinary.
+//!   with a nonempty value is a secret when [`is_secret_name`] flags the name.
 
 mod url;
 pub(super) use url::check_url;
 
 /// Last words that name a secret only as a whole word; `monkey` or `bypass` stay ordinary.
-const SECRET_WORDS: &[&str] = &["key", "apikey", "sig", "pwd", "pass", "jwt", "auth", "sid"];
+const SECRET_WORDS: &[&str] = &[
+    "key", "apikey", "sig", "pwd", "pass", "jwt", "auth", "sid", "bearer",
+];
 /// Endings that name a secret, so joined spellings such as `accesstoken` are caught too.
 const SECRET_SUFFIXES: &[&str] = &[
     "token",
@@ -30,10 +31,27 @@ const SECRET_SUFFIXES: &[&str] = &[
     "passwd",
     "signature",
     "session",
+    "sessionid",
+    "sessid",
     "credential",
     "credentials",
     "authorization",
 ];
+/// Trailing words that qualify the secret before them (`tokenValue`, `session_id`).
+const QUALIFIERS: &[&str] = &[
+    "value", "val", "str", "string", "id", "data", "raw", "hex", "b64", "base64", "text",
+];
+/// Words before `code` that make it an OAuth or device authorization code.
+const CODE_GRANTS: &[&str] = &[
+    "auth",
+    "oauth",
+    "access",
+    "authorization",
+    "device",
+    "verification",
+];
+/// Characters that end the name before an `@` inside a word.
+const NAME_BREAKS: &[char] = &['/', '?', '&', '#', '=', ';', '+', ','];
 /// Decoding rounds; more nested encodings than this are rejected rather than inspected.
 const DECODE_ROUNDS: usize = 4;
 
@@ -68,29 +86,45 @@ fn carries_userinfo(word: &str) -> bool {
     if let Some(address) = word.strip_prefix("mailto:") {
         return !is_email(address);
     }
+    if is_email(word) || word.strip_prefix('@').is_some_and(is_email) {
+        return false;
+    }
     let (has_scheme, rest) = match scheme_split(word) {
         Some(rest) => (true, rest),
         None => (false, word),
     };
     let after_slashes = rest.trim_start_matches('/');
-    if has_scheme || after_slashes.len() != rest.len() {
-        let end = after_slashes
-            .find(['/', '?', '#'])
-            .unwrap_or(after_slashes.len());
-        let authority = after_slashes.get(..end).unwrap_or(after_slashes);
-        return authority
-            .rsplit_once('@')
-            .is_some_and(|(userinfo, _)| userinfo != "git");
+    if !has_scheme && after_slashes.len() == rest.len() {
+        return embedded_userinfo(word);
     }
-    if is_email(word) {
-        return false;
-    }
-    word.match_indices('@').any(|(at, _)| {
-        let (before, after) = word.split_at(at);
-        let userinfo = before.rsplit('/').next().unwrap_or(before);
+    let end = after_slashes
+        .find(['/', '?', '#'])
+        .unwrap_or(after_slashes.len());
+    let (authority, remainder) = after_slashes.split_at(end);
+    authority
+        .rsplit_once('@')
+        .is_some_and(|(userinfo, _)| userinfo != "git")
+        || embedded_userinfo(remainder)
+}
+
+/// An `@` after a name and before a host, unless the pair is a bare address: no path, query or
+/// fragment right after the host, no port, and no `:` in the name.
+fn embedded_userinfo(text: &str) -> bool {
+    text.match_indices('@').any(|(at, _)| {
+        let (before, after) = text.split_at(at);
+        let name = before.rsplit(NAME_BREAKS).next().unwrap_or(before);
         let after = after.get(1..).unwrap_or_default();
         let end = after.find(['/', '?', '#']).unwrap_or(after.len());
-        !userinfo.is_empty() && userinfo != "git" && is_host(after.get(..end).unwrap_or(after))
+        let host = after.get(..end).unwrap_or(after);
+        let host = host.split(NAME_BREAKS).next().unwrap_or(host);
+        let address = !name.contains(':')
+            && !host.contains(':')
+            && host.contains('.')
+            && !after
+                .get(host.len()..)
+                .unwrap_or_default()
+                .starts_with(['/', '?', '#']);
+        !name.is_empty() && name != "git" && is_host(host) && !address
     })
 }
 
@@ -132,6 +166,14 @@ fn is_host(token: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
 }
 
+/// Whether a parameter name names a secret.
+///
+/// The name is split into words at `_`, `-`, `.`, `:` and lower-to-upper case changes; trailing
+/// digits of each word are dropped (`token2`), and trailing [`QUALIFIERS`] are dropped while a
+/// word remains before them (`tokenValue`, `session_id`). The last remaining word is a secret when
+/// it is one of [`SECRET_WORDS`] or ends with one of [`SECRET_SUFFIXES`] (`PHPSESSID`), or when it
+/// is `code` alone or after one of [`CODE_GRANTS`] (`auth_code`). Whole words decide, so
+/// `max_tokens`, `secret_santa` and `language_code` are ordinary.
 fn is_secret_name(name: &str) -> bool {
     let mut words = Vec::new();
     let mut current = String::new();
@@ -146,14 +188,34 @@ fn is_secret_name(name: &str) -> bool {
         previous_lower = c.is_lowercase() || c.is_ascii_digit();
     }
     words.push(current);
-    words
+    let mut words: Vec<String> = words
         .iter()
-        .rev()
-        .find(|word| !word.is_empty())
-        .is_some_and(|last| {
-            SECRET_WORDS.contains(&last.as_str())
-                || SECRET_SUFFIXES.iter().any(|suffix| last.ends_with(suffix))
+        .map(|word| {
+            word.trim_end_matches(|c: char| c.is_ascii_digit())
+                .to_owned()
         })
+        .filter(|word| !word.is_empty())
+        .collect();
+    while words.len() > 1
+        && words
+            .last()
+            .is_some_and(|last| QUALIFIERS.contains(&last.as_str()))
+    {
+        words.pop();
+    }
+    let Some(last) = words.last() else {
+        return false;
+    };
+    if last == "code" {
+        return words.len() == 1
+            || words
+                .iter()
+                .rev()
+                .nth(1)
+                .is_some_and(|grant| CODE_GRANTS.contains(&grant.as_str()));
+    }
+    SECRET_WORDS.contains(&last.as_str())
+        || SECRET_SUFFIXES.iter().any(|suffix| last.ends_with(suffix))
 }
 
 /// Percent-decode until nothing changes, so double encoding cannot hide a name or an `@`.
