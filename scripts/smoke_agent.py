@@ -129,7 +129,15 @@ def smoke(database):
         before = run_cli(database, 'export')
         for command in (['claim', 'TEST-A'], ['verify', 'TEST-A'], ['ratify', 'TEST-A'], ['plan', 'apply', 'x.json', '--reason', 'r']):
             refused = subprocess.run([str(CLI), '--database', str(database), '--json', *command], cwd=ROOT, capture_output=True, text=True, timeout=15)
-            assert refused.returncode != 0 and '--actor' in refused.stderr, (command, refused.stderr)
+            assert refused.returncode != 0 and '--actor' in json.loads(refused.stdout)['error']['message'], (command, refused)
+        # Argument errors keep the machine envelope wherever --json appears, and clap text otherwise.
+        api_version = worker.call('project_status', {})['api_version']
+        for command in (['--bogus', 'status', '--json'], ['--base-revision', 'abc', '--json', 'status'], ['--json', 'workspace']):
+            refused = subprocess.run([str(CLI), '--database', str(database), *command], cwd=ROOT, capture_output=True, text=True, timeout=15)
+            body = json.loads(refused.stdout)['error']
+            assert refused.returncode != 0 and body['code'] == 'invalid_request' and body['api_version'] == api_version, (command, refused)
+        human = subprocess.run([str(CLI), '--database', str(database), 'claim', 'TEST-A'], cwd=ROOT, capture_output=True, text=True, timeout=15)
+        assert human.returncode != 0 and not human.stdout and '--actor' in human.stderr, human
         assert run_cli(database, 'export') == before
         for tool, arguments, command in missing_pairs:
             agent_error = worker.call(tool, arguments, error='not_found')

@@ -327,7 +327,9 @@ Capabilities and limit map to repeated `--capability` and `--limit`; `project_ke
 map to repeated `--project-key` and `--resource-key`. Work identifiers in tool arguments
 are human keys; returned records also include stable UUIDs. Domain errors use stable `code` plus
 human-readable `message` and the `api_version`; the CLI `--json` output is `{"error": {...}}` and MCP
-uses `isError:true` with the same object as structuredContent.
+uses `isError:true` with the same object as structuredContent. When `--json` appears anywhere before
+`--`, CLI argument errors (a missing `--actor`, an unknown flag, an invalid value) use this envelope
+with code `invalid_request` and exit status 2; without `--json` they remain clap's text on stderr.
 A command refused by its readiness gates (dependencies, decisions, applicability, provisional basis
 or lifecycle eligibility checked by the gate evaluator) also carries `details: {transition, unmet}`,
 the same structured conditions `explain_work` reports for that transition. Refusals decided before

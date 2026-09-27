@@ -7,19 +7,25 @@ mod interchange;
 mod output;
 mod recovery;
 mod tracking;
+mod usage;
 
 use clap::Parser;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    let cli = args::Cli::parse();
-    let json = cli.json;
     tracing_subscriber::fmt()
         .without_time()
         .with_target(false)
         .with_ansi(false)
         .with_writer(std::io::stderr)
         .init();
+    let cli = match args::Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            return usage::report_blocking(&error, usage::json_requested(std::env::args_os()));
+        }
+    };
+    let json = cli.json;
     match app::run_blocking(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
