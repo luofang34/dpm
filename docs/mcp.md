@@ -115,7 +115,12 @@ evidence; a separate verifier still decides. `explain.context.external_reference
 linked to the work or its containing packages, while `next`, `status` and schedules ignore them.
 URLs must be http(s) on the identity's instance. Userinfo (`TOKEN@host` or `user:password@host`),
 credential parameters such as `access_token`, and credentials in labels or identity fields are
-rejected. No connector, token store or assignee write is involved.
+rejected. Parameter names are percent-decoded until stable and compared ignoring case, `_`, `-` and
+`.` (`%74oken`, `API_Key`, `x-api.key`). In labels, a word is also read as a URL without a scheme when
+a dotted host or `host:port` is followed by a path, query or fragment (`tok@github.com/o/r`,
+`github.com/o/r?token=x`), and any `name=value` pair with a secret-looking name is rejected. A bare
+address such as `user@example.com` is ordinary text, as are short words such as `#auth` or `key`
+outside a URL query. No connector, token store or assignee write is involved.
 
 References are part of the exported plan, so reviewed plan changes can add, relabel, move or
 remove them under the same validation. `plan diff` reports them under `external_references`.

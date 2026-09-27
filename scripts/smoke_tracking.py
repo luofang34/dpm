@@ -182,6 +182,16 @@ def forge_family(directory):
         stored = run_cli(database, 'export')['external_references'].values()
         assert sorted((r['identity']['provider'], r['identity']['instance'], len(r['links'])) for r in stored) == [
             ('Forgejo', 'codeberg.org', 2), ('Gitea', 'gitea.com', 1)], stored
+        leaked = {**forgejo, 'external_id': '8'}
+        for label, url in [('see codeberg.org/ops/dpm?%74oken=abc', None), ('tok@codeberg.org/ops/dpm', None),
+                           ('Issue 8', 'https://codeberg.org/ops/dpm/issues/8?API%5FKEY=abc')]:
+            arguments = {'key': 'TEST-D', 'identity': leaked, 'label': label, 'base_revision': 3}
+            cli = ['link-external', 'TEST-D', *flags(leaked), '--label', label]
+            if url:
+                arguments['url'] = url
+                cli += ['--url', url]
+            message = refused(database, worker, 'link_external', arguments, cli, 'invalid_command')
+            assert 'credentials' in message or 'secret' in message, message
     finally:
         worker.close()
 
@@ -208,4 +218,4 @@ if __name__ == '__main__':
             assert reopened.call('export_plan', {})['data'] == final
         finally:
             reopened.close()
-    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, one Forgejo/Gitea object family per instance, reviewed rename and export/import round trip')
+    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, one Forgejo/Gitea object family per instance, scheme-less and percent-encoded credential rejection, reviewed rename and export/import round trip')
