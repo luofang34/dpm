@@ -25,12 +25,19 @@ pub struct StatusSummary {
     pub total_work: usize,
     /// Number of tasks that can be claimed now.
     pub ready: usize,
-    /// Number of explicitly blocked tasks.
+    /// Number of explicitly blocked tasks within the counted scope.
     pub blocked: usize,
-    /// Number of claimed or in-progress tasks.
+    /// Number of claimed or in-progress tasks within the counted scope.
     pub in_flight: usize,
-    /// Number of tasks awaiting independent verification.
+    /// Number of tasks awaiting independent verification within the counted scope.
     pub awaiting_verification: usize,
+    /// Claimed, in-progress, blocked or submitted tasks outside the counted scope: a reviewed
+    /// choice change excluded them, so they take no transition until the plan changes again.
+    ///
+    /// The counted scope is the one progress and `complete` use, so no lifecycle count includes
+    /// work that no longer counts toward completion.
+    #[serde(default)]
+    pub excluded_in_flight: usize,
     /// Number of tasks whose enforced provisional basis rests on a rejected predecessor attempt.
     #[serde(default)]
     pub basis_invalidated: usize,
@@ -98,21 +105,25 @@ pub fn status(
         progress: crate::progress::progress_with(plan, &timeline).overall,
         revision: plan.revision,
         total_work: plan.work_items.len(),
-        blocked: plan
-            .work_items
-            .values()
-            .filter(|w| w.status == WorkStatus::Blocked)
-            .count(),
-        in_flight: plan
-            .work_items
-            .values()
-            .filter(|w| matches!(w.status, WorkStatus::Claimed | WorkStatus::InProgress))
-            .count(),
-        awaiting_verification: plan
-            .work_items
-            .values()
-            .filter(|w| w.status == WorkStatus::Submitted)
-            .count(),
+        blocked: count(plan, &timeline, true, &[WorkStatus::Blocked]),
+        in_flight: count(
+            plan,
+            &timeline,
+            true,
+            &[WorkStatus::Claimed, WorkStatus::InProgress],
+        ),
+        awaiting_verification: count(plan, &timeline, true, &[WorkStatus::Submitted]),
+        excluded_in_flight: count(
+            plan,
+            &timeline,
+            false,
+            &[
+                WorkStatus::Claimed,
+                WorkStatus::InProgress,
+                WorkStatus::Blocked,
+                WorkStatus::Submitted,
+            ],
+        ),
         basis_invalidated: plan
             .work_items
             .values()
@@ -131,6 +142,16 @@ pub fn status(
         not_applicable: choices::not_applicable(plan, &timeline),
         open_choices,
     })
+}
+
+/// Tasks in one of `statuses`, inside (`counted`) or outside the scope progress counts: work whose
+/// own conditions are selected, read from the same timeline.
+fn count(plan: &Plan, timeline: &Timeline, counted: bool, statuses: &[WorkStatus]) -> usize {
+    plan.work_items
+        .values()
+        .filter(|w| statuses.contains(&w.status))
+        .filter(|w| timeline.applicability(w.id).condition_selected() == counted)
+        .count()
 }
 
 /// Transitive successors that completing work could still release; excluded or stranded work

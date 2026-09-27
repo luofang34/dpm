@@ -287,7 +287,9 @@ of a single percentile: with no probability model, blending mutually exclusive b
 false claim. The headline forecast then covers committed work only. `decide` refuses a choice that
 would exclude claimed or started work; a reviewed replacement may do so, keeps that work's
 lifecycle and evidence, reports it in the preview, and the work then takes no transition until the
-plan changes. Automatic cancellation is not part of this model.
+plan changes. Automatic cancellation is not part of this model. `status` lifecycle counts
+(`in_flight`, `blocked`, `awaiting_verification`) use the scope progress counts, so such kept work
+appears only in `excluded_in_flight`.
 
 ### Uncertain durations
 

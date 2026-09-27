@@ -290,8 +290,9 @@ combination (up to 16): `choices`, `expected_finish_hours`, optional percentiles
 would be `stranded`. The headline `expected_finish_hours` then covers committed work only and the
 headline percentiles are null: branches without a probability model are never blended. Float and
 criticality in `next` and `explain` are likewise computed over committed work. Lifecycle counts
-(`in_flight`, `blocked`, `awaiting_verification`) still tally excluded work whose lifecycle a
-reviewed choice change kept; `complete` and progress do not count it. A replacement decision carries
+(`in_flight`, `blocked`, `awaiting_verification`) cover the same scope as `complete` and progress:
+work whose own conditions are selected. Claimed, started, blocked or submitted work whose lifecycle
+a reviewed choice change kept outside that scope is counted only in `excluded_in_flight`. A replacement decision carries
 no `blocks`, as for any replacement.
 
 `decide` refuses a choice that would exclude claimed or started work. Changing a made choice is a

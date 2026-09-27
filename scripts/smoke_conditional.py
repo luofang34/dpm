@@ -176,6 +176,8 @@ def change_after_start(database, worker, reviewer, revision):
     kept = cli(database, 'show', 'SUP-B-QUAL')
     assert kept['status'] == 'InProgress' and kept['owner'] == {'kind': 'Agent', 'name': 'parity'}
     assert kept['progress']['scope'] == 'not_selected'
+    counts = cli(database, 'status')
+    assert call(worker, 'project_status', {})['data'] == counts and counts['excluded_in_flight'] == 1, counts
     refused_alike(database, worker, 'submit_work', {'key': 'SUP-B-QUAL', 'base_revision': revision + 1},
                   ('submit', 'SUP-B-QUAL', '--actor', 'agent:parity'))
     parity(database, worker, 'choice switched under started work')
