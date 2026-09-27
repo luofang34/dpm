@@ -34,6 +34,32 @@ pub(crate) fn raw_blocking(text: &str) -> Result<(), CliError> {
         .map_err(io_error("write output", "stdout"))
 }
 
+/// Keys shown before the remainder is summarized as a count.
+const UNESTIMATED_SHOWN: usize = 5;
+
+/// One line naming the tasks the forecast counts as 0 h, or `None` when every task is estimated.
+pub(crate) fn unestimated_line(keys: &[dpm_model::Key]) -> Option<String> {
+    if keys.is_empty() {
+        return None;
+    }
+    let shown: Vec<_> = keys
+        .iter()
+        .take(UNESTIMATED_SHOWN)
+        .map(|k| k.0.as_str())
+        .collect();
+    let more = keys.len().saturating_sub(UNESTIMATED_SHOWN);
+    Some(format!(
+        "Unestimated: {} task(s) count as 0 h, so the forecast is optimistic: {}{}",
+        keys.len(),
+        shown.join(", "),
+        if more > 0 {
+            format!(" (+{more} more)")
+        } else {
+            String::new()
+        }
+    ))
+}
+
 pub(crate) fn next_text_blocking(result: &NextWorkResult) -> Result<(), CliError> {
     if !result.scope.is_unscoped() {
         let keys = |members: Vec<String>| {
@@ -99,3 +125,7 @@ pub(crate) fn next_text_blocking(result: &NextWorkResult) -> Result<(), CliError
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests;

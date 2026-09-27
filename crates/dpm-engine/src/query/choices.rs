@@ -49,6 +49,9 @@ pub struct ScenarioForecast {
     pub p95_finish_hours: Option<f64>,
     /// Work that could not proceed in this scenario without a plan change.
     pub stranded: Vec<Key>,
+    /// Tasks this scenario's forecast counts as 0 h because they have no estimate, in key order.
+    #[serde(default)]
+    pub unestimated: Vec<Key>,
 }
 
 pub(crate) fn not_applicable(plan: &Plan, timeline: &Timeline) -> Vec<InapplicableWork> {
@@ -172,5 +175,6 @@ fn forecast(
         p80_finish_hours: simulation.as_ref().map(|s| s.p80_finish_hours),
         p95_finish_hours: simulation.as_ref().map(|s| s.p95_finish_hours),
         stranded,
+        unestimated: super::unestimated(&hypothetical, &Timeline::at(&hypothetical, now)),
     })
 }

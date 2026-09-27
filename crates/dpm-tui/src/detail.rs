@@ -82,25 +82,24 @@ fn append_schedule(lines: &mut Vec<String>, detail: &WorkExplanation) {
     if detail.work.kind == dpm_model::WorkKind::WorkPackage {
         return;
     }
-    if let Some(schedule) = &detail.schedule {
-        section(
-            lines,
-            "Remaining schedule (elapsed hours)",
-            [
-                format!(
-                    "Earliest start {:.1} / finish {:.1}; latest start {:.1} / finish {:.1}",
-                    schedule.earliest_start_hours,
-                    schedule.earliest_finish_hours,
-                    schedule.latest_start_hours,
-                    schedule.latest_finish_hours
-                ),
-                format!(
-                    "Free float {:.1} / total float {:.1}; critical={}",
-                    schedule.free_float_hours, schedule.total_float_hours, schedule.critical
-                ),
-            ],
-        );
+    let mut values = Vec::new();
+    if detail.unestimated {
+        values.push("Unestimated: this task counts as 0 h, so its schedule is optimistic".into());
     }
+    if let Some(schedule) = &detail.schedule {
+        values.push(format!(
+            "Earliest start {:.1} / finish {:.1}; latest start {:.1} / finish {:.1}",
+            schedule.earliest_start_hours,
+            schedule.earliest_finish_hours,
+            schedule.latest_start_hours,
+            schedule.latest_finish_hours
+        ));
+        values.push(format!(
+            "Free float {:.1} / total float {:.1}; critical={}",
+            schedule.free_float_hours, schedule.total_float_hours, schedule.critical
+        ));
+    }
+    section(lines, "Remaining schedule (elapsed hours)", values);
 }
 
 fn append_context(lines: &mut Vec<String>, detail: &WorkExplanation) {

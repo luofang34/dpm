@@ -124,3 +124,31 @@ fn now_shows_every_percentile_of_each_open_choice_scenario() {
         "no blended percentile: {execution}"
     );
 }
+
+#[test]
+fn now_names_unestimated_work_in_text_for_the_headline_and_each_scenario() {
+    let mut plan = conditional();
+    for key in ["SUP-DESIGN", "SUP-A-QUOTE"] {
+        let id = plan.find_work_by_key(key).expect("work").id;
+        plan.work_items.get_mut(&id).expect("work").estimate = None;
+    }
+    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
+    let now = rows(&mut view, Page::Now);
+    let headline = row(&now, "Unestimated");
+    assert!(
+        headline.contains("Unestimated 1: counted as 0 h, forecast optimistic: SUP-DESIGN"),
+        "{now:#?}"
+    );
+    assert!(row(&now, "DEC-SUPPLIER=A:").contains("unestimated (0 h) SUP-A-QUOTE"));
+    assert!(!row(&now, "DEC-SUPPLIER=B:").contains("SUP-A-QUOTE"));
+}
+
+#[test]
+fn key_lists_name_the_count_they_leave_out() {
+    let keys: Vec<_> = ["A", "B", "C", "D", "E", "F"]
+        .into_iter()
+        .map(dpm_model::Key::new)
+        .collect();
+    assert_eq!(super::key_list(&keys[..2]), "A, B");
+    assert_eq!(super::key_list(&keys), "A, B, C, D, E (+1 more)");
+}

@@ -34,6 +34,11 @@ pub struct WorkExplanation {
     pub downstream_count: usize,
     /// Derived timing of this activity when available.
     pub schedule: Option<dpm_schedule::ActivitySchedule>,
+    /// Whether the forecast counts this task as 0 h because it has no estimate, so `schedule`,
+    /// `criticality` and every forecast that includes it are optimistic; see
+    /// [`is_unestimated`](crate::is_unestimated).
+    #[serde(default)]
+    pub unestimated: bool,
     /// Fraction of sampled schedules in which each activity is critical.
     pub criticality: Option<f64>,
     /// Readiness, blocker, gate, lifecycle, lag and schedule explanations.
@@ -87,7 +92,8 @@ pub fn explain_work(
         .unwrap_or_else(|| gates::evaluate(plan, authoritative, Transition::Claim, &timeline));
     let ready = gates.ready;
     let criticality = simulation.criticality.get(&work).copied();
-    let why_now = why_now(
+    let unestimated = super::is_unestimated(&timeline, authoritative);
+    let mut why_now = why_now(
         plan,
         authoritative,
         &timeline,
@@ -95,6 +101,9 @@ pub fn explain_work(
         downstream_count,
         criticality,
     );
+    if unestimated {
+        why_now.push(UNESTIMATED_REASON.into());
+    }
 
     Ok(WorkExplanation {
         gates,
@@ -107,6 +116,7 @@ pub fn explain_work(
         predecessors,
         downstream_count,
         schedule: schedule.activities.get(&work).cloned(),
+        unestimated,
         criticality,
         why_now,
         basis: BasisReport {
@@ -115,6 +125,9 @@ pub fn explain_work(
         },
     })
 }
+
+/// Explanation shared by `explain` and `next` for a task the forecast counts as 0 h.
+pub(crate) const UNESTIMATED_REASON: &str = "no duration estimate: the forecast counts this task as 0 h, so its schedule, float and criticality are optimistic";
 
 fn applicable() -> Applicability {
     Applicability::Applicable

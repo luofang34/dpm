@@ -92,6 +92,13 @@ fn headline(summary: &StatusSummary) -> String {
     if let Some(p95) = summary.p95_finish_hours {
         now.push_str(&format!(" · P95 {p95:.1}h"));
     }
+    if !summary.unestimated.is_empty() {
+        now.push_str(&format!(
+            "\nUnestimated {}: counted as 0 h, forecast optimistic: {}",
+            summary.unestimated.len(),
+            crate::open_choices::key_list(&summary.unestimated)
+        ));
+    }
     now
 }
 

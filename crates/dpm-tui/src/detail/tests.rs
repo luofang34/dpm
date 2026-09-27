@@ -124,3 +124,22 @@ fn detail_shows_the_rejected_basis_and_affected_successor_from_the_shared_report
         "{predecessor}"
     );
 }
+
+#[test]
+fn detail_says_in_words_when_its_task_counts_as_zero_hours() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let a = plan.find_work_by_key("TEST-A").expect("a").id;
+    let b = plan.find_work_by_key("TEST-B").expect("b").id;
+    plan.work_items.get_mut(&a).expect("a").estimate = None;
+    let text = |work| {
+        crate::detail::text(
+            &plan,
+            &explain_work(&plan, work, chrono::Utc::now()).expect("explain"),
+        )
+    };
+    assert!(text(a).contains("Unestimated: this task counts as 0 h"));
+    assert!(!text(b).contains("Unestimated"));
+}

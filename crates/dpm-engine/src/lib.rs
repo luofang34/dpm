@@ -26,7 +26,7 @@ pub use execution::apply_command;
 pub use query::{
     BasisReport, InapplicableWork, MAX_SCENARIOS, NextWorkCandidate, NextWorkQuery, OpenChoices,
     ScenarioForecast, StatusSummary, WorkExplanation, excluded_in_flight, explain_work,
-    in_status_scope, next_work, status,
+    in_status_scope, is_unestimated, next_work, status, unestimated,
 };
 pub use readiness::{completion, is_ready, show_work};
 

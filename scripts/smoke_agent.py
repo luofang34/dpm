@@ -524,6 +524,8 @@ if __name__ == '__main__':
         provisional_smoke(Path(directory))
         from smoke_ownership import ownership_smoke
         ownership_smoke(Path(directory))
+        from smoke_estimates import estimates_smoke
+        estimates_smoke(Path(directory))
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')
     print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')
     print('PASS: CLI/MCP dependency identity, soft-edge waiver/restore, refusals and non-gating links')

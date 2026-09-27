@@ -1,5 +1,5 @@
 use dpm_engine::{ProgressScope, StatusSummary};
-use dpm_model::Applicability;
+use dpm_model::{Applicability, Key};
 
 /// Short name of a derived applicability state, shared by every TUI surface that shows it.
 pub(crate) fn applicability_label(applicability: &Applicability) -> &'static str {
@@ -35,6 +35,18 @@ pub(crate) fn applicability_text(applicability: &Applicability) -> String {
     )
 }
 
+/// Keys named before the rest of a list is summarized as a count, so one line stays readable.
+const KEYS_SHOWN: usize = 5;
+
+/// Comma-separated keys, truncated with the count of those left out.
+pub(crate) fn key_list(keys: &[Key]) -> String {
+    let shown: Vec<_> = keys.iter().take(KEYS_SHOWN).map(|k| k.0.as_str()).collect();
+    match keys.len().saturating_sub(KEYS_SHOWN) {
+        0 => shown.join(", "),
+        more => format!("{} (+{more} more)", shown.join(", ")),
+    }
+}
+
 /// Excluded work and one forecast per open-choice scenario, never a blended percentile.
 pub(crate) fn summary_text(summary: &StatusSummary) -> String {
     let mut text = String::new();
@@ -68,6 +80,12 @@ pub(crate) fn summary_text(summary: &StatusSummary) -> String {
             if !scenario.stranded.is_empty() {
                 let stranded: Vec<_> = scenario.stranded.iter().map(|k| k.0.as_str()).collect();
                 text.push_str(&format!(" · stranded {}", stranded.join(", ")));
+            }
+            if !scenario.unestimated.is_empty() {
+                text.push_str(&format!(
+                    " · unestimated (0 h) {}",
+                    key_list(&scenario.unestimated)
+                ));
             }
             text.push('\n');
         }

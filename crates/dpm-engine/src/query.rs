@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 mod choices;
 pub use choices::{InapplicableWork, MAX_SCENARIOS, OpenChoices, ScenarioForecast};
+mod estimates;
+pub use estimates::{is_unestimated, unestimated};
 mod explain;
 pub use explain::{BasisReport, WorkExplanation, explain_work};
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +56,10 @@ pub struct StatusSummary {
     pub p80_finish_hours: Option<f64>,
     /// 95th percentile sampled completion time in elapsed hours; withheld while choices are open.
     pub p95_finish_hours: Option<f64>,
+    /// Tasks the headline forecast counts as 0 h because they have no estimate, in key order
+    /// ([`is_unestimated`](crate::is_unestimated)); the forecast is optimistic by their durations.
+    #[serde(default)]
+    pub unestimated: Vec<dpm_model::Key>,
     /// Work outside the active graph, with the reason; it is in no forecast and never ready.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub not_applicable: Vec<InapplicableWork>,
@@ -129,6 +135,7 @@ pub fn status(
         p50_finish_hours: simulation.as_ref().map(|s| s.p50_finish_hours),
         p80_finish_hours: simulation.as_ref().map(|s| s.p80_finish_hours),
         p95_finish_hours: simulation.as_ref().map(|s| s.p95_finish_hours),
+        unestimated: unestimated(plan, &timeline),
         not_applicable: choices::not_applicable(plan, &timeline),
         open_choices,
     })
@@ -276,14 +283,18 @@ pub fn next_work(
         .filter_map(|(work, claim)| {
             let finish = gates::evaluate(plan, work, Transition::Submit, &timeline);
             let activity = schedule.activities.get(&work.id)?;
-            Some(candidate(
+            let mut candidate = candidate(
                 work,
                 query,
                 (claim, &finish),
                 activity,
                 &downstream,
                 simulation.as_ref(),
-            ))
+            );
+            if is_unestimated(&timeline, work) {
+                candidate.reasons.push(explain::UNESTIMATED_REASON.into());
+            }
+            Some(candidate)
         })
         .collect::<Vec<_>>();
 

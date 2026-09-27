@@ -564,6 +564,20 @@ started on the pending submission while the forecast still waits for verificatio
 predecessor that still has outstanding constraints of its own is projected after them, which also
 only delays the forecast.
 
+A task without an estimate enters the remaining CPM and Monte Carlo at 0 h; the forecast does not
+guess a duration, so it is optimistic by that task's real duration. `project_status.unestimated`
+names that work so the forecast can be judged: the keys, in key order, of every work item that is a
+task (milestones are zero-duration points and packages have no duration of their own), has no
+`estimate`, is not Verified or Done (a Submitted task keeps its full duration until verification)
+and is `applicable` (work outside the active graph is in no headline forecast). The list is always
+present and empty when every such task is estimated. Each `open_choices.scenarios` entry carries
+its own `unestimated`, evaluated with that scenario's choices, so an unestimated task on an undecided
+branch is named by the scenarios that select it. `explain_work.unestimated` is true exactly when the
+explained item is in that list, and `why_now` then states that its schedule, float and criticality
+assume 0 h; a `next_work` candidate in the list carries the same statement in `reasons`. Text
+`status` prints a leading `Unestimated:` line with the count and the first five keys, and the TUI Now
+page and Detail state it in words. These fields are additive; `api_version` is unchanged.
+
 `explain_work.transitions` reports `claim`, `start`, `submit` and `verify` with the same shape as
 `gates` (the claim report). A milestone's `progress.completed_at` is the latest release among its
 incoming edges and gating decisions, so a decision resolved after every prerequisite sets it;
