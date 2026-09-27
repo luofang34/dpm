@@ -10,7 +10,7 @@ Every CLI mutation likewise requires an explicit `--actor KIND:NAME`; there is n
 omitting it can never make one caller its own reviewer.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
-The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:6`
+The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:7`
 and the observed `revision`; every MCP mutation tool requires that `base_revision`, and a call without it
 is refused with `invalid_request`. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,

@@ -14,7 +14,7 @@ use std::{
 };
 
 /// Application wire contract version, independent of terminal display text.
-pub const API_VERSION: u32 = 6;
+pub const API_VERSION: u32 = 7;
 
 /// Mutation precondition and engine command shared by CLI and agent tools.
 #[derive(Debug, Clone, Serialize, Deserialize)]
