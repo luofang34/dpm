@@ -30,7 +30,7 @@ def without_guids(xml):
 def check_imports(database, worker):
     """Both adapters return the same candidate and report, and importing changes nothing."""
     before, count = run_cli(database, 'export'), operations(database)
-    for fixture in ['mpxj-release-plan.xml', 'mpxj-unsupported-features.xml']:
+    for fixture in ['mpxj-release-plan.xml', 'mpxj-unsupported-features.xml', 'omniplan-native.xml']:
         remote = worker.call('import_mspdi', {'xml': (FIXTURES / fixture).read_text(), 'project_key': 'TEST', 'key_prefix': 'MSP'})
         local = run_cli(database, *import_args(FIXTURES / fixture))
         assert remote['data'] == local and remote['revision'] == before['revision'], fixture
