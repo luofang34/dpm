@@ -47,8 +47,9 @@ packages cannot be dependency endpoints. v0.1 uses elapsed hours; working calend
 input adapter and must not change dependency semantics. Remaining forecasts measure from the
 adapter-supplied clock reading, give completed tasks zero duration and remove constraints into
 completed tasks or reached milestones, using the same completion and decision-gate projection as
-execution queries. A constraint from completed work keeps only the lag the execution gate still
-reports as elapsing, and keeps its whole lag when the event time was never recorded, so the
+execution queries. A constraint from completed work, or a start-based (SS, SF) constraint from
+work that has started, keeps only the lag the execution gate still reports as elapsing from that
+event, and keeps its whole lag when the event time was never recorded, so the
 forecast waits exactly as long as execution will. They also drop waived soft constraints;
 the baseline projection keeps every constraint.
 

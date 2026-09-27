@@ -341,3 +341,62 @@ fn reached_milestones_do_not_reintroduce_historical_lag_in_remaining_forecasts()
     assert!(risk.p95_finish_hours <= estimate.pessimistic_hours);
     assert_eq!(plan, original);
 }
+
+fn start(work: &mut WorkItem, hours: Option<i64>) {
+    work.status = WorkStatus::InProgress;
+    work.owner = Some(dpm_model::ActorId::agent("owner"));
+    work.events.started_at = hours.map(at);
+}
+
+#[test]
+fn a_started_predecessor_releases_start_based_lag_from_its_start_event() {
+    for kind in [DependencyKind::StartStart, DependencyKind::StartFinish] {
+        let (mut plan, a, b) = pair(40.0, 3.0);
+        plan.dependencies.push(Dependency::new(a, b, kind, 10.0));
+        start(plan.work_items.get_mut(&a).expect("task"), Some(0));
+        let b_start = |plan: &Plan, now| {
+            deterministic_remaining(plan, now)
+                .expect("remaining")
+                .activities[&b]
+                .earliest_start_hours
+        };
+        // SF bounds B's finish, so B may start its 3h duration before the bound.
+        let finish_offset = if kind == DependencyKind::StartFinish {
+            3.0
+        } else {
+            0.0
+        };
+        assert_eq!(b_start(&plan, at(20)), 0.0, "{kind:?}: lag elapsed at +10h");
+        assert_eq!(
+            b_start(&plan, at(4)),
+            6.0 - finish_offset,
+            "{kind:?}: 6h of lag remain"
+        );
+        start(plan.work_items.get_mut(&a).expect("task"), None);
+        assert_eq!(
+            b_start(&plan, at(1_000)),
+            10.0 - finish_offset,
+            "{kind:?}: lag from an unrecorded start is never assumed to have elapsed"
+        );
+    }
+}
+
+#[test]
+fn finish_based_lag_from_submitted_but_unverified_work_is_kept_whole() {
+    for (kind, expected) in [
+        (DependencyKind::FinishStart, 4.0 + 2.0),
+        (DependencyKind::FinishFinish, 4.0 + 2.0 - 3.0),
+    ] {
+        let (mut plan, a, b) = pair(4.0, 3.0);
+        plan.dependencies.push(Dependency::new(a, b, kind, 2.0));
+        let work = plan.work_items.get_mut(&a).expect("task");
+        start(work, Some(0));
+        work.status = WorkStatus::Submitted;
+        work.events.submitted_at = Some(at(1));
+        let schedule = deterministic_remaining(&plan, at(50)).expect("remaining");
+        assert_eq!(
+            schedule.activities[&b].earliest_start_hours, expected,
+            "{kind:?}: only verification finishes the predecessor"
+        );
+    }
+}

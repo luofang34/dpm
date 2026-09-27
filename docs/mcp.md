@@ -359,6 +359,10 @@ finish. Positive lag must elapse in calendar time after the event (`release.stat
 event, which `why_now` states. Tasks verified or started before event times were recorded, and
 decisions resolved before then, count as having occurred at an unrecorded time: zero or negative lag
 releases, positive lag reports `release.state: unrecorded_event_time` with an actionable reason.
+The remaining schedule in `project_status`, `explain_work.schedule`, `next_work` and the Gantt
+waits exactly as long: SS/SF lag from a started predecessor, like any lag from verified work,
+counts from the recorded event and is dropped once released, and a lag from an unrecorded event
+time is kept whole. FS/FF edges keep their full lag until the predecessor is verified.
 
 `explain_work.transitions` reports `claim`, `start`, `submit` and `verify` with the same shape as
 `gates` (the claim report). A milestone's `progress.completed_at` is the latest release among its

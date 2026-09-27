@@ -122,7 +122,9 @@ pub(crate) struct Remaining {
 /// work keeps only the part of its lag the shared gate evaluator still reports as elapsing, so the
 /// forecast waits exactly as long as execution will; a lag whose event time was never recorded is
 /// kept whole rather than assumed to have elapsed. The completed predecessor projects at the origin
-/// with zero duration, so the kept lag is measured from `now`. Work the shared evaluator reports
+/// with zero duration, so the kept lag is measured from `now`. A start-based edge from work that has
+/// started is treated the same way from its start event; the started predecessor projects at the
+/// origin unless its own remaining constraints push it later, which only delays the forecast. Work the shared evaluator reports
 /// as not applicable keeps no duration and no edge, so it cannot move applicable work.
 pub(crate) fn remaining_plan(plan: &Plan, now: chrono::DateTime<chrono::Utc>) -> Remaining {
     let mut remaining = plan.clone();
@@ -144,7 +146,7 @@ pub(crate) fn remaining_plan(plan: &Plan, now: chrono::DateTime<chrono::Utc>) ->
         .filter(|d| !excluded.contains(&d.predecessor) && !excluded.contains(&d.successor))
         .filter(|d| !completed.contains(&d.successor))
         .filter_map(|d| {
-            if !completed.contains(&d.predecessor) {
+            if !completed.contains(&d.predecessor) && !started_from(plan, &timeline, d) {
                 return Some(d.clone());
             }
             let lag_hours = match timeline.edge(plan, d) {
@@ -168,6 +170,18 @@ pub(crate) fn remaining_plan(plan: &Plan, now: chrono::DateTime<chrono::Utc>) ->
         plan: remaining,
         excluded,
     }
+}
+
+/// Whether a start-based edge (SS, SF) waits on a predecessor start that has already occurred.
+///
+/// Its lag then elapses from that start exactly as the gate evaluator measures it, rather than
+/// from the predecessor's projected start at the origin. Finish-based edges still wait for
+/// verification, so a submitted or provisionally relied-on predecessor keeps its whole edge.
+fn started_from(plan: &Plan, timeline: &dpm_model::Timeline, edge: &Dependency) -> bool {
+    edge.kind.predecessor_endpoint() == dpm_model::Endpoint::Start
+        && timeline
+            .event(plan, edge.predecessor, dpm_model::Endpoint::Start)
+            .is_some()
 }
 
 /// Project a validated graph with an explicit finite, non-negative duration for every activity.

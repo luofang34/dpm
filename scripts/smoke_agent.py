@@ -403,6 +403,18 @@ def timing_plan(kind, lag, legacy=False):
     return plan
 
 
+def same_at_nearby_clocks(left, right, key=''):
+    """Equal views taken at two clock readings: forecast hours measured from each reading while a
+    lag elapses may differ by the time between the calls, and nothing else may differ."""
+    if isinstance(left, dict) and isinstance(right, dict):
+        return left.keys() == right.keys() and all(same_at_nearby_clocks(left[k], right[k], k) for k in left)
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(same_at_nearby_clocks(a, b, key) for a, b in zip(left, right))
+    if key.endswith('_hours') and isinstance(left, float) and isinstance(right, float):
+        return abs(left - right) < 0.01
+    return left == right
+
+
 def timing_smoke(directory):
     """Elapsed-lag gates, start events and unknown legacy times read identically through CLI and MCP."""
     fixture = directory / 'lag.json'
@@ -418,7 +430,9 @@ def timing_smoke(directory):
         assert (gate['relation'], gate['requires'], gate['release']) == ('StartStart', 'start', {'state': 'awaiting_event'})
         started = run_cli(database, 'start', 'TEST-A', '--actor', 'agent:timing')
         elapsing = worker.call('explain_work', {'key': 'TEST-B'})['data']
-        assert elapsing == run_cli(database, 'explain', 'TEST-B') and not elapsing['ready']
+        assert same_at_nearby_clocks(elapsing, run_cli(database, 'explain', 'TEST-B')) and not elapsing['ready']
+        # The forecast opens B with the gate: 24h after A's recorded start, not 24h after now.
+        assert 23.9 < elapsing['schedule']['earliest_start_hours'] < 24.0, elapsing['schedule']
         [gate] = elapsing['gates']['unmet']
         assert gate['release']['state'] == 'elapsing' and gate['release']['event_at'] == started['timestamp']
         assert elapsing['transitions']['submit']['unmet'][0]['type'] == 'lifecycle'
