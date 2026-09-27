@@ -261,8 +261,8 @@ an evidence author is not an independent reviewer: whoever wrote the proof would
 Planning sources (artifacts with `metadata.role = planning_source`, which arrive through reviewed
 plans as context) are not evidence and do not disqualify their author; `AttachArtifact` refuses that
 role so evidence cannot be relabelled as context.
-Verification and rejection still refuse any author of an artifact on the task, which also covers
-evidence imported with a snapshot. Only artifacts on the task itself count; evidence attached to a
+Verification and rejection refuse any author of evidence on the task, which also covers evidence
+imported with a snapshot. Only artifacts on the task itself count; evidence attached to a
 containing work package or milestone (any actor may attach there, since aggregates are never
 reviewed) and a decision's source artifacts do not. A single-person workspace therefore reviews
 through a second actor, such as the person's human principal reviewing an agent's result.
