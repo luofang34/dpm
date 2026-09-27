@@ -98,6 +98,9 @@ pub(crate) fn refuse_own_relaxation(
         .filter(|w| w.owner.as_ref() == Some(actor))
         .map(|w| w.id)
         .collect();
+    if owned.is_empty() {
+        return Ok(());
+    }
     let refuse = |work: Key, relaxed| EngineError::OwnGateRelaxed {
         actor: actor.clone(),
         work,
