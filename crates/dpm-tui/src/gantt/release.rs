@@ -16,24 +16,40 @@ pub(crate) fn state(plan: &Plan, timeline: &Timeline, edge: &Dependency) -> Stri
         .get(&edge.predecessor)
         .map_or_else(String::new, |w| w.key.to_string());
     let event = edge.kind.predecessor_endpoint();
-    if !Transition::Start.governs(edge.kind) {
+    let starting = gated(edge, true);
+    let finishing = gated(edge, false);
+    if starting.is_empty() {
         let release = timeline.edge(plan, edge);
         return format!(
-            "gates submit/verify: {}",
+            "gates {}: {}",
+            finishing.join("/"),
             describe(release, event, &key, None)
         );
     }
     let start = timeline.start_edge(plan, edge);
-    let mut text = format!("gates start: {}", start_state(&start, edge, event, &key));
-    if edge.start_basis == StartBasis::Provisional {
-        // Verification re-reads the edge without the pending attempt.
-        let finish = timeline.edge(plan, edge);
-        text.push_str(&format!(
-            " · gates verify: {}",
-            describe(finish, event, &key, None)
-        ));
+    let text = start_state(&start, edge, event, &key);
+    if edge.start_basis != StartBasis::Provisional || finishing.is_empty() {
+        // Without a provisional basis, later transitions read the same release as the start.
+        return format!("gates {}: {text}", [starting, finishing].concat().join("/"));
     }
-    text
+    // Verification re-reads the edge without the pending attempt.
+    let finish = timeline.edge(plan, edge);
+    format!(
+        "gates {}: {text} · gates {}: {}",
+        starting.join("/"),
+        finishing.join("/"),
+        describe(finish, event, &key, None)
+    )
+}
+
+/// Transitions of the successor this relation constrains, as the engine's gate evaluator reads
+/// them: those gated as a start, or the remaining ones.
+fn gated(edge: &Dependency, starting: bool) -> Vec<String> {
+    Transition::ALL
+        .into_iter()
+        .filter(|t| t.governs(edge.kind) && t.starts() == starting)
+        .map(|t| t.to_string())
+        .collect()
 }
 
 /// Decisions gating the work or a containing package, each open or resolved at the clock.

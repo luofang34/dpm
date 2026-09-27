@@ -341,18 +341,21 @@ fn inspector_reports_start_event_releases_for_ss_edges_instead_of_verification()
     let (mut plan, a, b) = single_edge(dpm_model::DependencyKind::StartStart, 2.0);
     let waiting = inspect(&plan, b, at(1));
     assert!(
-        waiting.contains("gates start: awaiting start of TEST-A"),
+        waiting.contains("gates claim/start/verify: awaiting start of TEST-A"),
         "{waiting}"
     );
     assert!(!waiting.contains("Execution waits for verified prerequisites"));
     run(&mut plan, begin(a), 1);
     let elapsing = inspect(&plan, b, at(2));
     assert!(
-        elapsing.contains("gates start: lag elapses at 2026-09-01 03:00 UTC"),
+        elapsing.contains("gates claim/start/verify: lag elapses at 2026-09-01 03:00 UTC"),
         "{elapsing}"
     );
     let released = inspect(&plan, b, at(4));
-    assert!(released.contains("gates start: released"), "{released}");
+    assert!(
+        released.contains("gates claim/start/verify: released"),
+        "{released}"
+    );
 }
 
 #[test]
@@ -384,7 +387,7 @@ fn inspector_shows_a_provisional_start_released_on_a_pending_attempt() {
     run(&mut plan, begin(b), 2);
     let started = inspect(&plan, b, at(3));
     assert!(
-        started.contains("gates start: released provisionally on attempt #1"),
+        started.contains("gates claim/start: released provisionally on attempt #1"),
         "{started}"
     );
     assert!(
@@ -403,4 +406,32 @@ fn inspector_lists_decision_gates_with_their_state() {
         screen.contains("Decision gates: TEST-GATE open"),
         "{screen}"
     );
+}
+
+#[test]
+fn inspector_names_every_transition_that_explain_lists_the_relation_as_unmet_for() {
+    for kind in [
+        dpm_model::DependencyKind::FinishStart,
+        dpm_model::DependencyKind::StartStart,
+        dpm_model::DependencyKind::FinishFinish,
+        dpm_model::DependencyKind::StartFinish,
+    ] {
+        let (plan, _, b) = single_edge(kind, 0.0);
+        let screen = inspect(&plan, b, at(1));
+        let explained = dpm_engine::explain_work(&plan, b, at(1)).expect("explain");
+        let unmet: Vec<String> = explained
+            .transitions
+            .iter()
+            .filter(|(_, report)| {
+                report
+                    .unmet
+                    .iter()
+                    .any(|gate| matches!(gate, dpm_engine::UnmetGate::Dependency { .. }))
+            })
+            .map(|(transition, _)| transition.to_string())
+            .collect();
+        assert!(unmet.len() >= 2, "{kind:?}: {unmet:?}");
+        let label = format!("gates {}:", unmet.join("/"));
+        assert!(screen.contains(&label), "{kind:?}: {label} in {screen}");
+    }
 }
