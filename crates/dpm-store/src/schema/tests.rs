@@ -35,6 +35,7 @@ fn claim(plan: &mut Plan) -> Operation {
         ActorId::agent("owner"),
         Command::Claim { work },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("claim")
 }
@@ -158,6 +159,7 @@ fn the_first_write_records_the_origin_derived_from_existing_history() {
             reason: "waiting".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("block");
     store.persist_blocking(&plan, &second).expect("persist");
@@ -187,6 +189,7 @@ fn an_originless_store_with_a_broken_history_is_never_upgraded() {
             reason: "waiting".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("block");
     let error = store.persist_blocking(&plan, &second).expect_err("refused");

@@ -23,7 +23,14 @@ fn id(plan: &Plan, key: &str) -> WorkItemId {
 
 fn run(plan: &mut Plan, actor: &ActorId, command: Command, at: DateTime<Utc>) {
     let label = format!("{command:?}");
-    apply_command(plan, actor.clone(), command, at).unwrap_or_else(|e| panic!("{label}: {e}"));
+    apply_command(
+        plan,
+        actor.clone(),
+        command,
+        at,
+        dpm_model::OperationId::new(),
+    )
+    .unwrap_or_else(|e| panic!("{label}: {e}"));
 }
 
 fn worker() -> ActorId {
@@ -142,7 +149,16 @@ fn a_proposal_still_cannot_author_a_replacement_resolution_time() {
         plan: Box::new(proposed),
         reason: "backdated".into(),
     };
-    assert!(apply_command(&mut plan, lead(), change, t(2)).is_err());
+    assert!(
+        apply_command(
+            &mut plan,
+            lead(),
+            change,
+            t(2),
+            dpm_model::OperationId::new()
+        )
+        .is_err()
+    );
     assert_eq!(plan, before);
 }
 

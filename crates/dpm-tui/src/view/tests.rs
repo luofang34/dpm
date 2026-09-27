@@ -325,7 +325,14 @@ fn detail_shows_recorded_events_and_every_transition_gate() {
         dpm_engine::Command::Claim { work },
         dpm_engine::Command::Start { work },
     ] {
-        dpm_engine::apply_command(&mut plan, worker.clone(), command, at).expect("execute");
+        dpm_engine::apply_command(
+            &mut plan,
+            worker.clone(),
+            command,
+            at,
+            dpm_model::OperationId::new(),
+        )
+        .expect("execute");
     }
     let explanation = dpm_engine::explain_work(&plan, work, at).expect("explain");
     let detail = crate::detail::text(&plan, &explanation);
@@ -373,6 +380,7 @@ fn conditional_work_shows_scenarios_exclusions_and_the_stranded_reason() {
             outcome: "B".into(),
         },
         chrono::Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("decide");
     let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
@@ -415,6 +423,7 @@ fn excluded_package_plan() -> Plan {
             outcome: "B".into(),
         },
         chrono::Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("decide");
     plan

@@ -40,6 +40,7 @@ fn detail_states_applicability_in_words_with_keys() {
             outcome: "B".into(),
         },
         chrono::Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("decide");
     let audit = plan.find_work_by_key("SUP-A-AUDIT").expect("audit").id;
@@ -103,7 +104,14 @@ fn detail_shows_the_rejected_basis_and_affected_successor_from_the_shared_report
         ),
     ];
     for (hour, (actor, command)) in (1..).zip(steps) {
-        apply_command(&mut plan, actor, command, at(hour)).expect("execute");
+        apply_command(
+            &mut plan,
+            actor,
+            command,
+            at(hour),
+            dpm_model::OperationId::new(),
+        )
+        .expect("execute");
     }
     let now = at(8);
     let successor = crate::detail::text(&plan, &explain_work(&plan, b, now).expect("explain"));

@@ -34,7 +34,14 @@ fn decide(plan: &mut Plan, option: &str, at: DateTime<Utc>) {
         decision,
         outcome: option.into(),
     };
-    apply_command(plan, ActorId::human("lead"), command, at).expect("decide");
+    apply_command(
+        plan,
+        ActorId::human("lead"),
+        command,
+        at,
+        dpm_model::OperationId::new(),
+    )
+    .expect("decide");
 }
 
 fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
@@ -45,10 +52,24 @@ fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
         Command::Start { work },
         Command::Submit { work, note: None },
     ] {
-        apply_command(plan, worker.clone(), command, at).expect("execute");
+        apply_command(
+            plan,
+            worker.clone(),
+            command,
+            at,
+            dpm_model::OperationId::new(),
+        )
+        .expect("execute");
     }
     let verify = Command::Verify { work, note: None };
-    apply_command(plan, ActorId::human("lead"), verify, at).expect("verify");
+    apply_command(
+        plan,
+        ActorId::human("lead"),
+        verify,
+        at,
+        dpm_model::OperationId::new(),
+    )
+    .expect("verify");
 }
 
 fn keys(plan: &Plan, ids: impl IntoIterator<Item = WorkItemId>) -> BTreeSet<String> {

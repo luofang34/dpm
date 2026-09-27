@@ -11,7 +11,14 @@ fn fixture() -> Plan {
     .expect("fixture")
 }
 fn apply(plan: &mut Plan, command: Command) {
-    apply_command(plan, ActorId::agent("owner"), command, Utc::now()).expect("command");
+    apply_command(
+        plan,
+        ActorId::agent("owner"),
+        command,
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
+    .expect("command");
 }
 #[test]
 fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
@@ -66,6 +73,7 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
         ActorId::human("reviewer"),
         Command::Verify { work, note: None },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("verify");
     let reached = progress(&plan, chrono::Utc::now()).expect("progress").work[&milestone];
@@ -95,7 +103,8 @@ fn report_validation_is_atomic_and_blocked_corrections_preserve_the_blocker() {
             &mut plan,
             ActorId::agent("owner"),
             report.clone(),
-            Utc::now()
+            Utc::now(),
+            dpm_model::OperationId::new()
         )
         .is_err()
     );
@@ -114,7 +123,16 @@ fn report_validation_is_atomic_and_blocked_corrections_preserve_the_blocker() {
         ),
     ] {
         let before = plan.clone();
-        assert!(apply_command(&mut plan, ActorId::agent(actor), command, Utc::now()).is_err());
+        assert!(
+            apply_command(
+                &mut plan,
+                ActorId::agent(actor),
+                command,
+                Utc::now(),
+                dpm_model::OperationId::new()
+            )
+            .is_err()
+        );
         assert_eq!(plan, before);
     }
     apply(&mut plan, report);

@@ -49,7 +49,14 @@ fn worker() -> ActorId {
 }
 
 fn run(plan: &mut Plan, actor: &ActorId, command: Command, hour: i64) -> Result<(), EngineError> {
-    apply_command(plan, actor.clone(), command, t(hour)).map(|_| ())
+    apply_command(
+        plan,
+        actor.clone(),
+        command,
+        t(hour),
+        dpm_model::OperationId::new(),
+    )
+    .map(|_| ())
 }
 
 fn ok(plan: &mut Plan, actor: &ActorId, command: Command, hour: i64) {

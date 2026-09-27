@@ -59,6 +59,7 @@ fn contextual_decisions_supply_sources_without_gating_or_leaking_to_other_work()
         ActorId::agent("worker"),
         Command::Claim { work: task },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("contextual question does not prevent a claim");
 

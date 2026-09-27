@@ -16,7 +16,14 @@ fn task(plan: &Plan) -> WorkItemId {
 }
 
 fn apply(plan: &mut Plan, actor: &str, command: Command) -> Operation {
-    apply_command(plan, ActorId::agent(actor), command, Utc::now()).expect("command")
+    apply_command(
+        plan,
+        ActorId::agent(actor),
+        command,
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
+    .expect("command")
 }
 
 fn finish(plan: &mut Plan, work: WorkItemId) {
@@ -40,7 +47,16 @@ fn failed_commands_are_atomic_and_self_verification_is_rejected() {
         },
     ] {
         let before = plan.clone();
-        assert!(apply_command(&mut plan, ActorId::agent("other"), command, Utc::now()).is_err());
+        assert!(
+            apply_command(
+                &mut plan,
+                ActorId::agent("other"),
+                command,
+                Utc::now(),
+                dpm_model::OperationId::new()
+            )
+            .is_err()
+        );
         assert_eq!(plan, before);
     }
     apply(&mut plan, "owner", Command::Submit { work, note: None });
@@ -50,7 +66,8 @@ fn failed_commands_are_atomic_and_self_verification_is_rejected() {
             &mut plan,
             ActorId::agent("owner"),
             Command::Verify { work, note: None },
-            Utc::now()
+            Utc::now(),
+            dpm_model::OperationId::new()
         ),
         Err(EngineError::SelfVerification(_))
     ));
@@ -183,6 +200,7 @@ fn only_humans_and_services_resolve_gating_or_contextual_decisions() {
             ActorId::agent("worker"),
             decide(decision),
             Utc::now(),
+            dpm_model::OperationId::new(),
         )
         .expect_err("agents cannot decide");
         assert!(
@@ -191,9 +209,23 @@ fn only_humans_and_services_resolve_gating_or_contextual_decisions() {
         );
         assert_eq!(plan, before, "a refused decision changes nothing");
     }
-    apply_command(&mut plan, ActorId::human("lead"), decide(gate), Utc::now()).expect("human");
+    apply_command(
+        &mut plan,
+        ActorId::human("lead"),
+        decide(gate),
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
+    .expect("human");
     let bot = ActorId::service("policy-bot");
-    apply_command(&mut plan, bot, decide(contextual), Utc::now()).expect("service");
+    apply_command(
+        &mut plan,
+        bot,
+        decide(contextual),
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
+    .expect("service");
 }
 
 #[test]
@@ -212,7 +244,16 @@ fn empty_commands_and_invalid_plans_do_not_change_state() {
         },
     ] {
         let before = plan.clone();
-        assert!(apply_command(&mut plan, ActorId::human("reviewer"), command, Utc::now()).is_err());
+        assert!(
+            apply_command(
+                &mut plan,
+                ActorId::human("reviewer"),
+                command,
+                Utc::now(),
+                dpm_model::OperationId::new()
+            )
+            .is_err()
+        );
         assert_eq!(plan, before);
     }
     plan.work_items
@@ -226,7 +267,8 @@ fn empty_commands_and_invalid_plans_do_not_change_state() {
             &mut plan,
             ActorId::agent("owner"),
             Command::Claim { work },
-            Utc::now()
+            Utc::now(),
+            dpm_model::OperationId::new()
         )
         .is_err()
     );
@@ -290,8 +332,14 @@ fn execution_commands_on_non_tasks_fail_atomically_as_not_a_task() {
         for (actor, command) in execution_commands(work) {
             let mut candidate = plan.clone();
             let label = format!("{command:?}");
-            let error = apply_command(&mut candidate, actor, command, Utc::now())
-                .expect_err("non-task execution must fail");
+            let error = apply_command(
+                &mut candidate,
+                actor,
+                command,
+                Utc::now(),
+                dpm_model::OperationId::new(),
+            )
+            .expect_err("non-task execution must fail");
             assert!(
                 matches!(error, EngineError::NotATask { work: w, kind: k } if w == work && k == kind),
                 "{label}: {error:?}"
@@ -301,4 +349,32 @@ fn execution_commands_on_non_tasks_fail_atomically_as_not_a_task() {
             assert_eq!(candidate, plan, "{label}");
         }
     }
+}
+
+#[test]
+fn replaying_a_recorded_operation_reproduces_its_identity_and_result() {
+    let mut plan = fixture();
+    let work = task(&plan);
+    let base = plan.clone();
+    let id = dpm_model::OperationId::new();
+    let recorded = apply_command(
+        &mut plan,
+        ActorId::agent("owner"),
+        Command::Claim { work },
+        Utc::now(),
+        id,
+    )
+    .expect("claim");
+    assert_eq!(recorded.id, id);
+    let mut replayed = base;
+    let again = apply_command(
+        &mut replayed,
+        recorded.actor.clone(),
+        recorded.command.clone(),
+        recorded.timestamp,
+        recorded.id,
+    )
+    .expect("replay");
+    assert_eq!(again.id, recorded.id);
+    assert_eq!(replayed, plan);
 }

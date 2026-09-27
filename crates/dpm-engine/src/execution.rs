@@ -6,11 +6,14 @@ use lifecycle::{block, claim, report_progress, start, submit, unblock, verify};
 /// Apply one validated semantic command atomically and return its audit operation.
 ///
 /// Errors leave every field, including the revision, unchanged. Revisions wrap at `u64::MAX`.
+/// The caller supplies the operation identity so replaying a recorded operation reproduces it
+/// exactly; the engine itself holds no source of randomness.
 pub fn apply_command(
     plan: &mut Plan,
     actor: ActorId,
     command: Command,
     timestamp: DateTime<Utc>,
+    id: OperationId,
 ) -> Result<Operation, EngineError> {
     plan.validate()?;
     nonempty(&actor.to_string(), "actor name", &actor.name)?;
@@ -19,7 +22,7 @@ pub fn apply_command(
     candidate.revision = plan.revision.wrapping_add(1);
     candidate.validate()?;
     let operation = Operation {
-        id: OperationId::new(),
+        id,
         base_revision: plan.revision,
         resulting_revision: candidate.revision,
         actor,

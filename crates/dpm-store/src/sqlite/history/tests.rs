@@ -21,6 +21,7 @@ fn chronological_pages_preserve_operation_identity_across_revision_wrap() {
                 reason: "rename".into(),
             },
             Utc::now(),
+            dpm_model::OperationId::new(),
         )
         .expect("apply");
         store.persist_blocking(&plan, &operation).expect("persist");

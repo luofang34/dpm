@@ -42,7 +42,7 @@ fn lead() -> ActorId {
 }
 
 fn run(plan: &mut Plan, actor: ActorId, command: Command, at: DateTime<Utc>) {
-    apply_command(plan, actor, command, at).expect("command");
+    apply_command(plan, actor, command, at, dpm_model::OperationId::new()).expect("command");
 }
 
 fn decide(plan: &mut Plan, option: &str, at: DateTime<Utc>) {
@@ -66,7 +66,14 @@ fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
 /// A refused command reports the applicability gate and changes nothing, not even the revision.
 fn refused(plan: &mut Plan, key: &str, command: Command) -> Vec<UnmetGate> {
     let before = plan.clone();
-    let error = apply_command(plan, worker(), command, t(50)).expect_err(key);
+    let error = apply_command(
+        plan,
+        worker(),
+        command,
+        t(50),
+        dpm_model::OperationId::new(),
+    )
+    .expect_err(key);
     assert_eq!(*plan, before, "{key}: failed commands are atomic");
     match error {
         EngineError::NotReady { unmet, .. } => {
@@ -223,6 +230,7 @@ fn decide_requires_a_declared_option_atomically() {
             outcome: "Supplier A".into(),
         },
         t(1),
+        dpm_model::OperationId::new(),
     )
     .expect_err("undeclared option");
     assert!(
@@ -250,6 +258,7 @@ fn a_choice_that_would_exclude_started_work_is_refused_by_decide() {
         lead(),
         Command::Decide { decision, outcome },
         t(1),
+        dpm_model::OperationId::new(),
     )
     .expect_err("excludes in-flight work");
     assert!(error.to_string().contains("in-flight work SUP-B-QUOTE"));
@@ -274,6 +283,7 @@ fn changing_a_choice_after_work_starts_requires_a_reviewed_change_and_keeps_the_
             outcome: "B".into(),
         },
         t(4),
+        dpm_model::OperationId::new(),
     );
     assert!(matches!(again, Err(EngineError::DecisionNotOpen(_))));
 
@@ -293,7 +303,13 @@ fn changing_a_choice_after_work_starts_requires_a_reviewed_change_and_keeps_the_
         plan: Box::new(proposed.clone()),
         reason: "Supplier A withdrew".into(),
     };
-    let agent = apply_command(&mut plan.clone(), worker(), command(), t(4));
+    let agent = apply_command(
+        &mut plan.clone(),
+        worker(),
+        command(),
+        t(4),
+        dpm_model::OperationId::new(),
+    );
     assert!(matches!(agent, Err(EngineError::ActorNotAllowed { .. })));
     run(&mut plan, lead(), command(), t(4));
     let work = &plan.work_items[&quote];

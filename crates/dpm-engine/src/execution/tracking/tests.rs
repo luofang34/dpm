@@ -42,7 +42,13 @@ fn request(work: WorkItemId, identity: ExternalIdentity, role: ExternalLinkRole)
 }
 
 fn run(plan: &mut Plan, actor: &str, command: Command) -> Result<crate::Operation, EngineError> {
-    apply_command(plan, ActorId::agent(actor), command, Utc::now())
+    apply_command(
+        plan,
+        ActorId::agent(actor),
+        command,
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
 }
 
 /// A rejected command must leave every field, including the revision, byte-identical.
@@ -381,6 +387,7 @@ fn explain_exposes_package_references_and_survives_reviewed_renames() {
             reason: "Repository moved".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("apply");
     let moved = explain_work(&plan, a, chrono::Utc::now())

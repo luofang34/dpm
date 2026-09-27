@@ -50,6 +50,7 @@ fn fixture() -> (Plan, DecisionId) {
         ActorId::agent("worker"),
         Command::Claim { work: task },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("claim");
     (plan, id)
@@ -80,6 +81,7 @@ fn apply(plan: &mut Plan, proposed: Plan) -> Result<crate::Operation, EngineErro
             reason: "revise the input format".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
 }
 

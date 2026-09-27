@@ -257,7 +257,14 @@ fn out_of_scope_dependency_never_satisfies_in_scope_work() {
             },
         ),
     ] {
-        apply_command(&mut plan, actor, command, Utc::now()).expect("complete W-B");
+        apply_command(
+            &mut plan,
+            actor,
+            command,
+            Utc::now(),
+            dpm_model::OperationId::new(),
+        )
+        .expect("complete W-B");
     }
     assert!(keys(&run(&plan, &[], &[REPO_A], 100)).contains(&"DEP".to_string()));
 }

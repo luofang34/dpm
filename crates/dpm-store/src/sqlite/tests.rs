@@ -17,6 +17,7 @@ fn claim(plan: &mut Plan, actor: &str) -> Operation {
         ActorId::agent(actor),
         Command::Claim { work },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("claim")
 }
@@ -132,6 +133,7 @@ fn forged_snapshots_and_duplicate_operation_ids_are_atomic_failures() {
         ActorId::agent("owner"),
         Command::Start { work },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("start");
     second.id = op.id;

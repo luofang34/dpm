@@ -18,12 +18,26 @@ fn id(plan: &Plan, key: &str) -> WorkItemId {
 
 fn run(plan: &mut Plan, actor: &ActorId, command: Command, hour: i64) {
     let label = format!("{command:?}");
-    apply_command(plan, actor.clone(), command, t(hour)).unwrap_or_else(|e| panic!("{label}: {e}"));
+    apply_command(
+        plan,
+        actor.clone(),
+        command,
+        t(hour),
+        dpm_model::OperationId::new(),
+    )
+    .unwrap_or_else(|e| panic!("{label}: {e}"));
 }
 
 fn refused(plan: &mut Plan, actor: &ActorId, command: Command, hour: i64) -> EngineError {
     let before = plan.clone();
-    let error = apply_command(plan, actor.clone(), command, t(hour)).expect_err("refused");
+    let error = apply_command(
+        plan,
+        actor.clone(),
+        command,
+        t(hour),
+        dpm_model::OperationId::new(),
+    )
+    .expect_err("refused");
     assert_eq!(*plan, before, "a refused command changes nothing");
     error
 }

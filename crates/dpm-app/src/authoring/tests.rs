@@ -127,7 +127,14 @@ fn executed() -> Value {
     for (minute, (actor, command)) in (0..).zip(steps) {
         let actor: ActorId = serde_json::from_value(actor.clone()).expect("actor");
         let command: Command = serde_json::from_value(command).expect("command shape");
-        apply_command(&mut plan, actor, command, at(minute)).expect("command");
+        apply_command(
+            &mut plan,
+            actor,
+            command,
+            at(minute),
+            dpm_model::OperationId::new(),
+        )
+        .expect("command");
     }
     serde_json::to_value(plan).expect("serialize")
 }
@@ -201,7 +208,14 @@ fn legacy_blocked() -> Value {
     let id = work.id.to_string();
     let block = json!({"Block": {"work": id, "reason": "waiting on a vendor"}});
     let command: Command = serde_json::from_value(block).expect("command shape");
-    apply_command(&mut plan, worker, command, at(0)).expect("block");
+    apply_command(
+        &mut plan,
+        worker,
+        command,
+        at(0),
+        dpm_model::OperationId::new(),
+    )
+    .expect("block");
     let document = serde_json::to_value(plan).expect("serialize");
     assert_eq!(
         document["work_items"][&id]["events"],

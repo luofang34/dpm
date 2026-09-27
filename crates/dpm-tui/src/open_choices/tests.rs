@@ -19,6 +19,7 @@ fn decide_b(plan: &mut Plan) {
             outcome: "B".into(),
         },
         chrono::Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("decide");
 }

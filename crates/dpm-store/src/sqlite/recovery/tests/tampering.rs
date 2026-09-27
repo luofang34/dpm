@@ -218,8 +218,14 @@ fn a_trigger_planted_after_open_is_refused_inside_the_write_transaction() {
          DELETE FROM operations WHERE sequence < NEW.sequence; END",
     );
     let command = next_command(&plan, 2);
-    let operation =
-        apply_command(&mut plan, ActorId::agent("owner"), command, Utc::now()).expect("command");
+    let operation = apply_command(
+        &mut plan,
+        ActorId::agent("owner"),
+        command,
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
+    .expect("command");
     let refused = store
         .persist_blocking(&plan, &operation)
         .expect_err("refused write");

@@ -19,6 +19,7 @@ fn apply(plan: &mut Plan, proposed: Plan) -> Result<crate::Operation, EngineErro
             reason: "clarify remaining work".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
 }
 
@@ -77,7 +78,8 @@ fn agent_approval_empty_reason_stale_revision_and_noop_fail_atomically() {
                     plan: Box::new(proposal.clone()),
                     reason: reason.into()
                 },
-                Utc::now()
+                Utc::now(),
+                dpm_model::OperationId::new()
             )
             .is_err()
         );
@@ -137,6 +139,7 @@ fn execution_locks_its_contract_context_and_dependencies_but_not_future_work() {
         ActorId::agent("worker"),
         Command::Claim { work },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("claim");
     let before = plan.clone();
@@ -261,13 +264,27 @@ fn plan_changes_cannot_author_or_rewrite_event_times() {
     let gate = plan.find_decision_by_key("TEST-GATE").expect("gate").id;
     let worker = ActorId::agent("worker");
     for command in [Command::Claim { work: task }, Command::Start { work: task }] {
-        apply_command(&mut plan, worker.clone(), command, Utc::now()).expect("execute");
+        apply_command(
+            &mut plan,
+            worker.clone(),
+            command,
+            Utc::now(),
+            dpm_model::OperationId::new(),
+        )
+        .expect("execute");
     }
     let decide = Command::Decide {
         decision: gate,
         outcome: "go".into(),
     };
-    apply_command(&mut plan, ActorId::human("lead"), decide, Utc::now()).expect("decide");
+    apply_command(
+        &mut plan,
+        ActorId::human("lead"),
+        decide,
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
+    .expect("decide");
     let before = plan.clone();
     let earlier = Utc::now() - chrono::TimeDelta::days(30);
     for case in 0..3 {

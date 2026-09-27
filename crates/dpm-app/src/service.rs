@@ -323,7 +323,13 @@ impl Application {
                 actual: plan.revision,
             });
         }
-        let operation = apply_command(&mut plan, request.actor, request.command, Utc::now())?;
+        let operation = apply_command(
+            &mut plan,
+            request.actor,
+            request.command,
+            Utc::now(),
+            dpm_model::OperationId::new(),
+        )?;
         if let Backing::Database(store) = &mut self.backing {
             store.persist_blocking(&plan, &operation)?;
         }

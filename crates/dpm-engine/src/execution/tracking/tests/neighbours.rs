@@ -89,6 +89,7 @@ fn edited(plan: &Plan, identity: ExternalIdentity) -> Result<(), EngineError> {
             reason: "edit the record".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     );
     assert_eq!(preview.is_ok(), result.is_ok(), "preview and apply agree");
     if result.is_err() {
@@ -157,6 +158,7 @@ fn rekeyed(
             reason: "re-add the object".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     );
     assert_eq!(preview.is_ok(), result.is_ok(), "preview and apply agree");
     if result.is_err() {

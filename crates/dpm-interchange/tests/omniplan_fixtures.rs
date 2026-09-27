@@ -59,7 +59,7 @@ fn apply(plan: &mut Plan, candidate: Plan) {
         plan: Box::new(candidate),
         reason: "Import reviewed OmniPlan schedule".into(),
     };
-    apply_command(plan, reviewer, command, at).expect("apply");
+    apply_command(plan, reviewer, command, at, dpm_model::OperationId::new()).expect("apply");
 }
 
 fn item(result: &ImportResult, uid: i64) -> &ItemReport {

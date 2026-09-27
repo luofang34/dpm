@@ -33,6 +33,7 @@ fn soft_edge_plan() -> (Plan, DependencyId, WorkItemId) {
             outcome: "proceed".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("decide");
     let edge = plan
@@ -51,7 +52,14 @@ fn json(value: &impl serde::Serialize) -> serde_json::Value {
 }
 
 fn run(plan: &mut Plan, actor: ActorId, command: Command) -> Result<(), EngineError> {
-    apply_command(plan, actor, command, Utc::now()).map(|_| ())
+    apply_command(
+        plan,
+        actor,
+        command,
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
+    .map(|_| ())
 }
 
 fn waive(dependency: DependencyId, reason: &str) -> Command {
@@ -89,6 +97,7 @@ fn waiver_and_restoration_change_readiness_and_remaining_cpm_consistently() {
         ActorId::human("lead"),
         waive(edge, "prototype of A is sufficient"),
         at,
+        dpm_model::OperationId::new(),
     )
     .expect("waive");
     assert!(matches!(operation.command, Command::WaiveDependency { .. }));

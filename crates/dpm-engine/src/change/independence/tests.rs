@@ -27,7 +27,8 @@ fn reviewer() -> ActorId {
 
 fn run(plan: &mut Plan, actor: ActorId, command: Command, at: DateTime<Utc>) -> Operation {
     let label = format!("{command:?}");
-    apply_command(plan, actor, command, at).unwrap_or_else(|e| panic!("{label}: {e}"))
+    apply_command(plan, actor, command, at, dpm_model::OperationId::new())
+        .unwrap_or_else(|e| panic!("{label}: {e}"))
 }
 
 fn apply(plan: &mut Plan, actor: ActorId, proposal: Plan) -> Result<Operation, EngineError> {
@@ -35,7 +36,7 @@ fn apply(plan: &mut Plan, actor: ActorId, proposal: Plan) -> Result<Operation, E
         plan: Box::new(proposal),
         reason: "reviewed".into(),
     };
-    apply_command(plan, actor, change, t(5))
+    apply_command(plan, actor, change, t(5), dpm_model::OperationId::new())
 }
 
 fn edge<'a>(plan: &'a mut Plan, from: &str, to: &str) -> &'a mut Dependency {

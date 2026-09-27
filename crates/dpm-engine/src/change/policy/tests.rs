@@ -16,7 +16,13 @@ fn key(plan: &Plan, key: &str) -> WorkItemId {
 }
 
 fn run(plan: &mut Plan, actor: ActorId, command: Command) -> Result<Operation, EngineError> {
-    apply_command(plan, actor, command, Utc::now())
+    apply_command(
+        plan,
+        actor,
+        command,
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
 }
 
 fn apply(plan: &mut Plan, proposal: Plan) -> Result<Operation, EngineError> {

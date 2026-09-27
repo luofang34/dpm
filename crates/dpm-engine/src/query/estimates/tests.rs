@@ -119,7 +119,14 @@ fn work_outside_the_active_graph_is_listed_only_by_the_scenario_that_selects_it(
         decision,
         outcome: "B".into(),
     };
-    apply_command(&mut plan, ActorId::human("lead"), decide, at()).expect("decide");
+    apply_command(
+        &mut plan,
+        ActorId::human("lead"),
+        decide,
+        at(),
+        dpm_model::OperationId::new(),
+    )
+    .expect("decide");
     assert_eq!(
         listed(&plan),
         ["SUP-B-QUOTE"],
@@ -143,7 +150,14 @@ fn the_list_matches_the_tasks_the_remaining_projection_runs_at_zero_hours() {
         decision,
         outcome: "B".into(),
     };
-    apply_command(&mut plan, ActorId::human("lead"), decide, at()).expect("decide");
+    apply_command(
+        &mut plan,
+        ActorId::human("lead"),
+        decide,
+        at(),
+        dpm_model::OperationId::new(),
+    )
+    .expect("decide");
     let design = plan.find_work_by_key("SUP-DESIGN").expect("work").id;
     let quote = plan.find_work_by_key("SUP-B-QUOTE").expect("work").id;
     for (actor, command) in [
@@ -178,7 +192,14 @@ fn the_list_matches_the_tasks_the_remaining_projection_runs_at_zero_hours() {
         } else {
             ActorId::agent(actor)
         };
-        apply_command(&mut plan, actor, command, at()).expect("execute");
+        apply_command(
+            &mut plan,
+            actor,
+            command,
+            at(),
+            dpm_model::OperationId::new(),
+        )
+        .expect("execute");
     }
 
     let schedule = dpm_schedule::deterministic_remaining(&plan, at()).expect("schedule");

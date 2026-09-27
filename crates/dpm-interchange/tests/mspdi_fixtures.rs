@@ -55,7 +55,7 @@ fn apply(plan: &mut Plan, candidate: Plan) {
         plan: Box::new(candidate),
         reason: "Import reviewed schedule".into(),
     };
-    apply_command(plan, reviewer, command, at).expect("apply");
+    apply_command(plan, reviewer, command, at, dpm_model::OperationId::new()).expect("apply");
 }
 
 fn edge_lags(plan: &Plan, from: &str, to: &str) -> Vec<(DependencyKind, f64)> {
@@ -315,7 +315,14 @@ fn conditional_work_is_written_unconditionally_and_reported_never_dropped() {
         decision,
         outcome: "B".into(),
     };
-    apply_command(&mut plan, ActorId::human("lead"), command, Utc::now()).expect("decide");
+    apply_command(
+        &mut plan,
+        ActorId::human("lead"),
+        command,
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
+    .expect("decide");
     let exported = export_mspdi(&plan, "SUP").expect("export");
     assert_eq!(exported.report.items.len(), plan.work_items.len());
     let item = |key: &str| {

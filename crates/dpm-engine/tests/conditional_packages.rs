@@ -27,7 +27,7 @@ fn run(plan: &mut Plan, actor: &str, command: Command, at: DateTime<Utc>) {
     } else {
         dpm_model::ActorId::agent(actor)
     };
-    apply_command(plan, actor, command, at).expect("command");
+    apply_command(plan, actor, command, at, dpm_model::OperationId::new()).expect("command");
 }
 
 fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {

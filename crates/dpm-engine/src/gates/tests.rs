@@ -57,7 +57,8 @@ fn structured_gates_report_every_constraint_and_inherited_decision() {
             &mut plan,
             ActorId::agent("worker"),
             Command::Claim { work },
-            Utc::now()
+            Utc::now(),
+            dpm_model::OperationId::new()
         )
         .is_err()
     );
@@ -137,7 +138,14 @@ fn the_hard_edge_remedy_names_the_claim_that_already_locks_its_lag() {
     legacy.owner = Some(ActorId::agent("legacy"));
     let now = Utc::now();
     let claim = Command::Claim { work: b };
-    apply_command(&mut plan, ActorId::agent("worker"), claim, now).expect("claim");
+    apply_command(
+        &mut plan,
+        ActorId::agent("worker"),
+        claim,
+        now,
+        dpm_model::OperationId::new(),
+    )
+    .expect("claim");
     let report = gate_report(&plan, b, crate::Transition::Submit, now).expect("gates");
     let reasons = report.reasons().join("\n");
     assert!(reasons.contains("was not recorded"), "{reasons}");
@@ -147,7 +155,13 @@ fn the_hard_edge_remedy_names_the_claim_that_already_locks_its_lag() {
         plan: Box::new(relaxed),
         reason: "drop the lag".into(),
     };
-    let refused = apply_command(&mut plan, ActorId::human("lead"), change, now);
+    let refused = apply_command(
+        &mut plan,
+        ActorId::human("lead"),
+        change,
+        now,
+        dpm_model::OperationId::new(),
+    );
     assert!(refused.is_err(), "a claimed successor's lag is protected");
     assert!(
         !reasons.contains("unstarted") && reasons.contains("claimed"),

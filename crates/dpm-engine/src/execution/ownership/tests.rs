@@ -51,13 +51,27 @@ fn lead() -> ActorId {
 
 fn ok(plan: &mut Plan, actor: &ActorId, command: Command, hour: i64) {
     let label = format!("{command:?} at +{hour}h");
-    apply_command(plan, actor.clone(), command, t(hour)).unwrap_or_else(|e| panic!("{label}: {e}"));
+    apply_command(
+        plan,
+        actor.clone(),
+        command,
+        t(hour),
+        dpm_model::OperationId::new(),
+    )
+    .unwrap_or_else(|e| panic!("{label}: {e}"));
 }
 
 /// A refused command leaves every field, including the revision, unchanged.
 fn refused(plan: &mut Plan, actor: &ActorId, command: Command, hour: i64) -> EngineError {
     let before = plan.clone();
-    let error = apply_command(plan, actor.clone(), command, t(hour)).expect_err("refused");
+    let error = apply_command(
+        plan,
+        actor.clone(),
+        command,
+        t(hour),
+        dpm_model::OperationId::new(),
+    )
+    .expect_err("refused");
     assert_eq!(*plan, before, "a refused command changes nothing");
     error
 }
@@ -104,7 +118,14 @@ fn an_agent_releases_its_own_claim_and_the_task_is_ready_again() {
     ok(&mut plan, &first(), Command::Claim { work: a }, 0);
     assert!(!listed(&plan, a, 0));
     let revision = plan.revision;
-    let operation = apply_command(&mut plan, first(), release(a), t(1)).expect("release");
+    let operation = apply_command(
+        &mut plan,
+        first(),
+        release(a),
+        t(1),
+        dpm_model::OperationId::new(),
+    )
+    .expect("release");
     assert_eq!(operation.base_revision, revision);
     assert!(matches!(operation.command, Command::Release { work, .. } if work == a));
     let item = &plan.work_items[&a];

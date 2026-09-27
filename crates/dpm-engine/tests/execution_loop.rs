@@ -59,6 +59,7 @@ fn agent_and_human_execution_loop_unlocks_work_semantically() {
             outcome: "Accept the verified input".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("decide");
 
@@ -79,6 +80,7 @@ fn agent_and_human_execution_loop_unlocks_work_semantically() {
             reason: "Additional review pending".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("block");
     assert_eq!(plan.work_items[&branch].status, WorkStatus::Blocked);
@@ -98,6 +100,7 @@ fn complete_input(plan: &mut Plan, input: dpm_model::WorkItemId) {
         agent.clone(),
         Command::Claim { work: input },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("claim");
     apply_command(
@@ -105,6 +108,7 @@ fn complete_input(plan: &mut Plan, input: dpm_model::WorkItemId) {
         agent.clone(),
         Command::Start { work: input },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("start");
     apply_command(
@@ -115,6 +119,7 @@ fn complete_input(plan: &mut Plan, input: dpm_model::WorkItemId) {
             note: Some("input documented".into()),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("submit");
     apply_command(
@@ -125,6 +130,7 @@ fn complete_input(plan: &mut Plan, input: dpm_model::WorkItemId) {
             note: Some("criteria checked".into()),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("verify");
 }

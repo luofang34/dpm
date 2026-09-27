@@ -32,7 +32,8 @@ fn ratification_requires_independent_authority_and_complete_contract_atomically(
             &mut plan,
             ActorId::agent("draft"),
             Command::RatifyContract { work },
-            Utc::now()
+            Utc::now(),
+            dpm_model::OperationId::new()
         )
         .is_err()
     );
@@ -49,7 +50,8 @@ fn ratification_requires_independent_authority_and_complete_contract_atomically(
             &mut plan,
             ActorId::human("lead"),
             Command::RatifyContract { work },
-            Utc::now()
+            Utc::now(),
+            dpm_model::OperationId::new()
         )
         .is_err()
     );
@@ -60,6 +62,7 @@ fn ratification_requires_independent_authority_and_complete_contract_atomically(
         ActorId::human("lead"),
         Command::RatifyContract { work },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("ratify");
     assert!(crate::is_ready(
@@ -81,7 +84,14 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
         Command::Start { work },
         Command::Submit { work, note: None },
     ] {
-        apply_command(&mut plan, owner.clone(), command, at).expect("submit");
+        apply_command(
+            &mut plan,
+            owner.clone(),
+            command,
+            at,
+            dpm_model::OperationId::new(),
+        )
+        .expect("submit");
     }
     for (actor, reason) in [(owner.clone(), "fix"), (reviewer.clone(), " ")] {
         let before = plan.clone();
@@ -93,7 +103,8 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
                     work,
                     reason: reason.into()
                 },
-                at
+                at,
+                dpm_model::OperationId::new()
             )
             .is_err()
         );
@@ -107,6 +118,7 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
             reason: "Missing acceptance evidence".into(),
         },
         at,
+        dpm_model::OperationId::new(),
     )
     .expect("reject");
     let item = &plan.work_items[&work];
@@ -118,12 +130,20 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
             .expect("next")
             .is_empty()
     );
-    apply_command(&mut plan, owner, Command::Submit { work, note: None }, at).expect("resubmit");
+    apply_command(
+        &mut plan,
+        owner,
+        Command::Submit { work, note: None },
+        at,
+        dpm_model::OperationId::new(),
+    )
+    .expect("resubmit");
     apply_command(
         &mut plan,
         reviewer,
         Command::Verify { work, note: None },
         at,
+        dpm_model::OperationId::new(),
     )
     .expect("verify");
     assert!(plan.work_items[&work].last_rejection.is_some());

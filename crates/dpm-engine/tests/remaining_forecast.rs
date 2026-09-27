@@ -27,7 +27,14 @@ fn started_pair(kind: DependencyKind, lag: f64) -> (Plan, WorkItemId, WorkItemId
     plan.dependencies = vec![Dependency::new(a, b, kind, lag)];
     let owner = ActorId::agent("author");
     for command in [Command::Claim { work: a }, Command::Start { work: a }] {
-        apply_command(&mut plan, owner.clone(), command, t(0)).expect("start A");
+        apply_command(
+            &mut plan,
+            owner.clone(),
+            command,
+            t(0),
+            dpm_model::OperationId::new(),
+        )
+        .expect("start A");
     }
     (plan, a, b)
 }
@@ -61,7 +68,14 @@ fn a_provisional_start_stays_a_conservative_forecast_until_verification() {
         work: a,
         note: None,
     };
-    apply_command(&mut plan, ActorId::agent("author"), submit, t(1)).expect("submit A");
+    apply_command(
+        &mut plan,
+        ActorId::agent("author"),
+        submit,
+        t(1),
+        dpm_model::OperationId::new(),
+    )
+    .expect("submit A");
     let claim = gate_report(&plan, b, Transition::Claim, t(2)).expect("gates");
     assert!(claim.ready && !claim.provisional.is_empty());
     let duration = plan.work_items[&a].expected_duration_hours();

@@ -51,6 +51,7 @@ fn inherited_decision_gates_block_children_and_explain_the_gate_key() {
             outcome: "approved".into(),
         },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("decide");
     assert!(is_ready(&plan, &plan.work_items[&task], chrono::Utc::now()));
@@ -84,7 +85,14 @@ fn nested_packages_complete_from_children_without_persisting_completion() {
             },
         ),
     ] {
-        apply_command(&mut plan, ActorId::agent(actor), command, Utc::now()).expect("execute");
+        apply_command(
+            &mut plan,
+            ActorId::agent(actor),
+            command,
+            Utc::now(),
+            dpm_model::OperationId::new(),
+        )
+        .expect("execute");
     }
     assert_eq!(
         completion(&plan, chrono::Utc::now()),
@@ -131,6 +139,7 @@ fn readiness_rejects_foreign_stale_or_invalid_contracts() {
         ActorId::agent("owner"),
         Command::Claim { work: work.id },
         Utc::now(),
+        dpm_model::OperationId::new(),
     )
     .expect("claim");
     assert!(!is_ready(&plan, &work, chrono::Utc::now()));
@@ -146,7 +155,8 @@ fn readiness_rejects_foreign_stale_or_invalid_contracts() {
             &mut plan,
             ActorId::agent("owner"),
             Command::Claim { work: work.id },
-            Utc::now()
+            Utc::now(),
+            dpm_model::OperationId::new()
         )
         .is_err()
     );
@@ -200,7 +210,14 @@ fn gated_milestone() -> (Plan, [WorkItemId; 3], dpm_model::DecisionId) {
             2,
         ),
     ] {
-        apply_command(&mut plan, actor.clone(), command, at(hour)).expect("predecessor");
+        apply_command(
+            &mut plan,
+            actor.clone(),
+            command,
+            at(hour),
+            dpm_model::OperationId::new(),
+        )
+        .expect("predecessor");
     }
     (plan, ids, gate)
 }
@@ -216,7 +233,14 @@ fn a_decision_approved_after_every_verification_sets_the_milestone_time_in_every
         decision: gate,
         outcome: "accepted".into(),
     };
-    apply_command(&mut plan, ActorId::human("lead"), decide, at(10)).expect("decide");
+    apply_command(
+        &mut plan,
+        ActorId::human("lead"),
+        decide,
+        at(10),
+        dpm_model::OperationId::new(),
+    )
+    .expect("decide");
     let reached = Some(dpm_model::EventTime::Recorded(at(10)));
     let timeline = dpm_model::Timeline::at(&plan, at(10));
     assert_eq!(timeline.completed_at(milestone), reached);
@@ -239,6 +263,7 @@ fn a_decision_approved_after_every_verification_sets_the_milestone_time_in_every
         worker.clone(),
         Command::Claim { work: b },
         at(33),
+        dpm_model::OperationId::new(),
     );
     assert!(
         matches!(refused, Err(crate::EngineError::NotReady { .. })),
@@ -247,5 +272,12 @@ fn a_decision_approved_after_every_verification_sets_the_milestone_time_in_every
     assert_eq!(plan, before, "+23h after the decision is too early");
     assert!(!is_ready(&plan, &plan.work_items[&b], at(33)));
     assert!(is_ready(&plan, &plan.work_items[&b], at(34)));
-    apply_command(&mut plan, worker, Command::Claim { work: b }, at(34)).expect("+24h");
+    apply_command(
+        &mut plan,
+        worker,
+        Command::Claim { work: b },
+        at(34),
+        dpm_model::OperationId::new(),
+    )
+    .expect("+24h");
 }

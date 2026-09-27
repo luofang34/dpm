@@ -59,13 +59,27 @@ fn reviewer() -> ActorId {
 
 fn ok(plan: &mut Plan, actor: &ActorId, command: Command, hour: i64) {
     let label = format!("{command:?} at +{hour}h");
-    apply_command(plan, actor.clone(), command, t(hour)).unwrap_or_else(|e| panic!("{label}: {e}"));
+    apply_command(
+        plan,
+        actor.clone(),
+        command,
+        t(hour),
+        dpm_model::OperationId::new(),
+    )
+    .unwrap_or_else(|e| panic!("{label}: {e}"));
 }
 
 /// A refused command leaves every field, including the revision, unchanged.
 fn refused(plan: &mut Plan, actor: &ActorId, command: Command, hour: i64) -> EngineError {
     let before = plan.clone();
-    let error = apply_command(plan, actor.clone(), command, t(hour)).expect_err("refused");
+    let error = apply_command(
+        plan,
+        actor.clone(),
+        command,
+        t(hour),
+        dpm_model::OperationId::new(),
+    )
+    .expect_err("refused");
     assert_eq!(*plan, before, "a refused command changes nothing");
     error
 }

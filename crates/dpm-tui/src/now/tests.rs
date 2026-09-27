@@ -15,8 +15,14 @@ fn id(plan: &Plan, key: &str) -> WorkItemId {
 
 fn run(plan: &mut Plan, actor: &str, command: Command, hour: i64) {
     let label = format!("{command:?}");
-    apply_command(plan, ActorId::human(actor), command, t(hour))
-        .unwrap_or_else(|e| panic!("{label}: {e}"));
+    apply_command(
+        plan,
+        ActorId::human(actor),
+        command,
+        t(hour),
+        dpm_model::OperationId::new(),
+    )
+    .unwrap_or_else(|e| panic!("{label}: {e}"));
 }
 
 /// Supplier A is chosen and its quote started, then blocked. The lead switches to supplier B, so

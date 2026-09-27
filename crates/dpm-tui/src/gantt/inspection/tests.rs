@@ -294,8 +294,14 @@ fn single_edge(kind: dpm_model::DependencyKind, lag: f64) -> (Plan, WorkItemId, 
 
 fn run(plan: &mut Plan, commands: Vec<dpm_engine::Command>, hour: u32) {
     for command in commands {
-        dpm_engine::apply_command(plan, ActorId::agent("worker"), command, at(hour))
-            .expect("execute");
+        dpm_engine::apply_command(
+            plan,
+            ActorId::agent("worker"),
+            command,
+            at(hour),
+            dpm_model::OperationId::new(),
+        )
+        .expect("execute");
     }
 }
 

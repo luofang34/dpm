@@ -142,6 +142,7 @@ impl SqliteStore {
             operation.actor.clone(),
             operation.command.clone(),
             operation.timestamp,
+            operation.id,
         )?;
         if expected != *plan {
             return Err(StoreError::SnapshotMismatch(operation.id));

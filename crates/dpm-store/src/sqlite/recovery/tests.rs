@@ -32,8 +32,14 @@ fn next_command(plan: &Plan, step: u64) -> Command {
 fn append(store: &mut SqliteStore, step: u64) {
     let mut plan = store.load_blocking().expect("load").expect("plan");
     let command = next_command(&plan, step);
-    let operation =
-        apply_command(&mut plan, ActorId::agent("owner"), command, Utc::now()).expect("command");
+    let operation = apply_command(
+        &mut plan,
+        ActorId::agent("owner"),
+        command,
+        Utc::now(),
+        dpm_model::OperationId::new(),
+    )
+    .expect("command");
     store.persist_blocking(&plan, &operation).expect("persist");
 }
 
