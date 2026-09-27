@@ -37,6 +37,16 @@ pub(crate) fn io_error(
 }
 
 impl CliError {
+    /// Machine envelope whose `error` object equals the MCP tool-error `structuredContent`.
+    pub(crate) fn envelope(&self) -> serde_json::Value {
+        serde_json::json!({ "error": dpm_app::ErrorResponse {
+            api_version: dpm_app::API_VERSION,
+            code: self.code(),
+            message: self.to_string(),
+            details: self.details(),
+        }})
+    }
+
     pub(crate) fn details(&self) -> Option<serde_json::Value> {
         match self {
             Self::Application(error) => error.details(),
@@ -55,3 +65,7 @@ impl CliError {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests;

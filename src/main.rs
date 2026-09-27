@@ -24,14 +24,7 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             if json {
-                let mut body =
-                    serde_json::json!({"code": error.code(), "message": error.to_string()});
-                if let Some(details) = error.details() {
-                    body["details"] = details;
-                }
-                if let Err(output_error) =
-                    output::json_blocking(&serde_json::json!({ "error": body }))
-                {
+                if let Err(output_error) = output::json_blocking(&error.envelope()) {
                     tracing::error!(%output_error, "could not write machine error");
                 }
             } else {

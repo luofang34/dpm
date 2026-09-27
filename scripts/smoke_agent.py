@@ -134,7 +134,8 @@ def smoke(database):
         for tool, arguments, command in missing_pairs:
             agent_error = worker.call(tool, arguments, error='not_found')
             cli_error = run_cli(database, *command, error='not_found')['error']
-            assert agent_error['message'] == cli_error['message']
+            # The CLI error object is the MCP tool-error structuredContent, api_version included.
+            assert agent_error == cli_error and cli_error['api_version'] == agent_error['api_version']
         missing = reviewer.call('decide_gate', {'decision': 'missing', 'outcome': 'choice', 'base_revision': 0}, error='not_found')
         assert missing['message'] == run_cli(database, 'decide', 'missing', 'choice', error='not_found')['error']['message']
         # Resolving a decision is a human or service act; an agent is refused alike and nothing changes.
@@ -146,7 +147,7 @@ def smoke(database):
         assert context['requirements'] and context['decisions'][0]['key'] == 'TEST-GATE'
         gated = worker.call('claim_work', {'key': 'TEST-B', 'base_revision': 0}, error='invalid_command')
         cli_gated = run_cli(database, 'claim', 'TEST-B', error='invalid_command')['error']
-        assert gated['message'] == cli_gated['message'] and gated['details'] == cli_gated['details']
+        assert gated == cli_gated
         assert gated['details']['unmet'] == worker.call('explain_work', {'key': 'TEST-B'})['data']['gates']['unmet']
         agent_error = worker.call('claim_work', {'key': 'TEST-M1', 'base_revision': 0}, error='invalid_command')
         cli_error = run_cli(database, 'claim', 'TEST-M1', error='invalid_command')['error']

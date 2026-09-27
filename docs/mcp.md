@@ -326,7 +326,8 @@ The workflow below applies to an authorized execution workspace; tool availabili
 Capabilities and limit map to repeated `--capability` and `--limit`; `project_keys` and `resource_keys`
 map to repeated `--project-key` and `--resource-key`. Work identifiers in tool arguments
 are human keys; returned records also include stable UUIDs. Domain errors use stable `code` plus
-human-readable `message`; CLI wraps this in `error`, MCP uses `isError:true` and structuredContent.
+human-readable `message` and the `api_version`; the CLI `--json` output is `{"error": {...}}` and MCP
+uses `isError:true` with the same object as structuredContent.
 A command refused by its readiness gates (dependencies, decisions, applicability, provisional basis
 or lifecycle eligibility checked by the gate evaluator) also carries `details: {transition, unmet}`,
 the same structured conditions `explain_work` reports for that transition. Refusals decided before
