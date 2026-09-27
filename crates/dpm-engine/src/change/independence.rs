@@ -95,7 +95,7 @@ pub(crate) fn refuse_own_relaxation(
     let owned: BTreeSet<WorkItemId> = current
         .work_items
         .values()
-        .filter(|w| w.owner.as_ref() == Some(actor))
+        .filter(|w| w.held_by(actor))
         .map(|w| w.id)
         .collect();
     if owned.is_empty() {

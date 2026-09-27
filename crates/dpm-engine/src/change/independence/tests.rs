@@ -237,3 +237,32 @@ fn an_owner_cannot_reselect_its_own_excluded_work() {
     }
     apply(&mut plan, reviewer(), proposal).expect("an independent reviewer may");
 }
+
+#[test]
+fn a_former_holder_cannot_relax_gates_after_handing_work_on() {
+    let (mut plan, _) = owned_predecessor();
+    let work = id(&plan, "TEST-A");
+    run(
+        &mut plan,
+        reviewer(),
+        Command::Handoff {
+            work,
+            from: owner(),
+            to: ActorId::human("successor"),
+            reason: "owner reassigned".into(),
+        },
+        t(2),
+    );
+    let mut proposal = plan.clone();
+    let (a, b) = (id(&plan, "TEST-A"), id(&plan, "TEST-B"));
+    proposal
+        .dependencies
+        .retain(|d| !(d.predecessor == a && d.successor == b));
+    let before = plan.clone();
+    let error = apply(&mut plan, owner(), proposal).expect_err("former holder refused");
+    assert!(
+        matches!(error, EngineError::OwnGateRelaxed { .. }),
+        "{error}"
+    );
+    assert_eq!(plan, before);
+}
