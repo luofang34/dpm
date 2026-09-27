@@ -266,3 +266,52 @@ fn a_former_holder_cannot_relax_gates_after_handing_work_on() {
     );
     assert_eq!(plan, before);
 }
+
+#[test]
+fn an_owner_cannot_relax_the_result_it_hands_on_through_a_milestone() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let mut proposal = plan.clone();
+    let mut milestone = proposal.work_items[&id(&plan, "TEST-M1")].clone();
+    milestone.id = WorkItemId::new();
+    milestone.key = Key::new("TEST-M2");
+    let (a, c, m2) = (id(&plan, "TEST-A"), id(&plan, "TEST-C"), milestone.id);
+    proposal.work_items.insert(m2, milestone);
+    proposal
+        .dependencies
+        .push(Dependency::new(a, m2, DependencyKind::FinishStart, 0.0));
+    proposal
+        .dependencies
+        .push(Dependency::new(m2, c, DependencyKind::FinishStart, 5.0));
+    apply(&mut plan, reviewer(), proposal).expect("reviewer adds the milestone");
+    run(&mut plan, owner(), Command::Claim { work: a }, t(1));
+    let removed = {
+        let mut proposal = plan.clone();
+        proposal
+            .dependencies
+            .retain(|d| !(d.predecessor == m2 && d.successor == c));
+        proposal
+    };
+    let lowered = {
+        let mut proposal = plan.clone();
+        for edge in &mut proposal.dependencies {
+            if edge.predecessor == m2 && edge.successor == c {
+                edge.lag_hours = 0.0;
+            }
+        }
+        proposal
+    };
+    for (label, proposal) in [("removed", removed), ("lowered", lowered)] {
+        let before = plan.clone();
+        let error = apply(&mut plan, owner(), proposal.clone()).expect_err(label);
+        assert!(
+            matches!(error, EngineError::OwnGateRelaxed { .. }),
+            "{label}: {error}"
+        );
+        assert_eq!(plan, before, "{label}");
+        let mut independent = plan.clone();
+        apply(&mut independent, reviewer(), proposal).expect("an independent reviewer may apply");
+    }
+}

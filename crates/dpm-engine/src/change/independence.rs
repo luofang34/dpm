@@ -3,7 +3,7 @@ use crate::{EngineError, Transition};
 use chrono::{DateTime, Utc};
 use dpm_model::{
     ActorId, Applicability, Dependency, DependencyId, DependencyKind, DependencyPolicy, Key, Plan,
-    StartBasis, Timeline, WorkItemId,
+    StartBasis, Timeline, WorkItemId, WorkKind,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -101,6 +101,7 @@ pub(crate) fn refuse_own_relaxation(
     if owned.is_empty() {
         return Ok(());
     }
+    let owned = through_milestones(current, owned);
     let refuse = |work: Key, relaxed| EngineError::OwnGateRelaxed {
         actor: actor.clone(),
         work,
@@ -130,6 +131,36 @@ pub(crate) fn refuse_own_relaxation(
         Some((mine, relaxed)) => Err(refuse(mine, relaxed)),
         None => Ok(()),
     }
+}
+
+/// Owned work plus every milestone joined to it through milestones only.
+///
+/// A milestone is a zero-duration point that forwards its prerequisites' results, so relaxing an
+/// edge beyond it relaxes what the owned work hands on (or waits for) exactly as if the edge touched
+/// the owned work directly.
+fn through_milestones(plan: &Plan, owned: BTreeSet<WorkItemId>) -> BTreeSet<WorkItemId> {
+    let is_milestone = |id: &WorkItemId| {
+        plan.work_items
+            .get(id)
+            .is_some_and(|w| w.kind == WorkKind::Milestone)
+    };
+    let mut reached = owned;
+    let mut frontier: Vec<WorkItemId> = reached.iter().copied().collect();
+    while let Some(node) = frontier.pop() {
+        for edge in &plan.dependencies {
+            let next = if edge.predecessor == node {
+                edge.successor
+            } else if edge.successor == node {
+                edge.predecessor
+            } else {
+                continue;
+            };
+            if is_milestone(&next) && reached.insert(next) {
+                frontier.push(next);
+            }
+        }
+    }
+    reached
 }
 
 /// The weakening of `old`, unless the proposal keeps an edge between the same endpoints that is
