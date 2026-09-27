@@ -26,7 +26,8 @@ pub(super) fn work(work: &WorkItem) -> Result<(), ValidationError> {
         work.status,
         WorkStatus::Submitted | WorkStatus::Verified | WorkStatus::Done
     );
-    if (events.started_at.is_some() && !started)
+    if (events.start_unrecorded && (events.started_at.is_some() || !started))
+        || (events.started_at.is_some() && !started)
         || (events.submitted_at.is_some() && !submitted)
         || (events.verified_at.is_some() && !work.status.satisfies_dependency())
     {

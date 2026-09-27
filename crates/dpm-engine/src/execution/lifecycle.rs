@@ -118,6 +118,10 @@ pub(super) fn block(
             status: item.status,
         });
     }
+    // The start of work begun before start times were recorded survives only in its lifecycle.
+    if item.status == WorkStatus::InProgress && item.events.started_at.is_none() {
+        item.events.start_unrecorded = true;
+    }
     item.block_reason = Some(reason.into());
     item.status = WorkStatus::Blocked;
     Ok(())
@@ -138,7 +142,7 @@ pub(super) fn unblock(
         });
     }
     item.block_reason = None;
-    item.status = if item.events.started_at.is_some() {
+    item.status = if item.start_event().is_some() {
         WorkStatus::InProgress
     } else if item.owner.is_some() {
         WorkStatus::Claimed
@@ -156,7 +160,7 @@ pub(super) fn report_progress(
 ) -> Result<(), EngineError> {
     let item = task_mut(plan, work)?;
     owns(item, actor)?;
-    let started_blocked = item.status == WorkStatus::Blocked && item.events.started_at.is_some();
+    let started_blocked = item.status == WorkStatus::Blocked && item.start_event().is_some();
     if !started_blocked {
         require_status(plan, actor, work, WorkStatus::InProgress)?;
     }

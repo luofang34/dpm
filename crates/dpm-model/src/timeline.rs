@@ -192,22 +192,15 @@ pub fn completion(plan: &Plan, now: DateTime<Utc>) -> BTreeSet<WorkItemId> {
 
 /// A task's own event: its recorded time, or unknown when its lifecycle shows it occurred earlier.
 fn task_event(work: &WorkItem, endpoint: Endpoint) -> Option<EventTime> {
-    let (recorded, occurred) = match endpoint {
-        Endpoint::Start => (
-            work.events.started_at,
-            matches!(
-                work.status,
-                WorkStatus::InProgress
-                    | WorkStatus::Submitted
-                    | WorkStatus::Verified
-                    | WorkStatus::Done
-            ),
-        ),
-        Endpoint::Finish => (work.events.verified_at, work.status.satisfies_dependency()),
-    };
-    match recorded {
-        Some(at) => Some(EventTime::Recorded(at)),
-        None => occurred.then_some(EventTime::Unrecorded),
+    match endpoint {
+        Endpoint::Start => work.start_event(),
+        Endpoint::Finish => match work.events.verified_at {
+            Some(at) => Some(EventTime::Recorded(at)),
+            None => work
+                .status
+                .satisfies_dependency()
+                .then_some(EventTime::Unrecorded),
+        },
     }
 }
 

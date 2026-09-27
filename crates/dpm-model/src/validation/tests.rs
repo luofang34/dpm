@@ -212,3 +212,37 @@ fn decision_replacement_links_must_reach_a_superseded_decision_without_loops() {
     plan.decisions.get_mut(&first).expect("old").supersedes = Some(second);
     assert!(plan.validate().is_err(), "replacement cycle");
 }
+
+#[test]
+fn an_unrecorded_start_marker_needs_started_work_without_a_start_time() {
+    let mut plan = fixture();
+    let id = plan.find_work_by_key("TEST-A").expect("task").id;
+    let work = plan.work_items.get_mut(&id).expect("task");
+    work.owner = Some(ActorId::agent("legacy"));
+    work.status = WorkStatus::Blocked;
+    work.block_reason = Some("vendor".into());
+    work.events.start_unrecorded = true;
+    plan.validate().expect("a blocked legacy start is valid");
+    let serialized = serde_json::to_value(plan.work_items[&id].events).expect("events");
+    assert_eq!(serialized, serde_json::json!({"start_unrecorded": true}));
+    let mut timed = plan.clone();
+    timed
+        .work_items
+        .get_mut(&id)
+        .expect("task")
+        .events
+        .started_at = Some(chrono::Utc::now());
+    assert!(
+        timed.validate().is_err(),
+        "a recorded start is not unrecorded"
+    );
+    let work = plan.work_items.get_mut(&id).expect("task");
+    work.status = WorkStatus::Claimed;
+    work.block_reason = None;
+    assert!(plan.validate().is_err(), "claimed work has not started");
+    assert_eq!(
+        serde_json::to_value(ExecutionEvents::default()).expect("events"),
+        serde_json::json!({}),
+        "the marker is additive and absent by default"
+    );
+}

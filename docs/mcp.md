@@ -338,8 +338,11 @@ Lifecycle commands record their own operation time: `start_work` sets `work.even
 `submit_work` sets `submitted_at` (cleared by `reject_work`), `verify_work` sets `verified_at`, and
 `decide_gate` sets the decision's `resolved_at`. No tool accepts an event time; plan changes cannot
 add or rewrite these fields (omit `resolved_at` from a replacement decision), and a command whose
-time precedes the event it follows is refused unchanged. Every query evaluates gates at one clock
-reading taken by the adapter for that response.
+time precedes the event it follows is refused unchanged. `report_blocker` on work that started
+before start times were recorded sets `work.events.start_unrecorded`: the work still counts as
+started for its SS/SF successors and `unblock_work` returns it to `InProgress`, while positive lag
+from its unknown start time stays closed. Every query evaluates gates at one clock reading taken by
+the adapter for that response.
 
 | Relation | Gates the successor's | Waits for the predecessor's |
 | --- | --- | --- |

@@ -149,7 +149,10 @@ timestamps as event facts on the task (`events.started_at`, `submitted_at`, `ver
 cannot add or rewrite these facts, and validation requires `started <= submitted <= verified`, so a
 command stamped before the event it follows is refused with no state change. Progress reports and
 submission require an explicit start. Unblocking started work returns it to `InProgress`; a rejection
-clears the rejected submission time. Queries read these facts from the snapshot, never by scanning
+clears the rejected submission time. Work that started before start times were recorded has no
+`started_at`; blocking it sets `events.start_unrecorded`, so gates, progress reports and `unblock`
+all keep treating it as started (`WorkItem::start_event`), and its unknown start time still holds
+positive lag closed. Queries read these facts from the snapshot, never by scanning
 the operation log, and readiness is never stored.
 
 | Relation | Gates the successor's | Predecessor event it waits for |

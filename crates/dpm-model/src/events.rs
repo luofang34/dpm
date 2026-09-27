@@ -18,6 +18,10 @@ pub struct ExecutionEvents {
     /// When an independent verifier accepted the result; the task's finish event.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verified_at: Option<DateTime<Utc>>,
+    /// The task started before start times were recorded. Blocking such work sets it, because a
+    /// `Blocked` lifecycle alone cannot say whether the work had started.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub start_unrecorded: bool,
 }
 
 impl ExecutionEvents {

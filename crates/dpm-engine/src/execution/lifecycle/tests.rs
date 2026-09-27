@@ -347,6 +347,49 @@ fn unknown_event_times_block_only_positive_lag_with_an_actionable_reason() {
 }
 
 #[test]
+fn a_blocked_legacy_start_still_releases_start_edges_and_resumes_in_progress() {
+    for kind in [DependencyKind::StartStart, DependencyKind::StartFinish] {
+        let (mut plan, a, b) = pair(kind, 0.0, DependencyPolicy::Hard);
+        let predecessor = plan.work_items.get_mut(&a).expect("a");
+        predecessor.status = WorkStatus::InProgress;
+        predecessor.owner = Some(worker());
+        let release =
+            |plan: &Plan| dpm_model::Timeline::at(plan, t(1)).edge(plan, &plan.dependencies[0]);
+        let started = release(&plan);
+        assert!(started.released_at().is_some(), "{kind:?}: {started:?}");
+        let block = Command::Block {
+            work: a,
+            reason: "waiting on a vendor".into(),
+        };
+        ok(&mut plan, &worker(), block, 1);
+        assert_eq!(
+            release(&plan),
+            started,
+            "{kind:?}: blocking never undoes a start"
+        );
+        views_agree(&plan, b, 1);
+        let report = Command::ReportProgress {
+            work: a,
+            percent: 40,
+            note: None,
+        };
+        ok(&mut plan, &worker(), report, 1);
+        plan.dependencies[0].lag_hours = 0.5;
+        assert_eq!(release(&plan), Release::UnrecordedEventTime);
+        plan.dependencies[0].lag_hours = 0.0;
+        ok(&mut plan, &worker(), Command::Unblock { work: a }, 2);
+        let resumed = &plan.work_items[&a];
+        assert_eq!(resumed.status, WorkStatus::InProgress, "{kind:?}");
+        assert_eq!(resumed.events.started_at, None, "no start time is invented");
+        let submit = Command::Submit {
+            work: a,
+            note: None,
+        };
+        ok(&mut plan, &worker(), submit, 3);
+    }
+}
+
+#[test]
 fn a_lead_shapes_the_schedule_but_never_releases_work_before_the_event() {
     let (mut plan, a, b) = pair(DependencyKind::FinishStart, -48.0, DependencyPolicy::Hard);
     let schedule = dpm_schedule::deterministic_remaining(&plan, t(0)).expect("schedule");

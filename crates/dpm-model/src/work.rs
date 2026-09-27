@@ -217,4 +217,25 @@ impl WorkItem {
     pub fn is_executable(&self) -> bool {
         self.kind == WorkKind::Task
     }
+
+    /// When the task started: its recorded time, or an unknown time when it started before start
+    /// times were recorded.
+    ///
+    /// Gate evaluation, resuming blocked work and progress reports all read this, so a legacy
+    /// start is never forgotten by one of them while another still honours it.
+    #[must_use]
+    pub fn start_event(&self) -> Option<crate::EventTime> {
+        let occurred = match self.status {
+            WorkStatus::InProgress
+            | WorkStatus::Submitted
+            | WorkStatus::Verified
+            | WorkStatus::Done => true,
+            WorkStatus::Blocked => self.events.start_unrecorded,
+            WorkStatus::Proposed | WorkStatus::Planned | WorkStatus::Claimed => false,
+        };
+        match self.events.started_at {
+            Some(at) => Some(crate::EventTime::Recorded(at)),
+            None => occurred.then_some(crate::EventTime::Unrecorded),
+        }
+    }
 }
