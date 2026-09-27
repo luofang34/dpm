@@ -12,7 +12,7 @@ pub(super) fn waive(
     reason: &str,
     at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
-    let edge = authorized_edge(plan, actor, dependency, reason, "waive a dependency")?;
+    let edge = authorized_edge(plan, actor, dependency, reason, Action::Waive)?;
     if edge.policy == DependencyPolicy::Hard {
         return Err(EngineError::InvalidCommand {
             entity: dependency.to_string(),
@@ -40,7 +40,7 @@ pub(super) fn restore(
     dependency: DependencyId,
     reason: &str,
 ) -> Result<(), EngineError> {
-    let edge = authorized_edge(plan, actor, dependency, reason, "restore a dependency")?;
+    let edge = authorized_edge(plan, actor, dependency, reason, Action::Restore)?;
     if !edge.is_waived() {
         return Err(EngineError::InvalidCommand {
             entity: dependency.to_string(),
@@ -51,20 +51,57 @@ pub(super) fn restore(
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+enum Action {
+    Waive,
+    Restore,
+}
+
+impl Action {
+    fn describe(self) -> &'static str {
+        match self {
+            Self::Waive => "waive a dependency",
+            Self::Restore => "restore a dependency",
+        }
+    }
+
+    fn describe_own(self) -> &'static str {
+        match self {
+            Self::Waive => "waive a dependency of its own work",
+            Self::Restore => "restore a dependency of its own work",
+        }
+    }
+}
+
+/// Setting a gate aside, or re-imposing it, is a judgement about both endpoints. As with
+/// verification and basis revalidation, the owner of either task would otherwise relax a gate on
+/// its own work, or on the result it hands to others, so the actor must own neither.
 fn authorized_edge<'a>(
     plan: &'a mut Plan,
     actor: &ActorId,
     dependency: DependencyId,
     reason: &str,
-    action: &'static str,
+    action: Action,
 ) -> Result<&'a mut Dependency, EngineError> {
     if actor.kind == ActorKind::Agent {
         return Err(EngineError::ActorNotAllowed {
             actor: actor.clone(),
-            action,
+            action: action.describe(),
         });
     }
     nonempty(&dependency.to_string(), "reason", reason)?;
+    let edge = plan
+        .find_dependency(dependency)
+        .ok_or(EngineError::MissingDependency(dependency))?;
+    let owns_endpoint = [edge.predecessor, edge.successor]
+        .iter()
+        .any(|id| plan.work_items.get(id).and_then(|w| w.owner.as_ref()) == Some(actor));
+    if owns_endpoint {
+        return Err(EngineError::ActorNotAllowed {
+            actor: actor.clone(),
+            action: action.describe_own(),
+        });
+    }
     plan.dependencies
         .iter_mut()
         .find(|edge| edge.id == dependency)

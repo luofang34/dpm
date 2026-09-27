@@ -264,3 +264,92 @@ fn relation_kinds_between_one_pair_are_addressed_by_distinct_identities() {
     assert!(gates.unmet.iter().any(|g| matches!(g,
         UnmetGate::Dependency { dependency, relation: DependencyKind::StartStart, .. } if *dependency == ss_id)));
 }
+
+fn refused_to(plan: &mut Plan, actor: &ActorId, command: Command) {
+    let before = plan.clone();
+    let error = run(plan, actor.clone(), command).expect_err("refused");
+    assert!(
+        matches!(error, EngineError::ActorNotAllowed { .. }),
+        "{actor}: {error:?}"
+    );
+    assert_eq!(*plan, before, "a refused command changes nothing");
+}
+
+#[test]
+fn owners_of_either_endpoint_can_neither_waive_nor_restore_the_edge() {
+    let (mut plan, edge, b) = soft_edge_plan();
+    let a = key(&plan, "TEST-A");
+    let (alice, bob, lead) = (
+        ActorId::human("alice"),
+        ActorId::human("bob"),
+        ActorId::human("lead"),
+    );
+    run(&mut plan, alice.clone(), Command::Claim { work: a }).expect("claim A");
+    refused_to(&mut plan, &alice, waive(edge, "my result is good enough"));
+    run(
+        &mut plan,
+        lead.clone(),
+        waive(edge, "prototype of A is sufficient"),
+    )
+    .expect("waive");
+    run(&mut plan, bob.clone(), Command::Claim { work: b }).expect("claim B");
+    for owner in [&alice, &bob] {
+        refused_to(&mut plan, owner, restore(edge, "my own call"));
+    }
+    run(
+        &mut plan,
+        ActorId::service("release-bot"),
+        restore(edge, "prototype rejected"),
+    )
+    .expect("independent restoration");
+    refused_to(&mut plan, &bob, waive(edge, "skip my own prerequisite"));
+    run(&mut plan, lead, waive(edge, "independent call")).expect("independent waiver");
+}
+
+#[test]
+fn a_successor_owner_cannot_waive_away_its_own_invalidated_provisional_basis() {
+    let (mut plan, edge, b) = soft_edge_plan();
+    let a = key(&plan, "TEST-A");
+    plan.dependencies
+        .iter_mut()
+        .find(|d| d.id == edge)
+        .expect("edge")
+        .start_basis = dpm_model::StartBasis::Provisional;
+    let (author, owner, reviewer) = (
+        ActorId::agent("author"),
+        ActorId::human("bob"),
+        ActorId::human("reviewer"),
+    );
+    let reject = Command::Reject {
+        work: a,
+        reason: "acceptance check fails".into(),
+    };
+    for (actor, command) in [
+        (&author, Command::Claim { work: a }),
+        (&author, Command::Start { work: a }),
+        (
+            &author,
+            Command::Submit {
+                work: a,
+                note: None,
+            },
+        ),
+        (&owner, Command::Claim { work: b }),
+        (&owner, Command::Start { work: b }),
+        (&reviewer, reject),
+    ] {
+        run(&mut plan, actor.clone(), command).expect("setup");
+    }
+    let invalidated = |plan: &Plan| {
+        gate_report(plan, b, crate::Transition::Submit, Utc::now())
+            .expect("gates")
+            .unmet
+            .iter()
+            .any(|g| matches!(g, UnmetGate::BasisInvalidated { .. }))
+    };
+    assert!(invalidated(&plan));
+    refused_to(&mut plan, &owner, waive(edge, "my work is fine"));
+    assert!(invalidated(&plan));
+    run(&mut plan, reviewer, waive(edge, "B no longer uses A")).expect("independent waiver");
+    assert!(!invalidated(&plan));
+}

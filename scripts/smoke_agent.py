@@ -361,9 +361,26 @@ def dependency_smoke(directory):
         restored = history['entries'][-1]['operation']
         assert restored['actor'] == {'kind': 'Service', 'name': 'ci'} and restored['timestamp']
         assert restored['command'] == {'RestoreDependency': {'dependency': edge['id'], 'reason': 'Prototype rejected'}}
+        owner_endpoint_refusal(database, edge['id'])
     finally:
         worker.close()
         reviewer.close()
+
+
+def owner_endpoint_refusal(database, edge):
+    """A human owning either endpoint cannot waive the edge, identically through CLI and MCP."""
+    owner = Agent(database, 'human:owner')
+    try:
+        run_cli(database, 'claim', 'TEST-A', '--actor', 'human:owner')
+        revision = run_cli(database, 'export')['revision']
+        arguments = {'dependency': edge, 'reason': 'my own result is enough', 'base_revision': revision}
+        remote = owner.call('waive_dependency', arguments, error='invalid_command')
+        local = run_cli(database, 'waive-dependency', edge, '--reason', 'my own result is enough', '--actor', 'human:owner',
+                        error='invalid_command')
+        assert remote['message'] == local['error']['message'] and 'its own work' in remote['message'], remote
+        assert run_cli(database, 'export')['revision'] == revision
+    finally:
+        owner.close()
 
 
 def timing_plan(kind, lag, legacy=False):

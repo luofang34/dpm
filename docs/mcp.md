@@ -233,7 +233,7 @@ whole proposal.
 
 Policy, kind, lag and rationale change only through reviewed `apply_change`; proposals cannot add,
 alter or remove waivers, nor edit or remove a waived edge, which must be restored first. `waive_dependency` and `restore_dependency` take `dependency`, a nonempty
-`reason` and `base_revision`. Only human/service actors may use them, only Soft edges can be waived,
+`reason` and `base_revision`. Only human/service actors that own neither endpoint task may use them, only Soft edges can be waived,
 and restoring requires a current waiver. The waiver's actor, time and reason stay on the edge until
 restoration; `history` records both operations with actor, time and reason. A waived edge is absent
 from `gates.unmet`, readiness, verification prerequisites, milestone completion and the remaining

@@ -215,7 +215,8 @@ A dependency's `policy` is `Hard` (the default) or `Soft`, with an optional `rat
 kind, lag and rationale change only through a reviewed plan change; edges into started work stay
 protected like the rest of its prerequisite basis. A human or service may waive an unwaived `Soft`
 edge, or restore a waived one, with a nonempty reason; `Hard` edges cannot be waived and agents may
-do neither. The waiver's actor, time and reason stay on the edge until restoration, and each waiver
+do neither. Like verification and basis revalidation, the actor must own neither endpoint task, so
+no owner relaxes a gate on its own work or on the result it hands on. The waiver's actor, time and reason stay on the edge until restoration, and each waiver
 or restoration is a semantic operation in the history. Plan changes cannot add, alter or remove a
 waiver, and a waived edge must be restored before a reviewed change edits or removes it.
 
