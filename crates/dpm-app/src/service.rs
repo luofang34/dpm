@@ -63,6 +63,9 @@ pub enum Query {
         /// Opt-in rule matching GUID-less tasks to existing work; absent never matches.
         #[serde(default)]
         match_existing_by: Option<dpm_interchange::ExistingMatch>,
+        /// Existing work keeps its priority; the report names differing source values.
+        #[serde(default)]
+        keep_existing_priority: bool,
     },
     /// Write one project's work as the supported Microsoft Project XML subset.
     ExportMspdi {

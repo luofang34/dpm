@@ -350,6 +350,10 @@ pub(crate) enum PlanCommand {
         /// the same title path (titles from the project root down); ambiguity refuses the import.
         #[arg(long, value_name = "RULE", value_parser = crate::interchange::existing_match)]
         match_existing_by: Option<dpm_app::ExistingMatch>,
+        /// Keep the priority of existing work and report differing source values; for tools such
+        /// as OmniPlan that rescale priorities by the highest one in the document.
+        #[arg(long)]
+        keep_existing_priority: bool,
         /// Also write the candidate plan here for review and `plan apply`.
         #[arg(long)]
         candidate: Option<PathBuf>,

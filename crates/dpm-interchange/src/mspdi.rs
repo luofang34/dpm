@@ -49,6 +49,11 @@ pub struct ImportOptions {
     /// matches, so such a task always maps to its derived identity.
     #[serde(default)]
     pub match_existing_by: Option<ExistingMatch>,
+    /// Keep the local priority of existing work whatever the source says, and report the source
+    /// value instead. OmniPlan rescales priorities by the highest one in the document, so an
+    /// unedited round trip without a P0 raises every band.
+    #[serde(default)]
+    pub keep_existing_priority: bool,
 }
 
 /// Explicit rule for mapping GUID-less source tasks onto existing work, for files that went
@@ -98,7 +103,10 @@ pub fn import_mspdi(
         &prefix,
         options.match_existing_by,
     )?;
-    let outline = items::map(current, &source, &resolver, project, &prefix)?;
+    let fields = items::FieldPolicy {
+        keep_existing_priority: options.keep_existing_priority,
+    };
+    let outline = items::map(current, &source, &resolver, (project, &prefix), fields)?;
     let mut candidate = current.clone();
     for mapped in outline.mapped() {
         candidate.work_items.insert(mapped.id, mapped.clone());

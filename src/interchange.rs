@@ -18,6 +18,7 @@ pub(crate) fn plan_command_blocking(
             project_key,
             key_prefix,
             match_existing_by,
+            keep_existing_priority,
             candidate,
         } => {
             let xml = fs::read_to_string(&file).map_err(io_error("read MSPDI document", &file))?;
@@ -26,6 +27,7 @@ pub(crate) fn plan_command_blocking(
                 project_key,
                 key_prefix,
                 match_existing_by,
+                keep_existing_priority,
             })?;
             if let Some(path) = candidate {
                 let text = serde_json::to_string_pretty(&response.data["candidate"])?;

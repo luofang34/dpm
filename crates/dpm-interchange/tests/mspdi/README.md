@@ -45,8 +45,8 @@ importer needs an explicit key prefix for them.
   expose: positive and negative lead times and start-after / end-before constraint dates. OmniPlan
   writes the locked start as `ConstraintType` 2 (Must Start On) and omits the start-after and
   end-before constraints from MSPDI entirely; SF between two normal tasks is written as `Type` 2;
-  its 0..9 priority is written as ⌊n·1000/9⌋ (3→333, 5→555, 7→777, 9→1000, unset 0 for groups and
-  milestones). Re-running the scripts reproduces the same outline, kinds, priorities, relations and
+  its priorities are written as ⌊n·1000 ÷ highest n in the document⌋, which is ⌊n·1000/9⌋ here
+  (3→333, 5→555, 7→777, 9→1000, unset 0 for groups and milestones). Re-running the scripts reproduces the same outline, kinds, priorities, relations and
   leads; the dates in the file depend on the day it is run.
 - `dpm-export-cjk.xml`: DPM's export of `tests/support/execution-plan.json` after importing the
   MPXJ release plan with two task names in Chinese; the file OmniPlan opened. It pins the pre-image for the round
@@ -54,6 +54,13 @@ importer needs an explicit key prefix for them.
 - `omniplan-export-of-dpm.xml`: OmniPlan's MSPDI export after opening `dpm-export-cjk.xml`. OmniPlan
   dropped every GUID, wrote priority 0 for groups, added a line break to every note, and rewrote
   the SF link into the zero-duration Release milestone as SS (the same bound for a milestone).
+
+- `dpm-export-no-p0.xml`: DPM's export of `tests/support/execution-plan.json` with priorities
+  P1, P2, P3 in key order and no P0 (the test rebuilds this plan and checks the export byte for
+  byte). It pins the pre-image for the next file and is not an external fixture.
+- `omniplan-export-no-p0.xml`: OmniPlan's MSPDI export after opening `dpm-export-no-p0.xml` from
+  its sandbox container. OmniPlan scaled the priorities by the highest one: 700/500/300 came back
+  as 1000/714/428, one DPM band higher each, which `--keep-existing-priority` leaves unapplied.
 
 In the other direction, DPM's export of the imported `omniplan-native.xml` opened in OmniPlan 4.10.3
 with the same groups, milestones, relation kinds, lead times and CJK names (top-level items in DPM

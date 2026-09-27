@@ -280,8 +280,9 @@ is not verified. `dpm-interchange` parses
 and writes the subset without network access and never touches the store.
 
 `plan import-mspdi FILE --project-key KEY [--key-prefix P] [--match-existing-by title-path]
-[--candidate OUT.json]` and `import_mspdi` (`xml`, `project_key`, optional `key_prefix` and
-`match_existing_by`) return `{report, preview, candidate}`.
+[--keep-existing-priority] [--candidate OUT.json]` and `import_mspdi` (`xml`, `project_key`,
+optional `key_prefix`, `match_existing_by` and `keep_existing_priority`) return
+`{report, preview, candidate}`.
 `candidate` is a full plan at the observed revision, `preview` is its `propose_change` result, and
 `--candidate` also writes it to a file. Importing is a query: nothing is persisted until a human or
 service applies the candidate with `plan apply` / `apply_change`, which re-validates it against
@@ -295,7 +296,7 @@ revision and operation history unchanged.
 | `Milestone=1` | Milestone; a nonzero source duration is dropped and reported. Without the element, existing work keeps its kind (reported as `kept`) and new work defaults to Task (reported as approximated) |
 | other tasks | Task, `Proposed`, empty acceptance: never executable until ratified. A zero-duration task without the flag stays an unestimated Task, so exported unestimated tasks keep their kind |
 | `Name`, `Notes` | `title`, `objective`; an empty name or absent notes keep the local value. Trailing line breaks in `Notes` are not content (OmniPlan ends every note with one) and are dropped |
-| `Priority` 0..1000 | P0 ≥800, P1 ≥600, P2 ≥400, P3 ≥200, else P4; export writes 900/700/500/300/100. Absent: existing work keeps its priority; new work gets the MSPDI default 500 (P2), reported as approximated. OmniPlan writes its nine priority steps as ⌊n·1000/9⌋ (111, 333, 555, 777, 1000 for DPM's 100..900), which fall in the same bands, and 0 for every group, which becomes P4 and is reported as a change on existing packages |
+| `Priority` 0..1000 | P0 ≥800, P1 ≥600, P2 ≥400, P3 ≥200, else P4; export writes 900/700/500/300/100. Absent: existing work keeps its priority; new work gets the MSPDI default 500 (P2), reported as approximated. OmniPlan rescales on export: it writes ⌊level·1000 ÷ highest level in the document⌋ with level = priority ÷ 100 (the `UID` 0 summary does not count), so the highest priority always comes back as 1000. With a P0 in the plan, DPM's 900/700/500/300/100 come back as 1000/777/555/333/111 in the same bands; a plan without P0 comes back one band higher (700/500/300 as 1000/714/428); groups may come back as 0 (P4). `--keep-existing-priority` / `keep_existing_priority: true` keeps the priority of existing work, lists `priority` as `kept` and reports the differing source value as approximated; new work still maps its source value |
 | `Duration` `PTnHnMnS` | Single-point estimate O=M=P in hours; zero means unestimated |
 | `PredecessorLink` `Type` 0/1/2/3 | FF/FS/SF/SS dependency |
 | `LinkLag` | `lag_hours = LinkLag / 600` (tenths of a minute) |
@@ -368,6 +369,9 @@ derived identity already names other work than its path matches, refuses the who
 history, evidence and ownership onto the wrong work. Titles are the one thing every tool round-trips;
 outline numbers and `UID`s are renumbered freely, and dates and durations are exactly what an edit
 changes. Renaming a task in the other tool therefore turns it into new work, and the report says so.
+Priorities from such a tool may be relative (see `Priority` above); against work with execution
+history a raised band is a protected change that refuses the whole import, so an OmniPlan round
+trip of a plan in progress needs `--keep-existing-priority` as well.
 
 Re-importing updates work with the same identity and never duplicates it. Keys, lifecycle,
 ownership, progress, evidence and acceptance stay local. The document owns only the dependencies

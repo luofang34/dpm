@@ -221,10 +221,6 @@ struct Arguments {
     observed: Option<ExternalState>,
     dependency: Option<String>,
     attempt: Option<u32>,
-    xml: Option<String>,
-    project_key: Option<String>,
-    key_prefix: Option<String>,
-    match_existing_by: Option<dpm_app::ExistingMatch>,
 }
 
 fn default_true() -> bool {
@@ -248,6 +244,11 @@ pub(crate) fn call_tool_blocking(
     if ownership::handles(name) {
         return ownership::call_blocking(app, actor, name, value);
     }
+    if interchange::handles(name) {
+        return Ok(serde_json::to_value(
+            app.query_blocking(interchange::query(name, value)?)?,
+        )?);
+    }
     let history_limit = value.get("limit").cloned().unwrap_or(json!(100));
     let args: Arguments = serde_json::from_value(value)?;
     if matches!(name, "workspace_list" | "workspace_register") {
@@ -257,7 +258,6 @@ pub(crate) fn call_tool_blocking(
         "export_plan" => Some(Query::Export),
         "plan_schema" => Some(Query::PlanSchema),
         "plan_template" => Some(Query::PlanTemplate),
-        "import_mspdi" | "export_mspdi" => Some(interchange::query(name, &args)?),
         "propose_change" => Some(Query::ProposeChange {
             plan: required(args.plan.clone(), "plan")?,
         }),

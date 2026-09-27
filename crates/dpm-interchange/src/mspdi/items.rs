@@ -66,12 +66,19 @@ enum Parent {
     NotImported(i64),
 }
 
+/// Which source fields the import may apply to existing work.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FieldPolicy {
+    /// Existing work keeps its priority; the report names the source value it did not apply.
+    pub(crate) keep_existing_priority: bool,
+}
+
 pub(crate) fn map(
     current: &Plan,
     source: &SourceProject,
     resolver: &Resolver,
-    project: ProjectId,
-    prefix: &str,
+    (project, prefix): (ProjectId, &str),
+    fields: FieldPolicy,
 ) -> Result<Outline, InterchangeError> {
     let mut outline = Outline::default();
     let mut identities: BTreeMap<WorkItemId, i64> = BTreeMap::new();
@@ -141,7 +148,8 @@ pub(crate) fn map(
                 }
                 check_kind(task, existing, placement.has_children)?;
                 let key = key_for(existing, task, prefix, &mut keys)?;
-                let (work, mut report) = fields::build(task, existing, id, key, &placement);
+                let (work, mut report) =
+                    fields::build(task, existing, (id, key), &placement, fields);
                 resolver.record(task, (id, &basis), &mut report);
                 outline.work.insert(task.uid, work);
                 outline.reports.push(report);

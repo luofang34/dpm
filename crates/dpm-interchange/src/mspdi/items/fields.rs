@@ -1,9 +1,10 @@
 //! Field-by-field mapping of one source task onto candidate work.
 //!
 //! A field the source omits or leaves empty is not source data: existing work keeps its local
-//! value and the report lists the field as `kept`, never as `preserved`.
+//! value and the report lists the field as `kept`, never as `preserved`. A field the import was
+//! asked to keep is `kept` too, with the differing source value reported as approximated.
 
-use super::{Parent, Placement};
+use super::{FieldPolicy, Parent, Placement};
 use crate::mspdi::encoding::{
     DEFAULT_PRIORITY, TimeBasis, duration_seconds, estimate_from_seconds, format_guid, hours,
     parse_duration, priority_from_value, priority_value, time_basis,
@@ -16,9 +17,9 @@ use std::collections::BTreeSet;
 pub(super) fn build(
     task: &SourceTask,
     existing: Option<&WorkItem>,
-    id: WorkItemId,
-    key: Key,
+    (id, key): (WorkItemId, Key),
     placement: &Placement,
+    policy: FieldPolicy,
 ) -> (WorkItem, ItemReport) {
     let mut report = ItemReport {
         uid: task.uid,
@@ -44,7 +45,12 @@ pub(super) fn build(
     report.preserved.push("outline".into());
     map_title(task, existing, &mut work, &mut report);
     map_objective(task, existing, &mut work, &mut report);
-    map_priority(task, existing, &mut work, &mut report);
+    match existing {
+        Some(existing) if policy.keep_existing_priority => {
+            keep_priority(task, existing, &mut report);
+        }
+        _ => map_priority(task, existing, &mut work, &mut report),
+    }
     map_duration(task, existing, &mut work, &mut report);
     (work, report)
 }
@@ -158,6 +164,26 @@ fn map_objective(
         report.preserved.push("notes".into());
     } else if existing.is_some() {
         report.kept.push("notes".into());
+    }
+}
+
+/// Existing work keeps its priority by request; a differing source value stays visible.
+fn keep_priority(task: &SourceTask, existing: &WorkItem, report: &mut ItemReport) {
+    match task.priority {
+        Some(value) if priority_value(existing.priority) == value => {
+            report.preserved.push("priority".into());
+        }
+        Some(value) => {
+            report.kept.push("priority".into());
+            report.approximated.push(Finding::new(
+                "priority",
+                format!(
+                    "source priority {value} not applied; existing {:?} kept",
+                    existing.priority
+                ),
+            ));
+        }
+        None => report.kept.push("priority".into()),
     }
 }
 

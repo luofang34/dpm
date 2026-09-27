@@ -108,6 +108,30 @@ def check_guidless_round_trip(database, worker, directory, exported):
     assert 'fuzzy' in bad['message'] or 'title-path' in bad['message'], bad
 
 
+def check_rescaled_priorities(directory):
+    """OmniPlan rescales priorities by the highest one; keeping local priority is explicit and identical in both adapters."""
+    plan = json.loads((ROOT / 'tests/support/execution-plan.json').read_text())
+    for item, band in zip(sorted(plan['work_items'].values(), key=lambda w: w['key']), ['P1', 'P2', 'P3'] * 10):
+        item['priority'] = band
+    source, database = directory / 'no-p0.json', directory / 'no-p0.sqlite'
+    source.write_text(json.dumps(plan))
+    run_cli(database, 'import', str(source))
+    fixture = ROOT / 'crates/dpm-interchange/tests/mspdi/omniplan-export-no-p0.xml'
+    arguments = {'xml': fixture.read_text(), 'project_key': 'TEST', 'key_prefix': 'OPR', 'match_existing_by': 'title-path'}
+    flags = ['plan', 'import-mspdi', str(fixture), '--project-key', 'TEST', '--key-prefix', 'OPR', '--match-existing-by', 'title-path']
+    worker = Agent(database, 'agent:importer')
+    try:
+        raised = run_cli(database, *flags)
+        assert raised == worker.call('import_mspdi', arguments)['data']
+        assert {(c['before'], c['after']) for i in raised['report']['items'] for c in i['changes']} == {('P1', 'P0'), ('P2', 'P1'), ('P3', 'P2')}
+        kept = run_cli(database, *flags, '--keep-existing-priority')
+        assert kept == worker.call('import_mspdi', {**arguments, 'keep_existing_priority': True})['data']
+        assert kept['preview']['changes'] == [], kept['preview']
+        assert all('priority' in i['kept'] for i in kept['report']['items'][1:])
+    finally:
+        worker.close()
+
+
 def smoke(directory):
     database = directory / 'interchange.sqlite'
     run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
@@ -121,9 +145,10 @@ def smoke(directory):
         check_apply_and_round_trip(database, worker, directory)
     finally:
         worker.close()
+    check_rescaled_priorities(directory)
 
 
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory() as directory:
         smoke(Path(directory))
-    print('PASS: MSPDI import/export CLI/MCP parity, reports keep imported tasks Proposed, failed imports and refused applies change nothing, human apply, export re-imports without changes, a GUID-less copy maps back only with --match-existing-by title-path')
+    print('PASS: MSPDI import/export CLI/MCP parity, reports keep imported tasks Proposed, failed imports and refused applies change nothing, human apply, export re-imports without changes, a GUID-less copy maps back only with --match-existing-by title-path, rescaled OmniPlan priorities stay local only with --keep-existing-priority')

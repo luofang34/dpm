@@ -36,6 +36,7 @@ fn options(prefix: Option<&str>) -> ImportOptions {
         project_key: "REL".into(),
         key_prefix: prefix.map(Into::into),
         match_existing_by: None,
+        keep_existing_priority: false,
     }
 }
 

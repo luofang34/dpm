@@ -1,6 +1,23 @@
-use super::{Arguments, required};
+use super::required;
 use dpm_app::{AppError, Query};
+use serde::Deserialize;
 use serde_json::{Map, Value, json};
+
+/// Arguments of the MSPDI tools, which no other tool shares.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MspdiArguments {
+    project_key: Option<String>,
+    xml: Option<String>,
+    key_prefix: Option<String>,
+    match_existing_by: Option<dpm_app::ExistingMatch>,
+    #[serde(default)]
+    keep_existing_priority: bool,
+}
+
+pub(super) fn handles(name: &str) -> bool {
+    matches!(name, "import_mspdi" | "export_mspdi")
+}
 
 /// Input schema for the read-only MSPDI tools; the CLI builds the same queries from flags.
 pub(super) fn schema(name: &str, properties: &mut Map<String, Value>, needed: &mut Vec<&str>) {
@@ -22,18 +39,24 @@ pub(super) fn schema(name: &str, properties: &mut Map<String, Value>, needed: &m
             "match_existing_by".into(),
             json!({"type":"string","enum":["title-path"],"description":"Opt-in: match tasks without a GUID to the one existing work item in the project with the same title path (titles from the project root down); ambiguity refuses the import. Absent: never match"}),
         );
+        properties.insert(
+            "keep_existing_priority".into(),
+            json!({"type":"boolean","description":"Keep the priority of existing work and report differing source values; for tools such as OmniPlan that rescale priorities by the highest one in the document. Default false"}),
+        );
         needed.push("xml");
     }
 }
 
-pub(super) fn query(name: &str, args: &Arguments) -> Result<Query, AppError> {
-    let project_key = required(args.project_key.clone(), "project_key")?;
+pub(super) fn query(name: &str, value: Value) -> Result<Query, AppError> {
+    let args: MspdiArguments = serde_json::from_value(value)?;
+    let project_key = required(args.project_key, "project_key")?;
     Ok(if name == "import_mspdi" {
         Query::ImportMspdi {
-            xml: required(args.xml.clone(), "xml")?,
+            xml: required(args.xml, "xml")?,
             project_key,
-            key_prefix: args.key_prefix.clone(),
+            key_prefix: args.key_prefix,
             match_existing_by: args.match_existing_by,
+            keep_existing_priority: args.keep_existing_priority,
         }
     } else {
         Query::ExportMspdi { project_key }

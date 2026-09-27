@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+    <SaveVersion>14</SaveVersion>
+    <Name>Synthetic execution graph</Name>
+    <GUID>00000009-0000-4000-8000-000000000001</GUID>
+    <Title>Synthetic execution graph</Title>
+    <Tasks>
+        <Task>
+            <UID>1</UID>
+            <GUID>00000007-0000-4000-8000-000000000001</GUID>
+            <ID>1</ID>
+            <Name>Contract A</Name>
+            <OutlineNumber>1</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>700</Priority>
+            <Duration>PT4H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Notes>Produce observable result A for the test graph.</Notes>
+        </Task>
+        <Task>
+            <UID>2</UID>
+            <GUID>00000007-0000-4000-8000-000000000002</GUID>
+            <ID>2</ID>
+            <Name>Contract B</Name>
+            <OutlineNumber>2</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>500</Priority>
+            <Duration>PT20H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Notes>Produce observable result B for the test graph.</Notes>
+            <PredecessorLink>
+                <PredecessorUID>1</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+        </Task>
+        <Task>
+            <UID>3</UID>
+            <GUID>00000007-0000-4000-8000-000000000003</GUID>
+            <ID>3</ID>
+            <Name>Contract C</Name>
+            <OutlineNumber>3</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>300</Priority>
+            <Duration>PT40H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Notes>Produce observable result C for the test graph.</Notes>
+            <PredecessorLink>
+                <PredecessorUID>2</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+        </Task>
+        <Task>
+            <UID>4</UID>
+            <GUID>00000007-0000-4000-8000-000000000004</GUID>
+            <ID>4</ID>
+            <Name>Contract D</Name>
+            <OutlineNumber>4</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>700</Priority>
+            <Duration>PT32H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Notes>Produce observable result D for the test graph.</Notes>
+            <PredecessorLink>
+                <PredecessorUID>1</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+        </Task>
+        <Task>
+            <UID>5</UID>
+            <GUID>00000007-0000-4000-8000-000000000005</GUID>
+            <ID>5</ID>
+            <Name>Contract E</Name>
+            <OutlineNumber>5</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>500</Priority>
+            <Duration>PT8H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Notes>Produce observable result E for the test graph.</Notes>
+            <PredecessorLink>
+                <PredecessorUID>3</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+            <PredecessorLink>
+                <PredecessorUID>4</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+        </Task>
+        <Task>
+            <UID>6</UID>
+            <GUID>00000007-0000-4000-8000-000000000006</GUID>
+            <ID>6</ID>
+            <Name>Contract F</Name>
+            <OutlineNumber>6</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>300</Priority>
+            <Duration>PT4H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Notes>Produce observable result F for the test graph.</Notes>
+            <PredecessorLink>
+                <PredecessorUID>5</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+        </Task>
+        <Task>
+            <UID>7</UID>
+            <GUID>00000007-0000-4000-8000-000000000007</GUID>
+            <ID>7</ID>
+            <Name>Verified join</Name>
+            <OutlineNumber>7</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>700</Priority>
+            <Duration>PT0H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <Milestone>1</Milestone>
+            <Summary>0</Summary>
+            <Notes>Check the verified dependency condition.</Notes>
+            <PredecessorLink>
+                <PredecessorUID>6</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+        </Task>
+    </Tasks>
+</Project>

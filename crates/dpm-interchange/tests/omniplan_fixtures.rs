@@ -37,6 +37,7 @@ fn options(project: &str, prefix: &str, matching: Option<ExistingMatch>) -> Impo
         project_key: project.into(),
         key_prefix: Some(prefix.into()),
         match_existing_by: matching,
+        keep_existing_priority: false,
     }
 }
 
@@ -283,4 +284,66 @@ fn omniplan_round_trip_maps_back_only_when_asked_and_reports_what_omniplan_chang
     let again = import(&plan, OMNIPLAN_ROUND_TRIP, &matching);
     let preview = propose_change(&plan, &again.candidate).expect("preview");
     assert!(preview.changes.is_empty());
+}
+
+const DPM_EXPORT_NO_P0: &str = include_str!("mspdi/dpm-export-no-p0.xml");
+const OMNIPLAN_NO_P0: &str = include_str!("mspdi/omniplan-export-no-p0.xml");
+
+/// The execution plan with priorities P1, P2, P3 in key order and no P0: the pre-image of
+/// `dpm-export-no-p0.xml`.
+fn plan_without_p0() -> Plan {
+    let mut plan: Plan =
+        serde_json::from_str(include_str!("../../../tests/support/execution-plan.json"))
+            .expect("plan");
+    let mut work: Vec<_> = plan.work_items.values_mut().collect();
+    work.sort_by(|a, b| a.key.cmp(&b.key));
+    for (item, priority) in work.into_iter().zip(
+        [Priority::P1, Priority::P2, Priority::P3]
+            .into_iter()
+            .cycle(),
+    ) {
+        item.priority = priority;
+    }
+    plan
+}
+
+#[test]
+fn omniplan_rescales_priorities_by_the_highest_one_so_existing_priority_can_be_kept() {
+    let plan = plan_without_p0();
+    let export = dpm_interchange::export_mspdi(&plan, "TEST").expect("export");
+    assert_eq!(
+        export.xml, DPM_EXPORT_NO_P0,
+        "the pinned pre-image is DPM's export"
+    );
+    let matching = options("TEST", "OPR", Some(ExistingMatch::TitlePath));
+    // OmniPlan writes ⌊level·1000 ÷ highest level⌋: 700/500/300 come back as 1000/714/428.
+    let raised = import(&plan, OMNIPLAN_NO_P0, &matching);
+    let mut bands: Vec<_> = raised.report.items[1..]
+        .iter()
+        .flat_map(|i| &i.changes)
+        .filter(|c| c.field == "priority")
+        .map(|c| (c.before.as_str(), c.after.as_str()))
+        .collect();
+    bands.sort_unstable();
+    bands.dedup();
+    assert_eq!(bands, [("P1", "P0"), ("P2", "P1"), ("P3", "P2")]);
+    let kept = import(
+        &plan,
+        OMNIPLAN_NO_P0,
+        &ImportOptions {
+            keep_existing_priority: true,
+            ..matching
+        },
+    );
+    let preview = propose_change(&plan, &kept.candidate).expect("preview");
+    assert!(preview.changes.is_empty(), "{:?}", preview.changes);
+    for item in &kept.report.items[1..] {
+        assert!(item.kept.contains(&"priority".to_string()), "{}", item.name);
+        let finding = item
+            .approximated
+            .iter()
+            .find(|f| f.field == "priority")
+            .expect("the source value stays visible");
+        assert!(finding.detail.contains("not applied"), "{}", finding.detail);
+    }
 }
