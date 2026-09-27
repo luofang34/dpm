@@ -425,7 +425,9 @@ the operation's own time as its `resolved_at`), and a command whose
 time precedes the event it follows is refused unchanged. `report_blocker` on work that started
 before start times were recorded sets `work.events.start_unrecorded`: the work still counts as
 started for its SS/SF successors and `unblock_work` returns it to `InProgress`, while positive lag
-from its unknown start time stays closed. Every query evaluates gates at one clock reading taken by
+from its unknown start time stays closed. Work already blocked in a snapshot saved before
+`start_unrecorded` existed has no start fact, so it counts as unstarted for its SS/SF successors, `unblock_work` returns it to
+`Claimed` once, and its owner calls `start_work` again, which records a new start time. Every query evaluates gates at one clock reading taken by
 the adapter for that response.
 
 | Relation | Gates the successor's | Waits for the predecessor's |

@@ -158,7 +158,10 @@ submission require an explicit start. Unblocking started work returns it to `InP
 clears the rejected submission time. Work that started before start times were recorded has no
 `started_at`; blocking it sets `events.start_unrecorded`, so gates, progress reports and `unblock`
 all keep treating it as started (`WorkItem::start_event`), and its unknown start time still holds
-positive lag closed. Queries read these facts from the snapshot, never by scanning
+positive lag closed. One limitation is not repaired: such work that was already `Blocked` when a
+snapshot written before `start_unrecorded` existed was saved carries no start fact at all, so it
+counts as unstarted (its SS/SF successors wait again) and `unblock` returns it to `Claimed`; its
+owner starts it again with `start`, which records a new start time. Queries read these facts from the snapshot, never by scanning
 the operation log, and readiness is never stored.
 
 | Relation | Gates the successor's | Predecessor event it waits for |
