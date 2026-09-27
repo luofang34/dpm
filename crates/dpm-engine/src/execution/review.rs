@@ -43,10 +43,11 @@ pub(super) fn reject(
             status: item.status,
         });
     }
-    if item.owner.as_ref() == Some(actor) {
+    // A former owner executed part of the result, so a handoff does not make it independent.
+    if item.held_by(actor) {
         return Err(EngineError::ActorNotAllowed {
             actor: actor.clone(),
-            action: "review its own submission",
+            action: "review work it has owned",
         });
     }
     item.status = WorkStatus::InProgress;

@@ -75,7 +75,8 @@ impl Action {
 
 /// Setting a gate aside, or re-imposing it, is a judgement about both endpoints. As with
 /// verification and basis revalidation, the owner of either task would otherwise relax a gate on
-/// its own work, or on the result it hands to others, so the actor must own neither.
+/// its own work, or on the result it hands to others, so the actor must not own either task now
+/// or have owned it before a handoff.
 fn authorized_edge<'a>(
     plan: &'a mut Plan,
     actor: &ActorId,
@@ -95,7 +96,7 @@ fn authorized_edge<'a>(
         .ok_or(EngineError::MissingDependency(dependency))?;
     let owns_endpoint = [edge.predecessor, edge.successor]
         .iter()
-        .any(|id| plan.work_items.get(id).and_then(|w| w.owner.as_ref()) == Some(actor));
+        .any(|id| plan.work_items.get(id).is_some_and(|w| w.held_by(actor)));
     if owns_endpoint {
         return Err(EngineError::ActorNotAllowed {
             actor: actor.clone(),

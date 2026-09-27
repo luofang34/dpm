@@ -186,8 +186,8 @@ The start command records the attempts the shared evaluator released it on as im
 `DependencyBasis` entries on the successor. Basis state is derived from the predecessor's attempt
 record, never cached: a basis on a rejected attempt adds `UnmetGate::BasisInvalidated` to the
 successor's submission and verification gates until `RevalidateBasis` appends a basis on the
-predecessor's current pending or verified attempt. Only a human or service that owns neither task may
-revalidate, and a stale or unrejected request changes nothing. Later upstream submissions and
+predecessor's current pending or verified attempt. Only a human or service that holds or has held
+neither task (see [release and handoff](#release-and-handoff)) may revalidate, and a stale or unrejected request changes nothing. Later upstream submissions and
 verifications never re-base a successor, and no command rewrites downstream lifecycles.
 
 A milestone has zero duration: its start and finish are one reach event, and all four relation kinds
@@ -220,7 +220,8 @@ A dependency's `policy` is `Hard` (the default) or `Soft`, with an optional `rat
 kind, lag and rationale change only through a reviewed plan change; edges into started work stay
 protected like the rest of its prerequisite basis. A human or service may waive an unwaived `Soft`
 edge, or restore a waived one, with a nonempty reason; `Hard` edges cannot be waived and agents may
-do neither. Like verification and basis revalidation, the actor must own neither endpoint task, so
+do neither. Like verification and basis revalidation, the actor must not hold, or have held before a
+handoff, either endpoint task, so
 no owner relaxes a gate on its own work or on the result it hands on. The waiver's actor, time and reason stay on the edge until restoration, and each waiver
 or restoration is a semantic operation in the history. Plan changes cannot add, alter or remove a
 waiver, and a waived edge must be restored before a reviewed change edits or removes it.
@@ -294,6 +295,51 @@ lifecycle and evidence, reports it in the preview, and the work then takes no tr
 plan changes. Automatic cancellation is not part of this model. `status` lifecycle counts
 (`in_flight`, `blocked`, `awaiting_verification`) use the scope progress counts, so such kept work
 appears only in `excluded_in_flight`.
+
+### Release and handoff
+
+A claim can be wrong, an executor can stop, and work can need a different executor. Two commands
+recover without a generic undo; neither is a gated transition, so neither consults the gate
+evaluator, and both are semantic operations in the history with actor, time and reason.
+
+| Command | Who | From | Effect |
+|---------|-----|------|--------|
+| `Release { work, reason }` | the owner, any actor kind | `Claimed` (no start event) | `Planned`, owner cleared |
+| `Handoff { work, from, to, reason }` | a human or service | `Claimed`, `InProgress`, owned `Blocked` | owner becomes `to`; a `Handoff` record is appended |
+
+Decisions and reasons:
+
+- **Release is limited to unstarted claims.** A claim records no event, attempt or basis, and only a
+  start releases SS/SF successors, so undoing a reservation loses no fact and changes no successor's
+  gates; readiness is derived, so the task is simply claimable again. Started work (including
+  blocked work that had started, and submitted work) is refused with `AlreadyStarted`: releasing it
+  would orphan its start event, progress and basis. Owned blocked work that never started is
+  unblocked first, which returns it to `Claimed`. Agents may release their own claims, because
+  giving up a reservation grants nothing.
+- **Only a human or service authorizes a handoff.** An agent that could reassign work could pass
+  its result to a collaborator and review it, or take work from another executor. An agent that
+  cannot finish releases an unstarted claim, or blocks with a reason and asks for a handoff.
+- **The authorizer may be the current or the new owner.** A person taking over an interrupted
+  agent's work is the common recovery, and a single-person workspace has no one else to ask.
+  Independence does not depend on who authorized the move but on the record: `WorkItem.handoffs` is
+  append-only (from, to, actor, at, reason), and `WorkItem::held_by` treats every earlier `from` as
+  a holder. Verification, rejection, basis revalidation and waivers all refuse a holder, so an
+  actor that executed any part of the work never reviews it, whoever holds it now. A releaser is not
+  recorded as a holder, because a release happens before any execution.
+- **Everything recorded stays.** Status, events (including `start_unrecorded`), attempts, the last
+  rejection, basis entries, progress, blocker and evidence are untouched; an invalidated basis is
+  still invalidated for the new owner and still needs an independent revalidation.
+- **Submitted work is not handed off.** Its pending attempt is the submitter's claim of completion;
+  a reviewer rejects it first, which returns it to `InProgress`, and the rework can then move.
+- **`from` is part of the command.** Adapters fill it from the observed owner, the operation log
+  then names both sides, and a request whose `from` is no longer the owner is refused with
+  `OwnerMismatch`. Handoff times are validated to be in order, like event times.
+- **Choices.** Neither command asks the applicability gate: releasing excluded in-flight work stops
+  it counting in `excluded_in_flight`, and handing it off moves ownership only; the work still takes
+  no lifecycle transition until the plan changes.
+
+Plan changes still cannot change owners or handoff records, and new work cannot carry either.
+A released task is no longer claimed, so its unstarted contract becomes reviewable again.
 
 ### Uncertain durations
 

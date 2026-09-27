@@ -35,6 +35,25 @@ pub enum Command {
         /// Task to reserve.
         work: WorkItemId,
     },
+    /// Give up the caller's own unstarted claim, returning the task to Planned without an owner.
+    Release {
+        /// Claimed task owned by the caller.
+        work: WorkItemId,
+        /// Non-empty explanation, such as a mistaken claim or an executor that cannot continue.
+        reason: String,
+    },
+    /// Transfer claimed, started or blocked work to another owner, authorized by a human or
+    /// service; every recorded execution fact stays with the work.
+    Handoff {
+        /// Task changing owners.
+        work: WorkItemId,
+        /// Owner the caller observed; the command is refused if the work has changed hands.
+        from: ActorId,
+        /// New owner, who continues from the recorded state.
+        to: ActorId,
+        /// Non-empty explanation of the change of executor.
+        reason: String,
+    },
     /// Begin executing a claimed task, recording its start event at the operation time.
     Start {
         /// Claimed task owned by the caller.
@@ -228,6 +247,21 @@ pub enum EngineError {
     /// Progress and submission follow an explicit start; a claim only reserves work.
     #[error("work item {0} has not started; start it before reporting progress or submitting")]
     NotStarted(WorkItemId),
+    /// Started work has execution facts a release would orphan; only a handoff moves it.
+    #[error(
+        "work item {0} has started; started work cannot be released, only handed off by a human or service"
+    )]
+    AlreadyStarted(WorkItemId),
+    /// A handoff named an owner the work no longer has.
+    #[error("work item {work} is owned by {actual}, not {expected}; reload before handing it off")]
+    OwnerMismatch {
+        /// Affected work.
+        work: WorkItemId,
+        /// Owner named by the request.
+        expected: ActorId,
+        /// Current owner.
+        actual: ActorId,
+    },
     /// A reported blocker prevents execution.
     #[error("work item {work} is blocked: {reason}")]
     Blocked {

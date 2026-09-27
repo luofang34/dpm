@@ -246,3 +246,56 @@ fn an_unrecorded_start_marker_needs_started_work_without_a_start_time() {
         "the marker is additive and absent by default"
     );
 }
+
+#[test]
+fn handoffs_name_two_owners_a_reason_and_keep_time_order() {
+    let base = fixture();
+    let task = base.find_work_by_key("TEST-A").expect("task").id;
+    let milestone = base.find_work_by_key("TEST-M1").expect("milestone").id;
+    let at = chrono::DateTime::<chrono::Utc>::UNIX_EPOCH;
+    let handoff = |from: &str, to: &str, reason: &str, hours: i64| Handoff {
+        from: ActorId::agent(from),
+        to: ActorId::agent(to),
+        actor: ActorId::human("lead"),
+        at: at + chrono::TimeDelta::hours(hours),
+        reason: reason.into(),
+    };
+    let mut valid = base.clone();
+    let item = valid.work_items.get_mut(&task).expect("task");
+    item.handoffs = vec![handoff("a", "b", "moved", 1), handoff("b", "a", "back", 1)];
+    valid.validate().expect("ordered handoffs");
+    let invalid = [
+        (task, vec![handoff("a", "a", "same", 1)]),
+        (task, vec![handoff("a", "b", " ", 1)]),
+        (
+            task,
+            vec![handoff("a", "b", "x", 2), handoff("b", "c", "y", 1)],
+        ),
+        (milestone, vec![handoff("a", "b", "not a task", 1)]),
+    ];
+    for (work, handoffs) in invalid {
+        let mut plan = base.clone();
+        plan.work_items.get_mut(&work).expect("work").handoffs = handoffs;
+        assert!(plan.validate().is_err());
+    }
+}
+
+#[test]
+fn actors_parse_from_the_adapter_spelling_and_round_trip() {
+    for spelling in ["human:ann", "agent:coder", "service:ci"] {
+        let actor: ActorId = spelling.parse().expect("actor");
+        assert_eq!(actor.to_string(), spelling);
+    }
+    assert_eq!(
+        "coder".parse::<ActorId>(),
+        Err(ActorParseError::MissingKind("coder".into()))
+    );
+    assert_eq!(
+        "robot:x".parse::<ActorId>(),
+        Err(ActorParseError::UnknownKind("robot".into()))
+    );
+    assert_eq!(
+        "agent: ".parse::<ActorId>(),
+        Err(ActorParseError::EmptyName)
+    );
+}

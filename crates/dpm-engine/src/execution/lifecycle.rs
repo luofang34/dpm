@@ -214,6 +214,12 @@ pub(super) fn verify(
     if item.owner.as_ref() == Some(actor) {
         return Err(EngineError::SelfVerification(work));
     }
+    if item.held_by(actor) {
+        return Err(EngineError::ActorNotAllowed {
+            actor: actor.clone(),
+            action: "verify work it held before a handoff",
+        });
+    }
     permit(plan, work, Transition::Verify, at)?;
     let item = task_mut(plan, work)?;
     item.status = WorkStatus::Verified;

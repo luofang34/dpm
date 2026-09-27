@@ -48,6 +48,29 @@ pub(super) fn work(work: &WorkItem) -> Result<(), ValidationError> {
             "start, submission and verification times must not precede one another",
         ));
     }
+    handoffs(work)
+}
+
+fn handoffs(work: &WorkItem) -> Result<(), ValidationError> {
+    if !work.is_executable() && !work.handoffs.is_empty() {
+        return Err(invalid("work handoff", work.id, "only tasks change owners"));
+    }
+    for handoff in &work.handoffs {
+        if handoff.from == handoff.to || handoff.reason.trim().is_empty() {
+            return Err(invalid(
+                "work handoff",
+                work.id,
+                "a handoff names two different owners and a nonempty reason",
+            ));
+        }
+    }
+    if work.handoffs.windows(2).any(|pair| pair[0].at > pair[1].at) {
+        return Err(invalid(
+            "work handoff",
+            work.id,
+            "handoffs are recorded in time order",
+        ));
+    }
     Ok(())
 }
 

@@ -113,7 +113,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register'} == names
+        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),
@@ -507,8 +507,11 @@ if __name__ == '__main__':
         conditional_smoke(directory)
         from smoke_provisional import provisional_smoke
         provisional_smoke(Path(directory))
+        from smoke_ownership import ownership_smoke
+        ownership_smoke(Path(directory))
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')
     print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')
     print('PASS: CLI/MCP dependency identity, soft-edge waiver/restore, refusals and non-gating links')
     print('PASS: CLI/MCP start events, elapsed-lag gates, unknown legacy event times and lead explanations')
+    print('PASS: CLI/MCP release and handoff parity, refusals, independent review and history')
     print('PASS: CLI/MCP conditional work: options, applicability gates, branch joins, excluded packages, scenarios and reviewed choice changes')

@@ -87,12 +87,8 @@ pub(crate) enum Commands {
         #[arg(long)]
         actor: String,
     },
-    /// Reserve a ready work item; a claim is not a start.
-    Claim {
-        key: String,
-        #[arg(long)]
-        actor: String,
-    },
+    #[command(flatten)]
+    Ownership(OwnershipCommand),
     /// Start owned claimed work, recording the start event SS/SF successors wait for.
     Start {
         key: String,
@@ -254,6 +250,37 @@ pub(crate) enum StoreCommand {
     VerifyStore {
         /// Store or backup file; defaults to the selected workspace's store.
         path: Option<PathBuf>,
+    },
+}
+
+/// Commands that change who holds a task, flattened into the top-level command list.
+#[derive(Debug, Subcommand)]
+pub(crate) enum OwnershipCommand {
+    /// Reserve a ready work item; a claim is not a start.
+    Claim {
+        key: String,
+        #[arg(long)]
+        actor: String,
+    },
+    /// Give up your own unstarted claim; the task returns to Planned without an owner.
+    Release {
+        key: String,
+        #[arg(long)]
+        reason: String,
+        #[arg(long)]
+        actor: String,
+    },
+    /// Hand claimed, started or blocked work to another actor as a human or service; history,
+    /// events, attempts, basis, progress and blocker stay with the work.
+    Handoff {
+        key: String,
+        /// New owner as KIND:NAME.
+        #[arg(long)]
+        to: String,
+        #[arg(long)]
+        reason: String,
+        #[arg(long)]
+        actor: String,
     },
 }
 

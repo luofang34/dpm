@@ -203,10 +203,11 @@ fn mutate_blocking(
 
 fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, Command), CliError> {
     let pair = match command {
-        lifecycle @ (Commands::Ratify { .. }
-        | Commands::Reject { .. }
-        | Commands::Claim { .. }
-        | Commands::Start { .. }) => lifecycle_mutation_blocking(app, lifecycle)?,
+        lifecycle
+        @ (Commands::Ratify { .. } | Commands::Reject { .. } | Commands::Start { .. }) => {
+            lifecycle_mutation_blocking(app, lifecycle)?
+        }
+        Commands::Ownership(command) => crate::ownership::mutation_blocking(app, command)?,
         Commands::Block {
             key,
             reason,
@@ -393,12 +394,6 @@ fn lifecycle_mutation_blocking(
                 reason,
             },
         ),
-        Commands::Claim { key, actor: who } => (
-            actor(&who)?,
-            Command::Claim {
-                work: app.work_id_blocking(&key)?,
-            },
-        ),
         Commands::Start { key, actor: who } => (
             actor(&who)?,
             Command::Start {
@@ -406,9 +401,7 @@ fn lifecycle_mutation_blocking(
             },
         ),
         _ => {
-            return Err(CliError::Input(
-                "expected contract, claim or start command".into(),
-            ));
+            return Err(CliError::Input("expected contract or start command".into()));
         }
     })
 }

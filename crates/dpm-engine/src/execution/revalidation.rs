@@ -13,8 +13,9 @@ use dpm_model::{
 /// Record the predecessor's current attempt as the successor's basis on one invalidated edge.
 ///
 /// The reviewer must be a human or service, like any waiver: accepting work built on a rejected
-/// result is an accountable judgement an agent cannot make for itself. Neither the successor's
-/// owner nor the predecessor's owner may review, because each would certify its own work.
+/// result is an accountable judgement an agent cannot make for itself. No actor that owns or has
+/// owned (before a handoff) the successor or the predecessor may review, because each would
+/// certify its own work.
 pub(super) fn revalidate(
     plan: &mut Plan,
     actor: &ActorId,
@@ -29,7 +30,7 @@ pub(super) fn revalidate(
         return Err(refused(actor, "revalidate a dependency basis"));
     }
     let item = task_mut(plan, work)?;
-    if item.owner.as_ref() == Some(actor) {
+    if item.held_by(actor) {
         return Err(refused(actor, "revalidate the basis of its own work"));
     }
     let item = plan
@@ -53,7 +54,7 @@ pub(super) fn revalidate(
         });
     }
     let predecessor = plan.work_items.get(&status.predecessor);
-    if predecessor.and_then(|p| p.owner.as_ref()) == Some(actor) {
+    if predecessor.is_some_and(|p| p.held_by(actor)) {
         return Err(refused(actor, "revalidate work against its own result"));
     }
     if status.current_attempt != Some(attempt) {

@@ -4,6 +4,7 @@ mod authoring;
 mod error;
 mod git_artifact;
 mod interchange;
+mod ownership;
 mod project;
 mod registry;
 mod service;

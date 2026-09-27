@@ -40,6 +40,7 @@ fn task(project: ProjectId, key: &str, hours: f64) -> WorkItem {
         requirement_ids: BTreeSet::new(),
         artifact_ids: BTreeSet::new(),
         owner: None,
+        handoffs: Vec::new(),
         block_reason: None,
         events: Default::default(),
         condition: None,

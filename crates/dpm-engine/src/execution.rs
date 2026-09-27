@@ -47,6 +47,23 @@ fn execute(
         Command::RatifyContract { work } => review::ratify(plan, actor, *work),
         Command::Reject { work, reason } => review::reject(plan, actor, *work, reason, at),
         Command::Claim { work } => claim(plan, actor, *work, at),
+        Command::Release { work, reason } => ownership::release(plan, actor, *work, reason),
+        Command::Handoff {
+            work,
+            from,
+            to,
+            reason,
+        } => ownership::handoff(
+            plan,
+            actor,
+            ownership::HandoffRequest {
+                work: *work,
+                from,
+                to,
+                reason,
+            },
+            at,
+        ),
         Command::Start { work } => start(plan, actor, *work, at),
         Command::Block { work, reason } => block(plan, actor, *work, reason),
         Command::Unblock { work } => unblock(plan, actor, *work),
@@ -175,6 +192,7 @@ fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
 
 mod choice;
 mod lifecycle;
+mod ownership;
 mod revalidation;
 mod review;
 mod tracking;

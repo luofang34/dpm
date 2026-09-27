@@ -55,6 +55,9 @@ pub enum AppError {
         /// Revision currently stored.
         actual: u64,
     },
+    /// A principal argument is not spelled `KIND:NAME`.
+    #[error(transparent)]
+    Actor(#[from] dpm_model::ActorParseError),
     /// Request parameter is absent or invalid.
     #[error("invalid request: {0}")]
     InvalidRequest(String),
@@ -115,7 +118,7 @@ impl AppError {
             Self::Store(dpm_store::StoreError::TargetExists { .. }) => "target_exists",
             Self::Store(error) if error.is_corruption() => "corrupt_store",
             Self::Store(_) => "storage_error",
-            Self::Json(_) | Self::InvalidRequest(_) => "invalid_request",
+            Self::Json(_) | Self::InvalidRequest(_) | Self::Actor(_) => "invalid_request",
         }
     }
     /// Structured refusal context: a refused transition returns the same unmet gates as `explain`.

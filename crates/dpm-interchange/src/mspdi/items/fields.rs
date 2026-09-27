@@ -124,6 +124,7 @@ fn new_work(id: WorkItemId, key: Key, kind: WorkKind, project: ProjectId) -> Wor
         requirement_ids: BTreeSet::new(),
         artifact_ids: BTreeSet::new(),
         owner: None,
+        handoffs: Vec::new(),
         resources: Vec::new(),
         last_rejection: None,
         attempts: Vec::new(),

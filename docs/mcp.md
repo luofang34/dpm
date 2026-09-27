@@ -33,6 +33,8 @@ which the store still checks atomically. Presentation text is not the API contra
 | ratify KEY | ratify_contract | Human/service approves a complete Proposed contract |
 | reject KEY REASON | reject_work | Independent reviewer returns Submitted work for rework |
 | claim KEY | claim_work | Reserve only ready tasks; a claim is not a start |
+| release KEY --reason TEXT | release_work | Owner gives up an unstarted claim; the task returns to Planned without an owner |
+| handoff KEY --to KIND:NAME --reason TEXT | handoff_work | Human/service moves claimed, started or blocked work to another owner; every recorded fact stays |
 | start KEY | start_work | Owner starts claimed work; records the start event SS/SF successors wait for |
 | block KEY REASON | report_blocker | Record blocker and preserve owner |
 | unblock KEY | unblock_work | Resume without changing owner |
@@ -78,6 +80,23 @@ A replacement for a decision with `options` keeps the same option keys, and its 
 different option: that is the only way to change a choice once made. `applicability_changes` in the
 preview lists each work item whose [applicability](#conditional-work-and-branch-joins) the proposal
 changes, with `in_flight`, `before` and `after`.
+
+## Release and handoff
+
+`release_work` (`key`, nonempty `reason`, `base_revision`) lets the owner give up a claim it has
+not started: the task returns to `Planned` with no owner and is claimable again. Any actor kind may
+release its own claim. Anything else is refused with no change: another actor's claim, unowned or
+blocked work (unblock first), and started or submitted work (`has started`; use a handoff).
+
+`handoff_work` (`key`, `to` as `KIND:NAME`, nonempty `reason`, `base_revision`) moves claimed,
+started or blocked work to another owner. The configured actor must be a human or service; agents
+are refused. The command records the observed owner as `from`, and the work's `handoffs` list keeps
+`{from, to, actor, at, reason}` for every transfer. Status, events, attempts, basis, progress,
+blocker and evidence are unchanged, so the new owner continues where the work stopped. Submitted
+work is refused (reject it first), as are unowned work, `to` equal to the owner and a malformed
+`to` (`invalid_request`). No actor that has held the work, now or before a handoff, may verify,
+reject, revalidate its basis or waive its edges. Plan changes cannot change owners or handoffs.
+See [the decision log](architecture.md#release-and-handoff).
 
 ## External tracking references
 
@@ -278,7 +297,7 @@ whole proposal.
 
 Policy, kind, lag and rationale change only through reviewed `apply_change`; proposals cannot add,
 alter or remove waivers, nor edit or remove a waived edge, which must be restored first. `waive_dependency` and `restore_dependency` take `dependency`, a nonempty
-`reason` and `base_revision`. Only human/service actors that own neither endpoint task may use them, only Soft edges can be waived,
+`reason` and `base_revision`. Only human/service actors that neither hold nor have held (before a handoff) either endpoint task may use them, only Soft edges can be waived,
 and restoring requires a current waiver. The waiver's actor, time and reason stay on the edge until
 restoration; `history` records both operations with actor, time and reason. A waived edge is absent
 from `gates.unmet`, readiness, verification prerequisites, milestone completion and the remaining
@@ -449,7 +468,7 @@ is reported with `enforced: false` and gates nothing.
 
 `revalidate_basis` (`key`, `dependency`, `attempt`, nonempty `reason`, `base_revision`) appends a
 new basis with `source.kind: "revalidation"`, actor and reason. It is refused with no change unless
-the actor is a human or service that owns neither task (accepting work built on a rejected result is
+the actor is a human or service that neither holds nor has held either task (accepting work built on a rejected result is
 an accountable judgement, like a waiver, and neither owner may certify its own work), the effective
 basis on that edge is invalidated, and `attempt` is the predecessor's current pending or verified
 attempt. Revalidating onto a pending attempt relies on it again: if it is also rejected, the work is

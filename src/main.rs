@@ -5,6 +5,7 @@ mod args;
 mod error;
 mod interchange;
 mod output;
+mod ownership;
 mod recovery;
 mod tracking;
 mod usage;

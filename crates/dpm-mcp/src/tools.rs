@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
 mod interchange;
+mod ownership;
 
 const NAMES: &[(&str, &str)] = &[
     (
@@ -124,7 +125,7 @@ const NAMES: &[(&str, &str)] = &[
 ];
 
 pub(crate) fn definitions() -> Vec<Value> {
-    NAMES.iter().map(|(name,description)| {
+    NAMES.iter().chain(ownership::NAMES.iter()).map(|(name,description)| {
         let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
@@ -141,6 +142,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 if *name == "apply_change" { properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.push("reason"); }
             },
             "import_mspdi" | "export_mspdi" => interchange::schema(name, &mut properties, &mut required),
+            "release_work" | "handoff_work" => ownership::schema(name, &mut properties, &mut required),
             "history" => { properties.insert("after_sequence".into(),json!({"type":"integer","minimum":0,"default":0})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"maximum":1000,"default":100})); },
             "workspace_register" => { properties.insert("database".into(),json!({"type":"string"})); properties.insert("replace".into(),json!({"type":"boolean","default":false})); required.push("database"); },
             "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); },
@@ -242,6 +244,9 @@ pub(crate) fn call_tool_blocking(
     value: Value,
 ) -> Result<Value, AppError> {
     validate_argument_names(name, &value)?;
+    if ownership::handles(name) {
+        return ownership::call_blocking(app, actor, name, value);
+    }
     let history_limit = value.get("limit").cloned().unwrap_or(json!(100));
     let args: Arguments = serde_json::from_value(value)?;
     if matches!(name, "workspace_list" | "workspace_register") {

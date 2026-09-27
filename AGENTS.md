@@ -115,6 +115,9 @@ When operating on a real DPM workspace, prefer the machine interface:
 9. a separate human/service verifier runs `dpm verify <KEY> --json ...`.
 
 If work cannot proceed, use `block` with a concrete reason instead of silently switching scope.
+If you cannot finish a task, do not abandon the claim: `dpm release <KEY> --reason "..."` an
+unstarted claim, or block started work and ask a human/service to `dpm handoff <KEY> --to KIND:NAME`.
+Agents cannot authorize handoffs, and no former owner may review the work it held.
 If the plan itself is wrong, export it and use `plan diff` / `propose_change`; do not route around
 dependencies in code. A human/service applies the reviewed candidate with a reason. New tasks are
 Proposed and require ratification. Execution and its prerequisite/context basis remain protected.
