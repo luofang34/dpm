@@ -5,6 +5,7 @@ import fcntl
 import os
 import pty
 import select
+import signal
 import sqlite3
 import struct
 import subprocess
@@ -63,8 +64,14 @@ class Console:
         os.write(self.master, keys)
         self.read_until(marker, start)
 
-    def stop(self, key):
-        self.key(key, b'\x1b[?1049l')
+    def stop(self, key=None, signal_number=None):
+        if signal_number is None:
+            self.key(key, b'\x1b[?1049l')
+        else:
+            # An external signal, unlike the ^C key, is not delivered through raw-mode input.
+            start = len(self.output)
+            os.kill(self.process.pid, signal_number)
+            self.read_until(b'\x1b[?1049l', start)
         # Drain output before waiting: a PTY close can wait for its final cursor bytes.
         deadline = time.monotonic() + 15
         while True:
@@ -124,9 +131,16 @@ def smoke(directory):
         interrupted.stop(b'\x03')
     finally:
         interrupted.close()
+    for signal_number in (signal.SIGINT, signal.SIGTERM):
+        signalled = Console(database)
+        try:
+            signalled.read_until(b'waiting-terminal-refresh')
+            signalled.stop(signal_number=signal_number)
+        finally:
+            signalled.close()
 
 
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-terminal-') as temporary:
         smoke(Path(temporary))
-    print('PASS: real terminal Gantt keys, Detail, external agent refresh, read-only navigation and q/Ctrl-C cleanup')
+    print('PASS: real terminal Gantt keys, Detail, external agent refresh, read-only navigation and q/Ctrl-C/SIGINT/SIGTERM cleanup')

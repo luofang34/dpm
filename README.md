@@ -236,7 +236,8 @@ Mouse motion requires terminal support; keyboard inspection remains fully usable
 released on exit; terminal text selection commonly uses Shift while capture is active.
 
 Press `?` for scrollable help and the full color legend; `Esc` closes help or returns inspector focus
-to the chart. Otherwise `Esc`/`q` quits. `NO_COLOR=1 cargo run tui` keeps text/symbols without colors.
+to the chart. Otherwise `Esc`/`q` quits; Ctrl-C and an external SIGINT or SIGTERM also quit and restore
+the terminal. `NO_COLOR=1 cargo run tui` keeps text/symbols without colors.
 
 | Indication | Meaning |
 | --- | --- |

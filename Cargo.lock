@@ -564,6 +564,7 @@ dependencies = [
  "dpm-schedule",
  "ratatui",
  "serde_json",
+ "signal-hook",
  "thiserror 2.0.21",
  "unicode-width",
 ]

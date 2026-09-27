@@ -8,6 +8,9 @@ use dpm_model::Plan;
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{io, time::Duration};
 
+mod interrupts;
+use interrupts::Interrupts;
+
 /// Failure to prepare a projection or operate the terminal.
 #[derive(Debug, thiserror::Error)]
 pub enum TuiError {
@@ -57,14 +60,16 @@ pub fn run_reloading_blocking<E: std::fmt::Display>(
     let mut view = View::new(plan, chrono::Utc::now())?;
     view.preview = preview;
     view.set_colors(std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()));
+    let interrupts = Interrupts::register()?;
     enable_raw_mode()?;
     let guard = TerminalGuard;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
     terminal.clear()?;
-    let result = event_loop_blocking(&mut terminal, &mut view, &mut reload);
+    let result = event_loop_blocking(&mut terminal, &mut view, &mut reload, &interrupts);
     drop(guard);
+    drop(interrupts);
     result
 }
 
@@ -72,11 +77,19 @@ fn event_loop_blocking<E: std::fmt::Display>(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     view: &mut View,
     reload: &mut impl FnMut() -> Result<Plan, E>,
+    interrupts: &Interrupts,
 ) -> Result<(), TuiError> {
     loop {
+        // A signal ends the console like the q key, so the guard restores the terminal.
+        if interrupts.received() {
+            return Ok(());
+        }
         terminal.draw(|frame| view.render(frame))?;
-        if !event::poll(Duration::from_millis(200))? {
-            continue;
+        match event::poll(Duration::from_millis(200)) {
+            Ok(true) => {}
+            Ok(false) => continue,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error.into()),
         }
         match event::read()? {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
