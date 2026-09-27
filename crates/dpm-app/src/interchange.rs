@@ -46,18 +46,22 @@ pub(crate) fn query(plan: &Plan, query: Query) -> Result<Value, AppError> {
     }
 }
 
-/// A refusal at work an imported task maps to also names the source task and its attempted
-/// change; the engine refusal stays the source of the error.
+/// A refusal at work an imported task maps to, or at a dependency a source link maps to (or that
+/// the candidate removes because the document omits it), also names the source task or link and
+/// the attempted change; the engine refusal stays the source of the error.
 fn refusal(plan: &Plan, result: &ImportResult, error: dpm_engine::EngineError) -> AppError {
-    let change = match &error {
-        dpm_engine::EngineError::InvalidCommand { entity, .. } => {
-            result.source_change(plan, entity)
-        }
-        _ => None,
+    let dpm_engine::EngineError::InvalidCommand { entity, .. } = &error else {
+        return AppError::Engine(error);
     };
-    match change {
-        Some(change) => AppError::Interchange(InterchangeError::Refused {
+    if let Some(change) = result.source_change(plan, entity) {
+        return AppError::Interchange(InterchangeError::Refused {
             change,
+            source: Box::new(error),
+        });
+    }
+    match result.source_link_change(plan, entity) {
+        Some(change) => AppError::Interchange(InterchangeError::RefusedLink {
+            change: Box::new(change),
             source: Box::new(error),
         }),
         None => AppError::Engine(error),

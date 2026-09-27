@@ -19,7 +19,7 @@ use dpm_model::{Plan, ProjectId};
 use serde::{Deserialize, Serialize};
 
 pub use export::{ExportResult, export_mspdi};
-pub use refusal::SourceChange;
+pub use refusal::{LinkEndpoint, SourceChange, SourceLinkChange};
 pub use report::{
     DependencyChange, DependencyExportReport, ExportReport, FieldChange, Finding, ImportReport,
     ItemExportReport, ItemOutcome, ItemReport, LinkOutcome, LinkReport, RemovedDependency,

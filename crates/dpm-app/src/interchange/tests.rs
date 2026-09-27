@@ -1,7 +1,7 @@
-#![allow(clippy::expect_used)]
+#![allow(clippy::expect_used, clippy::panic)]
 use crate::{AppError, Application, CommandRequest, Query};
 use dpm_engine::Command;
-use dpm_model::{ActorId, Plan};
+use dpm_model::{ActorId, DependencyPolicy, Plan};
 
 const RELEASE: &str = include_str!("../../../dpm-interchange/tests/mspdi/mpxj-release-plan.xml");
 
@@ -117,6 +117,107 @@ fn refusals_of_started_work_name_the_source_task_and_attempted_change() {
             "{expected} missing from: {message}"
         );
     }
+    assert_eq!(state(&app), (1, 1));
+}
+
+/// Application whose soft TEST-A -> TEST-B edge a human has waived, with its exported document and
+/// the exported UIDs of TEST-A and TEST-B.
+fn waived_edge_export() -> (Application, String, u64, u64) {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let key = |plan: &Plan, key: &str| plan.find_work_by_key(key).expect(key).id;
+    let (a, b) = (key(&plan, "TEST-A"), key(&plan, "TEST-B"));
+    let edge = plan
+        .dependencies
+        .iter_mut()
+        .find(|d| d.predecessor == a && d.successor == b)
+        .expect("edge");
+    edge.policy = DependencyPolicy::Soft;
+    let dependency = edge.id;
+    let mut app = Application::in_memory_blocking(&plan).expect("app");
+    app.execute_blocking(CommandRequest {
+        actor: ActorId::human("reviewer"),
+        base_revision: 0,
+        command: Command::WaiveDependency {
+            dependency,
+            reason: "Contract B may start early".into(),
+        },
+    })
+    .expect("waive");
+    let exported = app
+        .query_blocking(Query::ExportMspdi {
+            project_key: "TEST".into(),
+        })
+        .expect("export")
+        .data;
+    let uid = |key: &str| {
+        exported["report"]["items"]
+            .as_array()
+            .expect("items")
+            .iter()
+            .find(|i| i["key"] == key)
+            .and_then(|i| i["uid"].as_u64())
+            .expect(key)
+    };
+    let (from, to) = (uid("TEST-A"), uid("TEST-B"));
+    let xml = exported["xml"].as_str().expect("xml").to_owned();
+    (app, xml, from, to)
+}
+
+/// Replace the first occurrence of `from` inside the task element with UID `uid`.
+fn edit_task(xml: &str, uid: u64, from: &str, to: &str) -> String {
+    let start = xml.find(&format!("<UID>{uid}</UID>")).expect("task");
+    let end = start + xml[start..].find("</Task>").expect("task end");
+    let task = xml[start..end].replacen(from, to, 1);
+    assert_ne!(task, xml[start..end], "{from} not in task UID {uid}");
+    format!("{}{task}{}", &xml[..start], &xml[end..])
+}
+
+fn assert_names_the_link(error: &AppError, from: u64, to: u64, attempted: &[&str]) {
+    assert_eq!(error.code(), "invalid_command");
+    let AppError::Interchange(dpm_interchange::InterchangeError::RefusedLink { source, .. }) =
+        error
+    else {
+        panic!("not a link refusal: {error}");
+    };
+    assert!(source.to_string().contains("waived"), "{source}");
+    let message = error.to_string();
+    let uids = [format!("UID {from}"), format!("UID {to}")];
+    let named = [
+        "00000007-0000-4000-8000-000000000001",
+        "00000007-0000-4000-8000-000000000002",
+        "TEST-A",
+        "TEST-B",
+        "waived",
+    ];
+    for expected in uids
+        .iter()
+        .map(String::as_str)
+        .chain(named)
+        .chain(attempted.iter().copied())
+    {
+        assert!(
+            message.to_uppercase().contains(&expected.to_uppercase()),
+            "{expected} missing from: {message}"
+        );
+    }
+}
+
+#[test]
+fn refusals_of_waived_edges_name_the_source_link_and_attempted_change() {
+    let (app, xml, from, to) = waived_edge_export();
+    let relag = edit_task(&xml, to, "<LinkLag>0</LinkLag>", "<LinkLag>1200</LinkLag>");
+    let error = import(&app, &relag, "TEST").expect_err("waived edge is protected");
+    assert_names_the_link(&error, from, to, &["change", "lag 0 h", "lag 2 h"]);
+    let start = xml.find(&format!("<UID>{to}</UID>")).expect("task");
+    let link = start + xml[start..].find("<PredecessorLink>").expect("link");
+    let end =
+        link + xml[link..].find("</PredecessorLink>").expect("end") + "</PredecessorLink>".len();
+    let dropped = format!("{}{}", &xml[..link], &xml[end..]);
+    let error = import(&app, &dropped, "TEST").expect_err("waived edge is protected");
+    assert_names_the_link(&error, from, to, &["remove", "FS TEST-A -> TEST-B"]);
     assert_eq!(state(&app), (1, 1));
 }
 

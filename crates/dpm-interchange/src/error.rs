@@ -1,4 +1,4 @@
-use crate::SourceChange;
+use crate::{SourceChange, SourceLinkChange};
 use dpm_model::WorkKind;
 use thiserror::Error;
 
@@ -93,6 +93,16 @@ pub enum InterchangeError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync + 'static>,
     },
+    /// Review refused the candidate at a dependency that a source link maps to, or that the
+    /// candidate removes because the document omits the link.
+    #[error("{change}; refused: {source}")]
+    RefusedLink {
+        /// Source link and the change it attempts.
+        change: Box<SourceLinkChange>,
+        /// Review refusal naming only the dependency identity.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync + 'static>,
+    },
     /// A value cannot be written as MSPDI.
     #[error("work {key} cannot be exported as MSPDI: {reason}")]
     Unrepresentable {
@@ -112,7 +122,8 @@ impl InterchangeError {
             Self::KeyCollision { .. }
             | Self::Unrepresentable { .. }
             | Self::KindChange { .. }
-            | Self::Refused { .. } => "invalid_command",
+            | Self::Refused { .. }
+            | Self::RefusedLink { .. } => "invalid_command",
             Self::Xml { .. }
             | Self::NotMspdi { .. }
             | Self::MalformedProject { .. }

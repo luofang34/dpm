@@ -211,7 +211,10 @@ exported encoding) keeps the richer local three-point estimate, exact lag, polic
 waiver. Local work the document omits is retained, not deleted. Changes that touch protected
 (started) work are refused by `propose_change` as with any reviewed change; when the refused work is
 an imported task, the error also names the source `UID` and `GUID` and the attempted field and
-dependency changes. A document that would change the kind of existing work (a task gaining children,
+dependency changes. When the refusal names a dependency, such as a waived soft edge that the
+document would re-lag or drop, the error names the source link instead: the predecessor and
+successor `UID`, `GUID` and work key, and the attempted change or removal; the engine refusal stays
+its cause. A document that would change the kind of existing work (a task gaining children,
 a milestone flag flipped) fails the import with the same source context.
 
 `plan export-mspdi --project-key KEY [--output FILE]` and `export_mspdi` (`project_key`) return
