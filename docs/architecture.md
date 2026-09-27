@@ -258,6 +258,9 @@ Independence differs by command because the acts differ:
 A holder is the current owner or any actor that owned the task before a handoff or gave back a
 claim on it (`WorkItem::held_by`). Evidence is attached to a task only by its current owner, because
 an evidence author is not an independent reviewer: whoever wrote the proof would be judging it.
+Planning sources (artifacts with `metadata.role = planning_source`, which arrive through reviewed
+plans as context) are not evidence and do not disqualify their author; `AttachArtifact` refuses that
+role so evidence cannot be relabelled as context.
 Verification and rejection still refuse any author of an artifact on the task, which also covers
 evidence imported with a snapshot. Only artifacts on the task itself count; evidence attached to a
 containing work package or milestone (any actor may attach there, since aggregates are never

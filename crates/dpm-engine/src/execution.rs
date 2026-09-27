@@ -168,6 +168,7 @@ fn refuse_evidence_author(
         .artifact_ids
         .iter()
         .filter_map(|id| plan.artifacts.get(id))
+        .filter(|artifact| !is_planning_source(artifact))
         .any(|artifact| artifact.created_by == *actor);
     if authored {
         return Err(EngineError::ActorNotAllowed {
@@ -196,6 +197,13 @@ fn attach(
             action: "attach evidence to an unclaimed task; claim it first",
         });
     }
+    // Planning sources come from reviewed plans; labelling evidence as one would hide its author.
+    if is_planning_source(artifact) {
+        return Err(EngineError::InvalidCommand {
+            entity: artifact.id.to_string(),
+            reason: "planning sources arrive through reviewed plan changes, not as evidence".into(),
+        });
+    }
     if artifact.created_by != *actor || plan.artifacts.contains_key(&artifact.id) {
         return Err(EngineError::InvalidCommand {
             entity: artifact.id.to_string(),
@@ -210,6 +218,16 @@ fn attach(
     plan.artifacts.insert(artifact.id, artifact.clone());
     Ok(())
 }
+
+/// Plan-authored context (design documents, requirements sources) rather than execution evidence.
+fn is_planning_source(artifact: &Artifact) -> bool {
+    artifact
+        .metadata
+        .get("role")
+        .is_some_and(|role| role == PLANNING_SOURCE_ROLE)
+}
+
+const PLANNING_SOURCE_ROLE: &str = "planning_source";
 
 fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
     if value.trim().is_empty() {

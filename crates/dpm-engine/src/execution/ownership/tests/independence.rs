@@ -221,3 +221,48 @@ fn evidence_is_attached_to_a_task_only_by_its_current_owner() {
         EngineError::OwnedByAnother { .. }
     ));
 }
+
+#[test]
+fn a_planning_source_author_may_still_review_the_task() {
+    let (mut plan, a, _, _) = fs();
+    let mut source = artifact(author(), t(0));
+    source
+        .metadata
+        .insert("role".into(), "planning_source".into());
+    plan.work_items
+        .get_mut(&a)
+        .expect("work")
+        .artifact_ids
+        .insert(source.id);
+    plan.artifacts.insert(source.id, source);
+    start(&mut plan, &second(), a, 1);
+    ok(&mut plan, &second(), submit(a), 2);
+    let verify = Command::Verify {
+        work: a,
+        note: None,
+    };
+    ok(&mut plan, &author(), verify, 3);
+}
+
+#[test]
+fn evidence_cannot_be_attached_as_a_planning_source() {
+    let (mut plan, a, _, _) = fs();
+    ok(&mut plan, &second(), Command::Claim { work: a }, 0);
+    let mut disguised = artifact(second(), t(1));
+    disguised
+        .metadata
+        .insert("role".into(), "planning_source".into());
+    let error = refused(
+        &mut plan,
+        &second(),
+        Command::AttachArtifact {
+            work: a,
+            artifact: disguised,
+        },
+        1,
+    );
+    assert!(
+        matches!(error, EngineError::InvalidCommand { .. }),
+        "{error}"
+    );
+}
