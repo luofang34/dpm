@@ -5,7 +5,7 @@
 //! encoding rounds (seconds for durations, tenths of minutes for lags) or collapses (a three-point
 //! estimate written as one duration).
 
-use dpm_model::{DependencyKind, Priority, ThreePointEstimate, WorkItemId};
+use dpm_model::{DependencyKind, Priority, ProjectId, ThreePointEstimate, WorkItemId};
 use uuid::Uuid;
 
 const SECONDS_PER_HOUR: f64 = 3600.0;
@@ -179,6 +179,7 @@ pub(crate) fn format_guid(id: Uuid) -> String {
 const FNV_OFFSET: u128 = 0x6c62_272e_07bb_0142_62b8_2175_6295_c58d;
 const FNV_PRIME: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013b;
 const TASK_IDENTITY_DOMAIN: &[u8] = b"dpm.mspdi.task.v1\0";
+const SCOPED_IDENTITY_DOMAIN: &[u8] = b"dpm.mspdi.task.scoped.v1\0";
 
 /// MurmurHash3's 64-bit finalizer: a bijection in which every input bit affects every output bit.
 fn avalanche(mut value: u64) -> u64 {
@@ -194,13 +195,29 @@ fn avalanche(mut value: u64) -> u64 {
 /// UIDs are unique only within one file, so the project GUID keeps equal UIDs from different
 /// projects apart, and every re-import of the same file resolves the same work.
 pub(crate) fn derived_work_id(project: Uuid, uid: i64) -> WorkItemId {
+    identity(&[TASK_IDENTITY_DOMAIN, project.as_bytes(), &uid.to_be_bytes()])
+}
+
+/// Stable work identity for a source task when neither the task nor the document has a GUID.
+///
+/// The explicit key prefix names the source within the target project, so re-importing that
+/// source with the same prefix resolves the same work, while the same UID under another prefix or
+/// in another project is different work. The prefix is length-delimited so that no prefix/UID pair
+/// can spell another one.
+pub(crate) fn scoped_work_id(project: ProjectId, prefix: &str, uid: i64) -> WorkItemId {
+    let length = (prefix.len() as u64).to_be_bytes();
+    identity(&[
+        SCOPED_IDENTITY_DOMAIN,
+        project.0.as_bytes(),
+        &length,
+        prefix.as_bytes(),
+        &uid.to_be_bytes(),
+    ])
+}
+
+fn identity(parts: &[&[u8]]) -> WorkItemId {
     let mut hash = FNV_OFFSET;
-    let uid = uid.to_be_bytes();
-    let bytes = TASK_IDENTITY_DOMAIN
-        .iter()
-        .chain(project.as_bytes())
-        .chain(&uid);
-    for byte in bytes {
+    for byte in parts.iter().flat_map(|part| part.iter()) {
         hash ^= u128::from(*byte);
         hash = hash.wrapping_mul(FNV_PRIME);
     }

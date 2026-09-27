@@ -41,7 +41,8 @@ const IMPORT_SCOPE: &str = concat!(
 pub struct ImportOptions {
     /// Existing project that receives the imported work.
     pub project_key: String,
-    /// Prefix for keys of new work (`PREFIX-UID`); defaults to the project key.
+    /// Prefix for keys of new work (`PREFIX-UID`); defaults to the project key. A document without
+    /// any GUID requires it: it names the source, and GUID-less identities derive from it.
     #[serde(default)]
     pub key_prefix: Option<String>,
 }
@@ -58,8 +59,9 @@ pub struct ImportResult {
 
 /// Build a candidate plan that maps an MSPDI document onto `current` without changing it.
 ///
-/// Work identity is the task GUID (or, without one, an identity derived from the project GUID
-/// and task UID), so importing the same document again updates the same work. Lifecycle,
+/// Work identity is the task GUID; without one, an identity derived from the project GUID and task
+/// UID; without either GUID, one derived from the target project, the explicit key prefix and the
+/// task UID. Importing the same document again (with the same prefix) updates the same work. Lifecycle,
 /// ownership, progress, evidence and acceptance of existing work are never touched, and new
 /// tasks are `Proposed` because MSPDI carries no acceptance criteria.
 pub fn import_mspdi(
@@ -69,11 +71,13 @@ pub fn import_mspdi(
 ) -> Result<ImportResult, InterchangeError> {
     let source = source::parse(xml)?;
     let project = project_id(current, &options.project_key)?;
+    require_source_scope(&source, options)?;
     let prefix = options
         .key_prefix
         .clone()
         .unwrap_or_else(|| options.project_key.clone());
-    let outline = items::map(current, &source, project, &prefix)?;
+    let resolver = items::Resolver::new(&source, project, &options.project_key, &prefix);
+    let outline = items::map(current, &source, &resolver, project, &prefix)?;
     let mut candidate = current.clone();
     for mapped in outline.mapped() {
         candidate.work_items.insert(mapped.id, mapped.clone());
@@ -104,6 +108,31 @@ pub fn import_mspdi(
             retained,
         },
     })
+}
+
+/// Without any GUID, the key prefix is the only name of the source, so it must be stated rather
+/// than defaulted: a default would make every GUID-less file imported into the project the same
+/// source and silently merge unrelated tasks that share a UID.
+fn require_source_scope(
+    source: &source::SourceProject,
+    options: &ImportOptions,
+) -> Result<(), InterchangeError> {
+    if source.guid.is_some() || options.key_prefix.is_some() {
+        return Ok(());
+    }
+    let anonymous: Vec<i64> = source
+        .tasks
+        .iter()
+        .filter(|t| t.guid.is_none() && t.exclusion.is_none() && !t.is_project_summary())
+        .map(|t| t.uid)
+        .collect();
+    match anonymous.first() {
+        None => Ok(()),
+        Some(first) => Err(InterchangeError::SourceScopeRequired {
+            count: anonymous.len(),
+            first_uid: *first,
+        }),
+    }
 }
 
 fn project_id(plan: &Plan, key: &str) -> Result<ProjectId, InterchangeError> {

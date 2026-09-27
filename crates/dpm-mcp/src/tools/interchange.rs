@@ -16,7 +16,7 @@ pub(super) fn schema(name: &str, properties: &mut Map<String, Value>, needed: &m
         );
         properties.insert(
             "key_prefix".into(),
-            json!({"type":"string","minLength":1,"description":"Prefix for keys of new work (PREFIX-UID); defaults to the project key"}),
+            json!({"type":"string","minLength":1,"description":"Prefix for keys of new work (PREFIX-UID); defaults to the project key. Required for a document without GUIDs (such as OmniPlan's), where it names the source"}),
         );
         needed.push("xml");
     }

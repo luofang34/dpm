@@ -53,6 +53,16 @@ pub enum InterchangeError {
         /// Shared identity.
         identity: String,
     },
+    /// Neither the document nor some of its tasks carry a GUID, and the import names no source.
+    #[error(
+        "MSPDI document has no project GUID and {count} task(s) without a GUID (first UID {first_uid}); pass an explicit key prefix that names this source: work identity is then derived from the target project, the key prefix and the task UID, so re-importing with the same prefix updates the same work and another prefix plans separate work"
+    )]
+    SourceScopeRequired {
+        /// Imported tasks without a GUID.
+        count: usize,
+        /// First such task UID in document order.
+        first_uid: i64,
+    },
     /// The requested project key does not exist in the workspace.
     #[error("unknown project key {key}")]
     UnknownProject {
@@ -129,7 +139,8 @@ impl InterchangeError {
             | Self::MalformedProject { .. }
             | Self::MalformedTask { .. }
             | Self::DuplicateUid { .. }
-            | Self::DuplicateIdentity { .. } => "invalid_request",
+            | Self::DuplicateIdentity { .. }
+            | Self::SourceScopeRequired { .. } => "invalid_request",
         }
     }
 }

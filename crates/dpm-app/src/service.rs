@@ -56,7 +56,8 @@ pub enum Query {
         xml: String,
         /// Existing project receiving the imported work.
         project_key: String,
-        /// Prefix for keys of new work; defaults to the project key.
+        /// Prefix for keys of new work; defaults to the project key, and names the source of a
+        /// document without GUIDs, which requires it.
         #[serde(default)]
         key_prefix: Option<String>,
     },

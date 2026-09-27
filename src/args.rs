@@ -342,7 +342,8 @@ pub(crate) enum PlanCommand {
         /// Existing project receiving the imported work.
         #[arg(long)]
         project_key: String,
-        /// Prefix for keys of new work (PREFIX-UID); defaults to the project key.
+        /// Prefix for keys of new work (PREFIX-UID); defaults to the project key. Required for a
+        /// document without GUIDs (such as OmniPlan's), where it names the source.
         #[arg(long)]
         key_prefix: Option<String>,
         /// Also write the candidate plan here for review and `plan apply`.

@@ -270,7 +270,11 @@ fn lag_units_are_converted_or_reported_never_guessed() {
     // OmniPlan writes lags this way; the schema fixes the unit (tenths of a minute) and the
     // missing format means MS Project's default, working time.
     let unformatted = &import(&plan, &no_format).report.links[0];
-    assert_eq!(unformatted.outcome, LinkOutcome::Approximated, "{unformatted:?}");
+    assert_eq!(
+        unformatted.outcome,
+        LinkOutcome::Approximated,
+        "{unformatted:?}"
+    );
     assert!(
         unformatted.notes[0].contains("no LagFormat") && unformatted.notes[0].contains("1 h"),
         "{unformatted:?}"
@@ -310,8 +314,11 @@ fn identity_falls_back_to_project_guid_and_uid() {
         "<Project xmlns=\"http://schemas.microsoft.com/project\"><Tasks>{bare}</Tasks></Project>"
     );
     let result = import(&plan, &anonymous);
-    assert_eq!(result.report.items[0].outcome, ItemOutcome::Skipped);
-    assert_eq!(result.candidate, plan);
+    let project = plan.projects.values().next().expect("project").id;
+    assert_eq!(
+        result.report.items[0].work.as_ref().expect("work").id,
+        super::encoding::scoped_work_id(project, "MSP", 7)
+    );
 }
 
 #[test]

@@ -2,8 +2,11 @@
 
 mod changes;
 mod fields;
+mod identity;
 
-use super::encoding::{derived_work_id, format_guid};
+pub(crate) use identity::Resolver;
+
+use super::encoding::format_guid;
 use super::report::{Finding, ItemOutcome, ItemReport, WorkReference};
 use super::source::{SourceProject, SourceTask};
 use crate::InterchangeError;
@@ -65,6 +68,7 @@ enum Parent {
 pub(crate) fn map(
     current: &Plan,
     source: &SourceProject,
+    resolver: &Resolver,
     project: ProjectId,
     prefix: &str,
 ) -> Result<Outline, InterchangeError> {
@@ -121,12 +125,12 @@ pub(crate) fn map(
             parent,
             has_children,
         };
-        match place(current, source, task, &placement)? {
+        match place(current, resolver, task, &placement) {
             Err(report) => {
                 outline.skipped.insert(task.uid);
-                outline.reports.push(report);
+                outline.reports.push(*report);
             }
-            Ok((id, existing)) => {
+            Ok((id, basis, existing)) => {
                 if let Some(first) = identities.insert(id, task.uid) {
                     return Err(InterchangeError::DuplicateIdentity {
                         first,
@@ -136,7 +140,8 @@ pub(crate) fn map(
                 }
                 check_kind(task, existing, placement.has_children)?;
                 let key = key_for(existing, task, prefix, &mut keys)?;
-                let (work, report) = fields::build(task, existing, id, key, &placement);
+                let (work, mut report) = fields::build(task, existing, id, key, &placement);
+                resolver.record(task, &basis, &mut report);
                 outline.work.insert(task.uid, work);
                 outline.reports.push(report);
             }
@@ -156,41 +161,34 @@ struct Placement {
 /// Resolve identity and ownership, or the skipped-item report explaining why the task stays out.
 fn place<'a>(
     current: &'a Plan,
-    source: &SourceProject,
+    resolver: &Resolver,
     task: &SourceTask,
     placement: &Placement,
-) -> Result<Result<(WorkItemId, Option<&'a WorkItem>), ItemReport>, InterchangeError> {
+) -> Result<Placed<'a>, Box<ItemReport>> {
     if let Some(reason) = &task.exclusion {
-        return Ok(Err(skipped(task, "task", reason)));
+        return Err(Box::new(skipped(task, "task", reason)));
     }
     if let Parent::NotImported(uid) = placement.parent {
-        return Ok(Err(skipped(
+        return Err(Box::new(skipped(
             task,
             "parent",
             format!("summary task UID {uid} is not imported"),
         )));
     }
-    let id = match (task.guid, source.guid) {
-        (Some(guid), _) => WorkItemId(guid),
-        (None, Some(project)) => derived_work_id(project, task.uid),
-        (None, None) => {
-            return Ok(Err(skipped(
-                task,
-                "identity",
-                "neither the task nor the project has a GUID, so re-imports could not find it",
-            )));
-        }
-    };
+    let (id, basis) = resolver.resolve(task);
     let existing = current.work_items.get(&id);
     if let Some(work) = existing.filter(|w| w.project != placement.project) {
-        return Ok(Err(skipped(
+        return Err(Box::new(skipped(
             task,
             "identity",
             format!("identity {id} belongs to {} in another project", work.key),
         )));
     }
-    Ok(Ok((id, existing)))
+    Ok((id, basis, existing))
 }
+
+/// Resolved identity, how it was found, and the existing work it names.
+type Placed<'a> = (WorkItemId, identity::Basis, Option<&'a WorkItem>);
 
 /// Review never changes the kind of existing work, so the importer names the source task and the
 /// attempted change instead of leaving review to refuse the local key alone.

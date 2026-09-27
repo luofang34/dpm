@@ -288,7 +288,7 @@ revision and operation history unchanged.
 
 | MSPDI | DPM candidate |
 | --- | --- |
-| Task `GUID` | Work identity. Without one, an identity derived from the project `GUID` and task `UID`; neither skips the task |
+| Task `GUID` | Work identity. Without one, an identity derived from the project `GUID` and task `UID`; without either, one derived from the target project, the explicit key prefix and the task `UID` (see [identity without GUIDs](#identity-without-guids)) |
 | `OutlineLevel` order | `parent`; a summary task (or any task with children) becomes a WorkPackage |
 | `Milestone=1` | Milestone; a nonzero source duration is dropped and reported. Without the element, existing work keeps its kind (reported as `kept`) and new work defaults to Task (reported as approximated) |
 | other tasks | Task, `Proposed`, empty acceptance: never executable until ratified. A zero-duration task without the flag stays an unestimated Task, so exported unestimated tasks keep their kind |
@@ -338,6 +338,20 @@ manual scheduling, recurrence, cost, timephased data, and percent complete or ac
 progress never submits, verifies or completes local work. Inactive, blank, external and subproject
 tasks are skipped with a reason; `report.rejected` covers document-level data and
 `report.retained` lists local work in the project that the document does not name.
+
+### Identity without GUIDs
+
+Some tools, OmniPlan among them, write neither a project `GUID` nor task `GUID`s. `UID`s are unique
+only within one file, so for such a document the key prefix names the source: identity is derived
+from the target project, the key prefix and the `UID`, and the new key is `PREFIX-UID`. The prefix
+is then required rather than defaulted (`invalid_request` otherwise), because a default would make
+every GUID-less file imported into a project the same source and silently merge unrelated tasks
+that share a `UID`. Re-importing the same file with the same prefix updates the same work and never
+duplicates it; another prefix plans separate work. Reusing a prefix for a different GUID-less file
+asserts that it is the same source, and every item's `identity` finding says so. A prefix already
+used by an import that carried GUIDs cannot be reused: the new `PREFIX-UID` key collides and the
+import is refused. Renumbered `UID`s import as new work. The `UID` 0 / `OutlineLevel` 0 task
+summarizes the whole document; the target project stands for it and it is reported as skipped.
 
 Re-importing updates work with the same identity and never duplicates it. Keys, lifecycle,
 ownership, progress, evidence and acceptance stay local. The document owns only the dependencies

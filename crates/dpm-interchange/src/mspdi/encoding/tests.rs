@@ -107,6 +107,36 @@ fn derived_identities_are_stable_and_scoped_by_project_and_uid() {
 }
 
 #[test]
+fn identities_are_pinned_so_earlier_imports_keep_resolving() {
+    let project = Uuid::from_u128(0x6f1c_2a4e_1b7d_4c55_9a0e_3d2f_5b8c_9e10);
+    assert_eq!(
+        derived_work_id(project, 9).to_string(),
+        "8add68ca-5736-899d-9f3e-f437a926bc3c"
+    );
+    assert_eq!(
+        scoped_work_id(ProjectId(project), "REL", 9).to_string(),
+        "10509382-14c6-87fd-ae9a-71cb29dc1c46"
+    );
+}
+
+#[test]
+fn scoped_identities_separate_projects_prefixes_and_uids() {
+    let project = ProjectId(Uuid::from_u128(0x6f1c_2a4e_1b7d_4c55_9a0e_3d2f_5b8c_9e10));
+    let other = ProjectId(Uuid::from_u128(0x0b9d_7c6e_2f41_4a8b_b3c5_7e6f_1d2a_4b30));
+    let id = scoped_work_id(project, "OP", 12);
+    assert_eq!(id, scoped_work_id(project, "OP", 12));
+    assert_ne!(id, scoped_work_id(other, "OP", 12));
+    assert_ne!(id, scoped_work_id(project, "OQ", 12));
+    assert_ne!(id, scoped_work_id(project, "OP", 13));
+    // Length delimiting keeps a prefix from absorbing bytes of the UID.
+    assert_ne!(
+        scoped_work_id(project, "OP", 0x0100),
+        scoped_work_id(project, "OP\u{0}", 0x01)
+    );
+    assert_ne!(id, derived_work_id(project.0, 12));
+}
+
+#[test]
 fn guids_use_the_microsoft_project_spelling() {
     let id = Uuid::from_u128(0xa100_0000_0000_4000_8000_0000_0000_0001);
     assert_eq!(format_guid(id), "A1000000-0000-4000-8000-000000000001");

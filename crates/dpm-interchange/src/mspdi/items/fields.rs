@@ -32,17 +32,6 @@ pub(super) fn build(
         kept: Vec::new(),
         changes: Vec::new(),
     };
-    if task.guid.is_some() {
-        report.preserved.push("identity".into());
-    } else {
-        report.approximated.push(Finding::new(
-            "identity",
-            format!(
-                "no task GUID; identity derived from the project GUID and UID {}, so a renumbered UID imports as new work",
-                task.uid
-            ),
-        ));
-    }
     let kind = map_kind(task, existing, placement.has_children, &mut report);
     let mut work = existing
         .cloned()

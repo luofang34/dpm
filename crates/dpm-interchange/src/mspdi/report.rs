@@ -63,7 +63,8 @@ pub struct SourceSummary {
 /// Local work that a source task maps to in the candidate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkReference {
-    /// Stable work identity: the task GUID, or an identity derived from project GUID and UID.
+    /// Stable work identity: the task GUID, or an identity derived from the project GUID and UID,
+    /// or from the target project, key prefix and UID; the item's `identity` finding says which.
     pub id: WorkItemId,
     /// Work key; existing keys are kept, new work receives `PREFIX-UID`.
     pub key: Key,
