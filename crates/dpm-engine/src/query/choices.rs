@@ -64,7 +64,7 @@ pub(crate) fn not_applicable(plan: &Plan, timeline: &Timeline) -> Vec<Inapplicab
             applicability: timeline.applicability(w.id).clone(),
         })
         .collect();
-    work.sort_by(|a, b| a.key.cmp(&b.key));
+    work.sort_by(|a, b| a.key.natural_cmp(&b.key));
     work
 }
 
@@ -164,7 +164,7 @@ fn forecast(
         })
         .filter_map(|(id, _)| hypothetical.work_items.get(&id).map(|w| w.key.clone()))
         .collect();
-    stranded.sort();
+    stranded.sort_by(dpm_model::Key::natural_cmp);
     Ok(ScenarioForecast {
         choices: choices
             .iter()

@@ -128,3 +128,28 @@ fn complete_input(plan: &mut Plan, input: dpm_model::WorkItemId) {
     )
     .expect("verify");
 }
+
+#[test]
+fn equally_ranked_candidates_follow_natural_key_order() {
+    let mut plan = fixture();
+    let template = plan.find_work_by_key("TEST-A").expect("ready task").clone();
+    for key in ["N-10", "N-2"] {
+        let work = dpm_model::WorkItem {
+            id: dpm_model::WorkItemId::new(),
+            key: dpm_model::Key::new(key),
+            ..template.clone()
+        };
+        plan.work_items.insert(work.id, work);
+    }
+    let query = NextWorkQuery {
+        use_probabilistic_criticality: false,
+        ..NextWorkQuery::default()
+    };
+    let ranked: Vec<_> = next_work(&plan, &query, Utc::now())
+        .expect("next work")
+        .into_iter()
+        .map(|c| c.work.key.0)
+        .filter(|k| k.starts_with("N-"))
+        .collect();
+    assert_eq!(ranked, ["N-2", "N-10"]);
+}

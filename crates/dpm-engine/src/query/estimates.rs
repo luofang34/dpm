@@ -29,7 +29,7 @@ pub fn unestimated(plan: &Plan, timeline: &Timeline) -> Vec<Key> {
         .filter(|w| is_unestimated(timeline, w))
         .map(|w| w.key.clone())
         .collect();
-    keys.sort();
+    keys.sort_by(dpm_model::Key::natural_cmp);
     keys
 }
 

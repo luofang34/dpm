@@ -301,7 +301,7 @@ pub fn next_work(
     candidates.sort_by(|a, b| {
         b.score
             .total_cmp(&a.score)
-            .then_with(|| a.work.key.cmp(&b.work.key))
+            .then_with(|| a.work.key.natural_cmp(&b.work.key))
     });
     Ok(candidates)
 }
