@@ -357,7 +357,7 @@ because the document omits them.
 `report.items` has one entry per source task with `outcome` (`Created`, `Updated`, `Unchanged`,
 `Skipped`), the mapped `work`, and `preserved`, `approximated` and `rejected` findings. Fields the
 source omits never count as preserved: `kept` names them, and existing work keeps the local value.
-`changes` lists every local field an `Updated` item changes (`title`, `objective`, `kind`, `parent`,
+`changes` lists every local field an `Updated` item changes (`title`, `order`, `objective`, `kind`, `parent`,
 `priority`, `estimate`) with `before` and `after` values, and is empty otherwise;
 `report.links` has one entry per `PredecessorLink` with `outcome` (`Preserved`, `Changed`,
 `Approximated`, `Rejected`), notes, `changes` to existing local dependencies and the resulting
@@ -369,6 +369,10 @@ tasks are skipped with a reason; `report.rejected` covers document-level data an
 `report.retained` lists local work in the project that the document does not name.
 
 ### Identity without GUIDs
+
+DPM metadata takes precedence over GUIDs: its carried identity reconnects a task even when the
+external tool drops GUIDs or renames the task. No title-path matching is needed for those tasks.
+The fallback rules below apply only to tasks without DPM metadata.
 
 Some tools, OmniPlan among them, write neither a project `GUID` nor task `GUID`s. `UID`s are unique
 only within one file, so for such a document the key prefix names the source: identity is derived
@@ -382,19 +386,19 @@ used by an import that carried GUIDs cannot be reused: the new `PREFIX-UID` key 
 import is refused. Renumbered `UID`s import as new work. The `UID` 0 / `OutlineLevel` 0 task
 summarizes the whole document; the target project stands for it and it is reported as skipped.
 
-A round trip through such a tool (DPM export, edit in OmniPlan, import) loses the GUIDs DPM wrote,
-so by default the file comes back as a new source and plans new work beside the original. Mapping it
-back onto the original work is an explicit request, never a heuristic applied silently:
-`--match-existing-by title-path` / `match_existing_by: "title-path"` matches each task without a
-`GUID` to the one work item in the target project whose titles from the project root down equal the
-task's outline path of names. Every match is an `identity` approximation naming the matched key and
+If an external save drops both DPM metadata and GUIDs, importing it without an explicit match can
+plan new work beside the original. Mapping it back onto the original work is an explicit request,
+never a heuristic applied silently:
+`--match-existing-by title-path` / `match_existing_by: "title-path"` matches each task without DPM
+metadata or a `GUID` to the one work item in the target project whose titles from the project root
+down equal the task's outline path of names. Every match is an `identity` approximation naming the matched key and
 path; a task without a match keeps its derived identity and says that no work has its path. A path
 shared by several local items, or by several GUID-less tasks that could match, or a task whose
 derived identity already names other work than its path matches, refuses the whole import
 (`invalid_command`) listing every ambiguity, because a partial or guessed merge would silently move
-history, evidence and ownership onto the wrong work. Titles are the one thing every tool round-trips;
-outline numbers and `UID`s are renumbered freely, and dates and durations are exactly what an edit
-changes. Renaming a task in the other tool therefore turns it into new work, and the report says so.
+history, evidence and ownership onto the wrong work. Outline numbers and `UID`s may be renumbered
+by the external tool. Without DPM metadata or a GUID, renaming a task removes that title-path match
+and can plan new work; the report states which identity rule was used.
 Priorities from such a tool may be relative (see `Priority` above); against work with execution
 history a raised band is a protected change that refuses the whole import, so an OmniPlan round
 trip of a plan in progress needs `--keep-existing-priority` as well.
