@@ -70,6 +70,65 @@ fn gitlab_number_spaces_stay_apart() {
     assert_eq!(plan.external_references.len(), 3);
 }
 
+/// Rewrite the only record's identity under its own record id and review it.
+fn edited(plan: &Plan, identity: ExternalIdentity) -> Result<(), EngineError> {
+    let mut proposal = plan.clone();
+    let record = proposal
+        .external_references
+        .values_mut()
+        .next()
+        .expect("one reference");
+    record.identity = identity;
+    let preview = propose_change(plan, &proposal).map(|_| ());
+    let mut applied = plan.clone();
+    let result = apply_command(
+        &mut applied,
+        ActorId::human("reviewer"),
+        Command::ApplyChange {
+            plan: Box::new(proposal),
+            reason: "edit the record".into(),
+        },
+        Utc::now(),
+    );
+    assert_eq!(preview.is_ok(), result.is_ok(), "preview and apply agree");
+    if result.is_err() {
+        assert_eq!(&applied, plan, "a refused apply changes nothing");
+    }
+    result.map(|_| ())
+}
+
+#[test]
+fn a_same_record_edit_cannot_move_an_observation_to_another_object() {
+    let mut plan = fixture();
+    let a = id(&plan, "TEST-A");
+    let pull = github(ExternalObjectKind::PullRequest);
+    let merged = Some(ExternalState::Merged);
+    linked(&mut plan, a, pull.clone(), ExternalLinkRole::Tracks, merged).expect("merged");
+    let other_number = ExternalIdentity {
+        external_id: "77".into(),
+        ..pull.clone()
+    };
+    let other_provider = ExternalIdentity {
+        provider: ExternalProvider::GitLab,
+        kind: ExternalObjectKind::PullRequest,
+        ..pull.clone()
+    };
+    for identity in [other_number, other_provider] {
+        let error = edited(&plan, identity.canonical()).expect_err("observation moved");
+        assert!(error.to_string().contains("different object"), "{error}");
+    }
+    let transferred = ExternalIdentity {
+        namespace: Some("o/renamed".into()),
+        ..pull.clone()
+    };
+    edited(&plan, transferred.canonical()).expect("a repository transfer keeps the object");
+    let migrated = ExternalIdentity {
+        instance: "ghe.corp.example".into(),
+        ..pull
+    };
+    edited(&plan, migrated.canonical()).expect("a server migration keeps the object");
+}
+
 /// Replace the only record with a new record id for `identity`, keeping its links, and review it.
 fn rekeyed(
     plan: &Plan,

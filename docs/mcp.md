@@ -250,7 +250,10 @@ ID (a relabel or namespace move) and the one with its object key (a removal and 
 new ID). Either way it is an edit of that object, so it follows the link rules: the kind may only
 change as linking would change it (a pull request is never downgraded), and, like evidence and
 reviews, observations are attributed records that a plan change cannot add, rewrite or drop;
-record them with `link_external`. A removal in one reviewed change followed by a re-addition in a
+record them with `link_external`. Under the same reference ID, only a namespace move (repository
+transfer) or an instance change (server migration) keeps the object; another number, number space
+or provider names a different object, so a record carrying an observation cannot be rewritten into
+it — unlink it and link the other object. A removal in one reviewed change followed by a re-addition in a
 later one is indistinguishable from unlinking the last link and linking again, which starts a new
 record without history.
 

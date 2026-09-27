@@ -33,6 +33,18 @@ pub(super) fn protect_references(current: &Plan, proposed: &Plan) -> Result<(), 
 
 fn protect_edit(previous: &ExternalReference, next: &ExternalReference) -> Result<(), EngineError> {
     let rekeyed = previous.id != next.id;
+    // A repository transfer or a server migration keeps the object; another number, number space
+    // or provider names a different object, so an attributed observation cannot move with it.
+    let (old, new) = (previous.identity.object_key(), next.identity.object_key());
+    let same_object = old.family == new.family && old.space == new.space && old.id == new.id;
+    if !same_object && previous.observation.is_some() {
+        return Err(invalid(
+            next.id,
+            "a reviewed change may move a record to another namespace or instance, but another \
+             number, number space or provider is a different object and its observation cannot \
+             move with it; unlink this record and link the other object",
+        ));
+    }
     if !previous.identity.permits_kind_change_to(&next.identity) {
         return Err(invalid(
             next.id,

@@ -216,3 +216,32 @@ fn secret_names_with_suffixes_and_compounds_are_rejected() {
         assert_eq!(check_reference(Some(&url), "Tracked"), Ok(()), "{url}");
     }
 }
+
+#[test]
+fn userinfo_in_any_scheme_authority_is_a_credential() {
+    for label in [
+        "x=https://tok@evil.example",
+        "see:https://tok@evil.example",
+        "https://github.com/o?next=https://ghp_tok@evil.example",
+        "https://github.com/o?next=https://ghp_tok@10.0.0.5",
+    ] {
+        assert!(check_reference(None, label).is_err(), "{label}");
+    }
+    let url = "https://github.com/o/r/issues/6?next=https%3A%2F%2Fghp_abc%40evil.example";
+    assert!(check_reference(Some(url), "Issue 6").is_err(), "{url}");
+    for label in [
+        "mail alice@corp.example",
+        "@alice@mastodon.social",
+        "see https://github.com/o/r",
+    ] {
+        assert!(check_reference(None, label).is_ok(), "{label}");
+    }
+}
+
+#[test]
+fn kind_folding_is_idempotent_for_marks_that_lowercasing_produces() {
+    let fold = super::super::provider::fold_kind;
+    for name in ["İncident", "İSSUE", "Work İtems"] {
+        assert_eq!(fold(&fold(name)), fold(name), "{name}");
+    }
+}

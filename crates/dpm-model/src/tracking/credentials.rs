@@ -112,6 +112,18 @@ fn carries_userinfo(word: &str) -> bool {
 fn embedded_userinfo(text: &str) -> bool {
     text.match_indices('@').any(|(at, _)| {
         let (before, after) = text.split_at(at);
+        // Inside an authority (after `//`, as in `scheme://` or a protocol-relative URL) anywhere
+        // in the word, an `@` always ends userinfo, whatever precedes it (`x=https://tok@host`,
+        // `see:https://tok@host`, `?next=https://tok@host`).
+        let in_authority = before
+            .rfind("//")
+            .and_then(|start| before.get(start + 2..))
+            .is_some_and(|authority| {
+                !authority.is_empty() && !authority.contains(['/', '?', '#', '\\'])
+            });
+        if in_authority {
+            return true;
+        }
         let name = before.rsplit(NAME_BREAKS).next().unwrap_or(before);
         let after = after.get(1..).unwrap_or_default();
         let end = after.find(['/', '?', '#']).unwrap_or(after.len());

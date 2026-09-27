@@ -189,8 +189,10 @@ impl ExternalProvider {
 pub(super) fn fold_kind(name: &str) -> String {
     let folded: String = name
         .chars()
-        .filter(|c| c.is_alphanumeric())
+        // Lower-casing first lets the filter drop marks it produces (`İ` -> `i` + U+0307), so a
+        // second fold yields the same name.
         .flat_map(char::to_lowercase)
+        .filter(|c| c.is_alphanumeric())
         .collect();
     if let Some(stem) = folded.strip_suffix("ies").filter(|stem| !stem.is_empty()) {
         format!("{stem}y")
