@@ -28,7 +28,10 @@ fn duplicate_links_report_the_merged_lag() {
     assert_eq!(larger.dependencies, [merged[0].id]);
     assert_eq!(smaller.outcome, LinkOutcome::Approximated);
     assert!(
-        smaller.notes.iter().any(|n| n.contains("1 h")),
+        smaller
+            .notes
+            .iter()
+            .any(|n| n.contains("FS MSP-2 -> MSP-5") && n.contains("1 h")),
         "{smaller:?}"
     );
     assert_eq!(larger.outcome, LinkOutcome::Preserved);

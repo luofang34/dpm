@@ -61,6 +61,12 @@ pub(crate) fn map(current: &Plan, source: &SourceProject, outline: &Outline) -> 
     }
     let owned: BTreeSet<WorkItemId> = outline.mapped().map(|w| w.id).collect();
     let (dependencies, removed) = merge(current, &owned, edges);
+    let keys: BTreeMap<WorkItemId, &str> = current
+        .work_items
+        .values()
+        .chain(outline.mapped())
+        .map(|w| (w.id, w.key.0.as_str()))
+        .collect();
     for (report, mapped) in reports.iter_mut().zip(produced) {
         for edge in mapped {
             let Some(dependency) = dependencies
@@ -70,7 +76,7 @@ pub(crate) fn map(current: &Plan, source: &SourceProject, outline: &Outline) -> 
                 continue;
             };
             let shared = sources.get(&edge).is_some_and(|n| *n > 1);
-            describe(current, report, dependency, shared);
+            describe(current, &keys, report, dependency, shared);
             report.dependencies.push(dependency.id);
         }
     }
@@ -83,12 +89,16 @@ pub(crate) fn map(current: &Plan, source: &SourceProject, outline: &Outline) -> 
 
 /// State what the candidate dependency carries when it differs from this link or from the local
 /// edge it updates.
-fn describe(current: &Plan, report: &mut LinkReport, dependency: &Dependency, shared: bool) {
-    let key = |id| {
-        current
-            .work_items
-            .get(&id)
-            .map_or_else(|| id.to_string(), |w| w.key.0.clone())
+fn describe(
+    current: &Plan,
+    keys: &BTreeMap<WorkItemId, &str>,
+    report: &mut LinkReport,
+    dependency: &Dependency,
+    shared: bool,
+) {
+    let key = |id: WorkItemId| {
+        keys.get(&id)
+            .map_or_else(|| id.to_string(), |k| (*k).to_owned())
     };
     let edge = format!(
         "{} {} -> {}",
