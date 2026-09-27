@@ -442,9 +442,13 @@ event, which `why_now` states. Tasks verified or started before event times were
 decisions resolved before then, count as having occurred at an unrecorded time: zero or negative lag
 releases, positive lag reports `release.state: unrecorded_event_time` with an actionable reason.
 The remaining schedule in `project_status`, `explain_work.schedule`, `next_work` and the Gantt
-waits exactly as long: SS/SF lag from a started predecessor, like any lag from verified work,
-counts from the recorded event and is dropped once released, and a lag from an unrecorded event
-time is kept whole. FS/FF edges keep their full lag until the predecessor is verified.
+never releases a constraint before the gate does: SS/SF lag from a started predecessor, like any
+lag from verified work, counts from the recorded event and is dropped once released, and a lag from
+an unrecorded event time is kept whole. FS/FF edges keep their full lag until the predecessor is
+verified, so with a provisional start basis the forecast errs late: the successor may already have
+started on the pending submission while the forecast still waits for verification. A started
+predecessor that still has outstanding constraints of its own is projected after them, which also
+only delays the forecast.
 
 `explain_work.transitions` reports `claim`, `start`, `submit` and `verify` with the same shape as
 `gates` (the claim report). A milestone's `progress.completed_at` is the latest release among its

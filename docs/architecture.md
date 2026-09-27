@@ -49,8 +49,13 @@ adapter-supplied clock reading, give completed tasks zero duration and remove co
 completed tasks or reached milestones, using the same completion and decision-gate projection as
 execution queries. A constraint from completed work, or a start-based (SS, SF) constraint from
 work that has started, keeps only the lag the execution gate still reports as elapsing from that
-event, and keeps its whole lag when the event time was never recorded, so the
-forecast waits exactly as long as execution will. They also drop waived soft constraints;
+event, and keeps its whole lag when the event time was never recorded. The forecast therefore never
+releases a constraint before execution does, and waits exactly as long as execution for every
+released or elapsing lag it keeps; it errs late, never early, in two cases. A finish-to-start edge
+with a provisional start basis keeps its whole edge until the predecessor is verified, although the
+gate may already have let the successor start on the pending submission. A started predecessor
+projects at the clock reading unless its own outstanding constraints push it later, and a
+start-based lag from it is then measured from that later projection. They also drop waived soft constraints;
 the baseline projection keeps every constraint.
 
 ### Relations

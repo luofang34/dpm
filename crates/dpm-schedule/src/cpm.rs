@@ -120,7 +120,7 @@ pub(crate) struct Remaining {
 ///
 /// Edges into completed work and waived edges no longer bound anything. An edge from completed
 /// work keeps only the part of its lag the shared gate evaluator still reports as elapsing, so the
-/// forecast waits exactly as long as execution will; a lag whose event time was never recorded is
+/// forecast never releases a constraint before execution does; a lag whose event time was never recorded is
 /// kept whole rather than assumed to have elapsed. The completed predecessor projects at the origin
 /// with zero duration, so the kept lag is measured from `now`. A start-based edge from work that has
 /// started is treated the same way from its start event; the started predecessor projects at the

@@ -1,4 +1,5 @@
-//! The remaining forecast waits exactly as long as the execution gates, through the public API.
+//! The remaining forecast never releases a constraint before the execution gates do, through the
+//! public API.
 #![allow(clippy::expect_used, clippy::panic)]
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
