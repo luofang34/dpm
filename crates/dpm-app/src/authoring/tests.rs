@@ -111,6 +111,10 @@ fn executed() -> Value {
         (&worker, json!({"Start": {"work": c}})),
         (
             &reviewer,
+            json!({"Handoff": {"work": c, "from": worker, "to": {"kind": "Agent", "name": "second"}, "reason": "reassigned"}}),
+        ),
+        (
+            &reviewer,
             json!({"WaiveDependency": {"dependency": soft, "reason": "overlap accepted"}}),
         ),
         (&worker, json!({"LinkExternal": link})),

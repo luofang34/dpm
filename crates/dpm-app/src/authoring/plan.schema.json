@@ -79,6 +79,10 @@
         "start_unrecorded": {"type": "boolean", "description": "Set when work that started before start times were recorded is blocked, so resuming it keeps the start."}
       }
     },
+    "Handoff": {
+      "type": "object", "additionalProperties": false, "required": ["from", "to", "actor", "at", "reason"],
+      "properties": {"from": {"$ref": "#/$defs/Actor"}, "to": {"$ref": "#/$defs/Actor"}, "actor": {"$ref": "#/$defs/Actor"}, "at": {"$ref": "#/$defs/Time"}, "reason": {"type": "string"}}
+    },
     "Review": {
       "type": "object", "additionalProperties": false, "required": ["actor", "at", "reason"],
       "properties": {"actor": {"$ref": "#/$defs/Actor"}, "at": {"$ref": "#/$defs/Time"}, "reason": {"type": "string"}}
@@ -124,6 +128,7 @@
         "requirement_ids": {"$ref": "#/$defs/IdSet"},
         "artifact_ids": {"$ref": "#/$defs/IdSet", "description": "Managed evidence links."},
         "owner": {"anyOf": [{"$ref": "#/$defs/Actor"}, {"type": "null"}], "description": "Managed by claim."},
+        "handoffs": {"type": "array", "items": {"$ref": "#/$defs/Handoff"}, "description": "Managed by handoff; append-only record of ownership transfers."},
         "resources": {"type": "array", "items": {"$ref": "#/$defs/ResourceRequirement"}},
         "events": {"$ref": "#/$defs/Events"},
         "last_rejection": {"anyOf": [{"$ref": "#/$defs/Review"}, {"type": "null"}], "description": "Managed by reject."},
