@@ -1,5 +1,5 @@
-//! Spelling normalization and the single collision key used by validation, the engine and
-//! adapter lookup.
+//! Spelling normalization, the single collision key used by validation, the engine and adapter
+//! lookup, and the single kind-change rule used by linking and reviewed plan changes.
 
 use super::{ExternalIdentity, ExternalObjectKind, ExternalProvider};
 
@@ -37,7 +37,8 @@ impl ExternalIdentity {
     /// Forgejo is a fork of Gitea that keeps its repository paths and issue/pull numbering, so
     /// one instance addressed as either family names the same objects; the key uses Forgejo for
     /// both. Other families stay distinct even on one host, and every family stays distinct
-    /// across instances.
+    /// across instances. On GitHub, Forgejo and Gitea every kind of the shared issue sequence
+    /// (issues, pull requests and GitHub discussions) keys as `Issue`.
     ///
     /// The recorded provider and kind stay authoritative for display and for kind-specific rules
     /// such as `Merged`; only the collision check folds them.
@@ -47,55 +48,71 @@ impl ExternalIdentity {
         if key.provider == ExternalProvider::Gitea {
             key.provider = ExternalProvider::Forgejo;
         }
-        if self.provider.shares_issue_and_review_numbers()
-            && key.kind == ExternalObjectKind::PullRequest
-        {
+        if self.provider.numbers_in_issue_sequence(&self.kind) {
             key.kind = ExternalObjectKind::Issue;
         }
         key
     }
 
-    /// Whether this identity names `recorded`'s object as a pull request where the record says
-    /// issue. Only shared-number forges give both kinds one object key, and there the pull
-    /// request is the more specific kind, so a link may upgrade the record but never downgrade it.
+    /// Whether a record of this identity may take `next`'s kind: unchanged, or refined from issue
+    /// to pull request where both kinds share one number. A pull request is the more specific
+    /// kind of that object, so a record is never downgraded; every other kind change names a
+    /// different object. Linking and reviewed plan changes both apply this rule.
+    #[must_use]
+    pub fn permits_kind_change_to(&self, next: &Self) -> bool {
+        self.kind == next.kind
+            || (self.kind == ExternalObjectKind::Issue
+                && next.kind == ExternalObjectKind::PullRequest
+                && self.provider.shares_issue_and_review_numbers()
+                && next.provider.shares_issue_and_review_numbers())
+    }
+
+    /// Whether this identity names `recorded`'s object with a kind the record may be refined to.
     #[must_use]
     pub fn refines_kind_of(&self, recorded: &Self) -> bool {
-        recorded.kind == ExternalObjectKind::Issue
-            && self.kind == ExternalObjectKind::PullRequest
+        self.kind != recorded.kind
+            && recorded.permits_kind_change_to(self)
             && self.object_key() == recorded.object_key()
     }
 }
 
-/// Repeat a stripping step until it removes nothing; each step returns a shorter subslice or
-/// the input, so the loop terminates.
-fn strip_to_fixed_point(text: &str, step: impl Fn(&str) -> &str) -> &str {
+/// Repeat a normalization step until it changes nothing; every step only removes text, so the
+/// loop terminates.
+fn to_fixed_point(text: String, step: impl Fn(&str) -> String) -> String {
     let mut current = text;
     loop {
-        let next = step(current);
-        if next.len() == current.len() {
+        let next = step(&current);
+        if next == current {
             return current;
         }
         current = next;
     }
 }
 
-fn canonical_instance(instance: &str) -> String {
-    let lower = instance.to_lowercase();
-    strip_to_fixed_point(&lower, |text| {
+/// Lowercase `host[:port]` without scheme, trailing slash or trailing root dot; a port loses
+/// leading zeros, and the default HTTP(S) ports `443` and `80` are dropped.
+pub(super) fn canonical_instance(instance: &str) -> String {
+    to_fixed_point(instance.to_lowercase(), |text| {
         let text = text.trim();
         let text = text
             .strip_prefix("https://")
             .or_else(|| text.strip_prefix("http://"))
             .unwrap_or(text)
             .trim_end_matches('/');
-        // Default HTTP(S) ports address the same host, so they must not split identity.
-        text.strip_suffix(":443")
-            .or_else(|| text.strip_suffix(":80"))
-            .unwrap_or(text)
+        let (host, port) = match text.rsplit_once(':') {
+            Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => (host, Some(port)),
+            _ => (text, None),
+        };
+        let host = host.strip_suffix('.').unwrap_or(host).trim_end_matches('/');
+        match port.map(|port| (port, port.trim_start_matches('0'))) {
+            None | Some(("", _)) | Some((_, "443" | "80")) => host.to_owned(),
+            Some((_, "")) => format!("{host}:0"),
+            Some((_, port)) => format!("{host}:{port}"),
+        }
     })
-    .to_owned()
 }
 
+/// Slash-separated segments without empty or `.` segments; `..` is kept so validation rejects it.
 fn canonical_namespace(provider: &ExternalProvider, namespace: &str) -> String {
     let folded = if provider.folds_namespace_case() {
         namespace.to_lowercase()
@@ -103,20 +120,24 @@ fn canonical_namespace(provider: &ExternalProvider, namespace: &str) -> String {
         namespace.to_owned()
     };
     let strips_suffix = provider.numbers_repository_objects();
-    strip_to_fixed_point(&folded, |text| {
-        let text = text.trim().trim_matches('/');
-        match text.strip_suffix(".git") {
-            Some(repository) if strips_suffix => repository,
-            _ => text,
+    to_fixed_point(folded, |text| {
+        let joined = text
+            .trim()
+            .split('/')
+            .filter(|segment| !matches!(*segment, "" | "."))
+            .collect::<Vec<_>>()
+            .join("/");
+        match joined.strip_suffix(".git") {
+            Some(repository) if strips_suffix => repository.to_owned(),
+            _ => joined,
         }
     })
-    .to_owned()
 }
 
 fn canonical_external_id(provider: &ExternalProvider, external_id: &str) -> String {
-    let external_id = strip_to_fixed_point(external_id, |text| {
+    let external_id = to_fixed_point(external_id.to_owned(), |text| {
         let text = text.trim();
-        text.strip_prefix(['#', '!']).unwrap_or(text)
+        text.strip_prefix(['#', '!']).unwrap_or(text).to_owned()
     });
     if provider.folds_id_to_upper() {
         external_id.to_uppercase()
@@ -127,7 +148,7 @@ fn canonical_external_id(provider: &ExternalProvider, external_id: &str) -> Stri
         let trimmed = external_id.trim_start_matches('0');
         if trimmed.is_empty() { "0" } else { trimmed }.to_owned()
     } else {
-        external_id.to_owned()
+        external_id
     }
 }
 

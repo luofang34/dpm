@@ -95,6 +95,16 @@ fn protect_observations(current: &Plan, proposed: &Plan) -> Result<(), EngineErr
                 "observations are recorded by link; plan changes cannot add or rewrite them",
             ));
         }
+        // Review follows the link rule: a kind is only refined, never downgraded or swapped.
+        if let Some(current) = current.external_references.get(id)
+            && !current.identity.permits_kind_change_to(&reference.identity)
+        {
+            return Err(invalid(
+                id,
+                "a recorded kind may only be refined from issue to pull request on a \
+                 shared-number forge; link the other object instead",
+            ));
+        }
     }
     Ok(())
 }

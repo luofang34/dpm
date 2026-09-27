@@ -90,7 +90,31 @@ impl ExternalProvider {
     fn hosts_code_review(&self) -> bool {
         !matches!(self, Self::Jira | Self::Linear)
     }
+
+    /// Kinds numbered in one repository's shared issue sequence. GitHub also numbers discussions
+    /// there, so a discussion and an issue with one number cannot coexist.
+    fn numbers_in_issue_sequence(&self, kind: &ExternalObjectKind) -> bool {
+        match kind {
+            ExternalObjectKind::Issue | ExternalObjectKind::PullRequest => {
+                self.shares_issue_and_review_numbers()
+            }
+            ExternalObjectKind::Other(name) => *self == Self::GitHub && name == DISCUSSION,
+        }
+    }
+
+    /// Shared-number forges accept only the kinds of their one sequence, so no unknown kind can
+    /// give one number a second identity; other providers accept any kind they host.
+    fn accepts_kind(&self, kind: &ExternalObjectKind) -> bool {
+        if self.shares_issue_and_review_numbers() {
+            self.numbers_in_issue_sequence(kind)
+        } else {
+            *kind != ExternalObjectKind::PullRequest || self.hosts_code_review()
+        }
+    }
 }
+
+/// The GitHub discussion kind name.
+const DISCUSSION: &str = "discussion";
 
 /// Category of external object; GitLab issues and merge requests have separate numbering.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -104,14 +128,16 @@ pub enum ExternalObjectKind {
 }
 
 impl ExternalObjectKind {
-    /// Case-insensitive kind name; merge requests and `pr` map to `PullRequest`.
+    /// Kind name compared ignoring case, separators and one plural `s`: `pull_requests`, `PRs`
+    /// and `merge-request` are `PullRequest`, `issues` is `Issue`, `Discussions` is the
+    /// `discussion` kind. Any other name becomes a lowercase `Other` kind.
     pub fn parse(name: &str) -> Self {
         let name = name.trim().to_lowercase();
-        match name.as_str() {
+        let folded: String = name.chars().filter(|c| c.is_alphanumeric()).collect();
+        match folded.strip_suffix('s').unwrap_or(&folded) {
             "issue" => Self::Issue,
-            "issues" => Self::Issue,
-            "pullrequest" | "pull_request" | "pull-request" | "pull" | "pulls" | "pr"
-            | "merge_request" | "merge_requests" | "merge-request" | "mr" => Self::PullRequest,
+            "pullrequest" | "pull" | "pr" | "mergerequest" | "mr" => Self::PullRequest,
+            DISCUSSION => Self::Other(DISCUSSION.into()),
             _ => Self::Other(name),
         }
     }
@@ -138,7 +164,9 @@ pub struct ExternalIdentity {
 }
 
 impl ExternalIdentity {
-    fn validate(&self, id: ExternalReferenceId) -> Result<(), ValidationError> {
+    /// Check that this identity is canonical and structurally valid; commands check a requested
+    /// identity with this even when it resolves to an existing record.
+    pub fn validate(&self, id: ExternalReferenceId) -> Result<(), ValidationError> {
         if self.instance.contains('@') {
             return Err(invalid(
                 "external identity",
@@ -162,7 +190,9 @@ impl ExternalIdentity {
     fn validate_parts(&self, id: ExternalReferenceId) -> Result<(), ValidationError> {
         let fail = |reason: &str| Err(invalid("external identity", id, reason));
         if !valid_instance(&self.instance) {
-            return fail("instance must be a lowercase host[:port] without scheme or path");
+            return fail(
+                "instance must be a lowercase host[:port] without scheme or path, port 1-65535",
+            );
         }
         if let ExternalProvider::Other(name) = &self.provider
             && !lowercase_word(name)
@@ -182,12 +212,17 @@ impl ExternalIdentity {
                 return fail("this provider's keys are unique per instance; omit the namespace");
             }
             Some(namespace) if !valid_namespace(namespace) => {
-                return fail("namespace must be slash-separated segments without credentials");
+                return fail("namespace must be slash-separated names without `..` or credentials");
             }
             _ => {}
         }
-        if self.kind == ExternalObjectKind::PullRequest && !self.provider.hosts_code_review() {
-            return fail("this provider has no pull requests");
+        if !self.provider.accepts_kind(&self.kind) {
+            return fail(if self.provider.shares_issue_and_review_numbers() {
+                "this forge numbers issues and pull requests (and GitHub discussions) in one \
+                 sequence; use kind Issue, PullRequest or, on GitHub, discussion"
+            } else {
+                "this provider has no pull requests"
+            });
         }
         if self.external_id.is_empty()
             || !self
@@ -267,6 +302,15 @@ pub struct ExternalObservation {
     pub observed_by: ActorId,
 }
 
+impl ExternalObservation {
+    /// Whether a later report of `next` may replace this one. A merged pull request can neither
+    /// reopen nor close, so after `Merged` only another `Merged` report is accepted from any link.
+    #[must_use]
+    pub fn admits(&self, next: ExternalState) -> bool {
+        self.state != ExternalState::Merged || next == ExternalState::Merged
+    }
+}
+
 /// External object known to the workspace, with its display data and local links.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -300,6 +344,8 @@ impl ExternalReference {
 
 fn valid_instance(instance: &str) -> bool {
     let (host, port) = instance.split_once(':').unwrap_or((instance, ""));
+    let port_in_range = port.is_empty()
+        || (!port.starts_with('0') && port.parse::<u16>().is_ok_and(|port| port > 0));
     let host_ok = !host.is_empty()
         && !host.starts_with(['.', '-'])
         && !host.ends_with(['.', '-'])
@@ -308,12 +354,12 @@ fn valid_instance(instance: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '-'));
     let port_ok = !instance.contains(':')
         || (!port.is_empty() && port.len() <= 5 && port.chars().all(|c| c.is_ascii_digit()));
-    host_ok && port_ok
+    host_ok && port_ok && port_in_range
 }
 
 fn valid_namespace(namespace: &str) -> bool {
     namespace.split('/').all(|segment| {
-        !segment.is_empty()
+        !matches!(segment, "" | "." | "..")
             && segment
                 .chars()
                 .all(|c| c.is_alphanumeric() || matches!(c, '.' | '_' | '~' | '-'))

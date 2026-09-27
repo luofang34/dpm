@@ -194,9 +194,14 @@ fn credentials_are_rejected_in_every_shared_field() {
     };
     check(&|r| r.url = Some("https://github.com/ops/dpm/issues/42".into())).expect("plain URL");
     check(&|r| {
-        r.url = Some("https://github.com/ops/dpm/issues/42?author=me#issuecomment-1".into())
+        r.url = Some("https://github.com/ops/dpm/issues/42?tab=activity#issuecomment-1".into())
     })
-    .expect("ordinary parameters");
+    .expect("allowlisted view parameters");
+    assert!(
+        check(&|r| r.url = Some("https://github.com/ops/dpm/issues/42?author=me".into()))
+            .expect_err("unlisted query parameter")
+            .contains("query")
+    );
     for url in [
         "https://ghp_secret@github.com/ops/dpm/issues/42",
         "https://user:pass@github.com/ops/dpm/issues/42",

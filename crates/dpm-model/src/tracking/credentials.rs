@@ -1,88 +1,62 @@
 //! Rejection of credentials in shared tracking data; plans are exported, diffed and committed.
 //!
-//! Parameter names are percent-decoded until stable, lowercased and stripped of `_`, `-` and
-//! `.` before matching, so `%74oken`, `%2574oken`, `API_Key` and `x-api.key` are all caught.
+//! One detector decides for labels and URLs. A URL is first checked exactly as a label word, then
+//! against a structural allowlist, so the URL field can be stricter than a label but never looser.
+//!
+//! Each word is percent-decoded until stable, and `\` is read as `/`, before either rule runs:
+//!
+//! - **Userinfo.** After an optional `scheme:` and any number of slashes, the authority runs to the
+//!   next `/`, `?` or `#`; any `@` in it is userinfo. Without a scheme or leading slash, an `@`
+//!   followed by a host (dotted name, `localhost`, `[IPv6]`, or `name:port`) is userinfo. Userinfo
+//!   is rejected unless it is exactly `git`, the public SSH user of every forge
+//!   (`git@github.com:o/r.git`). A bare address with no scheme, path, query, fragment or port
+//!   (`user@example.com`, also after `mailto:`) is an email, not userinfo.
+//! - **Secret parameters.** The word is split at `?`, `&`, `;`, `/` and `#`. A piece `name=value`
+//!   with a nonempty value is a secret when the name, split into words at `_`, `-`, `.`, `:` and
+//!   lower-to-upper case changes, has a last word in [`SECRET_WORDS`] or ending with one of
+//!   [`SECRET_SUFFIXES`]. Whole words decide, so `max_tokens` and `secret_santa` are ordinary, and
+//!   an anchor such as `#token-refresh` has no value and is ordinary.
 
-/// Name fragments that mark a parameter as secret wherever it appears.
-const SECRET_PARAMETERS: &[&str] = &[
+mod url;
+pub(super) use url::check_url;
+
+/// Last words that name a secret only as a whole word; `monkey` or `bypass` stay ordinary.
+const SECRET_WORDS: &[&str] = &["key", "apikey", "sig", "pwd", "pass", "jwt", "auth", "sid"];
+/// Endings that name a secret, so joined spellings such as `accesstoken` are caught too.
+const SECRET_SUFFIXES: &[&str] = &[
     "token",
     "secret",
     "password",
     "passwd",
     "signature",
+    "session",
     "credential",
-    "apikey",
+    "credentials",
+    "authorization",
 ];
-/// Short names that are secret as URL parameters but ordinary words in prose.
-const SECRET_NAMES: &[&str] = &["key", "sig", "code", "auth", "authorization"];
 /// Decoding rounds; more nested encodings than this are rejected rather than inspected.
 const DECODE_ROUNDS: usize = 4;
 
-/// Validate a display URL: http(s), on the identity's instance, with no userinfo or secret parameter.
-pub(super) fn check_url(url: &str, instance: &str) -> Result<(), &'static str> {
-    if url.chars().any(char::is_whitespace) {
-        return Err("URL must not contain whitespace");
-    }
-    let lower = url.to_lowercase();
-    let rest = lower
-        .strip_prefix("https://")
-        .or_else(|| lower.strip_prefix("http://"))
-        .ok_or("URL must use http or https")?;
-    let authority = check_credentials(rest)?;
-    if authority != instance {
-        return Err("URL host must match the identity instance");
-    }
-    Ok(())
-}
-
-/// Reject credentials in free text: URLs with or without a scheme that carry userinfo or a
-/// secret parameter, and bare `name=value` pairs with a secret name.
-///
-/// A word without a scheme is read as a URL only when a host-like authority is followed by a
-/// path, query or fragment, so an email address such as `user@example.com` stays ordinary text.
+/// Reject credentials in free text, one whitespace-separated word at a time.
 pub(super) fn check_text(text: &str) -> Result<(), &'static str> {
     for word in text.split_whitespace() {
         let word = word
-            .trim_matches(|c: char| matches!(c, '(' | ')' | '<' | '>' | '[' | ']' | '"' | '\''))
-            .trim_end_matches(['.', ',', ';', ':', '!', '?'])
-            .to_lowercase();
-        if let Some((_, rest)) = word.split_once("://") {
-            check_credentials(rest)?;
-        } else if addresses_host(&word) {
-            check_credentials(&word)?;
-        }
-        check_secret_pairs(&word)?;
+            .trim_matches(|c: char| matches!(c, '(' | ')' | '<' | '>' | '"' | '\''))
+            .trim_end_matches(['.', ',', ';', ':', '!', '?']);
+        check_word(word)?;
     }
     Ok(())
 }
 
-/// Check the lowercase part of a URL after its scheme and return its authority.
-fn check_credentials(rest: &str) -> Result<&str, &'static str> {
-    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let (authority, tail) = rest.split_at(end);
-    // Any userinfo, including a token-only `TOKEN@host` or an encoded `%40`, is a credential.
-    if decode(authority)?.contains('@') {
+fn check_word(word: &str) -> Result<(), &'static str> {
+    let decoded = decode(word)?.replace('\\', "/");
+    if carries_userinfo(&decoded.to_lowercase()) {
         return Err("shared plans cannot carry URL credentials");
     }
-    let parameters = tail
-        .split_once(['?', '#'])
-        .map_or("", |(_, parameters)| parameters);
-    for pair in parameters.split(['&', '?', '#', ';']) {
-        let name = pair.split_once('=').map_or(pair, |(name, _)| name);
-        let name = parameter_name(name)?;
-        if SECRET_NAMES.contains(&name.as_str()) || is_secret(&name) {
-            return Err("shared plans cannot carry secret URL parameters");
-        }
-    }
-    Ok(authority)
-}
-
-/// Reject `name=value` pairs with a secret-looking name anywhere in a word.
-fn check_secret_pairs(word: &str) -> Result<(), &'static str> {
-    for pair in word.split(['?', '&', '#', ';']) {
-        if let Some((name, value)) = pair.split_once('=')
+    for piece in decoded.split(['?', '&', ';', '/', '#']) {
+        if let Some((name, value)) = piece.split_once('=')
             && !value.is_empty()
-            && is_secret(&parameter_name(name)?)
+            && is_secret_name(name)
         {
             return Err("shared plans cannot carry secret parameters");
         }
@@ -90,37 +64,99 @@ fn check_secret_pairs(word: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
-/// A scheme-less word names a host when its authority is a dotted host or carries a port and
-/// something follows it.
-fn addresses_host(word: &str) -> bool {
-    let end = word.find(['/', '?', '#']).unwrap_or(word.len());
-    let (authority, tail) = word.split_at(end);
-    let host_port = authority
-        .rsplit_once('@')
-        .map_or(authority, |(_, host)| host);
-    let (host, port) = host_port.split_once(':').unwrap_or((host_port, ""));
-    let host_like = !host.is_empty()
-        && host.split('.').all(|label| !label.is_empty())
+fn carries_userinfo(word: &str) -> bool {
+    if let Some(address) = word.strip_prefix("mailto:") {
+        return !is_email(address);
+    }
+    let (has_scheme, rest) = match scheme_split(word) {
+        Some(rest) => (true, rest),
+        None => (false, word),
+    };
+    let after_slashes = rest.trim_start_matches('/');
+    if has_scheme || after_slashes.len() != rest.len() {
+        let end = after_slashes
+            .find(['/', '?', '#'])
+            .unwrap_or(after_slashes.len());
+        let authority = after_slashes.get(..end).unwrap_or(after_slashes);
+        return authority
+            .rsplit_once('@')
+            .is_some_and(|(userinfo, _)| userinfo != "git");
+    }
+    if is_email(word) {
+        return false;
+    }
+    word.match_indices('@').any(|(at, _)| {
+        let (before, after) = word.split_at(at);
+        let userinfo = before.rsplit('/').next().unwrap_or(before);
+        let after = after.get(1..).unwrap_or_default();
+        let end = after.find(['/', '?', '#']).unwrap_or(after.len());
+        !userinfo.is_empty() && userinfo != "git" && is_host(after.get(..end).unwrap_or(after))
+    })
+}
+
+/// The text after a `scheme:` prefix; a colon followed by a digit is a port, not a scheme.
+fn scheme_split(word: &str) -> Option<&str> {
+    let (scheme, rest) = word.split_once(':')?;
+    let mut chars = scheme.chars();
+    let scheme_like = chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-'));
+    let port = rest.starts_with(|c: char| c.is_ascii_digit());
+    (scheme_like && !port).then_some(rest)
+}
+
+fn is_email(word: &str) -> bool {
+    let Some((local, domain)) = word.split_once('@') else {
+        return false;
+    };
+    !local.is_empty()
+        && !local.contains([':', '/', '?', '#'])
+        && !domain.contains([':', '/', '?', '#', '@', '['])
+        && domain.contains('.')
+        && is_host(domain)
+}
+
+/// A host token: `[IPv6]`, `localhost`, a dotted name or `name:port`, optionally followed by a
+/// port or an SCP-style `:path`.
+fn is_host(token: &str) -> bool {
+    if token.starts_with('[') {
+        return true;
+    }
+    let (host, port) = token.split_once(':').unwrap_or((token, ""));
+    let dotted = host.contains('.') && host.split('.').all(|label| !label.is_empty());
+    let has_port = !port.is_empty() && port.chars().all(|c| c.is_ascii_digit());
+    let named = host == "localhost" || dotted || has_port;
+    !host.is_empty()
+        && named
         && host
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '%'));
-    let has_port = !port.is_empty() && port.chars().all(|c| c.is_ascii_digit());
-    !tail.is_empty() && host_like && (host.contains('.') || has_port)
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
 }
 
-fn is_secret(name: &str) -> bool {
-    SECRET_PARAMETERS.iter().any(|secret| name.contains(secret))
+fn is_secret_name(name: &str) -> bool {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut previous_lower = false;
+    for c in name.chars() {
+        if matches!(c, '_' | '-' | '.' | ':') || (c.is_uppercase() && previous_lower) {
+            words.push(std::mem::take(&mut current));
+        }
+        if !matches!(c, '_' | '-' | '.' | ':') {
+            current.extend(c.to_lowercase());
+        }
+        previous_lower = c.is_lowercase() || c.is_ascii_digit();
+    }
+    words.push(current);
+    words
+        .iter()
+        .rev()
+        .find(|word| !word.is_empty())
+        .is_some_and(|last| {
+            SECRET_WORDS.contains(&last.as_str())
+                || SECRET_SUFFIXES.iter().any(|suffix| last.ends_with(suffix))
+        })
 }
 
-fn parameter_name(name: &str) -> Result<String, &'static str> {
-    Ok(decode(name)?
-        .to_lowercase()
-        .chars()
-        .filter(|c| !matches!(c, '_' | '-' | '.'))
-        .collect())
-}
-
-/// Percent-decode until nothing changes, so double encoding cannot hide a name.
+/// Percent-decode until nothing changes, so double encoding cannot hide a name or an `@`.
 fn decode(text: &str) -> Result<String, &'static str> {
     let mut current = text.to_owned();
     for _ in 0..DECODE_ROUNDS {

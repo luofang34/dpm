@@ -332,10 +332,14 @@ fn explain_exposes_package_references_and_survives_reviewed_renames() {
     plan.work_items.insert(package.id, package.clone());
     plan.work_items.get_mut(&a).expect("task").parent = Some(package.id);
     plan.validate().expect("package");
-    let epic = forgejo(
-        "git.alpha.example",
-        ExternalObjectKind::Other("epic".into()),
-    );
+    // GitLab numbers epics apart from issues; shared-number forges have no such kind.
+    let epic = ExternalIdentity {
+        provider: ExternalProvider::GitLab,
+        ..forgejo(
+            "gitlab.alpha.example",
+            ExternalObjectKind::Other("epic".into()),
+        )
+    };
     run(
         &mut plan,
         "linker",
@@ -447,3 +451,4 @@ fn reviewed_changes_cannot_author_or_rewrite_observations() {
 }
 
 mod kind;
+mod rules;

@@ -131,3 +131,5 @@ fn repository_suffix_and_prefix_spellings_reach_one_form() {
     };
     assert_eq!(instance.canonical(), canonical);
 }
+
+mod identity;

@@ -18,6 +18,9 @@ pub(super) fn link(
     if !plan.work_items.contains_key(&request.work) {
         return Err(EngineError::MissingWorkItem(request.work));
     }
+    // A request resolving to an existing record is still checked, so no unknown kind or
+    // non-canonical spelling can pass by matching a record.
+    request.identity.validate(request.reference)?;
     resolve_identity(plan, request)?;
     let reference = plan
         .external_references
@@ -30,8 +33,11 @@ pub(super) fn link(
             observation: None,
             links: BTreeSet::new(),
         });
-    // Relinking with the same role may only upgrade the kind; any other repeat is a duplicate.
-    let upgrade = request.identity.refines_kind_of(&reference.identity);
+    // Only a tracking link refines the recorded kind, so context links cannot restate what the
+    // tracked object is. Relinking with the same role may only refine; any other repeat is a
+    // duplicate.
+    let upgrade = request.role == ExternalLinkRole::Tracks
+        && request.identity.refines_kind_of(&reference.identity);
     if let Some(existing) = reference.links.iter().find(|l| l.work == request.work)
         && !(upgrade && existing.role == request.role)
     {
@@ -51,6 +57,17 @@ pub(super) fn link(
                 .get(&owner)
                 .map(|w| w.key.clone())
                 .ok_or(EngineError::MissingWorkItem(owner))?,
+        });
+    }
+    if let (Some(state), Some(previous)) = (request.observed, &reference.observation)
+        && !previous.admits(state)
+    {
+        return Err(EngineError::InvalidCommand {
+            entity: reference.id.to_string(),
+            reason: format!(
+                "{} was observed Merged by {} at {}; a merged pull request cannot become {state:?}",
+                reference.identity, previous.observed_by, previous.observed_at
+            ),
         });
     }
     if upgrade {

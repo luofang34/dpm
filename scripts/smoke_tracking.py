@@ -211,9 +211,14 @@ def issue_then_pull(directory):
         [reference] = explained['context']['external_references']
         assert reference['identity'] == {**issue, 'kind': 'PullRequest'}, reference
         assert reference['observation']['state'] == 'Merged' and len(reference['links']) == 1, reference
-        worker.call('link_external', {'key': 'TEST-B', 'identity': issue, 'role': 'Relates', 'observed': 'Closed',
-                                      'base_revision': 2})
+        closed = {'key': 'TEST-B', 'identity': issue, 'role': 'Relates', 'observed': 'Closed', 'base_revision': 2}
+        message = refused(database, worker, 'link_external', closed,
+                          ['link-external', 'TEST-B', *flags(issue), '--role', 'relates', '--observed', 'closed'],
+                          'invalid_command')
+        assert 'Merged' in message, 'a merged observation is final: ' + message
+        worker.call('link_external', {'key': 'TEST-B', 'identity': issue, 'role': 'Relates', 'base_revision': 2})
         [stored] = run_cli(database, 'export')['external_references'].values()
+        assert stored['observation']['state'] == 'Merged', stored
         assert stored['identity']['kind'] == 'PullRequest', 'an issue-kind link never downgrades the record'
         pull = {**issue, 'kind': 'PullRequest'}
         refused(database, worker, 'link_external', {'key': 'TEST-A', 'identity': pull, 'base_revision': 3},
@@ -224,6 +229,69 @@ def issue_then_pull(directory):
         assert upgrade['identity']['kind'] == 'PullRequest' and upgrade['observed'] == 'Merged', upgrade
     finally:
         worker.close()
+
+def revision(database):
+    return run_cli(database, 'export')['revision']
+
+
+def mcp_identity(identity):
+    """JSON callers name a kind outside Issue/PullRequest as an Other kind."""
+    kind = identity['kind']
+    return {**identity, 'kind': kind if kind in ('Issue', 'PullRequest') else {'Other': kind}}
+
+
+def one_decision_per_rule(directory):
+    """Each rule decides once for both adapters: credentials, kind aliases, ports, namespaces, kind changes."""
+    database = directory / 'rules.sqlite'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    worker = Agent(database, 'agent:rules')
+    try:
+        issue = {'provider': 'GitHub', 'instance': 'github.com', 'namespace': 'o/r', 'kind': 'Issue', 'external_id': '6'}
+        leaked = {**issue, 'external_id': '8'}
+        cases = [(label, None) for label in ['//ghp_abc@github.com/o/r', 'https:/tok@github.com/o/r',
+                                             'https:\\\\tok@github.com\\o\\r', 'user:ghp_secret@github.com',
+                                             'ghp_abc@[2001:db8::1]/o/r']]
+        cases += [('Issue 8', url) for url in ['https://github.com/o/r/issues/8;token=abc',
+                                               'https://github.com/o/r/issues/8/token=abc',
+                                               'https://github.com/o/r/issues/8?accessToken=abc']]
+        for label, url in cases:
+            arguments = {'key': 'TEST-D', 'identity': leaked, 'label': label, 'base_revision': 0}
+            cli = ['link-external', 'TEST-D', *flags(leaked), '--label', label]
+            if url:
+                arguments['url'] = url
+                cli += ['--url', url]
+            message = refused(database, worker, 'link_external', arguments, cli, 'invalid_command')
+            assert 'credentials' in message or 'secret' in message, (label, url, message)
+        label = 'max_tokens=4096 secret_santa=on see #token-refresh; clone git@github.com:o/r.git'
+        worker.call('link_external', {'key': 'TEST-A', 'identity': issue, 'label': label, 'base_revision': 0,
+                                      'url': 'https://github.com:0443/o/r/issues/6#api-key-setup'})
+        variants = [{**issue, 'kind': kind} for kind in ['pull_requests', 'pull-requests', 'prs', 'pullrequests', 'discussion']]
+        variants += [{**issue, 'instance': 'github.com:0443'}, {**issue, 'namespace': './o/r'}, {**issue, 'namespace': 'o//r'}]
+        for variant in variants:
+            refused(database, worker, 'link_external', {'key': 'TEST-B', 'identity': mcp_identity(variant), 'base_revision': 1},
+                    ['link-external', 'TEST-B', *flags(variant)], 'tracking_conflict')
+        for variant in [{**issue, 'kind': 'weird'}, {**issue, 'namespace': 'o/../r'}, {**issue, 'instance': 'github.com:0'}]:
+            refused(database, worker, 'link_external', {'key': 'TEST-B', 'identity': mcp_identity(variant), 'base_revision': 1},
+                    ['link-external', 'TEST-B', *flags(variant)], 'invalid_command')
+        pull = {**issue, 'kind': 'PullRequest'}
+        worker.call('link_external', {'key': 'TEST-B', 'identity': pull, 'role': 'Relates', 'base_revision': 1})
+        [stored] = run_cli(database, 'export')['external_references'].values()
+        assert stored['identity']['kind'] == 'Issue' and len(stored['links']) == 2, 'context links never refine the kind'
+        run_cli(database, 'link-external', 'TEST-C', *flags({**pull, 'external_id': '7'}), '--actor', 'agent:rules')
+        current = run_cli(database, 'export')
+        proposal = copy.deepcopy(current)
+        for reference in proposal['external_references'].values():
+            if reference['identity']['kind'] == 'PullRequest':
+                reference['identity']['kind'] = 'Issue'
+        candidate = directory / 'downgrade.json'
+        candidate.write_text(json.dumps(proposal))
+        remote = worker.call('propose_change', {'plan': proposal}, error='invalid_command')
+        local = run_cli(database, 'plan', 'diff', str(candidate), error='invalid_command')['error']
+        assert remote['message'] == local['message'] and 'kind' in remote['message'], (remote, local)
+        assert revision(database) == current['revision']
+    finally:
+        worker.close()
+
 
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-tracking-') as temporary:
@@ -241,6 +309,7 @@ if __name__ == '__main__':
             jira_identity(directory)
             forge_family(directory)
             issue_then_pull(directory)
+            one_decision_per_rule(directory)
         finally:
             worker.close()
             reviewer.close()
@@ -249,4 +318,4 @@ if __name__ == '__main__':
             assert reopened.call('export_plan', {})['data'] == final
         finally:
             reopened.close()
-    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, one Forgejo/Gitea object family per instance, scheme-less and percent-encoded credential rejection, issue-to-pull-request kind upgrade, reviewed rename and export/import round trip')
+    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, one Forgejo/Gitea object family per instance, scheme-less and percent-encoded credential rejection, one credential detector for labels and URLs, issue-to-pull-request kind upgrade by the owner only, final merged observations, kind/port/namespace spellings with one owner, reviewed changes never downgrade kinds, reviewed rename and export/import round trip')

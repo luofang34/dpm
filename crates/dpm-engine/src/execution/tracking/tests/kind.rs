@@ -71,6 +71,16 @@ fn a_pull_request_link_upgrades_an_issue_record_of_the_same_number_and_never_dow
         recorded,
         closed,
     );
+    // Merged is final: a later Open or Closed report would regress the observation.
+    rejected(&mut plan, context);
+    assert_eq!(
+        plan.external_references[&recorded]
+            .observation
+            .as_ref()
+            .map(|o| o.state),
+        Some(ExternalState::Merged)
+    );
+    let context = link(b, issue.clone(), ExternalLinkRole::Relates, recorded, None);
     run(&mut plan, "observer", context).expect("issue-kind context link");
     assert_eq!(
         plan.external_references[&recorded].identity.kind,
