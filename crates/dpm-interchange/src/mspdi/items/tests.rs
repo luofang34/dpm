@@ -45,16 +45,44 @@ fn absent_milestone_flag_keeps_the_local_kind() {
 }
 
 #[test]
+fn a_task_without_a_milestone_flag_reports_its_kind_as_a_default() {
+    // Spec and Review carry no <Milestone>; Approved carries <Milestone>1</Milestone>.
+    let created = import(&workspace(), &outline_document(""));
+    let spec = &created.report.items[1];
+    assert!(!spec.preserved.contains(&"kind".to_string()), "{spec:?}");
+    assert!(
+        spec.approximated
+            .iter()
+            .any(|f| f.field == "kind" && f.detail.contains("Task")),
+        "{spec:?}"
+    );
+    assert!(
+        created.report.items[3]
+            .preserved
+            .contains(&"kind".to_string())
+    );
+    assert!(
+        created.report.items[0]
+            .preserved
+            .contains(&"kind".to_string())
+    );
+    let (_, result) = reimport(|xml| xml);
+    let spec = &result.report.items[1];
+    assert!(!spec.preserved.contains(&"kind".to_string()), "{spec:?}");
+    assert!(spec.kept.contains(&"kind".to_string()), "{spec:?}");
+}
+
+#[test]
 fn omitted_fields_are_reported_as_kept_and_new_work_reports_the_default_priority() {
     let (_, result) = reimport(|xml| {
         xml.replace("<Priority>700</Priority>", "")
             .replace("<Notes>Write it</Notes>", "")
             .replace("<Duration>PT16H0M0S</Duration>", "")
     });
-    assert_eq!(result.report.items[2].kept, ["notes", "priority"]);
+    assert_eq!(result.report.items[2].kept, ["kind", "notes", "priority"]);
     assert_eq!(
         result.report.items[1].kept,
-        ["notes", "priority", "duration"]
+        ["kind", "notes", "priority", "duration"]
     );
     assert_eq!(result.report.items[3].kept, ["notes", "priority"]);
     assert!(result.report.items.iter().all(|i| i.changes.is_empty()));
@@ -110,7 +138,7 @@ fn a_top_level_source_task_reports_its_kept_local_parent() {
     let result = import(&current, &only_build);
     let item = &result.report.items[0];
     assert_eq!(work(&result.candidate, "MSP-5").parent, Some(design));
-    assert_eq!(item.kept, ["notes", "outline"]);
+    assert_eq!(item.kept, ["kind", "notes", "outline"]);
     assert!(!item.preserved.contains(&"outline".to_string()));
     assert_eq!(item.outcome, ItemOutcome::Unchanged);
 }

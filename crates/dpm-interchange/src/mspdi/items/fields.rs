@@ -86,10 +86,16 @@ fn map_kind(
     report: &mut ItemReport,
 ) -> WorkKind {
     let kind = resolve_kind(task, existing, has_children);
-    if kind == WorkKind::Milestone && task.milestone.is_none() {
+    // The outline and summary flag state a work package; otherwise only <Milestone> is source data.
+    if kind == WorkKind::WorkPackage || task.milestone.is_some() {
+        report.preserved.push("kind".into());
+    } else if existing.is_some() {
         report.kept.push("kind".into());
     } else {
-        report.preserved.push("kind".into());
+        report.approximated.push(Finding::new(
+            "kind",
+            format!("source omits Milestone; new work defaults to {kind:?}"),
+        ));
     }
     kind
 }
