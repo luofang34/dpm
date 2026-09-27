@@ -206,7 +206,8 @@ Working-time calendars do not apply to execution lag.
 Work completed before event times were recorded keeps its lifecycle but has no time. Such an event
 has occurred at an unknown time: it releases zero or negative lag, while a positive lag that needs it
 stays closed with `release.state = unrecorded_event_time` and an actionable reason (waive a Soft
-edge, or change the lag through a reviewed plan change while the successor is unstarted). A
+edge, or change the lag through a reviewed plan change while neither the successor nor any
+work depending on it has been claimed, since a claim already protects its prerequisite basis). A
 milestone or package whose time depends on an unrecorded event has an unrecorded completion time.
 `UnmetGate::Dependency` reports the edge identity, policy, relation, lag, the required predecessor
 event (`requires`) and its `release` state (`awaiting_event`, `elapsing` with `event_at` and

@@ -119,3 +119,38 @@ fn a_lead_never_satisfies_the_gate_of_the_transition_its_relation_governs() {
         }
     }
 }
+
+#[test]
+fn the_hard_edge_remedy_names_the_claim_that_already_locks_its_lag() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let a = plan.find_work_by_key("TEST-A").expect("a").id;
+    let b = plan.find_work_by_key("TEST-B").expect("b").id;
+    plan.work_items.retain(|id, _| *id == a || *id == b);
+    plan.decisions.clear();
+    plan.risks.clear();
+    plan.dependencies = vec![Dependency::new(a, b, DependencyKind::FinishFinish, 0.5)];
+    let legacy = plan.work_items.get_mut(&a).expect("a");
+    legacy.status = WorkStatus::Verified;
+    legacy.owner = Some(ActorId::agent("legacy"));
+    let now = Utc::now();
+    let claim = Command::Claim { work: b };
+    apply_command(&mut plan, ActorId::agent("worker"), claim, now).expect("claim");
+    let report = gate_report(&plan, b, crate::Transition::Submit, now).expect("gates");
+    let reasons = report.reasons().join("\n");
+    assert!(reasons.contains("was not recorded"), "{reasons}");
+    let mut relaxed = plan.clone();
+    relaxed.dependencies[0].lag_hours = 0.0;
+    let change = Command::ApplyChange {
+        plan: Box::new(relaxed),
+        reason: "drop the lag".into(),
+    };
+    let refused = apply_command(&mut plan, ActorId::human("lead"), change, now);
+    assert!(refused.is_err(), "a claimed successor's lag is protected");
+    assert!(
+        !reasons.contains("unstarted") && reasons.contains("claimed"),
+        "the remedy must say the claim already locks the lag: {reasons}"
+    );
+}
