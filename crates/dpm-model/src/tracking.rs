@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
+mod canonical;
 mod credentials;
 mod validation;
 pub(crate) use validation::validate;
@@ -137,83 +138,6 @@ pub struct ExternalIdentity {
 }
 
 impl ExternalIdentity {
-    /// Normalize spelling that providers treat as equal; validation rejects any other form.
-    #[must_use]
-    pub fn canonical(&self) -> Self {
-        let provider = match &self.provider {
-            ExternalProvider::Other(name) => ExternalProvider::parse(name),
-            known => known.clone(),
-        };
-        let instance = self.instance.trim().to_lowercase();
-        let instance = instance
-            .strip_prefix("https://")
-            .or_else(|| instance.strip_prefix("http://"))
-            .unwrap_or(&instance)
-            .trim_end_matches('/');
-        // Default HTTP(S) ports address the same host, so they must not split identity.
-        let instance = instance
-            .strip_suffix(":443")
-            .or_else(|| instance.strip_suffix(":80"))
-            .unwrap_or(instance)
-            .to_owned();
-        let namespace = self
-            .namespace
-            .as_deref()
-            .map(|n| n.trim().trim_matches('/'))
-            .filter(|n| !n.is_empty())
-            .map(|n| {
-                let n = if provider.numbers_repository_objects() {
-                    n.strip_suffix(".git").unwrap_or(n)
-                } else {
-                    n
-                };
-                if provider.folds_namespace_case() {
-                    n.to_lowercase()
-                } else {
-                    n.to_owned()
-                }
-            });
-        let kind = match &self.kind {
-            ExternalObjectKind::Other(name) => ExternalObjectKind::parse(name),
-            known => known.clone(),
-        };
-        let external_id = self.external_id.trim();
-        let external_id = external_id.strip_prefix(['#', '!']).unwrap_or(external_id);
-        let external_id = if provider.folds_id_to_upper() {
-            external_id.to_uppercase()
-        } else if provider.numbers_repository_objects()
-            && !external_id.is_empty()
-            && external_id.chars().all(|c| c.is_ascii_digit())
-        {
-            let trimmed = external_id.trim_start_matches('0');
-            if trimmed.is_empty() { "0" } else { trimmed }.to_owned()
-        } else {
-            external_id.to_owned()
-        };
-        Self {
-            provider,
-            instance,
-            namespace,
-            kind,
-            external_id,
-        }
-    }
-
-    /// The part of a canonical identity that decides whether two records name one object.
-    ///
-    /// The recorded kind stays authoritative for kind-specific rules such as `Merged`; only
-    /// the collision check ignores it where issues and pull requests share numbers.
-    #[must_use]
-    pub fn object_key(&self) -> Self {
-        let mut key = self.clone();
-        if self.provider.shares_issue_and_review_numbers()
-            && key.kind == ExternalObjectKind::PullRequest
-        {
-            key.kind = ExternalObjectKind::Issue;
-        }
-        key
-    }
-
     fn validate(&self, id: ExternalReferenceId) -> Result<(), ValidationError> {
         if self.instance.contains('@') {
             return Err(invalid(
