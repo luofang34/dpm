@@ -14,7 +14,7 @@ use std::{
 };
 
 /// Application wire contract version, independent of terminal display text.
-pub const API_VERSION: u32 = 8;
+pub const API_VERSION: u32 = 9;
 
 /// Mutation precondition and engine command shared by CLI and agent tools.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,9 +102,9 @@ pub enum Query {
         /// Project keys whose subtrees form the project scope; empty does not filter.
         #[serde(default)]
         project_keys: BTreeSet<String>,
-        /// Resource keys that returned work must fit; empty does not filter.
+        /// WorkspaceAsset keys that returned work must fit; empty does not filter.
         #[serde(default)]
-        resource_keys: BTreeSet<String>,
+        asset_keys: BTreeSet<String>,
     },
     /// Work contract with projected container/milestone status.
     Show {
@@ -133,7 +133,7 @@ pub struct QueryResponse {
 pub struct Application {
     backing: Backing,
     pub(crate) project_root: Option<PathBuf>,
-    pub(crate) project_resource: Option<dpm_model::ResourceId>,
+    pub(crate) project_asset: Option<dpm_model::AssetId>,
 }
 enum Backing {
     Database(SqliteStore),
@@ -146,7 +146,7 @@ impl Application {
         plan.validate().map_err(dpm_store::StoreError::from)?;
         Ok(Self {
             project_root: None,
-            project_resource: None,
+            project_asset: None,
             backing: Backing::Preview(Box::new(plan)),
         })
     }
@@ -176,7 +176,7 @@ impl Application {
         store.initialize_blocking(plan)?;
         Ok(Self {
             project_root: None,
-            project_resource: None,
+            project_asset: None,
             backing: Backing::Database(store),
         })
     }
@@ -184,7 +184,7 @@ impl Application {
     pub fn open_blocking(path: impl AsRef<Path>) -> Result<Self, AppError> {
         Ok(Self {
             project_root: None,
-            project_resource: None,
+            project_asset: None,
             backing: Backing::Database(SqliteStore::open_existing_blocking(path)?),
         })
     }
@@ -194,7 +194,7 @@ impl Application {
         store.initialize_blocking(plan)?;
         Ok(Self {
             project_root: None,
-            project_resource: None,
+            project_asset: None,
             backing: Backing::Database(store),
         })
     }
@@ -292,12 +292,12 @@ impl Application {
                 probabilistic,
                 limit,
                 project_keys,
-                resource_keys,
+                asset_keys,
             } => {
                 let scope = WorkScope::resolve(
                     &plan,
                     project_keys.iter().map(String::as_str),
-                    resource_keys.iter().map(String::as_str),
+                    asset_keys.iter().map(String::as_str),
                 )?;
                 let query = NextWorkQuery {
                     capabilities,

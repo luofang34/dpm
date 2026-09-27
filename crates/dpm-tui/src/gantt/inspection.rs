@@ -36,7 +36,7 @@ impl Gantt {
                 "Milestone pending".into()
             }
         } else {
-            format!("{:?}", work.status)
+            format!("{:?}", work.execution.status)
         };
         lines.push(Line::from(format!(
             "{state} · {:.0}% · verified={} · critical={}",

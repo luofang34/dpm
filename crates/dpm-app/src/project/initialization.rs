@@ -52,7 +52,7 @@ pub fn initialize_project_blocking(root: &Path, plan: &Plan) -> Result<PathBuf, 
     fs::write(
         &locator,
         format!(
-            "version = 2\nworkspace = \"{}\"\ndatabase = \"state.sqlite\"\n",
+            "version = 3\nworkspace = \"{}\"\ndatabase = \"state.sqlite\"\n",
             plan.workspace.id
         ),
     )

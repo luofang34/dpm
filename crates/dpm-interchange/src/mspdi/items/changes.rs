@@ -23,9 +23,14 @@ pub(super) fn between(
     let fields = [
         ("title", before.title.clone(), after.title.clone()),
         (
+            "order",
+            format!("{:?}", before.order.0),
+            format!("{:?}", after.order.0),
+        ),
+        (
             "objective",
-            before.objective.clone(),
-            after.objective.clone(),
+            before.contract.objective.clone(),
+            after.contract.objective.clone(),
         ),
         (
             "kind",
@@ -35,13 +40,13 @@ pub(super) fn between(
         ("parent", parent(before.parent), parent(after.parent)),
         (
             "priority",
-            format!("{:?}", before.priority),
-            format!("{:?}", after.priority),
+            format!("{:?}", before.schedule.priority),
+            format!("{:?}", after.schedule.priority),
         ),
         (
             "estimate",
-            estimate(before.estimate),
-            estimate(after.estimate),
+            estimate(before.schedule.estimate),
+            estimate(after.schedule.estimate),
         ),
     ];
     fields

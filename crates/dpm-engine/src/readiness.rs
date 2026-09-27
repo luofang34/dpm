@@ -37,7 +37,7 @@ pub(crate) fn show_with(
         .ok_or(EngineError::MissingWorkItem(work))?
         .clone();
     if !item.is_executable() && timeline.completed_at(work).is_some() {
-        item.status = WorkStatus::Verified;
+        item.execution.status = WorkStatus::Verified;
     }
     Ok(item)
 }

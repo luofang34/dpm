@@ -56,7 +56,7 @@ fn unicode_labels_fit_and_packages_roll_up_children() {
     package.id = dpm_model::WorkItemId::new();
     package.key = dpm_model::Key::new("WP");
     package.kind = WorkKind::WorkPackage;
-    package.estimate = None;
+    package.schedule.estimate = None;
     let id = package.id;
     plan.work_items.insert(id, package);
     plan.work_items.get_mut(&child).expect("child").parent = Some(id);

@@ -1,6 +1,12 @@
-use crate::{ActorId, ArtifactId, EstimateError, Key, ProjectId, RequirementId, WorkItemId};
+mod contract;
+mod execution;
+mod schedule;
+pub use contract::WorkContract;
+pub use execution::ExecutionRecord;
+pub use schedule::ScheduleInputs;
+
+use crate::{ActorId, EstimateError, Key, ProjectId, WorkItemId};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 /// Whether work is executable or a derived grouping/condition.
 pub enum WorkKind {
@@ -42,10 +48,11 @@ impl Priority {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 /// Authoritative lifecycle for tasks; aggregate completion is a query projection.
 pub enum WorkStatus {
     /// Work not yet approved for execution.
+    #[default]
     Proposed,
     /// Approved work eligible for readiness evaluation.
     Planned,
@@ -140,58 +147,14 @@ pub struct WorkItem {
     pub kind: WorkKind,
     /// Non-empty human-readable title.
     pub title: String,
-    /// Observable purpose of this work.
-    pub objective: String,
-    /// Evidence requirements for executable work.
-    pub acceptance: Vec<AcceptanceCriterion>,
-    /// Optional ordered procedure and scope; absent in plans that do not supply instructions.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub instructions: Option<crate::WorkInstructions>,
-    /// Stored lifecycle; aggregate work has derived completion.
-    pub status: WorkStatus,
-    /// Owner-reported task execution progress; verification remains a separate condition.
-    #[serde(default)]
-    pub reported_progress_percent: u8,
-    /// Human-assigned importance.
-    pub priority: Priority,
-    /// Optional duration uncertainty; absent estimates contribute zero hours.
-    pub estimate: Option<ThreePointEstimate>,
-    /// Capabilities required of a recommended worker.
-    pub capabilities: BTreeSet<String>,
-    /// Requirements implemented by this work.
-    pub requirement_ids: BTreeSet<RequirementId>,
-    /// Attached evidence identifiers.
-    pub artifact_ids: BTreeSet<ArtifactId>,
-    /// Principal that claimed the task and owns submission.
-    pub owner: Option<ActorId>,
-    /// Authorized ownership transfers in order; append-only, so every earlier holder stays known.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub handoffs: Vec<crate::Handoff>,
-    /// Claims given back before a start, in order; append-only, so a releaser stays a holder.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub releases: Vec<crate::ClaimRelease>,
-    /// Explicit read/write needs; an empty set permits work without repository resources.
-    pub resources: Vec<crate::ResourceRequirement>,
-    /// Execution event times recorded by lifecycle commands.
-    #[serde(default, skip_serializing_if = "crate::ExecutionEvents::is_empty")]
-    pub events: crate::ExecutionEvents,
-    /// Most recent independent rejection; retained across resubmission as review context.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_rejection: Option<ReviewRejection>,
-    /// Every submission in order; reviews close attempts but never remove or renumber them.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub attempts: Vec<crate::SubmissionAttempt>,
-    /// Predecessor attempts this task's execution relies on; append-only, latest per edge applies.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub basis: Vec<crate::DependencyBasis>,
-    /// Non-empty reason while the task is blocked.
-    pub block_reason: Option<String>,
-    /// Decision option this work and its descendants apply to; absent means unconditional.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub condition: Option<crate::WorkCondition>,
-    /// How a task or milestone treats incoming constraints from work a choice excluded.
-    #[serde(default, skip_serializing_if = "crate::JoinPolicy::is_default")]
-    pub join: crate::JoinPolicy,
+    /// Stable sibling position, independent of titles and keys.
+    pub order: crate::SiblingOrder,
+    /// Author-approved scope, requirements and applicability.
+    pub contract: crate::WorkContract,
+    /// Lifecycle and evidence recorded only by semantic commands.
+    pub execution: crate::ExecutionRecord,
+    /// Authoritative scheduling inputs; derived dates remain projections.
+    pub schedule: crate::ScheduleInputs,
 }
 
 /// Independent review explaining why submitted work needs another attempt.
@@ -212,6 +175,7 @@ impl WorkItem {
     pub fn expected_duration_hours(&self) -> f64 {
         match self.kind {
             WorkKind::Task => self
+                .schedule
                 .estimate
                 .map_or(0.0, ThreePointEstimate::pert_expected_hours),
             WorkKind::WorkPackage | WorkKind::Milestone => 0.0,
@@ -231,15 +195,15 @@ impl WorkItem {
     /// start is never forgotten by one of them while another still honours it.
     #[must_use]
     pub fn start_event(&self) -> Option<crate::EventTime> {
-        let occurred = match self.status {
+        let occurred = match self.execution.status {
             WorkStatus::InProgress
             | WorkStatus::Submitted
             | WorkStatus::Verified
             | WorkStatus::Done => true,
-            WorkStatus::Blocked => self.events.start_unrecorded,
+            WorkStatus::Blocked => self.execution.events.start_unrecorded,
             WorkStatus::Proposed | WorkStatus::Planned | WorkStatus::Claimed => false,
         };
-        match self.events.started_at {
+        match self.execution.events.started_at {
             Some(at) => Some(crate::EventTime::Recorded(at)),
             None => occurred.then_some(crate::EventTime::Unrecorded),
         }

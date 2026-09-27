@@ -8,8 +8,8 @@ use std::collections::BTreeSet;
 /// Resolved domain records needed by an agent to execute a work contract without guessing references.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionContext {
-    /// Resources named in this work contract, independent of local checkout paths.
-    pub resources: Vec<dpm_model::Resource>,
+    /// Assets named in this work contract, independent of local checkout paths.
+    pub assets: Vec<dpm_model::WorkspaceAsset>,
     /// Project owning the selected work.
     pub project: Project,
     /// Work-package ancestors, nearest first.
@@ -56,7 +56,7 @@ pub(crate) fn decision_applies(
         || lineage.iter().any(|id| {
             plan.work_items
                 .get(id)
-                .and_then(|w| w.condition.as_ref())
+                .and_then(|w| w.contract.condition.as_ref())
                 .is_some_and(|c| c.decision == decision.id)
         })
 }
@@ -98,24 +98,30 @@ pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContex
         .into_iter()
         .map(|id| plan.decisions[&id].clone())
         .collect();
-    let mut artifact_ids = work.artifact_ids.clone();
+    let mut artifact_ids = work.execution.artifact_ids.clone();
     for decision in &decisions {
         artifact_ids.extend(&decision.artifact_ids);
     }
     for dependency in &plan.dependencies {
         if dependency.successor == work.id {
-            artifact_ids.extend(&plan.work_items[&dependency.predecessor].artifact_ids);
+            artifact_ids.extend(
+                &plan.work_items[&dependency.predecessor]
+                    .execution
+                    .artifact_ids,
+            );
         }
     }
     ExecutionContext {
-        resources: work
-            .resources
+        assets: work
+            .contract
+            .assets
             .iter()
-            .filter_map(|r| plan.resources.get(&r.resource).cloned())
+            .filter_map(|r| plan.assets.get(&r.asset).cloned())
             .collect(),
         project: plan.projects[&work.project].clone(),
         parents,
         requirements: work
+            .contract
             .requirement_ids
             .iter()
             .filter_map(|id| plan.requirements.get(id).cloned())

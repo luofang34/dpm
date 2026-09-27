@@ -35,6 +35,15 @@ pub enum InterchangeError {
         /// Violated structural rule.
         reason: String,
     },
+    /// The imported outline cannot be assigned a valid sibling position.
+    #[error("MSPDI task UID {uid} cannot be positioned: {source}")]
+    OutlineOrder {
+        /// Source task UID.
+        uid: i64,
+        /// Position allocation failure.
+        #[source]
+        source: dpm_model::OrderError,
+    },
     /// Two task elements share a unique identifier.
     #[error("MSPDI task UID {uid} appears more than once")]
     DuplicateUid {
@@ -140,6 +149,7 @@ impl InterchangeError {
             Self::UnknownProject { .. } => "not_found",
             Self::KeyCollision { .. }
             | Self::Unrepresentable { .. }
+            | Self::OutlineOrder { .. }
             | Self::KindChange { .. }
             | Self::AmbiguousMatch { .. }
             | Self::Refused { .. }

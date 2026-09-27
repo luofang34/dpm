@@ -73,7 +73,7 @@ fn open_decisions(plan: &Plan) -> Vec<(DecisionId, Key, Vec<String>)> {
     let ids: BTreeSet<_> = plan
         .work_items
         .values()
-        .filter_map(|w| w.condition.as_ref())
+        .filter_map(|w| w.contract.condition.as_ref())
         .filter_map(|c| plan.effective_decision(c.decision))
         .filter(|d| d.status == DecisionStatus::Open)
         .map(|d| d.id)
@@ -145,7 +145,7 @@ fn forecast(
         && hypothetical
             .work_items
             .values()
-            .any(|w| w.estimate.is_some())
+            .any(|w| w.schedule.estimate.is_some())
     {
         Some(simulate_remaining(&hypothetical, simulation_config(), now)?)
     } else {

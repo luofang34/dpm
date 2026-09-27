@@ -12,7 +12,7 @@ pub(super) fn findings(
     work: &WorkItem,
 ) -> Vec<Finding> {
     let mut found = Vec::new();
-    if let Some(condition) = &work.condition {
+    if let Some(condition) = &work.contract.condition {
         let decision = plan
             .decisions
             .get(&condition.decision)
@@ -25,7 +25,7 @@ pub(super) fn findings(
             ),
         ));
     }
-    if let JoinPolicy::ActiveBranches { allow_empty } = work.join {
+    if let JoinPolicy::ActiveBranches { allow_empty } = work.contract.join {
         found.push(Finding::new(
             "join",
             format!(

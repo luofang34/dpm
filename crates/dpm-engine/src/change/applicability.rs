@@ -42,8 +42,11 @@ pub(super) fn changes(current: &Plan, proposed: &Plan) -> Vec<ApplicabilityChang
             Some(ApplicabilityChange {
                 work: id,
                 key: work.key.clone(),
-                status: work.status,
-                in_flight: !matches!(work.status, WorkStatus::Proposed | WorkStatus::Planned),
+                status: work.execution.status,
+                in_flight: !matches!(
+                    work.execution.status,
+                    WorkStatus::Proposed | WorkStatus::Planned
+                ),
                 before: before.get(&id).cloned(),
                 after: after.get(&id).cloned(),
             })

@@ -40,8 +40,8 @@ pub enum UnmetGate {
         key: String,
         /// Project containing the prerequisite.
         project: String,
-        /// Resources required by the prerequisite; these are context, not satisfied gates.
-        resource_keys: Vec<String>,
+        /// Assets required by the prerequisite; these are context, not satisfied gates.
+        asset_keys: Vec<String>,
         /// Relation; FS and SS govern the successor's start, FF and SF its finish.
         relation: DependencyKind,
         /// Positive lag must elapse after the event; negative lag shapes the schedule only.
@@ -147,12 +147,12 @@ pub(crate) fn evaluate(
     if !work.is_executable() {
         unmet.push(UnmetGate::Aggregate);
     }
-    match work.status {
+    match work.execution.status {
         status if status == transition.lifecycle() => {}
         WorkStatus::Proposed => unmet.push(UnmetGate::ContractNotRatified),
         status => unmet.push(UnmetGate::Lifecycle { status }),
     }
-    if let Some(reason) = &work.block_reason {
+    if let Some(reason) = &work.execution.block_reason {
         unmet.push(UnmetGate::Blocker {
             reason: reason.clone(),
         });
@@ -231,10 +231,11 @@ fn dependency_gate(
     UnmetGate::Dependency {
         dependency: dep.id,
         policy: dep.policy,
-        resource_keys: item
-            .resources
+        asset_keys: item
+            .contract
+            .assets
             .iter()
-            .filter_map(|r| plan.resources.get(&r.resource))
+            .filter_map(|r| plan.assets.get(&r.asset))
             .map(|r| r.key.to_string())
             .collect(),
         predecessor: item.id,
@@ -248,8 +249,8 @@ fn dependency_gate(
         lag_hours: dep.lag_hours,
         requires: dep.kind.predecessor_endpoint(),
         release,
-        status: item.status,
-        owner: item.owner.clone(),
+        status: item.execution.status,
+        owner: item.execution.owner.clone(),
         start_basis: dep.start_basis,
         accepts_submission: transition.starts() && dep.start_basis == StartBasis::Provisional,
         attempt,

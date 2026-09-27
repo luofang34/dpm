@@ -13,7 +13,11 @@ fn fixture() -> Plan {
 fn ratification_requires_independent_authority_and_complete_contract_atomically() {
     let mut plan = fixture();
     let work = plan.find_work_by_key("TEST-A").expect("task").id;
-    plan.work_items.get_mut(&work).expect("task").status = WorkStatus::Proposed;
+    plan.work_items
+        .get_mut(&work)
+        .expect("task")
+        .execution
+        .status = WorkStatus::Proposed;
     assert!(
         next_work(&plan, &NextWorkQuery::default(), chrono::Utc::now())
             .expect("next")
@@ -42,6 +46,7 @@ fn ratification_requires_independent_authority_and_complete_contract_atomically(
         .work_items
         .get_mut(&work)
         .expect("task")
+        .contract
         .acceptance
         .split_off(0);
     let before = plan.clone();
@@ -56,7 +61,11 @@ fn ratification_requires_independent_authority_and_complete_contract_atomically(
         .is_err()
     );
     assert_eq!(before, plan);
-    plan.work_items.get_mut(&work).expect("task").acceptance = acceptance;
+    plan.work_items
+        .get_mut(&work)
+        .expect("task")
+        .contract
+        .acceptance = acceptance;
     apply_command(
         &mut plan,
         ActorId::human("lead"),
@@ -122,9 +131,12 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
     )
     .expect("reject");
     let item = &plan.work_items[&work];
-    assert_eq!(item.status, WorkStatus::InProgress);
-    assert_eq!(item.owner, Some(owner.clone()));
-    assert_eq!(item.last_rejection.as_ref().expect("review").at, at);
+    assert_eq!(item.execution.status, WorkStatus::InProgress);
+    assert_eq!(item.execution.owner, Some(owner.clone()));
+    assert_eq!(
+        item.execution.last_rejection.as_ref().expect("review").at,
+        at
+    );
     assert!(
         next_work(&plan, &NextWorkQuery::default(), chrono::Utc::now())
             .expect("next")
@@ -146,5 +158,5 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
         dpm_model::OperationId::new(),
     )
     .expect("verify");
-    assert!(plan.work_items[&work].last_rejection.is_some());
+    assert!(plan.work_items[&work].execution.last_rejection.is_some());
 }

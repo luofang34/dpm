@@ -70,7 +70,7 @@ pub(crate) fn next_text_blocking(result: &NextWorkResult) -> Result<(), CliError
             }
         };
         text_blocking(&format!(
-            "Scope: projects {}; resources {} ({} of {} eligible in scope)\n",
+            "Scope: projects {}; assets {} ({} of {} eligible in scope)\n",
             keys(
                 result
                     .scope
@@ -82,7 +82,7 @@ pub(crate) fn next_text_blocking(result: &NextWorkResult) -> Result<(), CliError
             keys(
                 result
                     .scope
-                    .resources
+                    .assets
                     .iter()
                     .map(|m| m.key.0.clone())
                     .collect()

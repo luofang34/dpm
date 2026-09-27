@@ -2,7 +2,7 @@ use super::{ValidationError, entities::nonempty, invalid};
 use crate::WorkItem;
 
 pub(super) fn validate(work: &WorkItem) -> Result<(), ValidationError> {
-    let Some(instructions) = &work.instructions else {
+    let Some(instructions) = &work.contract.instructions else {
         return Ok(());
     };
     if !work.is_executable() || instructions.steps.is_empty() {

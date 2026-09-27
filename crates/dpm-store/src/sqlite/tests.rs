@@ -171,7 +171,10 @@ fn corrupt_revision_and_lifecycle_are_rejected_on_load() {
         store.load_blocking(),
         Err(StoreError::CorruptSnapshot { .. })
     ));
-    plan.find_work_by_key_mut("TEST-A").expect("task").status = WorkStatus::Claimed;
+    plan.find_work_by_key_mut("TEST-A")
+        .expect("task")
+        .execution
+        .status = WorkStatus::Claimed;
     store
         .connection
         .execute(

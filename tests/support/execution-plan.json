@@ -21,35 +21,44 @@
       "parent": null,
       "kind": "Task",
       "title": "Contract A",
-      "objective": "Produce observable result A for the test graph.",
-      "acceptance": [
-        {
-          "text": "Result A passes its independent check."
-        }
-      ],
-      "status": "Planned",
-      "reported_progress_percent": 0,
-      "priority": "P0",
-      "estimate": {
-        "optimistic_hours": 2.0,
-        "likely_hours": 4,
-        "pessimistic_hours": 6.0
+      "contract": {
+        "objective": "Produce observable result A for the test graph.",
+        "acceptance": [
+          {
+            "text": "Result A passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "rust",
+          "testing"
+        ],
+        "requirement_ids": [
+          "0000000a-0000-4000-8000-000000000001"
+        ],
+        "assets": [
+          {
+            "asset": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+            "access": "Write"
+          }
+        ]
       },
-      "capabilities": [
-        "rust",
-        "testing"
-      ],
-      "requirement_ids": [
-        "0000000a-0000-4000-8000-000000000001"
-      ],
-      "artifact_ids": [],
-      "owner": null,
-      "block_reason": null,
-      "resources": [
-        {
-          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
-          "access": "Write"
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P0",
+        "estimate": {
+          "optimistic_hours": 2.0,
+          "likely_hours": 4,
+          "pessimistic_hours": 6.0
         }
+      },
+      "order": [
+        100
       ]
     },
     "00000007-0000-4000-8000-000000000002": {
@@ -59,34 +68,43 @@
       "parent": null,
       "kind": "Task",
       "title": "Contract B",
-      "objective": "Produce observable result B for the test graph.",
-      "acceptance": [
-        {
-          "text": "Result B passes its independent check."
-        }
-      ],
-      "status": "Planned",
-      "reported_progress_percent": 0,
-      "priority": "P1",
-      "estimate": {
-        "optimistic_hours": 10.0,
-        "likely_hours": 20,
-        "pessimistic_hours": 30.0
+      "contract": {
+        "objective": "Produce observable result B for the test graph.",
+        "acceptance": [
+          {
+            "text": "Result B passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "rust"
+        ],
+        "requirement_ids": [
+          "0000000a-0000-4000-8000-000000000001"
+        ],
+        "assets": [
+          {
+            "asset": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+            "access": "Write"
+          }
+        ]
       },
-      "capabilities": [
-        "rust"
-      ],
-      "requirement_ids": [
-        "0000000a-0000-4000-8000-000000000001"
-      ],
-      "artifact_ids": [],
-      "owner": null,
-      "block_reason": null,
-      "resources": [
-        {
-          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
-          "access": "Write"
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P1",
+        "estimate": {
+          "optimistic_hours": 10.0,
+          "likely_hours": 20,
+          "pessimistic_hours": 30.0
         }
+      },
+      "order": [
+        200
       ]
     },
     "00000007-0000-4000-8000-000000000003": {
@@ -96,34 +114,43 @@
       "parent": null,
       "kind": "Task",
       "title": "Contract C",
-      "objective": "Produce observable result C for the test graph.",
-      "acceptance": [
-        {
-          "text": "Result C passes its independent check."
-        }
-      ],
-      "status": "Planned",
-      "reported_progress_percent": 0,
-      "priority": "P1",
-      "estimate": {
-        "optimistic_hours": 20.0,
-        "likely_hours": 40,
-        "pessimistic_hours": 60.0
+      "contract": {
+        "objective": "Produce observable result C for the test graph.",
+        "acceptance": [
+          {
+            "text": "Result C passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "testing"
+        ],
+        "requirement_ids": [
+          "0000000a-0000-4000-8000-000000000001"
+        ],
+        "assets": [
+          {
+            "asset": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+            "access": "Write"
+          }
+        ]
       },
-      "capabilities": [
-        "testing"
-      ],
-      "requirement_ids": [
-        "0000000a-0000-4000-8000-000000000001"
-      ],
-      "artifact_ids": [],
-      "owner": null,
-      "block_reason": null,
-      "resources": [
-        {
-          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
-          "access": "Write"
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P1",
+        "estimate": {
+          "optimistic_hours": 20.0,
+          "likely_hours": 40,
+          "pessimistic_hours": 60.0
         }
+      },
+      "order": [
+        300
       ]
     },
     "00000007-0000-4000-8000-000000000004": {
@@ -133,34 +160,43 @@
       "parent": null,
       "kind": "Task",
       "title": "Contract D",
-      "objective": "Produce observable result D for the test graph.",
-      "acceptance": [
-        {
-          "text": "Result D passes its independent check."
-        }
-      ],
-      "status": "Planned",
-      "reported_progress_percent": 0,
-      "priority": "P1",
-      "estimate": {
-        "optimistic_hours": 16.0,
-        "likely_hours": 32,
-        "pessimistic_hours": 48.0
+      "contract": {
+        "objective": "Produce observable result D for the test graph.",
+        "acceptance": [
+          {
+            "text": "Result D passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "rust"
+        ],
+        "requirement_ids": [
+          "0000000a-0000-4000-8000-000000000001"
+        ],
+        "assets": [
+          {
+            "asset": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+            "access": "Write"
+          }
+        ]
       },
-      "capabilities": [
-        "rust"
-      ],
-      "requirement_ids": [
-        "0000000a-0000-4000-8000-000000000001"
-      ],
-      "artifact_ids": [],
-      "owner": null,
-      "block_reason": null,
-      "resources": [
-        {
-          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
-          "access": "Write"
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P1",
+        "estimate": {
+          "optimistic_hours": 16.0,
+          "likely_hours": 32,
+          "pessimistic_hours": 48.0
         }
+      },
+      "order": [
+        400
       ]
     },
     "00000007-0000-4000-8000-000000000005": {
@@ -170,34 +206,43 @@
       "parent": null,
       "kind": "Task",
       "title": "Contract E",
-      "objective": "Produce observable result E for the test graph.",
-      "acceptance": [
-        {
-          "text": "Result E passes its independent check."
-        }
-      ],
-      "status": "Planned",
-      "reported_progress_percent": 0,
-      "priority": "P1",
-      "estimate": {
-        "optimistic_hours": 4.0,
-        "likely_hours": 8,
-        "pessimistic_hours": 12.0
+      "contract": {
+        "objective": "Produce observable result E for the test graph.",
+        "acceptance": [
+          {
+            "text": "Result E passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "testing"
+        ],
+        "requirement_ids": [
+          "0000000a-0000-4000-8000-000000000001"
+        ],
+        "assets": [
+          {
+            "asset": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+            "access": "Write"
+          }
+        ]
       },
-      "capabilities": [
-        "testing"
-      ],
-      "requirement_ids": [
-        "0000000a-0000-4000-8000-000000000001"
-      ],
-      "artifact_ids": [],
-      "owner": null,
-      "block_reason": null,
-      "resources": [
-        {
-          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
-          "access": "Write"
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P1",
+        "estimate": {
+          "optimistic_hours": 4.0,
+          "likely_hours": 8,
+          "pessimistic_hours": 12.0
         }
+      },
+      "order": [
+        500
       ]
     },
     "00000007-0000-4000-8000-000000000006": {
@@ -207,34 +252,43 @@
       "parent": null,
       "kind": "Task",
       "title": "Contract F",
-      "objective": "Produce observable result F for the test graph.",
-      "acceptance": [
-        {
-          "text": "Result F passes its independent check."
-        }
-      ],
-      "status": "Planned",
-      "reported_progress_percent": 0,
-      "priority": "P0",
-      "estimate": {
-        "optimistic_hours": 2.0,
-        "likely_hours": 4,
-        "pessimistic_hours": 6.0
+      "contract": {
+        "objective": "Produce observable result F for the test graph.",
+        "acceptance": [
+          {
+            "text": "Result F passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "review"
+        ],
+        "requirement_ids": [
+          "0000000a-0000-4000-8000-000000000001"
+        ],
+        "assets": [
+          {
+            "asset": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
+            "access": "Write"
+          }
+        ]
       },
-      "capabilities": [
-        "review"
-      ],
-      "requirement_ids": [
-        "0000000a-0000-4000-8000-000000000001"
-      ],
-      "artifact_ids": [],
-      "owner": null,
-      "block_reason": null,
-      "resources": [
-        {
-          "resource": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
-          "access": "Write"
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P0",
+        "estimate": {
+          "optimistic_hours": 2.0,
+          "likely_hours": 4,
+          "pessimistic_hours": 6.0
         }
+      },
+      "order": [
+        600
       ]
     },
     "00000007-0000-4000-8000-000000000007": {
@@ -244,22 +298,31 @@
       "parent": null,
       "kind": "Milestone",
       "title": "Verified join",
-      "objective": "Check the verified dependency condition.",
-      "acceptance": [
-        {
-          "text": "All prerequisites are verified."
-        }
-      ],
-      "status": "Planned",
-      "reported_progress_percent": 0,
-      "priority": "P0",
-      "estimate": null,
-      "capabilities": [],
-      "requirement_ids": [],
-      "artifact_ids": [],
-      "owner": null,
-      "block_reason": null,
-      "resources": []
+      "contract": {
+        "objective": "Check the verified dependency condition.",
+        "acceptance": [
+          {
+            "text": "All prerequisites are verified."
+          }
+        ],
+        "capabilities": [],
+        "requirement_ids": [],
+        "assets": []
+      },
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P0",
+        "estimate": null
+      },
+      "order": [
+        700
+      ]
     }
   },
   "requirements": {
@@ -344,8 +407,8 @@
       "lag_hours": 0.0
     }
   ],
-  "format_version": 2,
-  "resources": {
+  "format_version": 3,
+  "assets": {
     "94f881b6-d30b-50cb-98bf-082aafc2cdd4": {
       "id": "94f881b6-d30b-50cb-98bf-082aafc2cdd4",
       "key": "TEST-REPO",

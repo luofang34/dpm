@@ -17,7 +17,7 @@ fn nested_plan() -> (Plan, WorkItemId, WorkItemId) {
     package.id = WorkItemId::new();
     package.key = Key::new("PACKAGE");
     package.kind = WorkKind::WorkPackage;
-    package.estimate = None;
+    package.schedule.estimate = None;
     let parent = package.id;
     plan.work_items.insert(parent, package);
     plan.work_items.get_mut(&task).expect("task").parent = Some(parent);
@@ -101,10 +101,14 @@ fn nested_packages_complete_from_children_without_persisting_completion() {
     assert_eq!(
         show_work(&plan, outer_id, chrono::Utc::now())
             .expect("projection")
+            .execution
             .status,
         WorkStatus::Verified
     );
-    assert_eq!(plan.work_items[&outer_id].status, WorkStatus::Planned);
+    assert_eq!(
+        plan.work_items[&outer_id].execution.status,
+        WorkStatus::Planned
+    );
 }
 
 #[test]
@@ -112,7 +116,11 @@ fn empty_aggregates_and_proposed_tasks_are_not_complete_or_ready() {
     let (mut plan, task, parent) = nested_plan();
     plan.decisions.clear();
     plan.work_items.get_mut(&task).expect("task").parent = None;
-    plan.work_items.get_mut(&task).expect("task").status = WorkStatus::Proposed;
+    plan.work_items
+        .get_mut(&task)
+        .expect("task")
+        .execution
+        .status = WorkStatus::Proposed;
     assert!(!is_ready(
         &plan,
         &plan.work_items[&task],
@@ -144,9 +152,9 @@ fn readiness_rejects_foreign_stale_or_invalid_contracts() {
     .expect("claim");
     assert!(!is_ready(&plan, &work, chrono::Utc::now()));
     let stored = plan.work_items.get_mut(&work.id).expect("work");
-    stored.status = WorkStatus::Planned;
-    stored.owner = None;
-    stored.acceptance.clear();
+    stored.execution.status = WorkStatus::Planned;
+    stored.execution.owner = None;
+    stored.contract.acceptance.clear();
     let invalid = stored.clone();
     assert!(!is_ready(&plan, &invalid, chrono::Utc::now()));
     let before = plan.clone();
@@ -249,7 +257,7 @@ fn a_decision_approved_after_every_verification_sets_the_milestone_time_in_every
     let explained = explain_work(&plan, milestone, at(10)).expect("explain");
     assert_eq!(explained.progress.completed_at, reached);
     let shown = show_work(&plan, milestone, at(10)).expect("show");
-    assert_eq!(shown.status, WorkStatus::Verified);
+    assert_eq!(shown.execution.status, WorkStatus::Verified);
     assert_eq!(
         crate::status(&plan, false, at(10))
             .expect("status")

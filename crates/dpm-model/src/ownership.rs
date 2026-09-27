@@ -67,9 +67,9 @@ impl WorkItem {
     /// or releasing a claim never turns an actor that held it into its reviewer.
     #[must_use]
     pub fn held_by(&self, actor: &ActorId) -> bool {
-        self.owner.as_ref() == Some(actor)
-            || self.handoffs.iter().any(|h| h.from == *actor)
-            || self.releases.iter().any(|r| r.actor == *actor)
+        self.execution.owner.as_ref() == Some(actor)
+            || self.execution.handoffs.iter().any(|h| h.from == *actor)
+            || self.execution.releases.iter().any(|r| r.actor == *actor)
     }
 
     /// How the actor held this work at or before `at`, if it did.
@@ -81,7 +81,7 @@ impl WorkItem {
     /// equal times cannot be ordered and independence must not be assumed.
     #[must_use]
     pub fn holding_at(&self, actor: &ActorId, at: DateTime<Utc>) -> Option<Holding> {
-        let earlier = self.handoffs.iter().filter(|h| h.at <= at);
+        let earlier = self.execution.handoffs.iter().filter(|h| h.at <= at);
         if let Some(h) = earlier.clone().find(|h| h.to == *actor) {
             return Some(Holding::HandedTo(h.at));
         }
@@ -89,15 +89,16 @@ impl WorkItem {
             return Some(Holding::HandedFrom(h.at));
         }
         if let Some(r) = self
+            .execution
             .releases
             .iter()
             .find(|r| r.at <= at && r.actor == *actor)
         {
             return Some(Holding::Released(r.at));
         }
-        match self.handoffs.iter().find(|h| h.at > at) {
+        match self.execution.handoffs.iter().find(|h| h.at > at) {
             Some(later) if later.from == *actor => Some(Holding::OwnerUntil(later.at)),
-            None if self.owner.as_ref() == Some(actor) => Some(Holding::Owner),
+            None if self.execution.owner.as_ref() == Some(actor) => Some(Holding::Owner),
             _ => None,
         }
     }

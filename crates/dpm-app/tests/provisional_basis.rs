@@ -190,11 +190,13 @@ fn rejection_resubmission_and_revalidation_survive_restart_and_concurrent_writer
     assert!(flagged(&revalidated).is_empty());
     assert_eq!(revalidated["status"]["basis_invalidated"], 0);
     assert_eq!(revalidated["revision"].as_u64(), Some(before + 1));
-    let basis = revalidated["b"]["work"]["basis"].as_array().expect("basis");
+    let basis = revalidated["b"]["work"]["execution"]["basis"]
+        .as_array()
+        .expect("basis");
     let relied: Vec<_> = basis.iter().map(|x| x["attempt"].as_u64()).collect();
     assert_eq!(relied, [Some(1), Some(2)]);
     assert_eq!(basis[1]["source"]["kind"], "revalidation");
-    let attempts = revalidated["a"]["work"]["attempts"]
+    let attempts = revalidated["a"]["work"]["execution"]["attempts"]
         .as_array()
         .expect("attempts");
     assert_eq!(attempts[0]["outcome"]["state"], "rejected");

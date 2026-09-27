@@ -39,7 +39,7 @@ uuid_id!(ArtifactId);
 uuid_id!(DecisionId);
 uuid_id!(RiskId);
 uuid_id!(OperationId);
-uuid_id!(ResourceId);
+uuid_id!(AssetId);
 uuid_id!(ExternalReferenceId);
 uuid_id!(DependencyId);
 

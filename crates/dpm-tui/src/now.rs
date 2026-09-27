@@ -31,13 +31,13 @@ pub(crate) fn text(
         for work in plan
             .work_items
             .values()
-            .filter(|w| w.status == state && in_status_scope(timeline, w.id))
+            .filter(|w| w.execution.status == state && in_status_scope(timeline, w.id))
         {
             now.push_str(&format!(
                 "{} — {} {}\n",
                 work.key,
                 work.title,
-                work.block_reason.as_deref().unwrap_or("")
+                work.execution.block_reason.as_deref().unwrap_or("")
             ));
         }
     }
@@ -49,7 +49,7 @@ pub(crate) fn text(
                 "{} — {} [{:?}] {}\n",
                 work.key,
                 work.title,
-                work.status,
+                work.execution.status,
                 describe_applicability(timeline.applicability(work.id))
             ));
         }

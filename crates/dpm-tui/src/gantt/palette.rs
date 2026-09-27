@@ -18,8 +18,10 @@ impl Palette {
             WorkKind::Milestone => ('◇', Color::Yellow),
             WorkKind::WorkPackage => ('-', Color::Gray),
             WorkKind::Task if verified => ('.', Color::Green),
-            WorkKind::Task if work.status == WorkStatus::Blocked => ('!', Color::Yellow),
-            WorkKind::Task if work.status == WorkStatus::Submitted => ('?', Color::Magenta),
+            WorkKind::Task if work.execution.status == WorkStatus::Blocked => ('!', Color::Yellow),
+            WorkKind::Task if work.execution.status == WorkStatus::Submitted => {
+                ('?', Color::Magenta)
+            }
             WorkKind::Task if critical => ('#', Color::Red),
             WorkKind::Task => ('=', Color::Cyan),
         };

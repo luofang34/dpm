@@ -24,7 +24,7 @@ def smoke(directory):
         proposal['workspace'] = initial['workspace']
         for work in proposal['work_items'].values():
             if work['kind'] == 'Task':
-                work['status'] = 'Proposed'
+                work['execution']['status'] = 'Proposed'
         candidate.write_text(json.dumps(proposal))
         preview = worker.call('propose_change', {'plan': proposal})['data']
         assert preview == run_cli(database, 'plan', 'diff', str(candidate))
@@ -81,7 +81,7 @@ def reject_invalid(database, worker, reviewer, candidate, current):
         bad = copy.deepcopy(current)
         task = next(w for w in bad['work_items'].values() if w['key'] == 'TEST-A')
         if error_case == 'acceptance':
-            task['acceptance'] = [{'text': 'Lower the accepted result'}]
+            task['contract']['acceptance'] = [{'text': 'Lower the accepted result'}]
         elif error_case == 'cycle':
             edge = bad['dependencies'][0]
             reverse = {**edge, 'predecessor': edge['successor'], 'successor': edge['predecessor']}
@@ -90,7 +90,7 @@ def reject_invalid(database, worker, reviewer, candidate, current):
         elif error_case == 'duplicate_edge':
             bad['dependencies'].append({**bad['dependencies'][-1], 'kind': 'StartStart'})
         elif error_case == 'lifecycle':
-            task['status'] = 'Verified'
+            task['execution']['status'] = 'Verified'
         elif error_case == 'protected':
             task['title'] = 'Rewritten while claimed'
         elif error_case == 'gate':

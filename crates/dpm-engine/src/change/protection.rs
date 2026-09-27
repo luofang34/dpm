@@ -54,7 +54,7 @@ pub(super) fn validate(current: &Plan, proposed: &Plan) -> Result<(), EngineErro
                     "cannot change the prerequisite basis of execution",
                 ));
             }
-        } else if next.is_none() && !work.artifact_ids.is_empty() {
+        } else if next.is_none() && !work.execution.artifact_ids.is_empty() {
             return Err(invalid(
                 &work.key,
                 "cannot delete work with attached evidence",
@@ -98,18 +98,11 @@ fn validate_new_work(current: &Plan, proposed: &Plan) -> Result<(), EngineError>
         } else {
             WorkStatus::Planned
         };
-        if work.status != expected
-            || work.owner.is_some()
-            || work.reported_progress_percent != 0
-            || work.last_rejection.is_some()
-            || work.block_reason.is_some()
-            || !work.artifact_ids.is_empty()
-            || !work.events.is_empty()
-            || !work.attempts.is_empty()
-            || !work.basis.is_empty()
-            || !work.handoffs.is_empty()
-            || !work.releases.is_empty()
-        {
+        let pristine = dpm_model::ExecutionRecord {
+            status: expected,
+            ..Default::default()
+        };
+        if work.execution != pristine {
             return Err(invalid(
                 &work.key,
                 "new tasks must be Proposed; new work cannot carry execution or evidence",
@@ -120,17 +113,7 @@ fn validate_new_work(current: &Plan, proposed: &Plan) -> Result<(), EngineError>
 }
 
 fn same_execution(a: &WorkItem, b: &WorkItem) -> bool {
-    a.status == b.status
-        && a.owner == b.owner
-        && a.reported_progress_percent == b.reported_progress_percent
-        && a.block_reason == b.block_reason
-        && a.last_rejection == b.last_rejection
-        && a.artifact_ids == b.artifact_ids
-        && a.events == b.events
-        && a.attempts == b.attempts
-        && a.basis == b.basis
-        && a.handoffs == b.handoffs
-        && a.releases == b.releases
+    a.execution == b.execution
 }
 
 fn execution_basis(plan: &Plan) -> BTreeSet<WorkItemId> {
@@ -138,9 +121,11 @@ fn execution_basis(plan: &Plan) -> BTreeSet<WorkItemId> {
         .work_items
         .values()
         .filter(|w| {
-            !matches!(w.status, WorkStatus::Proposed | WorkStatus::Planned)
-                || w.owner.is_some()
-                || w.last_rejection.is_some()
+            !matches!(
+                w.execution.status,
+                WorkStatus::Proposed | WorkStatus::Planned
+            ) || w.execution.owner.is_some()
+                || w.execution.last_rejection.is_some()
         })
         .map(|w| w.id)
         .collect();
@@ -174,17 +159,19 @@ fn protect_context(current: &Plan, proposed: &Plan, work: &WorkItem) -> Result<(
         project = current.projects[&id].parent;
     }
     if work
+        .contract
         .requirement_ids
         .iter()
         .any(|id| current.requirements.get(id) != proposed.requirements.get(id))
         || work
-            .resources
+            .contract
+            .assets
             .iter()
-            .any(|r| current.resources.get(&r.resource) != proposed.resources.get(&r.resource))
+            .any(|r| current.assets.get(&r.asset) != proposed.assets.get(&r.asset))
     {
         return Err(invalid(
             &work.key,
-            "cannot change the requirement or resource basis of execution",
+            "cannot change the requirement or asset basis of execution",
         ));
     }
     Ok(())

@@ -208,8 +208,12 @@ fn an_owner_cannot_release_a_successor_stranded_behind_its_excluded_work() {
     let (mut plan, _) = excluded_in_flight();
     let audit = id(&plan, "SUP-A-AUDIT");
     let mut proposal = plan.clone();
-    proposal.work_items.get_mut(&audit).expect("audit").join =
-        JoinPolicy::ActiveBranches { allow_empty: true };
+    proposal
+        .work_items
+        .get_mut(&audit)
+        .expect("audit")
+        .contract
+        .join = JoinPolicy::ActiveBranches { allow_empty: true };
     match refused_as(&mut plan, proposal.clone()) {
         RelaxedConstraint::Gate { work, gate, .. } => {
             assert_eq!(work, Key::new("SUP-A-AUDIT"));

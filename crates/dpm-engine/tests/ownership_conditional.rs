@@ -122,7 +122,7 @@ fn an_excluded_claim_is_released_and_stops_counting_as_in_flight() {
     run(&mut plan, &worker(), release, 5);
     let item = &plan.work_items[&quote];
     assert_eq!(
-        (item.status, item.owner.clone()),
+        (item.execution.status, item.execution.owner.clone()),
         (WorkStatus::Planned, None)
     );
     let summary = status(&plan, false, t(5)).expect("status");
@@ -154,7 +154,7 @@ fn excluded_started_work_changes_hands_but_still_takes_no_transition() {
         reason: "worker reassigned while the plan is reviewed".into(),
     };
     run(&mut plan, &lead(), handoff, 5);
-    assert_eq!(plan.work_items[&quote].owner, Some(other.clone()));
+    assert_eq!(plan.work_items[&quote].execution.owner, Some(other.clone()));
     let submit = Command::Submit {
         work: quote,
         note: None,

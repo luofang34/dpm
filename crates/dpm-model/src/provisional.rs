@@ -79,13 +79,14 @@ impl WorkItem {
     #[must_use]
     pub fn attempt(&self, number: u32) -> Option<&SubmissionAttempt> {
         let index = usize::try_from(number).ok()?.checked_sub(1)?;
-        self.attempts.get(index)
+        self.execution.attempts.get(index)
     }
 
     /// Latest attempt unless it was rejected: the pending or verified result a basis may rely on.
     #[must_use]
     pub fn current_attempt(&self) -> Option<&SubmissionAttempt> {
-        self.attempts
+        self.execution
+            .attempts
             .last()
             .filter(|a| !matches!(a.outcome, AttemptOutcome::Rejected { .. }))
     }
@@ -94,7 +95,7 @@ impl WorkItem {
     #[must_use]
     pub fn effective_basis(&self) -> Vec<&DependencyBasis> {
         let mut latest: Vec<&DependencyBasis> = Vec::new();
-        for entry in &self.basis {
+        for entry in &self.execution.basis {
             match latest.iter_mut().find(|b| b.dependency == entry.dependency) {
                 Some(slot) => *slot = entry,
                 None => latest.push(entry),

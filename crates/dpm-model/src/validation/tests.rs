@@ -66,21 +66,40 @@ fn malformed_graphs_and_contracts_are_rejected() {
         |p| {
             p.find_work_by_key_mut("TEST-A")
                 .expect("task")
+                .contract
                 .objective
                 .clear()
         },
         |p| {
             p.find_work_by_key_mut("TEST-A")
                 .expect("task")
+                .contract
                 .acceptance
                 .clear()
         },
-        |p| p.find_work_by_key_mut("TEST-A").expect("task").acceptance[0].text = " ".into(),
-        |p| p.find_work_by_key_mut("TEST-A").expect("task").owner = Some(ActorId::agent("owner")),
-        |p| p.find_work_by_key_mut("TEST-A").expect("task").status = WorkStatus::Claimed,
         |p| {
             p.find_work_by_key_mut("TEST-A")
                 .expect("task")
+                .contract
+                .acceptance[0]
+                .text = " ".into()
+        },
+        |p| {
+            p.find_work_by_key_mut("TEST-A")
+                .expect("task")
+                .execution
+                .owner = Some(ActorId::agent("owner"))
+        },
+        |p| {
+            p.find_work_by_key_mut("TEST-A")
+                .expect("task")
+                .execution
+                .status = WorkStatus::Claimed
+        },
+        |p| {
+            p.find_work_by_key_mut("TEST-A")
+                .expect("task")
+                .execution
                 .artifact_ids
                 .insert(ArtifactId::new());
         },
@@ -136,7 +155,10 @@ fn estimates_reject_nonfinite_negative_and_unordered_bounds() {
         },
     ] {
         let mut plan = fixture();
-        plan.find_work_by_key_mut("TEST-A").expect("task").estimate = Some(estimate);
+        plan.find_work_by_key_mut("TEST-A")
+            .expect("task")
+            .schedule
+            .estimate = Some(estimate);
         assert!(matches!(
             plan.validate(),
             Err(ValidationError::Estimate { .. })
@@ -163,7 +185,10 @@ fn unknown_plan_fields_are_rejected_instead_of_dropping_proposed_edits() {
         String::new(),
         "/workspace".into(),
         format!("/work_items/{work}"),
-        format!("/work_items/{work}/acceptance/0"),
+        format!("/work_items/{work}/contract"),
+        format!("/work_items/{work}/execution"),
+        format!("/work_items/{work}/schedule"),
+        format!("/work_items/{work}/contract/acceptance/0"),
     ] {
         let mut value = source.clone();
         value
@@ -218,18 +243,19 @@ fn an_unrecorded_start_marker_needs_started_work_without_a_start_time() {
     let mut plan = fixture();
     let id = plan.find_work_by_key("TEST-A").expect("task").id;
     let work = plan.work_items.get_mut(&id).expect("task");
-    work.owner = Some(ActorId::agent("legacy"));
-    work.status = WorkStatus::Blocked;
-    work.block_reason = Some("vendor".into());
-    work.events.start_unrecorded = true;
+    work.execution.owner = Some(ActorId::agent("legacy"));
+    work.execution.status = WorkStatus::Blocked;
+    work.execution.block_reason = Some("vendor".into());
+    work.execution.events.start_unrecorded = true;
     plan.validate().expect("a blocked legacy start is valid");
-    let serialized = serde_json::to_value(plan.work_items[&id].events).expect("events");
+    let serialized = serde_json::to_value(plan.work_items[&id].execution.events).expect("events");
     assert_eq!(serialized, serde_json::json!({"start_unrecorded": true}));
     let mut timed = plan.clone();
     timed
         .work_items
         .get_mut(&id)
         .expect("task")
+        .execution
         .events
         .started_at = Some(chrono::Utc::now());
     assert!(
@@ -237,8 +263,8 @@ fn an_unrecorded_start_marker_needs_started_work_without_a_start_time() {
         "a recorded start is not unrecorded"
     );
     let work = plan.work_items.get_mut(&id).expect("task");
-    work.status = WorkStatus::Claimed;
-    work.block_reason = None;
+    work.execution.status = WorkStatus::Claimed;
+    work.execution.block_reason = None;
     assert!(plan.validate().is_err(), "claimed work has not started");
     assert_eq!(
         serde_json::to_value(ExecutionEvents::default()).expect("events"),
@@ -262,7 +288,7 @@ fn handoffs_name_two_owners_a_reason_and_keep_time_order() {
     };
     let mut valid = base.clone();
     let item = valid.work_items.get_mut(&task).expect("task");
-    item.handoffs = vec![handoff("a", "b", "moved", 1), handoff("b", "a", "back", 1)];
+    item.execution.handoffs = vec![handoff("a", "b", "moved", 1), handoff("b", "a", "back", 1)];
     valid.validate().expect("ordered handoffs");
     let invalid = [
         (task, vec![handoff("a", "a", "same", 1)]),
@@ -275,7 +301,11 @@ fn handoffs_name_two_owners_a_reason_and_keep_time_order() {
     ];
     for (work, handoffs) in invalid {
         let mut plan = base.clone();
-        plan.work_items.get_mut(&work).expect("work").handoffs = handoffs;
+        plan.work_items
+            .get_mut(&work)
+            .expect("work")
+            .execution
+            .handoffs = handoffs;
         assert!(plan.validate().is_err());
     }
 }

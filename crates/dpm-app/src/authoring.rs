@@ -33,7 +33,7 @@ pub(crate) fn plan_template(current: &Plan) -> Result<Value, AppError> {
         "format_version": current.format_version,
         "workspace": current.workspace,
         "revision": current.revision,
-        "resources": {},
+        "assets": {},
         "artifacts": {},
         "projects": {project.clone(): {
             "id": project, "key": "TEMPLATE", "parent": null,
@@ -74,29 +74,53 @@ pub(crate) fn plan_template(current: &Plan) -> Result<Value, AppError> {
 
 fn task(id: &str, project: &str, parent: &str, requirement: &str, key: &str, title: &str) -> Value {
     json!({
-        "id": id, "key": key, "project": project, "parent": parent, "kind": "Task", "title": title,
-        "objective": "State why this work matters and what it unblocks.",
-        "acceptance": [{"text": "State an observable, independently checkable result."}],
-        "instructions": {
-            "steps": [{"action": "Describe the first action.", "expected_result": "Describe what it produces."}],
-            "in_scope": ["Name what this task changes."],
-            "out_of_scope": ["Name what it must not change."],
-            "verification": ["Name the command or review that checks the acceptance."]
-        },
-        "status": "Proposed", "priority": "P2",
-        "estimate": {"optimistic_hours": 2.0, "likely_hours": 4.0, "pessimistic_hours": 8.0},
-        "capabilities": ["replace-with-a-capability"], "requirement_ids": [requirement],
-        "artifact_ids": [], "owner": null, "block_reason": null, "resources": []
+    "id": id,
+    "key": key,
+    "project": project,
+    "parent": parent,
+    "kind": "Task",
+    "title": title,
+    "order": [32768],
+    "contract": {"objective": "State why this work matters and what it unblocks.",
+    "acceptance": [{"text": "State an observable, independently checkable result."}],
+    "instructions": {
+                "steps": [{"action": "Describe the first action.", "expected_result": "Describe what it produces."}],
+                "in_scope": ["Name what this task changes."],
+                "out_of_scope": ["Name what it must not change."],
+                "verification": ["Name the command or review that checks the acceptance."]
+            },
+    "capabilities": ["replace-with-a-capability"],
+    "requirement_ids": [requirement],
+    "assets": []},
+    "execution": {"status": "Proposed",
+    "artifact_ids": [],
+    "owner": null,
+    "block_reason": null},
+    "schedule": {"priority": "P2",
+    "estimate": {"optimistic_hours": 2.0, "likely_hours": 4.0, "pessimistic_hours": 8.0}}
     })
 }
 
 fn container(id: &str, project: &str, key: &str, kind: &str, title: &str) -> Value {
     json!({
-        "id": id, "key": key, "project": project, "parent": null, "kind": kind, "title": title,
-        "objective": "State the outcome this groups or marks.",
-        "acceptance": [{"text": "Every contained or preceding task is verified."}],
-        "status": "Planned", "priority": "P2", "estimate": null, "capabilities": [],
-        "requirement_ids": [], "artifact_ids": [], "owner": null, "block_reason": null, "resources": []
+    "id": id,
+    "key": key,
+    "project": project,
+    "parent": null,
+    "kind": kind,
+    "title": title,
+    "order": [32768],
+    "contract": {"objective": "State the outcome this groups or marks.",
+    "acceptance": [{"text": "Every contained or preceding task is verified."}],
+    "capabilities": [],
+    "requirement_ids": [],
+    "assets": []},
+    "execution": {"status": "Planned",
+    "artifact_ids": [],
+    "owner": null,
+    "block_reason": null},
+    "schedule": {"priority": "P2",
+    "estimate": null}
     })
 }
 

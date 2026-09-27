@@ -57,12 +57,12 @@ fn with_supplier_a_package() -> Plan {
     let mut package = plan.find_work_by_key("SUP-PKG-A").expect("package").clone();
     package.id = WorkItemId::new();
     package.key = Key::new("X-PKG");
-    package.condition = None;
+    package.contract.condition = None;
     let mut task = plan.find_work_by_key("SUP-A-QUOTE").expect("task").clone();
     task.id = WorkItemId::new();
     task.key = Key::new("X-A1");
     task.parent = Some(package.id);
-    task.condition = Some(WorkCondition {
+    task.contract.condition = Some(WorkCondition {
         decision,
         option: "A".into(),
     });

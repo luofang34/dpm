@@ -131,7 +131,11 @@ fn now_names_unestimated_work_in_text_for_the_headline_and_each_scenario() {
     let mut plan = conditional();
     for key in ["SUP-DESIGN", "SUP-A-QUOTE"] {
         let id = plan.find_work_by_key(key).expect("work").id;
-        plan.work_items.get_mut(&id).expect("work").estimate = None;
+        plan.work_items
+            .get_mut(&id)
+            .expect("work")
+            .schedule
+            .estimate = None;
     }
     let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     let now = rows(&mut view, Page::Now);

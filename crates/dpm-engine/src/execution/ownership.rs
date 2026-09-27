@@ -28,15 +28,16 @@ pub(super) fn release(
     if item.start_event().is_some() {
         return Err(EngineError::AlreadyStarted(work));
     }
-    if item.status != WorkStatus::Claimed || item.owner.as_ref() != Some(actor) {
+    if item.execution.status != WorkStatus::Claimed || item.execution.owner.as_ref() != Some(actor)
+    {
         return Err(EngineError::InvalidTransition {
             work,
-            status: item.status,
+            status: item.execution.status,
         });
     }
-    item.owner = None;
-    item.status = WorkStatus::Planned;
-    item.releases.push(ClaimRelease {
+    item.execution.owner = None;
+    item.execution.status = WorkStatus::Planned;
+    item.execution.releases.push(ClaimRelease {
         actor: actor.clone(),
         at,
         reason: reason.into(),
@@ -74,13 +75,13 @@ pub(super) fn handoff(
     }
     let item = task_mut(plan, work)?;
     let held = matches!(
-        item.status,
+        item.execution.status,
         WorkStatus::Claimed | WorkStatus::InProgress | WorkStatus::Blocked
     );
-    let Some(owner) = item.owner.clone().filter(|_| held) else {
+    let Some(owner) = item.execution.owner.clone().filter(|_| held) else {
         return Err(EngineError::InvalidTransition {
             work,
-            status: item.status,
+            status: item.execution.status,
         });
     };
     if owner != *from {
@@ -96,14 +97,14 @@ pub(super) fn handoff(
             reason: format!("{to} already owns the work; hand it off to a different actor"),
         });
     }
-    item.handoffs.push(Handoff {
+    item.execution.handoffs.push(Handoff {
         from: owner,
         to: to.clone(),
         actor: actor.clone(),
         at,
         reason: reason.into(),
     });
-    item.owner = Some(to.clone());
+    item.execution.owner = Some(to.clone());
     Ok(())
 }
 

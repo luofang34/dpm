@@ -56,13 +56,15 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
         ..verify
     })
     .expect("verify");
-    let recorded = app.plan_blocking().expect("plan").work_items[&work].events;
+    let recorded = app.plan_blocking().expect("plan").work_items[&work]
+        .execution
+        .events;
     drop(app);
     let reopened = Application::open_blocking(&path).expect("reopen");
     let plan = reopened.plan_blocking().expect("plan");
     assert_eq!(plan.revision, 4);
     assert_eq!(
-        plan.work_items[&work].events, recorded,
+        plan.work_items[&work].execution.events, recorded,
         "event facts survive restart"
     );
     assert!(recorded.started_at <= recorded.submitted_at);
@@ -73,7 +75,7 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
                 key: "TEST-A".into()
             })
             .expect("show")
-            .data["status"],
+            .data["execution"]["status"],
         "Verified"
     );
 }
@@ -105,13 +107,13 @@ fn refused_transitions_carry_the_same_unmet_gates_as_explain() {
     assert_eq!(app.plan_blocking().expect("plan").revision, 0);
 }
 
-fn next_query(project_keys: &[&str], resource_keys: &[&str], limit: usize) -> Query {
+fn next_query(project_keys: &[&str], asset_keys: &[&str], limit: usize) -> Query {
     Query::Next {
         capabilities: BTreeSet::new(),
         probabilistic: false,
         limit,
         project_keys: project_keys.iter().map(|k| k.to_string()).collect(),
-        resource_keys: resource_keys.iter().map(|k| k.to_string()).collect(),
+        asset_keys: asset_keys.iter().map(|k| k.to_string()).collect(),
     }
 }
 
@@ -151,7 +153,7 @@ fn next_requests_without_scope_fields_remain_accepted() {
     .expect("request without scope");
     assert!(matches!(
         query,
-        Query::Next { ref project_keys, ref resource_keys, .. }
-            if project_keys.is_empty() && resource_keys.is_empty()
+        Query::Next { ref project_keys, ref asset_keys, .. }
+            if project_keys.is_empty() && asset_keys.is_empty()
     ));
 }

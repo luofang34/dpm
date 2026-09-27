@@ -150,7 +150,7 @@ pub(super) fn affected_work(current: &Plan, proposed: &Plan) -> Vec<AffectedWork
                     work: work.id,
                     key: work.key.clone(),
                     kind: work.kind,
-                    status: work.status,
+                    status: work.execution.status,
                 });
             }
         }

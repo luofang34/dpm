@@ -215,7 +215,11 @@ fn too_many_open_combinations_are_counted_but_not_forecast() {
         let mut decision = template.clone();
         decision.id = dpm_model::DecisionId::new();
         decision.key = dpm_model::Key::new(format!("DEC-EXTRA-{index}"));
-        plan.work_items.get_mut(&work).expect("work").condition = Some(dpm_model::WorkCondition {
+        plan.work_items
+            .get_mut(&work)
+            .expect("work")
+            .contract
+            .condition = Some(dpm_model::WorkCondition {
             decision: decision.id,
             option: "A".into(),
         });

@@ -103,17 +103,20 @@ fn outline_maps_to_packages_tasks_and_milestones_without_execution() {
     let candidate = &result.candidate;
     let design = work(candidate, "MSP-1");
     assert_eq!(design.kind, WorkKind::WorkPackage);
-    assert_eq!(design.status, WorkStatus::Planned);
+    assert_eq!(design.execution.status, WorkStatus::Planned);
     let spec = work(candidate, "MSP-2");
     assert_eq!(
-        (spec.kind, spec.status, spec.parent),
+        (spec.kind, spec.execution.status, spec.parent),
         (WorkKind::Task, WorkStatus::Proposed, Some(design.id))
     );
-    assert!(spec.acceptance.is_empty() && spec.owner.is_none());
-    assert_eq!(spec.objective, "Write it");
-    assert_eq!(spec.estimate.map(|e| e.likely_hours), Some(16.0));
+    assert!(spec.contract.acceptance.is_empty() && spec.execution.owner.is_none());
+    assert_eq!(spec.contract.objective, "Write it");
+    assert_eq!(spec.schedule.estimate.map(|e| e.likely_hours), Some(16.0));
     assert_eq!(spec.id.0.to_string(), guid(2));
-    assert_eq!(work(candidate, "MSP-3").priority, dpm_model::Priority::P1);
+    assert_eq!(
+        work(candidate, "MSP-3").schedule.priority,
+        dpm_model::Priority::P1
+    );
     assert_eq!(work(candidate, "MSP-4").kind, WorkKind::Milestone);
     assert_eq!(work(candidate, "MSP-5").parent, None);
     let review = &result.report.items[2];
@@ -204,12 +207,16 @@ fn unchanged_source_values_keep_richer_local_estimates_and_edges() {
     let mut current = import(&plan, &outline_document("")).candidate;
     let spec = work(&current, "MSP-2").id;
     // 12/15/24 h has a PERT expectation of 16 h, the value the source still carries.
-    current.work_items.get_mut(&spec).expect("spec").estimate =
-        Some(dpm_model::ThreePointEstimate {
-            optimistic_hours: 12.0,
-            likely_hours: 15.0,
-            pessimistic_hours: 24.0,
-        });
+    current
+        .work_items
+        .get_mut(&spec)
+        .expect("spec")
+        .schedule
+        .estimate = Some(dpm_model::ThreePointEstimate {
+        optimistic_hours: 12.0,
+        likely_hours: 15.0,
+        pessimistic_hours: 24.0,
+    });
     let edge = current
         .dependencies
         .iter_mut()
@@ -425,7 +432,7 @@ fn rejected_links_carry_only_the_rejection_and_zero_durations_are_reported() {
     assert_eq!(spec.outcome, ItemOutcome::Updated);
     assert!(!spec.preserved.contains(&"duration".to_string()));
     assert!(spec.approximated.iter().any(|f| f.field == "duration"));
-    assert_eq!(work(&result.candidate, "MSP-2").estimate, None);
+    assert_eq!(work(&result.candidate, "MSP-2").schedule.estimate, None);
 }
 
 #[test]

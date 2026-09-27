@@ -53,10 +53,10 @@ def with_excluded_package(directory):
     package_id, task_id = (str(uuid.UUID(int=0x0d << 96 | n)) for n in (0x51, 0x52))
     package = {**copy.deepcopy(next(w for w in items.values() if w['key'] == 'SUP-PKG-A')),
                'id': package_id, 'key': 'X-PKG', 'title': 'Supplier A onboarding'}
-    package.pop('condition')
+    package['contract'].pop('condition')
     quote = next(w for w in items.values() if w['key'] == 'SUP-A-QUOTE')
     task = {**copy.deepcopy(quote), 'id': task_id, 'key': 'X-A1', 'title': 'Onboard supplier A',
-            'parent': package_id, 'condition': {'decision': supplier_id(plan), 'option': 'A'}}
+            'parent': package_id, 'contract': {**quote['contract'], 'condition': {'decision': supplier_id(plan), 'option': 'A'}}}
     items[package_id], items[task_id] = package, task
     plan['dependencies'].append({'predecessor': quote['id'], 'successor': task_id, 'kind': 'FinishStart',
                                  'lag_hours': 0.0})
@@ -174,7 +174,7 @@ def change_after_start(database, worker, reviewer, revision):
                   ('plan', 'apply', str(candidate), '--reason', 'switch', '--actor', 'agent:parity'))
     call(reviewer, 'apply_change', {'plan': proposal, 'reason': 'Supplier B failed qualification', 'base_revision': revision})
     kept = cli(database, 'show', 'SUP-B-QUAL')
-    assert kept['status'] == 'InProgress' and kept['owner'] == {'kind': 'Agent', 'name': 'parity'}
+    assert kept['execution']['status'] == 'InProgress' and kept['execution']['owner'] == {'kind': 'Agent', 'name': 'parity'}
     assert kept['progress']['scope'] == 'not_selected'
     history = cli(database, 'history')['entries']
     applied = history[-1]['operation']

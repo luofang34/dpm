@@ -101,7 +101,7 @@ fn run_open_blocking(
         Commands::Next {
             capabilities,
             project_keys,
-            resource_keys,
+            asset_keys,
             limit,
             deterministic_only,
         } => {
@@ -110,7 +110,7 @@ fn run_open_blocking(
                 limit,
                 probabilistic: !deterministic_only,
                 project_keys: project_keys.into_iter().collect(),
-                resource_keys: resource_keys.into_iter().collect(),
+                asset_keys: asset_keys.into_iter().collect(),
             })?;
             if json {
                 return output::json_blocking(&response.data);
@@ -314,13 +314,13 @@ fn artifact_mutation_blocking(
         Commands::AttachGitHead {
             key,
             actor: who,
-            resource,
+            asset,
         } => {
             let principal = actor(&who)?;
             let artifact = app.git_head_artifact_blocking(
                 principal.clone(),
                 app.work_id_blocking(&key)?,
-                resource.as_deref(),
+                asset.as_deref(),
             )?;
             Ok((
                 principal,

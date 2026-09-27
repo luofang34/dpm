@@ -188,11 +188,17 @@ fn a_skipped_predecessor_does_not_release_ordinary_downstream_work() {
 fn an_all_skipped_join_needs_an_explicit_empty_permission() {
     let mut plan = fixture();
     let package = plan.find_work_by_key_mut("SUP-PKG-B").expect("package");
-    package.condition.as_mut().expect("condition").option = "A".into();
+    package
+        .contract
+        .condition
+        .as_mut()
+        .expect("condition")
+        .option = "A".into();
     let mut permissive = plan.clone();
     permissive
         .find_work_by_key_mut("SUP-MERGE")
         .expect("merge")
+        .contract
         .join = JoinPolicy::ActiveBranches { allow_empty: true };
 
     decide(&mut plan, "B", t(1));
@@ -246,9 +252,9 @@ fn a_choice_that_would_exclude_started_work_is_refused_by_decide() {
     // Reachable only through state that predates the condition; decide must still not cancel it.
     let mut plan = fixture();
     let quote = plan.find_work_by_key_mut("SUP-B-QUOTE").expect("work");
-    quote.status = WorkStatus::InProgress;
-    quote.owner = Some(worker());
-    quote.events.started_at = Some(t(0));
+    quote.execution.status = WorkStatus::InProgress;
+    quote.execution.owner = Some(worker());
+    quote.execution.events.started_at = Some(t(0));
     plan.validate().expect("valid legacy state");
     let before = plan.clone();
     let decision = supplier(&plan);
@@ -311,8 +317,12 @@ fn changing_a_choice_after_work_starts_requires_a_reviewed_change_and_keeps_the_
     let command = dpm_engine::plan_change(&plan, &proposed, "Supplier A withdrew").expect("delta");
     run(&mut plan, lead(), command, t(4));
     let work = &plan.work_items[&quote];
-    assert_eq!(work.status, WorkStatus::InProgress, "not cancelled");
-    assert_eq!(work.owner, Some(worker()));
+    assert_eq!(
+        work.execution.status,
+        WorkStatus::InProgress,
+        "not cancelled"
+    );
+    assert_eq!(work.execution.owner, Some(worker()));
     refused(
         &mut plan,
         "SUP-A-QUOTE",
@@ -337,9 +347,11 @@ fn review_protects_conditions_of_started_work() {
     proposed
         .find_work_by_key_mut("SUP-DESIGN")
         .expect("work")
+        .contract
         .condition = plan
         .find_work_by_key("SUP-PKG-A")
         .expect("package")
+        .contract
         .condition
         .clone();
     assert!(propose_change(&plan, &proposed).is_err());
@@ -349,9 +361,10 @@ fn review_protects_conditions_of_started_work() {
     proposed
         .find_work_by_key_mut("SUP-BUILD")
         .expect("work")
+        .contract
         .join = JoinPolicy::ActiveBranches { allow_empty: true };
     let preview = propose_change(&plan, &proposed).expect("allowed");
-    assert_eq!(preview.changes[0].fields, vec!["join".to_string()]);
+    assert_eq!(preview.changes[0].fields, vec!["contract".to_string()]);
 }
 
 /// A reviewed replacement that selects supplier B, keeping the same option keys.

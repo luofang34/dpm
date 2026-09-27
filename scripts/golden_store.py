@@ -22,7 +22,8 @@ def record(database, directory):
     keys = {w['key']: w for w in plan['work_items'].values()}
     keys['TEST-F']['title'] = 'Integration contract, clarified'
     added = json.loads(json.dumps(keys['TEST-F']))
-    added.update(id='00000000-0000-4000-8000-00000000f00d', key='TEST-G', status='Proposed')
+    added.update(id='00000000-0000-4000-8000-00000000f00d', key='TEST-G')
+    added['execution']['status'] = 'Proposed'
     plan['work_items'][added['id']] = added
     plan['dependencies'][0]['lag_hours'] = 1.929842284342272e-18
     candidate = directory / 'candidate.json'

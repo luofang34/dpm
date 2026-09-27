@@ -141,9 +141,9 @@
     <Tasks>
         <Task>
             <UID>1</UID>
-            <GUID>A1000000-0000-4000-8000-000000000009</GUID>
+            <GUID>A1000000-0000-4000-8000-000000000001</GUID>
             <ID>1</ID>
-            <Name>Release</Name>
+            <Name>Design</Name>
             <Active>1</Active>
             <Manual>0</Manual>
             <Type>0</Type>
@@ -151,6 +151,127 @@
             <WBS>1</WBS>
             <OutlineNumber>1</OutlineNumber>
             <OutlineLevel>1</OutlineLevel>
+            <Priority>500</Priority>
+            <Duration>PT0H0M0S</Duration>
+            <DurationFormat>5</DurationFormat>
+            <ResumeValid>0</ResumeValid>
+            <EffortDriven>0</EffortDriven>
+            <Recurring>0</Recurring>
+            <OverAllocated>0</OverAllocated>
+            <Estimated>0</Estimated>
+            <Milestone>0</Milestone>
+            <Summary>1</Summary>
+            <Critical>0</Critical>
+            <IsSubproject>0</IsSubproject>
+            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
+            <ExternalTask>0</ExternalTask>
+            <FixedCostAccrual>3</FixedCostAccrual>
+            <ConstraintType>0</ConstraintType>
+            <CalendarUID>-1</CalendarUID>
+            <LevelAssignments>0</LevelAssignments>
+            <LevelingCanSplit>0</LevelingCanSplit>
+            <LevelingDelayFormat>5</LevelingDelayFormat>
+            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <HideBar>0</HideBar>
+            <Rollup>0</Rollup>
+            <EarnedValueMethod>0</EarnedValueMethod>
+        </Task>
+        <Task>
+            <UID>2</UID>
+            <GUID>A1000000-0000-4000-8000-000000000002</GUID>
+            <ID>2</ID>
+            <Name>Write specification</Name>
+            <Active>1</Active>
+            <Manual>0</Manual>
+            <Type>0</Type>
+            <IsNull>0</IsNull>
+            <WBS>1.1</WBS>
+            <OutlineNumber>1.1</OutlineNumber>
+            <OutlineLevel>2</OutlineLevel>
+            <Priority>500</Priority>
+            <Duration>PT16H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <ResumeValid>0</ResumeValid>
+            <EffortDriven>0</EffortDriven>
+            <Recurring>0</Recurring>
+            <OverAllocated>0</OverAllocated>
+            <Estimated>0</Estimated>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Critical>0</Critical>
+            <IsSubproject>0</IsSubproject>
+            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
+            <ExternalTask>0</ExternalTask>
+            <FixedCostAccrual>3</FixedCostAccrual>
+            <RemainingDuration>PT16H0M0S</RemainingDuration>
+            <ConstraintType>0</ConstraintType>
+            <CalendarUID>-1</CalendarUID>
+            <LevelAssignments>0</LevelAssignments>
+            <LevelingCanSplit>0</LevelingCanSplit>
+            <LevelingDelayFormat>5</LevelingDelayFormat>
+            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <Notes>Specify the release scope and interfaces.</Notes>
+            <HideBar>0</HideBar>
+            <Rollup>0</Rollup>
+            <EarnedValueMethod>0</EarnedValueMethod>
+        </Task>
+        <Task>
+            <UID>3</UID>
+            <GUID>A1000000-0000-4000-8000-000000000003</GUID>
+            <ID>3</ID>
+            <Name>Review specification</Name>
+            <Active>1</Active>
+            <Manual>0</Manual>
+            <Type>0</Type>
+            <IsNull>0</IsNull>
+            <WBS>1.2</WBS>
+            <OutlineNumber>1.2</OutlineNumber>
+            <OutlineLevel>2</OutlineLevel>
+            <Priority>500</Priority>
+            <Duration>PT8H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <ResumeValid>0</ResumeValid>
+            <EffortDriven>0</EffortDriven>
+            <Recurring>0</Recurring>
+            <OverAllocated>0</OverAllocated>
+            <Estimated>0</Estimated>
+            <Milestone>0</Milestone>
+            <Summary>0</Summary>
+            <Critical>0</Critical>
+            <IsSubproject>0</IsSubproject>
+            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
+            <ExternalTask>0</ExternalTask>
+            <FixedCostAccrual>3</FixedCostAccrual>
+            <RemainingDuration>PT8H0M0S</RemainingDuration>
+            <ConstraintType>0</ConstraintType>
+            <CalendarUID>-1</CalendarUID>
+            <LevelAssignments>0</LevelAssignments>
+            <LevelingCanSplit>0</LevelingCanSplit>
+            <LevelingDelayFormat>5</LevelingDelayFormat>
+            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <HideBar>0</HideBar>
+            <Rollup>0</Rollup>
+            <EarnedValueMethod>0</EarnedValueMethod>
+            <PredecessorLink>
+                <PredecessorUID>2</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>5</LagFormat>
+            </PredecessorLink>
+        </Task>
+        <Task>
+            <UID>4</UID>
+            <GUID>A1000000-0000-4000-8000-000000000004</GUID>
+            <ID>4</ID>
+            <Name>Design approved</Name>
+            <Active>1</Active>
+            <Manual>0</Manual>
+            <Type>0</Type>
+            <IsNull>0</IsNull>
+            <WBS>1.3</WBS>
+            <OutlineNumber>1.3</OutlineNumber>
+            <OutlineLevel>2</OutlineLevel>
             <Priority>500</Priority>
             <Duration>PT0H0M0S</Duration>
             <DurationFormat>6</DurationFormat>
@@ -176,25 +297,18 @@
             <Rollup>0</Rollup>
             <EarnedValueMethod>0</EarnedValueMethod>
             <PredecessorLink>
-                <PredecessorUID>8</PredecessorUID>
-                <Type>2</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>14400</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>9</PredecessorUID>
+                <PredecessorUID>3</PredecessorUID>
                 <Type>1</Type>
                 <CrossProject>0</CrossProject>
-                <LinkLag>0</LinkLag>
-                <LagFormat>5</LagFormat>
+                <LinkLag>1200</LinkLag>
+                <LagFormat>6</LagFormat>
             </PredecessorLink>
         </Task>
         <Task>
-            <UID>2</UID>
-            <GUID>A1000000-0000-4000-8000-000000000001</GUID>
-            <ID>2</ID>
-            <Name>Design</Name>
+            <UID>5</UID>
+            <GUID>A1000000-0000-4000-8000-000000000005</GUID>
+            <ID>5</ID>
+            <Name>Build</Name>
             <Active>1</Active>
             <Manual>0</Manual>
             <Type>0</Type>
@@ -228,181 +342,16 @@
             <EarnedValueMethod>0</EarnedValueMethod>
         </Task>
         <Task>
-            <UID>3</UID>
-            <GUID>A1000000-0000-4000-8000-000000000002</GUID>
-            <ID>3</ID>
-            <Name>Write specification</Name>
+            <UID>6</UID>
+            <GUID>A1000000-0000-4000-8000-000000000006</GUID>
+            <ID>6</ID>
+            <Name>Implement</Name>
             <Active>1</Active>
             <Manual>0</Manual>
             <Type>0</Type>
             <IsNull>0</IsNull>
             <WBS>2.1</WBS>
             <OutlineNumber>2.1</OutlineNumber>
-            <OutlineLevel>2</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT16H0M0S</Duration>
-            <DurationFormat>6</DurationFormat>
-            <ResumeValid>0</ResumeValid>
-            <EffortDriven>0</EffortDriven>
-            <Recurring>0</Recurring>
-            <OverAllocated>0</OverAllocated>
-            <Estimated>0</Estimated>
-            <Milestone>0</Milestone>
-            <Summary>0</Summary>
-            <Critical>0</Critical>
-            <IsSubproject>0</IsSubproject>
-            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
-            <ExternalTask>0</ExternalTask>
-            <FixedCostAccrual>3</FixedCostAccrual>
-            <RemainingDuration>PT16H0M0S</RemainingDuration>
-            <ConstraintType>0</ConstraintType>
-            <CalendarUID>-1</CalendarUID>
-            <LevelAssignments>0</LevelAssignments>
-            <LevelingCanSplit>0</LevelingCanSplit>
-            <LevelingDelayFormat>5</LevelingDelayFormat>
-            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
-            <Notes>Specify the release scope and interfaces.</Notes>
-            <HideBar>0</HideBar>
-            <Rollup>0</Rollup>
-            <EarnedValueMethod>0</EarnedValueMethod>
-        </Task>
-        <Task>
-            <UID>4</UID>
-            <GUID>A1000000-0000-4000-8000-000000000003</GUID>
-            <ID>4</ID>
-            <Name>Review specification</Name>
-            <Active>1</Active>
-            <Manual>0</Manual>
-            <Type>0</Type>
-            <IsNull>0</IsNull>
-            <WBS>2.2</WBS>
-            <OutlineNumber>2.2</OutlineNumber>
-            <OutlineLevel>2</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT8H0M0S</Duration>
-            <DurationFormat>6</DurationFormat>
-            <ResumeValid>0</ResumeValid>
-            <EffortDriven>0</EffortDriven>
-            <Recurring>0</Recurring>
-            <OverAllocated>0</OverAllocated>
-            <Estimated>0</Estimated>
-            <Milestone>0</Milestone>
-            <Summary>0</Summary>
-            <Critical>0</Critical>
-            <IsSubproject>0</IsSubproject>
-            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
-            <ExternalTask>0</ExternalTask>
-            <FixedCostAccrual>3</FixedCostAccrual>
-            <RemainingDuration>PT8H0M0S</RemainingDuration>
-            <ConstraintType>0</ConstraintType>
-            <CalendarUID>-1</CalendarUID>
-            <LevelAssignments>0</LevelAssignments>
-            <LevelingCanSplit>0</LevelingCanSplit>
-            <LevelingDelayFormat>5</LevelingDelayFormat>
-            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
-            <HideBar>0</HideBar>
-            <Rollup>0</Rollup>
-            <EarnedValueMethod>0</EarnedValueMethod>
-            <PredecessorLink>
-                <PredecessorUID>3</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>0</LinkLag>
-                <LagFormat>5</LagFormat>
-            </PredecessorLink>
-        </Task>
-        <Task>
-            <UID>5</UID>
-            <GUID>A1000000-0000-4000-8000-000000000004</GUID>
-            <ID>5</ID>
-            <Name>Design approved</Name>
-            <Active>1</Active>
-            <Manual>0</Manual>
-            <Type>0</Type>
-            <IsNull>0</IsNull>
-            <WBS>2.3</WBS>
-            <OutlineNumber>2.3</OutlineNumber>
-            <OutlineLevel>2</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT0H0M0S</Duration>
-            <DurationFormat>6</DurationFormat>
-            <ResumeValid>0</ResumeValid>
-            <EffortDriven>0</EffortDriven>
-            <Recurring>0</Recurring>
-            <OverAllocated>0</OverAllocated>
-            <Estimated>0</Estimated>
-            <Milestone>1</Milestone>
-            <Summary>0</Summary>
-            <Critical>0</Critical>
-            <IsSubproject>0</IsSubproject>
-            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
-            <ExternalTask>0</ExternalTask>
-            <FixedCostAccrual>3</FixedCostAccrual>
-            <ConstraintType>0</ConstraintType>
-            <CalendarUID>-1</CalendarUID>
-            <LevelAssignments>0</LevelAssignments>
-            <LevelingCanSplit>0</LevelingCanSplit>
-            <LevelingDelayFormat>5</LevelingDelayFormat>
-            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
-            <HideBar>0</HideBar>
-            <Rollup>0</Rollup>
-            <EarnedValueMethod>0</EarnedValueMethod>
-            <PredecessorLink>
-                <PredecessorUID>4</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>1200</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-        </Task>
-        <Task>
-            <UID>6</UID>
-            <GUID>A1000000-0000-4000-8000-000000000005</GUID>
-            <ID>6</ID>
-            <Name>Build</Name>
-            <Active>1</Active>
-            <Manual>0</Manual>
-            <Type>0</Type>
-            <IsNull>0</IsNull>
-            <WBS>3</WBS>
-            <OutlineNumber>3</OutlineNumber>
-            <OutlineLevel>1</OutlineLevel>
-            <Priority>500</Priority>
-            <Duration>PT0H0M0S</Duration>
-            <DurationFormat>5</DurationFormat>
-            <ResumeValid>0</ResumeValid>
-            <EffortDriven>0</EffortDriven>
-            <Recurring>0</Recurring>
-            <OverAllocated>0</OverAllocated>
-            <Estimated>0</Estimated>
-            <Milestone>0</Milestone>
-            <Summary>1</Summary>
-            <Critical>0</Critical>
-            <IsSubproject>0</IsSubproject>
-            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
-            <ExternalTask>0</ExternalTask>
-            <FixedCostAccrual>3</FixedCostAccrual>
-            <ConstraintType>0</ConstraintType>
-            <CalendarUID>-1</CalendarUID>
-            <LevelAssignments>0</LevelAssignments>
-            <LevelingCanSplit>0</LevelingCanSplit>
-            <LevelingDelayFormat>5</LevelingDelayFormat>
-            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
-            <HideBar>0</HideBar>
-            <Rollup>0</Rollup>
-            <EarnedValueMethod>0</EarnedValueMethod>
-        </Task>
-        <Task>
-            <UID>7</UID>
-            <GUID>A1000000-0000-4000-8000-000000000006</GUID>
-            <ID>7</ID>
-            <Name>Implement</Name>
-            <Active>1</Active>
-            <Manual>0</Manual>
-            <Type>0</Type>
-            <IsNull>0</IsNull>
-            <WBS>3.1</WBS>
-            <OutlineNumber>3.1</OutlineNumber>
             <OutlineLevel>2</OutlineLevel>
             <Priority>700</Priority>
             <Duration>PT40H0M0S</Duration>
@@ -430,6 +379,13 @@
             <Rollup>0</Rollup>
             <EarnedValueMethod>0</EarnedValueMethod>
             <PredecessorLink>
+                <PredecessorUID>2</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>4800</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+            <PredecessorLink>
                 <PredecessorUID>3</PredecessorUID>
                 <Type>1</Type>
                 <CrossProject>0</CrossProject>
@@ -443,25 +399,18 @@
                 <LinkLag>4800</LinkLag>
                 <LagFormat>6</LagFormat>
             </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>5</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
         </Task>
         <Task>
-            <UID>8</UID>
+            <UID>7</UID>
             <GUID>A1000000-0000-4000-8000-000000000007</GUID>
-            <ID>8</ID>
+            <ID>7</ID>
             <Name>Write documentation</Name>
             <Active>1</Active>
             <Manual>0</Manual>
             <Type>0</Type>
             <IsNull>0</IsNull>
-            <WBS>3.2</WBS>
-            <OutlineNumber>3.2</OutlineNumber>
+            <WBS>2.2</WBS>
+            <OutlineNumber>2.2</OutlineNumber>
             <OutlineLevel>2</OutlineLevel>
             <Priority>500</Priority>
             <Duration>PT12H0M0S</Duration>
@@ -489,6 +438,13 @@
             <Rollup>0</Rollup>
             <EarnedValueMethod>0</EarnedValueMethod>
             <PredecessorLink>
+                <PredecessorUID>2</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>4800</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+            <PredecessorLink>
                 <PredecessorUID>3</PredecessorUID>
                 <Type>1</Type>
                 <CrossProject>0</CrossProject>
@@ -503,14 +459,7 @@
                 <LagFormat>6</LagFormat>
             </PredecessorLink>
             <PredecessorLink>
-                <PredecessorUID>5</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>7</PredecessorUID>
+                <PredecessorUID>6</PredecessorUID>
                 <Type>3</Type>
                 <CrossProject>0</CrossProject>
                 <LinkLag>2400</LinkLag>
@@ -518,16 +467,16 @@
             </PredecessorLink>
         </Task>
         <Task>
-            <UID>9</UID>
+            <UID>8</UID>
             <GUID>A1000000-0000-4000-8000-000000000008</GUID>
-            <ID>9</ID>
+            <ID>8</ID>
             <Name>Integration test</Name>
             <Active>1</Active>
             <Manual>0</Manual>
             <Type>0</Type>
             <IsNull>0</IsNull>
-            <WBS>3.3</WBS>
-            <OutlineNumber>3.3</OutlineNumber>
+            <WBS>2.3</WBS>
+            <OutlineNumber>2.3</OutlineNumber>
             <OutlineLevel>2</OutlineLevel>
             <Priority>500</Priority>
             <Duration>PT16H0M0S</Duration>
@@ -555,6 +504,13 @@
             <Rollup>0</Rollup>
             <EarnedValueMethod>0</EarnedValueMethod>
             <PredecessorLink>
+                <PredecessorUID>2</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>4800</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+            <PredecessorLink>
                 <PredecessorUID>3</PredecessorUID>
                 <Type>1</Type>
                 <CrossProject>0</CrossProject>
@@ -569,18 +525,62 @@
                 <LagFormat>6</LagFormat>
             </PredecessorLink>
             <PredecessorLink>
-                <PredecessorUID>5</PredecessorUID>
-                <Type>1</Type>
-                <CrossProject>0</CrossProject>
-                <LinkLag>4800</LinkLag>
-                <LagFormat>6</LagFormat>
-            </PredecessorLink>
-            <PredecessorLink>
-                <PredecessorUID>7</PredecessorUID>
+                <PredecessorUID>6</PredecessorUID>
                 <Type>0</Type>
                 <CrossProject>0</CrossProject>
                 <LinkLag>-1800</LinkLag>
                 <LagFormat>6</LagFormat>
+            </PredecessorLink>
+        </Task>
+        <Task>
+            <UID>9</UID>
+            <GUID>A1000000-0000-4000-8000-000000000009</GUID>
+            <ID>9</ID>
+            <Name>Release</Name>
+            <Active>1</Active>
+            <Manual>0</Manual>
+            <Type>0</Type>
+            <IsNull>0</IsNull>
+            <WBS>3</WBS>
+            <OutlineNumber>3</OutlineNumber>
+            <OutlineLevel>1</OutlineLevel>
+            <Priority>500</Priority>
+            <Duration>PT0H0M0S</Duration>
+            <DurationFormat>6</DurationFormat>
+            <ResumeValid>0</ResumeValid>
+            <EffortDriven>0</EffortDriven>
+            <Recurring>0</Recurring>
+            <OverAllocated>0</OverAllocated>
+            <Estimated>0</Estimated>
+            <Milestone>1</Milestone>
+            <Summary>0</Summary>
+            <Critical>0</Critical>
+            <IsSubproject>0</IsSubproject>
+            <IsSubprojectReadOnly>0</IsSubprojectReadOnly>
+            <ExternalTask>0</ExternalTask>
+            <FixedCostAccrual>3</FixedCostAccrual>
+            <ConstraintType>0</ConstraintType>
+            <CalendarUID>-1</CalendarUID>
+            <LevelAssignments>0</LevelAssignments>
+            <LevelingCanSplit>0</LevelingCanSplit>
+            <LevelingDelayFormat>5</LevelingDelayFormat>
+            <IgnoreResourceCalendar>0</IgnoreResourceCalendar>
+            <HideBar>0</HideBar>
+            <Rollup>0</Rollup>
+            <EarnedValueMethod>0</EarnedValueMethod>
+            <PredecessorLink>
+                <PredecessorUID>7</PredecessorUID>
+                <Type>2</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>14400</LinkLag>
+                <LagFormat>6</LagFormat>
+            </PredecessorLink>
+            <PredecessorLink>
+                <PredecessorUID>8</PredecessorUID>
+                <Type>1</Type>
+                <CrossProject>0</CrossProject>
+                <LinkLag>0</LinkLag>
+                <LagFormat>5</LagFormat>
             </PredecessorLink>
         </Task>
     </Tasks>

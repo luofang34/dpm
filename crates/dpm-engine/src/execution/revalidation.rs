@@ -65,7 +65,7 @@ pub(super) fn revalidate(
             current: status.current_attempt,
         });
     }
-    task_mut(plan, work)?.basis.push(DependencyBasis {
+    task_mut(plan, work)?.execution.basis.push(DependencyBasis {
         dependency,
         predecessor: status.predecessor,
         attempt,

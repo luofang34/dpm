@@ -97,7 +97,10 @@ pub fn status(
     // Mutually exclusive branches have no probability model, so no single percentile is given.
     let simulation = if probabilistic
         && open_choices.is_none()
-        && plan.work_items.values().any(|w| w.estimate.is_some())
+        && plan
+            .work_items
+            .values()
+            .any(|w| w.schedule.estimate.is_some())
     {
         Some(simulate_remaining(plan, simulation_config(), now)?)
     } else {
@@ -145,7 +148,7 @@ pub fn status(
 fn count(plan: &Plan, timeline: &Timeline, counted: bool, statuses: &[WorkStatus]) -> usize {
     plan.work_items
         .values()
-        .filter(|w| statuses.contains(&w.status))
+        .filter(|w| statuses.contains(&w.execution.status))
         .filter(|w| in_status_scope(timeline, w.id) == counted)
         .count()
 }
@@ -171,7 +174,7 @@ pub fn excluded_in_flight<'a>(plan: &'a Plan, timeline: &Timeline) -> Vec<&'a Wo
     ];
     plan.work_items
         .values()
-        .filter(|w| IN_FLIGHT.contains(&w.status) && !in_status_scope(timeline, w.id))
+        .filter(|w| IN_FLIGHT.contains(&w.execution.status) && !in_status_scope(timeline, w.id))
         .collect()
 }
 
@@ -264,7 +267,10 @@ pub fn next_work(
     let schedule = deterministic_remaining(plan, now)?;
     let downstream = downstream_counts(plan, &timeline);
     let simulation = if query.use_probabilistic_criticality
-        && plan.work_items.values().any(|w| w.estimate.is_some())
+        && plan
+            .work_items
+            .values()
+            .any(|w| w.schedule.estimate.is_some())
     {
         Some(simulate_remaining(plan, simulation_config(), now)?)
     } else {
@@ -277,7 +283,7 @@ pub fn next_work(
         .values()
         .filter_map(|work| reports.get(&work.id).filter(|r| r.ready).map(|r| (work, r)))
         .filter(|(work, _)| {
-            query.capabilities.is_empty() || work.capabilities.is_subset(&query.capabilities)
+            query.capabilities.is_empty() || work.contract.capabilities.is_subset(&query.capabilities)
         })
         // Claimable work is applicable, so the active-graph schedule always covers it.
         .filter_map(|(work, claim)| {
@@ -316,14 +322,14 @@ fn candidate(
 ) -> NextWorkCandidate {
     let downstream_count = downstream.get(&work.id).copied().unwrap_or(0);
     let criticality = simulation.and_then(|summary| summary.criticality.get(&work.id).copied());
-    let capability_match = work.capabilities.is_empty()
-        || work.capabilities.is_subset(&query.capabilities)
+    let capability_match = work.contract.capabilities.is_empty()
+        || work.contract.capabilities.is_subset(&query.capabilities)
         || query.capabilities.is_empty();
 
     // Explicit components keep recommendation scores independently explainable.
     let critical_component = criticality.unwrap_or(if activity.critical { 1.0 } else { 0.0 });
     let capability_component = if capability_match { 15.0 } else { -100.0 };
-    let priority_component = f64::from(work.priority.rank()) * 8.0;
+    let priority_component = f64::from(work.schedule.priority.rank()) * 8.0;
     let downstream_component = (downstream_count as f64 + 1.0).ln() * 6.0;
     let float_penalty = activity.total_float_hours.min(100.0) * 0.05;
     let score = critical_component * 100.0
@@ -364,10 +370,10 @@ fn candidate(
     if downstream_count > 0 {
         reasons.push(format!("unblocks {downstream_count} downstream work items"));
     }
-    if work.priority <= Priority::P1 {
-        reasons.push(format!("human priority is {:?}", work.priority));
+    if work.schedule.priority <= Priority::P1 {
+        reasons.push(format!("human priority is {:?}", work.schedule.priority));
     }
-    if !work.capabilities.is_empty() {
+    if !work.contract.capabilities.is_empty() {
         reasons.push(if capability_match {
             "requested capabilities match".into()
         } else {

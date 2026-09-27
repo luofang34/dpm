@@ -17,12 +17,12 @@ def audit_contracts(database, actor, plan, expected):
     assert len(tasks) == expected['task_count']
     for task in tasks:
         key = task['key']
-        contract = task['instructions']
+        contract = task['contract']['instructions']
         assert len(contract['steps']) >= 3, key
         assert all(step['action'].strip() and step['expected_result'].strip() for step in contract['steps']), key
         for field in ('in_scope', 'out_of_scope', 'verification'):
             assert contract[field] and all(text.strip() for text in contract[field]), (key, field)
-        assert len(task['acceptance']) >= 3, key
+        assert len(task['contract']['acceptance']) >= 3, key
         shown = run_cli(database, 'show', key)
         tool = actor.call('get_work', {'key': key})
         assert tool['revision'] == 0 and tool['data'] == shown, key
@@ -85,7 +85,7 @@ def smoke(directory):
         assert summary['progress'] == {'percent_complete': 0.0, 'verified': False}
         assert [c['work']['key'] for c in run_cli(database, 'next', '--deterministic-only')['candidates']] == expected['ready_keys']
         detail = run_cli(database, 'explain', expected['first_contract'])
-        assert not detail['ready'] and len(detail['work']['acceptance']) >= 3
+        assert not detail['ready'] and len(detail['work']['contract']['acceptance']) >= 3
         context = detail['context']
         assert context['requirements'] and context['artifacts'] and context['risks']
         assert expected['execution_gate'] in {gate['key'] for gate in context['decisions']}

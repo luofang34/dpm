@@ -28,8 +28,8 @@ pub enum ProjectSource {
 pub struct ProjectLocation {
     /// Expected workspace identity, checked before any operation.
     pub workspace: WorkspaceId,
-    /// Resource represented by this checkout, if any.
-    pub resource: Option<String>,
+    /// WorkspaceAsset represented by this checkout, if any.
+    pub asset: Option<String>,
     /// Directory containing `.dpm/project.toml`.
     pub root: PathBuf,
     /// Resolved source path, relative to the locator directory when configured relatively.
@@ -41,7 +41,7 @@ pub struct ProjectLocation {
 struct Locator {
     version: u32,
     workspace: WorkspaceId,
-    resource: Option<String>,
+    asset: Option<String>,
     database: Option<PathBuf>,
     preview: Option<PathBuf>,
 }
@@ -71,11 +71,11 @@ impl ProjectLocation {
             path: path.clone(),
             source,
         })?;
-        if locator.version != 2 {
+        if locator.version != 3 {
             return Err(ProjectError::Invalid {
                 path,
                 message: format!(
-                    "unsupported locator version {}; supported version is 2",
+                    "unsupported locator version {}; supported version is 3",
                     locator.version
                 ),
             });
@@ -99,7 +99,7 @@ impl ProjectLocation {
             root,
             source,
             workspace: locator.workspace,
-            resource: locator.resource,
+            asset: locator.asset,
         })
     }
 
@@ -156,14 +156,14 @@ impl ProjectLocation {
             }
             .into());
         }
-        if let Some(key) = &self.resource {
-            app.project_resource = Some(
-                plan.resources
+        if let Some(key) = &self.asset {
+            app.project_asset = Some(
+                plan.assets
                     .values()
                     .find(|r| r.key.0 == *key)
                     .ok_or_else(|| ProjectError::Invalid {
                         path: self.root.clone(),
-                        message: format!("unknown resource {key}"),
+                        message: format!("unknown asset {key}"),
                     })?
                     .id,
             );

@@ -131,7 +131,7 @@ fn prepare(recorder: &mut Recorder) -> (DependencyId, DependencyId, WorkItemId) 
         let mut new = plan.work_items[&a].clone();
         new.id = added;
         new.key = Key::new("TEST-NEW");
-        new.status = WorkStatus::Proposed;
+        new.execution.status = WorkStatus::Proposed;
         plan.work_items.insert(added, new);
     });
     let plan = recorder.plan();

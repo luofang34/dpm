@@ -104,11 +104,11 @@ fn release_fixture_maps_outline_durations_and_links() {
     assert_eq!(work("REL-3").parent, Some(work("REL-2").id));
     assert_eq!(work("REL-10").parent, None);
     assert_eq!(
-        work("REL-3").objective,
+        work("REL-3").contract.objective,
         "Specify the release scope and interfaces."
     );
-    assert_eq!(work("REL-7").priority, dpm_model::Priority::P1);
-    let hours = |key: &str| work(key).estimate.map(|e| e.likely_hours);
+    assert_eq!(work("REL-7").schedule.priority, dpm_model::Priority::P1);
+    let hours = |key: &str| work(key).schedule.estimate.map(|e| e.likely_hours);
     assert_eq!(
         [
             hours("REL-3"),
@@ -119,7 +119,7 @@ fn release_fixture_maps_outline_durations_and_links() {
         ],
         [Some(16.0), Some(8.0), Some(40.0), Some(12.0), Some(16.0)]
     );
-    assert!(work("REL-3").acceptance.is_empty());
+    assert!(work("REL-3").contract.acceptance.is_empty());
     assert_eq!(
         edge_lags(candidate, "REL-4", "REL-5"),
         [(DependencyKind::FinishStart, 2.0)]
@@ -209,12 +209,12 @@ fn unsupported_fixture_reports_every_category_and_completes_nothing() {
     apply(&mut plan, result.candidate);
     let finished = plan.find_work_by_key("REL-4").expect("finished");
     assert_eq!(
-        (finished.title.as_str(), finished.status),
+        (finished.title.as_str(), finished.execution.status),
         ("Finished task", WorkStatus::Proposed)
     );
     let progress = dpm_engine::progress(&plan, chrono::Utc::now()).expect("progress");
     assert!(!progress.work[&finished.id].verified);
-    assert_eq!(finished.reported_progress_percent, 0);
+    assert_eq!(finished.execution.reported_progress_percent, 0);
 }
 
 #[test]

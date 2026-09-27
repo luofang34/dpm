@@ -64,7 +64,7 @@ def normal(directory):
         actor.call('start_work', {'key': 'TEST-A', 'base_revision': 1})
         cli(child, 'submit', 'TEST-A', '--actor', 'agent:discovery')
         cli(child, 'verify', 'TEST-A', '--actor', 'human:reviewer')
-        assert actor.call('get_work', {'key': 'TEST-A'})['data']['status'] == 'Verified'
+        assert actor.call('get_work', {'key': 'TEST-A'})['data']['execution']['status'] == 'Verified'
     finally:
         actor.close()
     cli(root, 'init', error='project_exists')
@@ -96,23 +96,23 @@ def git_evidence(directory):
     head = git('rev-parse', 'HEAD')
     cli(root, 'import', ROOT / 'tests/support/execution-plan.json')
     cli(directory, '--project', root, 'attach-git-head', 'TEST-A', error='invalid_request')
-    cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--resource', 'UNKNOWN', error='invalid_request')
+    cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--asset', 'UNKNOWN', error='invalid_request')
     # Evidence authors are never independent reviewers, so only the task's owner attaches evidence.
-    cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--resource', 'TEST-REPO', error='invalid_command')
+    cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--asset', 'TEST-REPO', error='invalid_command')
     cli(directory, '--project', root, 'claim', 'TEST-A')
-    cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--resource', 'TEST-REPO')
+    cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--asset', 'TEST-REPO')
     cli(directory, '--project', root, 'release', 'TEST-A', '--reason', 'evidence recorded', '--actor', 'agent:local')
     actor = Agent(None, 'agent:evidence', cwd=directory, project=root)
     try:
         actor.call('claim_work', {'key': 'TEST-A', 'base_revision': 3})
-        actor.call('attach_git_head', {'key': 'TEST-A', 'resource': 'TEST-REPO', 'base_revision': 4})
+        actor.call('attach_git_head', {'key': 'TEST-A', 'asset': 'TEST-REPO', 'base_revision': 4})
     finally:
         actor.close()
     exported = cli(root, 'export')
     assert len(exported['artifacts']) == 2
     assert all(a['metadata']['commit'] == head for a in exported['artifacts'].values())
-    resource = next(iter(exported['resources']))
-    assert all(a['metadata']['resource_id'] == resource and a['uri'] == f'git:resource:{resource}@{head}' for a in exported['artifacts'].values())
+    asset = next(iter(exported['assets']))
+    assert all(a['metadata']['asset_id'] == asset and a['uri'] == f'git:asset:{asset}@{head}' for a in exported['artifacts'].values())
 
 
 def bindings(directory):
@@ -130,7 +130,7 @@ def bindings(directory):
     unbound = directory / 'unbound-checkout'
     (unbound / '.dpm').mkdir(parents=True)
     workspace = local('--database', database, 'export')['workspace']['id']
-    (unbound / '.dpm/project.toml').write_text(f"version = 2\nworkspace = '{workspace}'\nresource = 'TEST-REPO'\n")
+    (unbound / '.dpm/project.toml').write_text(f"version = 3\nworkspace = '{workspace}'\nasset = 'TEST-REPO'\n")
     missing = local('--project', unbound, 'status', error='workspace_not_bound')['error']['message']
     assert workspace in missing and 'workspace register' in missing
     started = subprocess.run([str(MCP), '--project', str(unbound), '--actor', 'agent:unbound'], cwd=directory, env=env,
@@ -148,10 +148,10 @@ def bindings(directory):
     for name in ['repository-one', 'documents']:
         root = directory / name
         (root / '.dpm').mkdir(parents=True)
-        (root / '.dpm/project.toml').write_text(f"version = 2\nworkspace = '{registered['workspace']}'\nresource = 'TEST-REPO'\n")
+        (root / '.dpm/project.toml').write_text(f"version = 3\nworkspace = '{registered['workspace']}'\nasset = 'TEST-REPO'\n")
     first, second = directory / 'repository-one', directory / 'documents'
     local('--project', first, 'claim', 'TEST-A', '--actor', 'agent:shared')
-    assert local('--project', second, 'show', 'TEST-A')['owner']['name'] == 'shared'
+    assert local('--project', second, 'show', 'TEST-A')['execution']['owner']['name'] == 'shared'
     local('--project', second, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
     exported = local('--project', first, 'export')
     moved = directory / 'moved/renamed-checkout'
@@ -179,7 +179,7 @@ def stale_bindings(directory):
     first = local('workspace', 'register', '--database', store)['workspace']
     checkout = directory / 'stale-checkout'
     (checkout / '.dpm').mkdir(parents=True)
-    (checkout / '.dpm/project.toml').write_text(f"version = 2\nworkspace = '{first}'\n")
+    (checkout / '.dpm/project.toml').write_text(f"version = 3\nworkspace = '{first}'\n")
     store.unlink()
     local('--database', store, 'init', 'Unrelated')
     second = local('--database', store, 'export')['workspace']['id']
@@ -203,7 +203,7 @@ def stale_bindings(directory):
         assert local('workspace', 'list')[0]['store'] == {'status': 'missing'}
     finally:
         actor.close()
-    (checkout / '.dpm/project.toml').write_text(f"version = 2\nworkspace = '{second}'\n")
+    (checkout / '.dpm/project.toml').write_text(f"version = 3\nworkspace = '{second}'\n")
     missing = local('--project', checkout, 'status', error='workspace_store_missing')['error']['message']
     started = mcp_start(checkout)
     assert started.returncode != 0 and f'workspace_store_missing: {missing}' in started.stderr, started.stderr

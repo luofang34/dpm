@@ -26,9 +26,8 @@ reports rather than drops.
   export format and is not an external fixture.
 - `mpxj-rewrite-of-dpm-export.xml`: MPXJ's `MSPDIReader` reading DPM's export of the release plan
   and its `MSPDIWriter` writing it again ([MpxjRewrite.java](MpxjRewrite.java)), so DPM's export
-  is checked against another implementation's reading of it. The export MPXJ read listed siblings
-  in text key order; it has the same tasks and links as `dpm-export-release-plan.xml`, and the
-  rewrite is compared by meaning, not byte for byte.
+  is checked against another implementation's reading of it. The input is `dpm-export-release-plan.xml`; the rewrite preserves its explicit outline order,
+  tasks and links and is compared by meaning, not byte for byte.
 
 ## OmniPlan fixtures
 

@@ -74,7 +74,7 @@ fn previews_have_no_store_to_back_up_or_verify() {
     std::fs::write(
         locator.join("project.toml"),
         format!(
-            "version = 2\nworkspace = \"{}\"\npreview = \"plan.json\"\n",
+            "version = 3\nworkspace = \"{}\"\npreview = \"plan.json\"\n",
             fixture().workspace.id
         ),
     )

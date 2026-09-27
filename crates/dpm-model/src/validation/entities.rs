@@ -70,29 +70,10 @@ fn validate_work(plan: &Plan, work: &WorkItem) -> Result<(), ValidationError> {
     nonempty("work title", work.id, &work.title)?;
     super::events::work(work)?;
     super::instructions::validate(work)?;
-    if let Some(review) = &work.last_rejection {
-        nonempty("review reason", work.id, &review.reason)?;
-        nonempty("review actor", work.id, &review.actor.name)?;
-        if !work.is_executable() || work.owner.is_none() {
-            return Err(invalid(
-                "review",
-                work.id,
-                "rejection requires an owned task",
-            ));
-        }
-        if let Some(holding) = work.holding_at(&review.actor, review.at) {
-            return Err(invalid(
-                "review",
-                work.id,
-                format!(
-                    "rejection at {} is not independent: {} {holding}",
-                    review.at, review.actor
-                ),
-            ));
-        }
-    }
-    if work.reported_progress_percent > 100
-        || (work.reported_progress_percent > 0 && (!work.is_executable() || work.owner.is_none()))
+    validate_review(work)?;
+    if work.execution.reported_progress_percent > 100
+        || (work.execution.reported_progress_percent > 0
+            && (!work.is_executable() || work.execution.owner.is_none()))
     {
         return Err(invalid(
             "work progress",
@@ -101,7 +82,7 @@ fn validate_work(plan: &Plan, work: &WorkItem) -> Result<(), ValidationError> {
         ));
     }
     project_reference(plan, work.project, work.id)?;
-    if let Some(estimate) = work.estimate {
+    if let Some(estimate) = work.schedule.estimate {
         estimate
             .validate()
             .map_err(|source| ValidationError::Estimate {
@@ -109,7 +90,7 @@ fn validate_work(plan: &Plan, work: &WorkItem) -> Result<(), ValidationError> {
                 source,
             })?;
     }
-    for requirement in &work.requirement_ids {
+    for requirement in &work.contract.requirement_ids {
         if !plan.requirements.contains_key(requirement) {
             return Err(invalid(
                 "work",
@@ -118,7 +99,7 @@ fn validate_work(plan: &Plan, work: &WorkItem) -> Result<(), ValidationError> {
             ));
         }
     }
-    for artifact in &work.artifact_ids {
+    for artifact in &work.execution.artifact_ids {
         if !plan.artifacts.contains_key(artifact) {
             return Err(invalid(
                 "work",
@@ -127,14 +108,17 @@ fn validate_work(plan: &Plan, work: &WorkItem) -> Result<(), ValidationError> {
             ));
         }
     }
-    if let Some(owner) = &work.owner {
+    if let Some(owner) = &work.execution.owner {
         nonempty("actor", work.id, &owner.name)?;
     }
     if !work.is_executable() {
-        if work.owner.is_some()
-            || work.block_reason.is_some()
-            || work.estimate.is_some()
-            || !matches!(work.status, WorkStatus::Planned | WorkStatus::Proposed)
+        if work.execution.owner.is_some()
+            || work.execution.block_reason.is_some()
+            || work.schedule.estimate.is_some()
+            || !matches!(
+                work.execution.status,
+                WorkStatus::Planned | WorkStatus::Proposed
+            )
         {
             return Err(invalid(
                 "work",
@@ -148,9 +132,15 @@ fn validate_work(plan: &Plan, work: &WorkItem) -> Result<(), ValidationError> {
 }
 
 fn validate_lifecycle(work: &WorkItem) -> Result<(), ValidationError> {
-    if work.status != WorkStatus::Proposed {
-        nonempty("work objective", work.id, &work.objective)?;
-        if work.acceptance.is_empty() || work.acceptance.iter().any(|c| c.text.trim().is_empty()) {
+    if work.execution.status != WorkStatus::Proposed {
+        nonempty("work objective", work.id, &work.contract.objective)?;
+        if work.contract.acceptance.is_empty()
+            || work
+                .contract
+                .acceptance
+                .iter()
+                .any(|c| c.text.trim().is_empty())
+        {
             return Err(invalid(
                 "work",
                 work.id,
@@ -158,26 +148,31 @@ fn validate_lifecycle(work: &WorkItem) -> Result<(), ValidationError> {
             ));
         }
     }
-    if (work.status == WorkStatus::Blocked) != work.block_reason.is_some() {
+    if (work.execution.status == WorkStatus::Blocked) != work.execution.block_reason.is_some() {
         return Err(invalid(
             "work",
             work.id,
             "block reason and blocked lifecycle must agree",
         ));
     }
-    if let Some(reason) = &work.block_reason {
+    if let Some(reason) = &work.execution.block_reason {
         nonempty("block reason", work.id, reason)?;
     }
     let requires_owner = matches!(
-        work.status,
+        work.execution.status,
         WorkStatus::Claimed
             | WorkStatus::InProgress
             | WorkStatus::Submitted
             | WorkStatus::Verified
             | WorkStatus::Done
     );
-    let forbids_owner = matches!(work.status, WorkStatus::Proposed | WorkStatus::Planned);
-    if (requires_owner && work.owner.is_none()) || (forbids_owner && work.owner.is_some()) {
+    let forbids_owner = matches!(
+        work.execution.status,
+        WorkStatus::Proposed | WorkStatus::Planned
+    );
+    if (requires_owner && work.execution.owner.is_none())
+        || (forbids_owner && work.execution.owner.is_some())
+    {
         return Err(invalid(
             "work",
             work.id,
@@ -332,6 +327,31 @@ fn validate_replacement(
             ));
         }
         next = previous.supersedes;
+    }
+    Ok(())
+}
+
+fn validate_review(work: &WorkItem) -> Result<(), ValidationError> {
+    if let Some(review) = &work.execution.last_rejection {
+        nonempty("review reason", work.id, &review.reason)?;
+        nonempty("review actor", work.id, &review.actor.name)?;
+        if !work.is_executable() || work.execution.owner.is_none() {
+            return Err(invalid(
+                "review",
+                work.id,
+                "rejection requires an owned task",
+            ));
+        }
+        if let Some(holding) = work.holding_at(&review.actor, review.at) {
+            return Err(invalid(
+                "review",
+                work.id,
+                format!(
+                    "rejection at {} is not independent: {} {holding}",
+                    review.at, review.actor
+                ),
+            ));
+        }
     }
     Ok(())
 }

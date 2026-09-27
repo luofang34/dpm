@@ -40,9 +40,9 @@ fn seeded_simulation_is_reproducible_ordered_and_bounded() {
 fn completed_plan_has_zero_remaining_duration_even_with_lag() {
     let mut plan = fixture();
     for work in plan.work_items.values_mut().filter(|w| w.is_executable()) {
-        work.status = WorkStatus::Verified;
-        work.owner = Some(ActorId::agent("owner"));
-        work.events.verified_at = Some(chrono::DateTime::UNIX_EPOCH);
+        work.execution.status = WorkStatus::Verified;
+        work.execution.owner = Some(ActorId::agent("owner"));
+        work.execution.events.verified_at = Some(chrono::DateTime::UNIX_EPOCH);
     }
     for dependency in &mut plan.dependencies {
         dependency.lag_hours = 5.0;
@@ -100,16 +100,25 @@ fn layered(count: usize) -> Plan {
             id: dpm_model::WorkItemId::new(),
             key: dpm_model::Key::new(format!("S-{i}")),
             parent: None,
-            status: WorkStatus::Planned,
-            owner: None,
-            estimate: Some(ThreePointEstimate {
-                optimistic_hours: hours * 0.5,
-                likely_hours: hours,
-                pessimistic_hours: hours * 3.0,
-            }),
-            requirement_ids: Default::default(),
-            artifact_ids: Default::default(),
-            resources: Vec::new(),
+            contract: dpm_model::WorkContract {
+                requirement_ids: Default::default(),
+                assets: Vec::new(),
+                ..(template.clone()).contract
+            },
+            execution: dpm_model::ExecutionRecord {
+                status: WorkStatus::Planned,
+                owner: None,
+                artifact_ids: Default::default(),
+                ..(template.clone()).execution
+            },
+            schedule: dpm_model::ScheduleInputs {
+                estimate: Some(ThreePointEstimate {
+                    optimistic_hours: hours * 0.5,
+                    likely_hours: hours,
+                    pessimistic_hours: hours * 3.0,
+                }),
+                ..(template.clone()).schedule
+            },
             ..template.clone()
         };
         ids.push(work.id);
@@ -143,8 +152,8 @@ fn reference(plan: &Plan, config: SimulationConfig, remaining_only: bool) -> Sim
             .work_items
             .iter()
             .map(|(id, work)| {
-                let done = remaining_only && work.status.satisfies_dependency();
-                let hours = match work.estimate {
+                let done = remaining_only && work.execution.status.satisfies_dependency();
+                let hours = match work.schedule.estimate {
                     _ if done => 0.0,
                     Some(e) if work.is_executable() => sample_triangular(
                         &mut rng,
@@ -223,10 +232,10 @@ fn remaining_simulation_equals_one_projection_of_the_remaining_graph_per_sample(
             .values_mut()
             .find(|w| w.key == key)
             .expect("layered task");
-        work.status = WorkStatus::Verified;
-        work.owner = Some(ActorId::agent("owner"));
-        work.events.started_at = Some(at(n));
-        work.events.verified_at = Some(at(n + 1));
+        work.execution.status = WorkStatus::Verified;
+        work.execution.owner = Some(ActorId::agent("owner"));
+        work.execution.events.started_at = Some(at(n));
+        work.execution.events.verified_at = Some(at(n + 1));
     }
     let config = SimulationConfig {
         iterations: 200,

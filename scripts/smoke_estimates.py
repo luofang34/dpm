@@ -13,7 +13,7 @@ def unestimated_plan():
     plan = json.loads((ROOT / 'tests/support/execution-plan.json').read_text())
     for work in plan['work_items'].values():
         if work['key'] in ('TEST-A', 'TEST-E'):
-            work['estimate'] = None
+            work['schedule']['estimate'] = None
     return plan
 
 
@@ -73,7 +73,7 @@ def check_scenarios(directory):
     plan = json.loads((ROOT / 'tests/support/conditional-plan.json').read_text())
     for work in plan['work_items'].values():
         if work['key'] in ('SUP-DESIGN', 'SUP-A-QUOTE', 'SUP-B-QUOTE'):
-            work['estimate'] = None
+            work['schedule']['estimate'] = None
     fixture, database = directory / 'estimates-conditional.json', directory / 'estimates-conditional.sqlite'
     fixture.write_text(json.dumps(plan))
     run_cli(database, 'import', str(fixture))

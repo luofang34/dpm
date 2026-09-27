@@ -74,7 +74,7 @@ fn work_edits() -> Vec<(&'static str, Edit)> {
             clone_first(&mut p.work_items, WorkItemId::new(), |w, id| {
                 w.id = id;
                 w.key = Key::new("ADDED-WORK");
-                w.status = WorkStatus::Proposed;
+                w.execution.status = WorkStatus::Proposed;
             });
         }),
         ("work removed", |p| {
@@ -136,16 +136,16 @@ fn context_edits() -> Vec<(&'static str, Edit)> {
             });
             removed.map(|id| p.risks.remove(&id));
         }),
-        ("resource edited, added and removed", |p| {
-            if let Some(r) = p.resources.values_mut().next() {
+        ("asset edited, added and removed", |p| {
+            if let Some(r) = p.assets.values_mut().next() {
                 r.label.push_str(" (relabelled)");
             }
-            let removed = last_key(&p.resources);
-            clone_first(&mut p.resources, dpm_model::ResourceId::new(), |r, id| {
+            let removed = last_key(&p.assets);
+            clone_first(&mut p.assets, dpm_model::AssetId::new(), |r, id| {
                 r.id = id;
                 r.key = Key::new("ADDED-RESOURCE");
             });
-            removed.map(|id| p.resources.remove(&id));
+            removed.map(|id| p.assets.remove(&id));
         }),
     ]
 }
@@ -387,7 +387,7 @@ fn a_one_field_edit_on_a_large_plan_logs_a_small_operation() {
     let template = plan
         .work_items
         .values()
-        .find(|w| w.status == WorkStatus::Planned)
+        .find(|w| w.execution.status == WorkStatus::Planned)
         .cloned()
         .expect("planned work");
     for index in 0..400 {
@@ -401,7 +401,7 @@ fn a_one_field_edit_on_a_large_plan_logs_a_small_operation() {
     proposed
         .work_items
         .values_mut()
-        .find(|w| w.status == WorkStatus::Planned)
+        .find(|w| w.execution.status == WorkStatus::Planned)
         .expect("planned")
         .title = "One clarified title".into();
     let plan_size = serde_json::to_string(&plan).expect("json").len();

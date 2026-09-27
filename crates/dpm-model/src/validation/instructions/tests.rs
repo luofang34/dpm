@@ -23,10 +23,15 @@ fn instructions() -> WorkInstructions {
 #[test]
 fn absent_instructions_remain_compatible_and_present_instructions_roundtrip() {
     let mut plan = fixture();
-    assert!(plan.work_items.values().all(|w| w.instructions.is_none()));
+    assert!(
+        plan.work_items
+            .values()
+            .all(|w| w.contract.instructions.is_none())
+    );
     plan.validate().expect("legacy plan");
     plan.find_work_by_key_mut("TEST-A")
         .expect("task")
+        .contract
         .instructions = Some(instructions());
     plan.validate().expect("complete instructions");
     let json = serde_json::to_string(&plan).expect("serialize");
@@ -54,7 +59,7 @@ fn incomplete_steps_scope_and_checks_are_rejected_with_work_context() {
         let id = work.id;
         let mut value = instructions();
         edit(&mut value);
-        work.instructions = Some(value);
+        work.contract.instructions = Some(value);
         let error = plan
             .validate()
             .expect_err("incomplete contract")
@@ -69,7 +74,7 @@ fn aggregate_work_cannot_carry_execution_instructions() {
         let mut plan = fixture();
         let work = plan.find_work_by_key_mut("TEST-M1").expect("milestone");
         work.kind = kind;
-        work.instructions = Some(instructions());
+        work.contract.instructions = Some(instructions());
         assert!(validate(work).is_err());
     }
 }

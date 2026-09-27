@@ -18,7 +18,7 @@ pub(super) fn validate(plan: &Plan) -> Result<(), ValidationError> {
         }
     }
     for work in plan.work_items.values() {
-        if let Some(condition) = &work.condition {
+        if let Some(condition) = &work.contract.condition {
             let decision = plan.decisions.get(&condition.decision).ok_or_else(|| {
                 invalid(
                     "work condition",
@@ -37,7 +37,7 @@ pub(super) fn validate(plan: &Plan) -> Result<(), ValidationError> {
                 ));
             }
         }
-        if !work.join.is_default() && work.kind == WorkKind::WorkPackage {
+        if !work.contract.join.is_default() && work.kind == WorkKind::WorkPackage {
             return Err(invalid(
                 "work join",
                 work.id,

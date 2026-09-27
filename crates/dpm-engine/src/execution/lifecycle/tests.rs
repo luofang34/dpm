@@ -203,7 +203,7 @@ fn each_relation_gates_its_own_transition_until_24h_have_elapsed() {
             },
             open,
         );
-        let events = plan.work_items[&b].events;
+        let events = plan.work_items[&b].execution.events;
         assert_eq!(events.verified_at, Some(t(open)), "{kind:?}");
         assert!(events.started_at.is_some() && events.submitted_at.is_some());
     }
@@ -270,8 +270,8 @@ fn restored_edges_gate_start_and_verification_of_work_reserved_or_submitted_whil
 fn a_claim_reserves_work_but_only_a_start_releases_start_to_start_successors() {
     let (mut plan, a, b) = pair(DependencyKind::StartStart, 0.0, DependencyPolicy::Hard);
     ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
-    assert_eq!(plan.work_items[&a].status, WorkStatus::Claimed);
-    assert!(plan.work_items[&a].events.started_at.is_none());
+    assert_eq!(plan.work_items[&a].execution.status, WorkStatus::Claimed);
+    assert!(plan.work_items[&a].execution.events.started_at.is_none());
     views_agree(&plan, b, 5);
     assert_eq!(
         refused(
@@ -302,7 +302,7 @@ fn a_claim_reserves_work_but_only_a_start_releases_start_to_start_successors() {
         assert_eq!(plan, before);
     }
     ok(&mut plan, &worker(), Command::Start { work: a }, 6);
-    assert_eq!(plan.work_items[&a].events.started_at, Some(t(6)));
+    assert_eq!(plan.work_items[&a].execution.events.started_at, Some(t(6)));
     views_agree(&plan, b, 6);
     ok(
         &mut plan,
@@ -320,8 +320,8 @@ fn unknown_event_times_block_only_positive_lag_with_an_actionable_reason() {
     ] {
         let (mut plan, a, b) = pair(kind, 0.0, DependencyPolicy::Hard);
         let predecessor = plan.work_items.get_mut(&a).expect("a");
-        predecessor.status = legacy;
-        predecessor.owner = Some(worker());
+        predecessor.execution.status = legacy;
+        predecessor.execution.owner = Some(worker());
         views_agree(&plan, b, 0);
         assert!(
             is_ready(&plan, &plan.work_items[&b], t(0)),
@@ -358,8 +358,8 @@ fn a_blocked_legacy_start_still_releases_start_edges_and_resumes_in_progress() {
     for kind in [DependencyKind::StartStart, DependencyKind::StartFinish] {
         let (mut plan, a, b) = pair(kind, 0.0, DependencyPolicy::Hard);
         let predecessor = plan.work_items.get_mut(&a).expect("a");
-        predecessor.status = WorkStatus::InProgress;
-        predecessor.owner = Some(worker());
+        predecessor.execution.status = WorkStatus::InProgress;
+        predecessor.execution.owner = Some(worker());
         let release =
             |plan: &Plan| dpm_model::Timeline::at(plan, t(1)).edge(plan, &plan.dependencies[0]);
         let started = release(&plan);
@@ -386,8 +386,11 @@ fn a_blocked_legacy_start_still_releases_start_edges_and_resumes_in_progress() {
         plan.dependencies[0].lag_hours = 0.0;
         ok(&mut plan, &worker(), Command::Unblock { work: a }, 2);
         let resumed = &plan.work_items[&a];
-        assert_eq!(resumed.status, WorkStatus::InProgress, "{kind:?}");
-        assert_eq!(resumed.events.started_at, None, "no start time is invented");
+        assert_eq!(resumed.execution.status, WorkStatus::InProgress, "{kind:?}");
+        assert_eq!(
+            resumed.execution.events.started_at, None,
+            "no start time is invented"
+        );
         let submit = Command::Submit {
             work: a,
             note: None,
@@ -452,45 +455,11 @@ fn event_times_are_the_command_times_and_cannot_be_backdated() {
     assert!(run(&mut plan, &reviewer, verify(a), 7).is_err());
     assert_eq!(plan, before, "a verification before the submission");
     ok(&mut plan, &reviewer, verify(a), 11);
-    let events = plan.work_items[&a].events;
+    let events = plan.work_items[&a].execution.events;
     assert_eq!(
         (events.started_at, events.submitted_at, events.verified_at),
         (Some(t(5)), Some(t(8)), Some(t(11)))
     );
 }
 
-#[test]
-fn blocking_and_rejection_keep_the_start_and_drop_the_rejected_submission() {
-    let (mut plan, a, _) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
-    let reviewer = ActorId::human("reviewer");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 3);
-    ok(&mut plan, &worker(), Command::Start { work: a }, 5);
-    let block = Command::Block {
-        work: a,
-        reason: "vendor".into(),
-    };
-    ok(&mut plan, &worker(), block, 6);
-    let report = Command::ReportProgress {
-        work: a,
-        percent: 40,
-        note: None,
-    };
-    ok(&mut plan, &worker(), report, 6);
-    ok(&mut plan, &worker(), Command::Unblock { work: a }, 7);
-    let resumed = &plan.work_items[&a];
-    assert_eq!(
-        resumed.status,
-        WorkStatus::InProgress,
-        "started work resumes started"
-    );
-    assert_eq!(resumed.events.started_at, Some(t(5)));
-    ok(&mut plan, &worker(), submit(a), 8);
-    let reject = Command::Reject {
-        work: a,
-        reason: "missing test".into(),
-    };
-    ok(&mut plan, &reviewer, reject, 9);
-    assert_eq!(plan.work_items[&a].events.submitted_at, None);
-    ok(&mut plan, &worker(), submit(a), 10);
-    assert_eq!(plan.work_items[&a].events.submitted_at, Some(t(10)));
-}
+mod timing;

@@ -40,18 +40,19 @@ fn prepared_contracts_have_no_owners_progress_or_implicit_authorization() {
             .all(|d| d.status == DecisionStatus::Open && d.outcome.is_none())
     );
     for item in plan.work_items.values() {
-        assert_eq!(item.status, WorkStatus::Planned);
-        assert!(item.owner.is_none());
-        assert_eq!(item.reported_progress_percent, 0);
+        assert_eq!(item.execution.status, WorkStatus::Planned);
+        assert!(item.execution.owner.is_none());
+        assert_eq!(item.execution.reported_progress_percent, 0);
         if item.is_executable() {
-            assert!(!item.objective.trim().is_empty());
-            assert!(item.acceptance.len() >= 3);
+            assert!(!item.contract.objective.trim().is_empty());
+            assert!(item.contract.acceptance.len() >= 3);
             assert!(
-                !item.capabilities.is_empty()
-                    && !item.requirement_ids.is_empty()
-                    && !item.artifact_ids.is_empty()
+                !item.contract.capabilities.is_empty()
+                    && !item.contract.requirement_ids.is_empty()
+                    && !item.execution.artifact_ids.is_empty()
             );
-            item.estimate
+            item.schedule
+                .estimate
                 .expect("provisional O/M/P")
                 .validate()
                 .expect("estimate");
@@ -61,7 +62,7 @@ fn prepared_contracts_have_no_owners_progress_or_implicit_authorization() {
                 item.key
             );
         } else {
-            assert!(item.estimate.is_none());
+            assert!(item.schedule.estimate.is_none());
             assert_eq!(item.expected_duration_hours(), 0.0);
         }
     }
@@ -120,7 +121,7 @@ fn recorded_design_choices_are_context_and_never_execution_approval() {
             }
         }
         assert!(!detail.ready);
-        assert_eq!(work.status, WorkStatus::Planned);
+        assert_eq!(work.execution.status, WorkStatus::Planned);
     }
     assert_eq!(plan.revision, 0);
 }
@@ -179,13 +180,17 @@ fn every_task_exposes_ordered_steps_boundaries_and_checks_without_mutation() {
     let plan = fixture();
     let before = plan.clone();
     for work in plan.work_items.values().filter(|w| w.is_executable()) {
-        let contract = work.instructions.as_ref().expect("explicit procedure");
+        let contract = work
+            .contract
+            .instructions
+            .as_ref()
+            .expect("explicit procedure");
         assert!(contract.steps.len() >= 3, "{}", work.key);
         assert!(!contract.in_scope.is_empty() && !contract.out_of_scope.is_empty());
         assert!(!contract.verification.is_empty());
         let detail = explain_work(&plan, work.id, chrono::Utc::now()).expect("explain");
-        assert_eq!(detail.work.instructions.as_ref(), Some(contract));
-        assert_eq!(detail.work.acceptance, work.acceptance);
+        assert_eq!(detail.work.contract.instructions.as_ref(), Some(contract));
+        assert_eq!(detail.work.contract.acceptance, work.contract.acceptance);
         assert!(!detail.ready);
     }
     assert_eq!(plan, before);
@@ -263,7 +268,7 @@ fn seed_text_naming_a_decision_stays_true_whether_or_not_it_is_decided() {
         "has been decided",
     ];
     for work in plan.work_items.values() {
-        for text in [&work.title, &work.objective] {
+        for text in [&work.title, &work.contract.objective] {
             let named = plan.decisions.values().any(|d| text.contains(&d.key.0));
             let lower = text.to_lowercase();
             let asserted: Vec<_> = stateful.iter().filter(|s| lower.contains(*s)).collect();

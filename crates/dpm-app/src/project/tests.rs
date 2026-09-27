@@ -23,12 +23,12 @@ fn nearest_project_and_git_boundaries_prevent_cross_project_selection() {
     let outer = temp.path();
     locator_blocking(
         outer,
-        "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'outer.sqlite'",
+        "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'outer.sqlite'",
     );
     let nested = outer.join("nested");
     locator_blocking(
         &nested,
-        "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'inner.sqlite'",
+        "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'inner.sqlite'",
     );
     let child = nested.join("src/feature");
     fs::create_dir_all(&child).expect("child");
@@ -48,7 +48,7 @@ fn nearest_project_and_git_boundaries_prevent_cross_project_selection() {
     ));
     locator_blocking(
         &independent,
-        "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'own.sqlite'",
+        "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'own.sqlite'",
     );
     assert_eq!(
         ProjectLocation::discover_blocking(&independent)
@@ -63,16 +63,16 @@ fn invalid_nearest_locator_never_falls_back_to_parent() {
     let temp = TempDir::new().expect("temp");
     locator_blocking(
         temp.path(),
-        "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'outer.sqlite'",
+        "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'outer.sqlite'",
     );
     let child = temp.path().join("child");
     for content in [
         "not toml",
         "version = 99\ndatabase = 'state.sqlite'",
         "version = 1",
-        "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = ''",
-        "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'a'\npreview = 'b'",
-        "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'a'\nunknown = true",
+        "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = ''",
+        "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'a'\npreview = 'b'",
+        "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'a'\nunknown = true",
     ] {
         locator_blocking(&child, content);
         assert!(
@@ -131,7 +131,7 @@ fn preview_reads_are_identical_and_all_mutations_are_rejected_without_files() {
     fs::write(&path, &original).expect("plan");
     locator_blocking(
         temp.path(),
-        "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\npreview = '../plan.json'",
+        "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\npreview = '../plan.json'",
     );
     let mut app = open_workspace_blocking(temp.path(), None, None).expect("preview");
     assert!(app.is_read_only());
@@ -214,6 +214,7 @@ fn invalid_plan_creates_no_project_and_missing_sources_are_not_initialized() {
         .values_mut()
         .find(|w| w.is_executable())
         .expect("task")
+        .contract
         .acceptance
         .clear();
     assert!(initialize_project_blocking(temp.path(), &invalid).is_err());
@@ -222,7 +223,7 @@ fn invalid_plan_creates_no_project_and_missing_sources_are_not_initialized() {
         locator_blocking(
             temp.path(),
             &format!(
-                "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\n{source} = 'missing'"
+                "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\n{source} = 'missing'"
             ),
         );
         assert!(open_workspace_blocking(temp.path(), None, None).is_err());
@@ -233,7 +234,7 @@ fn invalid_plan_creates_no_project_and_missing_sources_are_not_initialized() {
 #[test]
 fn a_cloned_database_locator_can_be_initialized_but_preview_cannot() {
     let temp = TempDir::new().expect("temp");
-    let config = "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'state.sqlite'";
+    let config = "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\ndatabase = 'state.sqlite'";
     locator_blocking(temp.path(), config);
     let expected = plan();
     initialize_project_blocking(temp.path(), &expected).expect("initialize cloned project");
@@ -250,7 +251,7 @@ fn a_cloned_database_locator_can_be_initialized_but_preview_cannot() {
     );
     locator_blocking(
         temp.path(),
-        "version = 2\nworkspace = '00000008-0000-4000-8000-000000000001'\npreview = '../plan.json'",
+        "version = 3\nworkspace = '00000008-0000-4000-8000-000000000001'\npreview = '../plan.json'",
     );
     assert_eq!(
         initialize_project_blocking(temp.path(), &expected)
@@ -269,7 +270,7 @@ fn explicit_refresh_reloads_preview_contracts_without_switching_identity_or_mode
     locator_blocking(
         temp.path(),
         &format!(
-            "version = 2\nworkspace = '{}'\npreview = '../plan.json'",
+            "version = 3\nworkspace = '{}'\npreview = '../plan.json'",
             expected.workspace.id
         ),
     );

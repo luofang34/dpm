@@ -6,7 +6,7 @@ use crate::{Decision, DecisionStatus, WorkItem, WorkStatus};
 /// Ordering is the guardrail against backdating: a command whose timestamp precedes the event it
 /// follows yields an invalid candidate, so the command is rejected and state stays unchanged.
 pub(super) fn work(work: &WorkItem) -> Result<(), ValidationError> {
-    let events = &work.events;
+    let events = &work.execution.events;
     if !work.is_executable() && !events.is_empty() {
         return Err(invalid(
             "work events",
@@ -15,7 +15,7 @@ pub(super) fn work(work: &WorkItem) -> Result<(), ValidationError> {
         ));
     }
     let started = matches!(
-        work.status,
+        work.execution.status,
         WorkStatus::InProgress
             | WorkStatus::Blocked
             | WorkStatus::Submitted
@@ -23,18 +23,21 @@ pub(super) fn work(work: &WorkItem) -> Result<(), ValidationError> {
             | WorkStatus::Done
     );
     let submitted = matches!(
-        work.status,
+        work.execution.status,
         WorkStatus::Submitted | WorkStatus::Verified | WorkStatus::Done
     );
     if (events.start_unrecorded && (events.started_at.is_some() || !started))
         || (events.started_at.is_some() && !started)
         || (events.submitted_at.is_some() && !submitted)
-        || (events.verified_at.is_some() && !work.status.satisfies_dependency())
+        || (events.verified_at.is_some() && !work.execution.status.satisfies_dependency())
     {
         return Err(invalid(
             "work events",
             work.id,
-            format!("recorded events do not match lifecycle {:?}", work.status),
+            format!(
+                "recorded events do not match lifecycle {:?}",
+                work.execution.status
+            ),
         ));
     }
     let ordered = [events.started_at, events.submitted_at, events.verified_at]
@@ -52,10 +55,10 @@ pub(super) fn work(work: &WorkItem) -> Result<(), ValidationError> {
 }
 
 fn handoffs(work: &WorkItem) -> Result<(), ValidationError> {
-    if !work.is_executable() && !work.handoffs.is_empty() {
+    if !work.is_executable() && !work.execution.handoffs.is_empty() {
         return Err(invalid("work handoff", work.id, "only tasks change owners"));
     }
-    for handoff in &work.handoffs {
+    for handoff in &work.execution.handoffs {
         if handoff.from == handoff.to || handoff.reason.trim().is_empty() {
             return Err(invalid(
                 "work handoff",
@@ -64,7 +67,12 @@ fn handoffs(work: &WorkItem) -> Result<(), ValidationError> {
             ));
         }
     }
-    if work.handoffs.windows(2).any(|pair| pair[0].at > pair[1].at) {
+    if work
+        .execution
+        .handoffs
+        .windows(2)
+        .any(|pair| pair[0].at > pair[1].at)
+    {
         return Err(invalid(
             "work handoff",
             work.id,
@@ -75,17 +83,27 @@ fn handoffs(work: &WorkItem) -> Result<(), ValidationError> {
 }
 
 fn releases(work: &WorkItem) -> Result<(), ValidationError> {
-    if !work.is_executable() && !work.releases.is_empty() {
+    if !work.is_executable() && !work.execution.releases.is_empty() {
         return Err(invalid("work release", work.id, "only tasks are claimed"));
     }
-    if work.releases.iter().any(|r| r.reason.trim().is_empty()) {
+    if work
+        .execution
+        .releases
+        .iter()
+        .any(|r| r.reason.trim().is_empty())
+    {
         return Err(invalid(
             "work release",
             work.id,
             "a release names a nonempty reason",
         ));
     }
-    if work.releases.windows(2).any(|pair| pair[0].at > pair[1].at) {
+    if work
+        .execution
+        .releases
+        .windows(2)
+        .any(|pair| pair[0].at > pair[1].at)
+    {
         return Err(invalid(
             "work release",
             work.id,

@@ -144,7 +144,7 @@ fn why_now(
     let mut why_now = Vec::new();
     let current = Transition::ALL
         .into_iter()
-        .find(|t| t.lifecycle() == work.status)
+        .find(|t| t.lifecycle() == work.execution.status)
         .and_then(|t| transitions.get(&t).map(|report| (t, report)));
     if timeline.completed_at(work.id).is_some() {
         why_now.push("work is complete".into());

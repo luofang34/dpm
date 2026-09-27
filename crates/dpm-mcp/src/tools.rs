@@ -56,7 +56,7 @@ const NAMES: &[(&str, &str)] = &[
     ),
     (
         "next_work",
-        "Rank executable leaf tasks on the full graph, then apply capability eligibility, optional project/resource scope and limit; eligible work outside scope stays listed",
+        "Rank executable leaf tasks on the full graph, then apply capability eligibility, optional project/asset scope and limit; eligible work outside scope stays listed",
     ),
     (
         "get_work",
@@ -148,7 +148,7 @@ pub(crate) fn definitions() -> Vec<Value> {
             "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); },
             "next_work" => { properties.insert("capabilities".into(),json!({"type":"array","items":{"type":"string"}})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"default":5})); properties.insert("probabilistic".into(),json!({"type":"boolean","default":true}));
                 properties.insert("project_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"Project keys whose subtrees form a query-only scope; not a directory"}));
-                properties.insert("resource_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"Resource keys returned work must fit: at least one named, every write listed"})); },
+                properties.insert("asset_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"WorkspaceAsset keys returned work must fit: at least one named, every write listed"})); },
             "reject_work" => { properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.push("reason"); },
             "report_blocker" => { properties.insert("blocker".into(),json!({"type":"string","minLength":1})); required.push("blocker"); },
             "report_progress" => {
@@ -156,7 +156,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 properties.insert("note".into(),json!({"type":"string"})); required.push("percent");
             },
             "submit_work"|"verify_work" => { properties.insert("note".into(),json!({"type":"string"})); },
-            "attach_git_head" => { properties.insert("resource".into(),json!({"type":"string"})); },
+            "attach_git_head" => { properties.insert("asset".into(),json!({"type":"string"})); },
             "add_artifact" => { properties.insert("artifact".into(),artifact_schema()); required.push("artifact"); },
             "link_external"|"unlink_external" => {
                 properties.insert("identity".into(),identity_schema()); required.push("identity");
@@ -201,7 +201,7 @@ struct Arguments {
     #[serde(default)]
     project_keys: BTreeSet<String>,
     #[serde(default)]
-    resource_keys: BTreeSet<String>,
+    asset_keys: BTreeSet<String>,
     #[serde(default = "default_true")]
     probabilistic: bool,
     #[serde(default = "default_limit")]
@@ -211,7 +211,7 @@ struct Arguments {
     note: Option<String>,
     percent: Option<u8>,
     artifact: Option<Artifact>,
-    resource: Option<String>,
+    asset: Option<String>,
     decision: Option<String>,
     outcome: Option<String>,
     identity: Option<ExternalIdentity>,
@@ -273,7 +273,7 @@ pub(crate) fn call_tool_blocking(
             probabilistic: args.probabilistic,
             limit: args.limit,
             project_keys: args.project_keys.clone(),
-            resource_keys: args.resource_keys.clone(),
+            asset_keys: args.asset_keys.clone(),
         }),
         "get_work" => Some(Query::Show {
             key: required(args.key.clone(), "key")?,
@@ -347,11 +347,7 @@ fn mutation_blocking(
     match name {
         "attach_git_head" => Ok(Command::AttachArtifact {
             work,
-            artifact: app.git_head_artifact_blocking(
-                actor.clone(),
-                work,
-                args.resource.as_deref(),
-            )?,
+            artifact: app.git_head_artifact_blocking(actor.clone(), work, args.asset.as_deref())?,
         }),
         "ratify_contract" => Ok(Command::RatifyContract { work }),
         "reject_work" => Ok(Command::Reject {

@@ -111,10 +111,10 @@ documents nested projects, cloned configurations and existing databases.
 A workspace may span several Git repositories and non-code projects. Use explicit project/database
 selection for a central local plan; automatic discovery remains conservative at Git boundaries.
 SQLite holds durable runtime state. Plan interchange uses JSON; TOML configures project locators.
-`dpm next --project-key KEY --resource-key KEY` narrows globally ranked work to a project subtree or
-resources without hiding eligible work elsewhere; see the [agent contract](docs/mcp.md#scoped-next).
+`dpm next --project-key KEY --asset-key KEY` narrows globally ranked work to a project subtree or
+assets without hiding eligible work elsewhere; see the [agent contract](docs/mcp.md#scoped-next).
 Inspect `CORE-20` and `SYNC-10` with `explain` for semantic plan editing and sync requirements.
-Current resource identities and local bindings are described in the project-selection guide.
+Current workspace asset identities and local bindings are described in the project-selection guide.
 
 Self-host is the only bundled example. `demo` explicitly initializes a copy in another project or
 an explicit database; it never overwrites existing state. Each task includes ordered actions and

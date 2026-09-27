@@ -158,12 +158,15 @@ fn authored_extremes() -> Value {
     doc["decisions"] = json!({id.as_str().expect("id"): decision});
     let works = doc["work_items"].as_object_mut().expect("work");
     for (index, work) in works.values_mut().enumerate() {
-        work["join"] = if index % 2 == 0 {
+        work["contract"]["join"] = if index % 2 == 0 {
             json!({"mode": "all_predecessors"})
         } else {
             json!({"mode": "active_branches", "allow_empty": true})
         };
-        if let Some(basis) = work.get_mut("basis").and_then(Value::as_array_mut) {
+        if let Some(basis) = work["execution"]
+            .get_mut("basis")
+            .and_then(Value::as_array_mut)
+        {
             let mut revalidated = basis[0].clone();
             revalidated["source"] = json!({"kind": "revalidation", "actor": {"kind": "Human", "name": "lead"}, "reason": "re-read"});
             basis.push(revalidated);
@@ -177,12 +180,12 @@ fn authored_extremes() -> Value {
     doc["links"] =
         json!([{"kind": "RelatesTo", "source": ids[0], "target": ids[1], "note": "context"}]);
     doc["dependencies"][0]["rationale"] = "ordering".into();
-    for resource in doc["resources"]
+    for asset in doc["assets"]
         .as_object_mut()
         .into_iter()
         .flat_map(|m| m.values_mut())
     {
-        resource["kind"] = json!({"Other": "Laboratory"});
+        asset["kind"] = json!({"Other": "Laboratory"});
     }
     for reference in doc["external_references"]
         .as_object_mut()
@@ -202,9 +205,9 @@ fn legacy_blocked() -> Value {
     let mut plan = plan(&fixture("execution"));
     let worker = ActorId::agent("w");
     let work = plan.find_work_by_key_mut("TEST-A").expect("work");
-    work.status = WorkStatus::InProgress;
-    work.owner = Some(worker.clone());
-    work.events = ExecutionEvents::default();
+    work.execution.status = WorkStatus::InProgress;
+    work.execution.owner = Some(worker.clone());
+    work.execution.events = ExecutionEvents::default();
     let id = work.id.to_string();
     let block = json!({"Block": {"work": id, "reason": "waiting on a vendor"}});
     let command: Command = serde_json::from_value(block).expect("command shape");
@@ -218,7 +221,7 @@ fn legacy_blocked() -> Value {
     .expect("block");
     let document = serde_json::to_value(plan).expect("serialize");
     assert_eq!(
-        document["work_items"][&id]["events"],
+        document["work_items"][&id]["execution"]["events"],
         json!({"start_unrecorded": true})
     );
     document
@@ -292,9 +295,14 @@ fn the_schema_declares_exactly_the_fields_and_variants_the_model_serializes() {
 #[test]
 fn the_model_comparison_reports_each_kind_of_drift() {
     let schema = plan_schema().expect("schema");
-    let join = "/$defs/WorkItem/properties/join/oneOf/1/properties";
+    let join = "/$defs/WorkContract/properties/join/oneOf/1/properties";
     let drifts = [
-        ("writes `join`", "/$defs/WorkItem/properties", "join", None),
+        (
+            "writes `join`",
+            "/$defs/WorkContract/properties",
+            "join",
+            None,
+        ),
         ("writes `allow_empty`", join, "allow_empty", None),
         (
             "declares `bogus`",
@@ -390,7 +398,8 @@ fn the_template_applies_to_an_empty_workspace_and_is_refused_elsewhere() {
     assert!(
         tasks
             .iter()
-            .all(|t| t.status == dpm_model::WorkStatus::Proposed && !t.acceptance.is_empty())
+            .all(|t| t.execution.status == dpm_model::WorkStatus::Proposed
+                && !t.contract.acceptance.is_empty())
     );
     let mut app = Application::in_memory_blocking(&empty).expect("app");
     let data = app.query_blocking(Query::PlanTemplate).expect("query").data;

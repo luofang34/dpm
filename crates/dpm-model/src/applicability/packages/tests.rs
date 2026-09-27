@@ -32,7 +32,7 @@ fn add(plan: &mut Plan, template: &str, key: &str, parent: Option<&str>, option:
     work.id = WorkItemId::new();
     work.key = Key::new(key);
     work.parent = parent.map(|p| id(plan, p));
-    work.condition = option.map(|option| WorkCondition {
+    work.contract.condition = option.map(|option| WorkCondition {
         decision,
         option: option.into(),
     });
@@ -61,11 +61,11 @@ fn decide(plan: &mut Plan, option: &str, at: DateTime<Utc>) {
 
 fn verify(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
     let work = plan.find_work_by_key_mut(key).expect("work");
-    work.status = WorkStatus::Verified;
-    work.owner = Some(ActorId::agent("worker"));
-    work.events.started_at = Some(at);
-    work.events.submitted_at = Some(at);
-    work.events.verified_at = Some(at);
+    work.execution.status = WorkStatus::Verified;
+    work.execution.owner = Some(ActorId::agent("worker"));
+    work.execution.events.started_at = Some(at);
+    work.execution.events.submitted_at = Some(at);
+    work.execution.events.verified_at = Some(at);
 }
 
 fn state(plan: &Plan, key: &str) -> Applicability {

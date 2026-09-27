@@ -24,7 +24,7 @@ fn permit(
     if report.ready {
         return Ok(report);
     }
-    if let Some(reason) = &item.block_reason {
+    if let Some(reason) = &item.execution.block_reason {
         return Err(EngineError::Blocked {
             work,
             reason: reason.clone(),
@@ -45,13 +45,13 @@ fn require_status(
 ) -> Result<(), EngineError> {
     let item = task_mut(plan, work)?;
     owns(item, actor)?;
-    if item.status == WorkStatus::Claimed && expected == WorkStatus::InProgress {
+    if item.execution.status == WorkStatus::Claimed && expected == WorkStatus::InProgress {
         return Err(EngineError::NotStarted(work));
     }
-    if item.status != expected || item.owner.as_ref() != Some(actor) {
+    if item.execution.status != expected || item.execution.owner.as_ref() != Some(actor) {
         return Err(EngineError::InvalidTransition {
             work,
-            status: item.status,
+            status: item.execution.status,
         });
     }
     Ok(())
@@ -67,8 +67,8 @@ pub(super) fn claim(
     task_mut(plan, work)?;
     permit(plan, work, Transition::Claim, at)?;
     let item = task_mut(plan, work)?;
-    item.owner = Some(actor.clone());
-    item.status = WorkStatus::Claimed;
+    item.execution.owner = Some(actor.clone());
+    item.execution.status = WorkStatus::Claimed;
     Ok(())
 }
 
@@ -82,10 +82,10 @@ pub(super) fn start(
     require_status(plan, actor, work, WorkStatus::Claimed)?;
     let report = permit(plan, work, Transition::Start, at)?;
     let item = task_mut(plan, work)?;
-    item.status = WorkStatus::InProgress;
-    item.events.started_at = Some(at);
+    item.execution.status = WorkStatus::InProgress;
+    item.execution.events.started_at = Some(at);
     // The start relies on exactly the attempts the shared evaluator released it on.
-    item.basis.extend(
+    item.execution.basis.extend(
         report
             .provisional
             .into_iter()
@@ -110,20 +110,21 @@ pub(super) fn block(
     let item = task_mut(plan, work)?;
     owns(item, actor)?;
     if !matches!(
-        item.status,
+        item.execution.status,
         WorkStatus::Planned | WorkStatus::Claimed | WorkStatus::InProgress
     ) {
         return Err(EngineError::InvalidTransition {
             work: item.id,
-            status: item.status,
+            status: item.execution.status,
         });
     }
     // The start of work begun before start times were recorded survives only in its lifecycle.
-    if item.status == WorkStatus::InProgress && item.events.started_at.is_none() {
-        item.events.start_unrecorded = true;
+    if item.execution.status == WorkStatus::InProgress && item.execution.events.started_at.is_none()
+    {
+        item.execution.events.start_unrecorded = true;
     }
-    item.block_reason = Some(reason.into());
-    item.status = WorkStatus::Blocked;
+    item.execution.block_reason = Some(reason.into());
+    item.execution.status = WorkStatus::Blocked;
     Ok(())
 }
 
@@ -135,16 +136,16 @@ pub(super) fn unblock(
 ) -> Result<(), EngineError> {
     let item = task_mut(plan, work)?;
     owns(item, actor)?;
-    if item.status != WorkStatus::Blocked {
+    if item.execution.status != WorkStatus::Blocked {
         return Err(EngineError::InvalidTransition {
             work: item.id,
-            status: item.status,
+            status: item.execution.status,
         });
     }
-    item.block_reason = None;
-    item.status = if item.start_event().is_some() {
+    item.execution.block_reason = None;
+    item.execution.status = if item.start_event().is_some() {
         WorkStatus::InProgress
-    } else if item.owner.is_some() {
+    } else if item.execution.owner.is_some() {
         WorkStatus::Claimed
     } else {
         WorkStatus::Planned
@@ -160,15 +161,16 @@ pub(super) fn report_progress(
 ) -> Result<(), EngineError> {
     let item = task_mut(plan, work)?;
     owns(item, actor)?;
-    let started_blocked = item.status == WorkStatus::Blocked && item.start_event().is_some();
+    let started_blocked =
+        item.execution.status == WorkStatus::Blocked && item.start_event().is_some();
     if !started_blocked {
         require_status(plan, actor, work, WorkStatus::InProgress)?;
     }
     let item = task_mut(plan, work)?;
-    if item.owner.as_ref() != Some(actor) {
+    if item.execution.owner.as_ref() != Some(actor) {
         return Err(EngineError::InvalidTransition {
             work,
-            status: item.status,
+            status: item.execution.status,
         });
     }
     if percent > 100 {
@@ -177,7 +179,7 @@ pub(super) fn report_progress(
             reason: "progress must be between 0 and 100".into(),
         });
     }
-    item.reported_progress_percent = percent;
+    item.execution.reported_progress_percent = percent;
     Ok(())
 }
 
@@ -190,10 +192,14 @@ pub(super) fn submit(
     require_status(plan, actor, work, WorkStatus::InProgress)?;
     permit(plan, work, Transition::Submit, at)?;
     let item = task_mut(plan, work)?;
-    item.status = WorkStatus::Submitted;
-    item.events.submitted_at = Some(at);
-    let number = item.attempts.last().map_or(1, |a| a.number.wrapping_add(1));
-    item.attempts.push(SubmissionAttempt {
+    item.execution.status = WorkStatus::Submitted;
+    item.execution.events.submitted_at = Some(at);
+    let number = item
+        .execution
+        .attempts
+        .last()
+        .map_or(1, |a| a.number.wrapping_add(1));
+    item.execution.attempts.push(SubmissionAttempt {
         number,
         submitted_at: at,
         outcome: AttemptOutcome::Pending,
@@ -208,10 +214,10 @@ pub(super) fn verify(
     at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     let item = task_mut(plan, work)?;
-    if item.status != WorkStatus::Submitted {
+    if item.execution.status != WorkStatus::Submitted {
         return Err(EngineError::NotSubmitted(work));
     }
-    if item.owner.as_ref() == Some(actor) {
+    if item.execution.owner.as_ref() == Some(actor) {
         return Err(EngineError::SelfVerification(work));
     }
     if item.held_by(actor) {
@@ -223,10 +229,11 @@ pub(super) fn verify(
     super::refuse_evidence_author(plan, actor, work, "verify work whose evidence it authored")?;
     permit(plan, work, Transition::Verify, at)?;
     let item = task_mut(plan, work)?;
-    item.status = WorkStatus::Verified;
-    item.events.verified_at = Some(at);
+    item.execution.status = WorkStatus::Verified;
+    item.execution.events.verified_at = Some(at);
     // A legacy submission has no attempt record to close.
     if let Some(attempt) = item
+        .execution
         .attempts
         .last_mut()
         .filter(|a| a.outcome == AttemptOutcome::Pending)

@@ -74,9 +74,12 @@ fn release_and_handoff_are_recorded_operations_that_survive_restart() {
         })
         .expect("show")
         .data;
-    assert_eq!(shown["owner"], json!({"kind": "Agent", "name": "second"}));
-    assert_eq!(shown["handoffs"][0]["actor"]["name"], "lead");
-    assert!(shown["events"]["started_at"].is_string());
+    assert_eq!(
+        shown["execution"]["owner"],
+        json!({"kind": "Agent", "name": "second"})
+    );
+    assert_eq!(shown["execution"]["handoffs"][0]["actor"]["name"], "lead");
+    assert!(shown["execution"]["events"]["started_at"].is_string());
 }
 
 #[test]

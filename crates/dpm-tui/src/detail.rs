@@ -8,9 +8,9 @@ pub(crate) fn text(plan: &Plan, detail: &WorkExplanation) -> String {
         format!("{} — {}", work.key, work.title),
         format!(
             "Status: {:?} · {:.0}% · verified={}",
-            work.status, detail.progress.percent_complete, detail.progress.verified
+            work.execution.status, detail.progress.percent_complete, detail.progress.verified
         ),
-        format!("Objective: {}", work.objective),
+        format!("Objective: {}", work.contract.objective),
     ];
     if !detail.applicability.is_applicable() {
         lines.push(format!(
@@ -19,16 +19,16 @@ pub(crate) fn text(plan: &Plan, detail: &WorkExplanation) -> String {
             dpm_engine::describe_applicability(&detail.applicability)
         ));
     }
-    if let Some(owner) = &work.owner {
+    if let Some(owner) = &work.execution.owner {
         lines.push(format!("Owner: {owner}"));
     }
     section(
         &mut lines,
         "Acceptance",
-        work.acceptance.iter().map(|a| a.text.clone()),
+        work.contract.acceptance.iter().map(|a| a.text.clone()),
     );
     execution(&mut lines, detail);
-    if let Some(review) = &work.last_rejection {
+    if let Some(review) = &work.execution.last_rejection {
         section(
             &mut lines,
             "Latest review rejection",
@@ -38,7 +38,7 @@ pub(crate) fn text(plan: &Plan, detail: &WorkExplanation) -> String {
             )],
         );
     }
-    if let Some(instructions) = &work.instructions {
+    if let Some(instructions) = &work.contract.instructions {
         section(
             &mut lines,
             "Steps",
@@ -114,9 +114,9 @@ fn append_context(lines: &mut Vec<String>, detail: &WorkExplanation) {
     );
     section(
         lines,
-        "Resources",
+        "Assets",
         context
-            .resources
+            .assets
             .iter()
             .map(|r| format!("{}: {} ({:?})", r.key, r.label, r.kind)),
     );
@@ -161,9 +161,9 @@ fn append_context(lines: &mut Vec<String>, detail: &WorkExplanation) {
 /// Recorded events, completion time, gate explanations and every transition's eligibility.
 fn execution(lines: &mut Vec<String>, detail: &WorkExplanation) {
     let events = [
-        ("started", detail.work.events.started_at),
-        ("submitted", detail.work.events.submitted_at),
-        ("verified", detail.work.events.verified_at),
+        ("started", detail.work.execution.events.started_at),
+        ("submitted", detail.work.execution.events.submitted_at),
+        ("verified", detail.work.execution.events.verified_at),
     ];
     section(
         lines,

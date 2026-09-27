@@ -63,18 +63,12 @@ impl View {
             .drain(..)
             .map(|item| (hierarchy_path(plan, &item), item))
             .collect();
-        paths.sort_by(|(a, _), (b, _)| {
-            a.iter()
-                .zip(b)
-                .map(|(a, b)| a.natural_cmp(b))
-                .find(|order| order.is_ne())
-                .unwrap_or_else(|| a.len().cmp(&b.len()))
-        });
+        paths.sort_by(|(a, _), (b, _)| a.cmp(b));
         work.extend(paths.into_iter().map(|(_, item)| item));
         let done = completion(plan, clock);
         for item in &mut work {
             if !item.is_executable() && done.contains(&item.id) {
-                item.status = WorkStatus::Verified;
+                item.execution.status = WorkStatus::Verified;
             }
         }
         let network = format!(
@@ -254,7 +248,7 @@ impl View {
                     "  ".repeat(depth(&self.plan, w)),
                     crate::work_label::milestone_badge(w, self.progress.work[&w.id].verified),
                     w.key,
-                    w.status,
+                    w.execution.status,
                     self.progress.work[&w.id].percent_complete,
                     w.title,
                     crate::open_choices::scope_tag(
@@ -305,11 +299,14 @@ impl View {
     }
 }
 
-fn hierarchy_path(plan: &Plan, work: &WorkItem) -> Vec<dpm_model::Key> {
-    let mut path = vec![work.key.clone()];
+fn hierarchy_path(
+    plan: &Plan,
+    work: &WorkItem,
+) -> Vec<(dpm_model::SiblingOrder, dpm_model::WorkItemId)> {
+    let mut path = vec![(work.order.clone(), work.id)];
     let mut parent = work.parent;
     while let Some(item) = parent.and_then(|id| plan.work_items.get(&id)) {
-        path.push(item.key.clone());
+        path.push((item.order.clone(), item.id));
         parent = item.parent;
     }
     path.reverse();

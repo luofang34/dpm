@@ -103,7 +103,7 @@ When operating on a real DPM workspace, prefer the machine interface:
 
 1. `dpm status --json`
 2. `dpm next --json --capability <capability>`
-3. `dpm explain <KEY> --json`; read `work.instructions.steps`, `in_scope`, `out_of_scope`,
+3. `dpm explain <KEY> --json`; read `work.contract.instructions.steps`, `in_scope`, `out_of_scope`,
    `verification`, objective and acceptance together with the resolved context;
 4. `dpm claim <KEY> --json --actor agent:<name>` reserves the task;
 5. `dpm start <KEY> --json --actor agent:<name>` when work actually begins; the start is the event SS/SF

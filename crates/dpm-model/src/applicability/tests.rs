@@ -35,11 +35,11 @@ fn decide(plan: &mut Plan, option: &str, at: Option<DateTime<Utc>>) {
 
 fn verify(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
     let work = plan.find_work_by_key_mut(key).expect("work");
-    work.status = WorkStatus::Verified;
-    work.owner = Some(ActorId::agent("worker"));
-    work.events.started_at = Some(at);
-    work.events.submitted_at = Some(at);
-    work.events.verified_at = Some(at);
+    work.execution.status = WorkStatus::Verified;
+    work.execution.owner = Some(ActorId::agent("worker"));
+    work.execution.events.started_at = Some(at);
+    work.execution.events.submitted_at = Some(at);
+    work.execution.events.verified_at = Some(at);
 }
 
 fn state(plan: &Plan, key: &str) -> Applicability {
@@ -139,7 +139,10 @@ fn an_ordinary_dependency_on_skipped_work_strands_its_successor() {
     assert_eq!(timeline.edge(&plan, edge), Release::NotSelected);
 
     // Without an explicit branch join the merge point is stranded too, and so is its successor.
-    plan.find_work_by_key_mut("SUP-MERGE").expect("merge").join = JoinPolicy::AllPredecessors;
+    plan.find_work_by_key_mut("SUP-MERGE")
+        .expect("merge")
+        .contract
+        .join = JoinPolicy::AllPredecessors;
     assert!(matches!(
         state(&plan, "SUP-MERGE"),
         Applicability::Stranded { .. }
@@ -188,7 +191,7 @@ fn the_join_completes_only_with_the_selected_verified_branch_and_the_choice_time
 fn an_all_skipped_join_completes_only_when_it_permits_an_empty_result() {
     let mut plan = fixture();
     let b = plan.find_work_by_key_mut("SUP-PKG-B").expect("package");
-    b.condition.as_mut().expect("condition").option = "A".into();
+    b.contract.condition.as_mut().expect("condition").option = "A".into();
     decide(&mut plan, "B", Some(t(4)));
     assert_eq!(state(&plan, "SUP-MERGE"), Applicability::EmptyJoin);
     assert!(matches!(
@@ -198,8 +201,10 @@ fn an_all_skipped_join_completes_only_when_it_permits_an_empty_result() {
     let merge = id(&plan, "SUP-MERGE");
     assert!(!Timeline::at(&plan, t(9)).completed().contains(&merge));
 
-    plan.find_work_by_key_mut("SUP-MERGE").expect("merge").join =
-        JoinPolicy::ActiveBranches { allow_empty: true };
+    plan.find_work_by_key_mut("SUP-MERGE")
+        .expect("merge")
+        .contract
+        .join = JoinPolicy::ActiveBranches { allow_empty: true };
     assert_eq!(state(&plan, "SUP-MERGE"), Applicability::Applicable);
     assert_eq!(
         Timeline::at(&plan, t(9)).completed_at(merge),
@@ -234,7 +239,7 @@ fn verified_work_counts_only_while_its_option_is_selected() {
     plan.validate().expect("valid replacement");
     assert!(state(&plan, "SUP-A-QUOTE").is_not_selected());
     assert_eq!(
-        plan.work_items[&quote].status,
+        plan.work_items[&quote].execution.status,
         WorkStatus::Verified,
         "lifecycle is kept"
     );
@@ -261,12 +266,13 @@ fn malformed_options_conditions_and_joins_are_rejected() {
 
     let mut plan = fixture();
     let work = plan.find_work_by_key_mut("SUP-PKG-A").expect("package");
-    work.condition.as_mut().expect("condition").option = "C".into();
+    work.contract.condition.as_mut().expect("condition").option = "C".into();
     assert!(plan.validate().is_err(), "condition must name an option");
 
     let mut plan = fixture();
     plan.find_work_by_key_mut("SUP-PKG-A")
         .expect("package")
+        .contract
         .join = JoinPolicy::ActiveBranches { allow_empty: false };
     assert!(plan.validate().is_err(), "packages are not merge points");
 

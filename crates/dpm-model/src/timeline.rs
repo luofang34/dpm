@@ -106,7 +106,10 @@ impl Timeline {
     #[must_use]
     pub fn edge(&self, plan: &Plan, edge: &Dependency) -> Release {
         if self.applicability(edge.predecessor).is_not_selected() {
-            let join = plan.work_items.get(&edge.successor).map(|w| w.join);
+            let join = plan
+                .work_items
+                .get(&edge.successor)
+                .map(|w| w.contract.join);
             return match (join, self.choice_at.get(&edge.predecessor)) {
                 (Some(join), Some(at)) if join.skips_unselected() => {
                     Release::SkippedBranch { at: *at }
@@ -132,7 +135,9 @@ impl Timeline {
     }
 
     fn aggregate_completion(&self, plan: &Plan, work: &WorkItem) -> Option<EventTime> {
-        if work.status != WorkStatus::Planned || !self.applicability(work.id).is_applicable() {
+        if work.execution.status != WorkStatus::Planned
+            || !self.applicability(work.id).is_applicable()
+        {
             return None;
         }
         let prerequisites: Vec<Release> = match work.kind {
@@ -158,7 +163,7 @@ impl Timeline {
         };
         // Without one branch that happened, completion would rest only on excluded work.
         let permits_empty = matches!(
-            work.join,
+            work.contract.join,
             crate::JoinPolicy::ActiveBranches { allow_empty: true }
         );
         let happened = prerequisites
@@ -194,9 +199,10 @@ pub fn completion(plan: &Plan, now: DateTime<Utc>) -> BTreeSet<WorkItemId> {
 fn task_event(work: &WorkItem, endpoint: Endpoint) -> Option<EventTime> {
     match endpoint {
         Endpoint::Start => work.start_event(),
-        Endpoint::Finish => match work.events.verified_at {
+        Endpoint::Finish => match work.execution.events.verified_at {
             Some(at) => Some(EventTime::Recorded(at)),
             None => work
+                .execution
                 .status
                 .satisfies_dependency()
                 .then_some(EventTime::Unrecorded),

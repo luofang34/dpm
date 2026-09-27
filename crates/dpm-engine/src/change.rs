@@ -69,7 +69,7 @@ pub fn propose_change(current: &Plan, proposed: &Plan) -> Result<ChangePreview, 
 /// Collections serialized as maps keyed by stable identity, compared entity by entity.
 const KEYED_COLLECTIONS: [&str; 7] = [
     "projects",
-    "resources",
+    "assets",
     "work_items",
     "requirements",
     "decisions",

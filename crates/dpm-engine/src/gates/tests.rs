@@ -134,8 +134,8 @@ fn the_hard_edge_remedy_names_the_claim_that_already_locks_its_lag() {
     plan.risks.clear();
     plan.dependencies = vec![Dependency::new(a, b, DependencyKind::FinishFinish, 0.5)];
     let legacy = plan.work_items.get_mut(&a).expect("a");
-    legacy.status = WorkStatus::Verified;
-    legacy.owner = Some(ActorId::agent("legacy"));
+    legacy.execution.status = WorkStatus::Verified;
+    legacy.execution.owner = Some(ActorId::agent("legacy"));
     let now = Utc::now();
     let claim = Command::Claim { work: b };
     apply_command(

@@ -126,12 +126,15 @@ fn native_file_maps_outline_kinds_names_and_priorities() {
     assert_eq!(work("OMNI-3").parent, Some(work("OMNI-2").id));
     assert_eq!(work("OMNI-9").parent, Some(work("OMNI-6").id));
     assert_eq!(work("OMNI-10").parent, None);
-    assert_eq!(work("OMNI-3").objective, "明确发布范围与接口。");
-    assert_eq!(work("OMNI-7").estimate.map(|e| e.likely_hours), Some(40.0));
+    assert_eq!(work("OMNI-3").contract.objective, "明确发布范围与接口。");
+    assert_eq!(
+        work("OMNI-7").schedule.estimate.map(|e| e.likely_hours),
+        Some(40.0)
+    );
     // OmniPlan's 0..9 priority is written as n * 1000 / 9; DPM's bands recover it.
     use Priority::*;
     assert_eq!(
-        ["OMNI-3", "OMNI-4", "OMNI-7", "OMNI-9", "OMNI-5"].map(|key| work(key).priority),
+        ["OMNI-3", "OMNI-4", "OMNI-7", "OMNI-9", "OMNI-5"].map(|key| work(key).schedule.priority),
         [P3, P2, P0, P1, P4]
     );
     for item in &report.items[1..] {
@@ -160,7 +163,7 @@ fn native_file_reports_links_constraint_resource_and_calendars() {
         document,
         [
             "2 calendar(s) not imported; DPM schedules elapsed hours",
-            "1 resource(s) not imported; DPM resources are explicit repositories and tools",
+            "1 resource(s) not imported; DPM workspace assets are repositories and tools",
         ]
     );
     use LinkOutcome::*;
@@ -306,7 +309,7 @@ fn plan_without_p0() -> Plan {
             .into_iter()
             .cycle(),
     ) {
-        item.priority = priority;
+        item.schedule.priority = priority;
     }
     plan
 }

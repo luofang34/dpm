@@ -53,7 +53,12 @@ fn contextual_decisions_supply_sources_without_gating_or_leaking_to_other_work()
             .any(|candidate| candidate.work.id == task)
     );
     assert_eq!(plan, before);
-    assert!(!plan.work_items[&task].artifact_ids.contains(&source.id));
+    assert!(
+        !plan.work_items[&task]
+            .execution
+            .artifact_ids
+            .contains(&source.id)
+    );
     apply_command(
         &mut plan,
         ActorId::agent("worker"),
@@ -88,7 +93,7 @@ fn context_associations_apply_to_descendants_without_affecting_readiness() {
     parent.id = WorkItemId::new();
     parent.key = dpm_model::Key::new("PACKAGE");
     parent.kind = dpm_model::WorkKind::WorkPackage;
-    parent.estimate = None;
+    parent.schedule.estimate = None;
     let parent_id = parent.id;
     plan.work_items.insert(parent_id, parent);
     plan.work_items.get_mut(&task).expect("task").parent = Some(parent_id);

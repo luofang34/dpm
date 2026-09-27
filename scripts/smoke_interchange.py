@@ -112,7 +112,7 @@ def check_rescaled_priorities(directory):
     """OmniPlan rescales priorities by the highest one; keeping local priority is explicit and identical in both adapters."""
     plan = json.loads((ROOT / 'tests/support/execution-plan.json').read_text())
     for item, band in zip(sorted(plan['work_items'].values(), key=lambda w: w['key']), ['P1', 'P2', 'P3'] * 10):
-        item['priority'] = band
+        item['schedule']['priority'] = band
     source, database = directory / 'no-p0.json', directory / 'no-p0.sqlite'
     source.write_text(json.dumps(plan))
     run_cli(database, 'import', str(source))

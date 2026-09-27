@@ -15,8 +15,8 @@ use dpm_model::{Key, Plan, Timeline, WorkItem};
 #[must_use]
 pub fn is_unestimated(timeline: &Timeline, work: &WorkItem) -> bool {
     work.is_executable()
-        && work.estimate.is_none()
-        && !work.status.satisfies_dependency()
+        && work.schedule.estimate.is_none()
+        && !work.execution.status.satisfies_dependency()
         && timeline.applicability(work.id).is_applicable()
 }
 

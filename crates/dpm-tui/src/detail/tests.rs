@@ -141,7 +141,7 @@ fn detail_says_in_words_when_its_task_counts_as_zero_hours() {
     .expect("fixture");
     let a = plan.find_work_by_key("TEST-A").expect("a").id;
     let b = plan.find_work_by_key("TEST-B").expect("b").id;
-    plan.work_items.get_mut(&a).expect("a").estimate = None;
+    plan.work_items.get_mut(&a).expect("a").schedule.estimate = None;
     let text = |work| {
         crate::detail::text(
             &plan,

@@ -15,7 +15,7 @@ fn locator_blocking(path: &Path, workspace: WorkspaceId) -> ProjectLocation {
     fs::create_dir_all(path.join(".dpm")).expect("directory");
     fs::write(
         path.join(".dpm/project.toml"),
-        format!("version = 2\nworkspace = '{workspace}'\n"),
+        format!("version = 3\nworkspace = '{workspace}'\n"),
     )
     .expect("locator");
     ProjectLocation::at_blocking(path).expect("location")
@@ -59,7 +59,7 @@ fn two_entry_points_observe_one_claim_without_copying_or_resetting_history() {
         .expect("plan");
     assert_eq!(snapshot.revision, 1);
     assert_eq!(
-        snapshot.work_items[&work].owner,
+        snapshot.work_items[&work].execution.owner,
         Some(ActorId::agent("worker"))
     );
     assert!(
@@ -123,7 +123,7 @@ fn identities(app: &Application) -> (WorkspaceId, Vec<dpm_model::WorkItemId>, Ve
     (
         plan.workspace.id,
         plan.work_items.keys().copied().collect(),
-        plan.resources.keys().map(ToString::to_string).collect(),
+        plan.assets.keys().map(ToString::to_string).collect(),
     )
 }
 
@@ -142,7 +142,7 @@ fn moving_a_checkout_or_renaming_its_repository_keeps_every_identity() {
     fs::write(
         checkout.join(".dpm/project.toml"),
         format!(
-            "version = 2\nworkspace = '{}'\nresource = 'TEST-REPO'\n",
+            "version = 3\nworkspace = '{}'\nasset = 'TEST-REPO'\n",
             plan.workspace.id
         ),
     )
@@ -151,12 +151,12 @@ fn moving_a_checkout_or_renaming_its_repository_keeps_every_identity() {
         .expect("location")
         .open_with_registry_blocking(&registry)
         .expect("open");
-    let resource = app.project_resource.expect("bound resource");
+    let asset = app.project_asset.expect("bound asset");
     let before = identities(&app);
     let mut renamed = app.plan_blocking().expect("plan");
-    if let Some(repository) = renamed.resources.get_mut(&resource) {
+    if let Some(repository) = renamed.assets.get_mut(&asset) {
         repository.label = "Renamed repository".into();
-        repository.kind = dpm_model::ResourceKind::GitRepository {
+        repository.kind = dpm_model::AssetKind::GitRepository {
             remotes: vec!["https://example.invalid/renamed.git".into()],
         };
     }
@@ -176,7 +176,7 @@ fn moving_a_checkout_or_renaming_its_repository_keeps_every_identity() {
         .open_with_registry_blocking(&registry)
         .expect("reopen");
     assert_eq!(identities(&reopened), before);
-    assert_eq!(reopened.project_resource, Some(resource));
+    assert_eq!(reopened.project_asset, Some(asset));
     assert_eq!(reopened.plan_blocking().expect("plan").revision, 1);
     assert_eq!(
         registry.list_blocking().expect("bindings").len(),

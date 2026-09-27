@@ -22,8 +22,11 @@ fn preserved(result: &ImportResult, uid: i64) -> Vec<String> {
 #[test]
 fn absent_priority_keeps_the_local_priority() {
     let (current, result) = reimport(|xml| xml.replace("<Priority>700</Priority>", ""));
-    assert_eq!(work(&current, "MSP-3").priority, Priority::P1);
-    assert_eq!(work(&result.candidate, "MSP-3").priority, Priority::P1);
+    assert_eq!(work(&current, "MSP-3").schedule.priority, Priority::P1);
+    assert_eq!(
+        work(&result.candidate, "MSP-3").schedule.priority,
+        Priority::P1
+    );
     assert_eq!(result.candidate, current);
     assert_eq!(result.report.items[2].outcome, ItemOutcome::Unchanged);
     assert!(!preserved(&result, 3).contains(&"priority".to_string()));
@@ -43,11 +46,17 @@ fn trailing_line_breaks_in_notes_are_not_content() {
     let trailing =
         |xml: String| xml.replace("<Notes>Write it</Notes>", "<Notes>Write it\n</Notes>");
     let (_, result) = reimport(trailing);
-    assert_eq!(work(&result.candidate, "MSP-2").objective, "Write it");
+    assert_eq!(
+        work(&result.candidate, "MSP-2").contract.objective,
+        "Write it"
+    );
     assert_eq!(result.report.items[1].outcome, ItemOutcome::Unchanged);
     assert!(preserved(&result, 2).contains(&"notes".to_string()));
     let created = import(&workspace(), &trailing(outline_document("")));
-    assert_eq!(work(&created.candidate, "MSP-2").objective, "Write it");
+    assert_eq!(
+        work(&created.candidate, "MSP-2").contract.objective,
+        "Write it"
+    );
 }
 
 #[test]
@@ -186,7 +195,7 @@ fn kind_changes_name_the_source_task_and_the_attempted_change() {
 fn source_field(changed: &str) -> &str {
     match changed {
         "objective" => "notes",
-        "parent" => "outline",
+        "parent" | "order" => "outline",
         "estimate" => "duration",
         other => other,
     }

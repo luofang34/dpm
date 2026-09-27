@@ -11,9 +11,9 @@ fn at(hours: i64) -> chrono::DateTime<chrono::Utc> {
 }
 
 fn verify(work: &mut WorkItem, hours: Option<i64>) {
-    work.status = WorkStatus::Verified;
-    work.owner = Some(dpm_model::ActorId::agent("owner"));
-    work.events.verified_at = hours.map(at);
+    work.execution.status = WorkStatus::Verified;
+    work.execution.owner = Some(dpm_model::ActorId::agent("owner"));
+    work.execution.events.verified_at = hours.map(at);
 }
 
 fn task(project: ProjectId, key: &str, hours: f64) -> WorkItem {
@@ -24,33 +24,40 @@ fn task(project: ProjectId, key: &str, hours: f64) -> WorkItem {
         parent: None,
         kind: WorkKind::Task,
         title: key.to_string(),
-        objective: key.to_string(),
-        acceptance: vec![AcceptanceCriterion {
-            text: "observable result exists".into(),
-        }],
-        instructions: None,
-        status: WorkStatus::Planned,
-        reported_progress_percent: 0,
-        priority: Priority::P2,
-        estimate: Some(ThreePointEstimate {
-            optimistic_hours: hours,
-            likely_hours: hours,
-            pessimistic_hours: hours,
-        }),
-        capabilities: BTreeSet::new(),
-        requirement_ids: BTreeSet::new(),
-        artifact_ids: BTreeSet::new(),
-        owner: None,
-        handoffs: Vec::new(),
-        releases: Vec::new(),
-        block_reason: None,
-        events: Default::default(),
-        condition: None,
-        join: dpm_model::JoinPolicy::default(),
-        last_rejection: None,
-        attempts: Vec::new(),
-        basis: Vec::new(),
-        resources: Vec::new(),
+        order: Default::default(),
+        contract: dpm_model::WorkContract {
+            objective: key.to_string(),
+            acceptance: vec![AcceptanceCriterion {
+                text: "observable result exists".into(),
+            }],
+            instructions: None,
+            capabilities: BTreeSet::new(),
+            requirement_ids: BTreeSet::new(),
+            condition: None,
+            join: dpm_model::JoinPolicy::default(),
+            assets: Vec::new(),
+        },
+        execution: dpm_model::ExecutionRecord {
+            status: WorkStatus::Planned,
+            reported_progress_percent: 0,
+            artifact_ids: BTreeSet::new(),
+            owner: None,
+            handoffs: Vec::new(),
+            releases: Vec::new(),
+            block_reason: None,
+            events: Default::default(),
+            last_rejection: None,
+            attempts: Vec::new(),
+            basis: Vec::new(),
+        },
+        schedule: dpm_model::ScheduleInputs {
+            priority: Priority::P2,
+            estimate: Some(ThreePointEstimate {
+                optimistic_hours: hours,
+                likely_hours: hours,
+                pessimistic_hours: hours,
+            }),
+        },
     }
 }
 
@@ -337,7 +344,10 @@ fn reached_milestones_do_not_reintroduce_historical_lag_in_remaining_forecasts()
         at(26),
     )
     .expect("simulation");
-    let estimate = plan.work_items[&successor].estimate.expect("estimate");
+    let estimate = plan.work_items[&successor]
+        .schedule
+        .estimate
+        .expect("estimate");
     assert!(risk.p50_finish_hours >= estimate.optimistic_hours);
     assert!(risk.p50_finish_hours <= risk.p80_finish_hours);
     assert!(risk.p80_finish_hours <= risk.p95_finish_hours);
@@ -346,9 +356,9 @@ fn reached_milestones_do_not_reintroduce_historical_lag_in_remaining_forecasts()
 }
 
 fn start(work: &mut WorkItem, hours: Option<i64>) {
-    work.status = WorkStatus::InProgress;
-    work.owner = Some(dpm_model::ActorId::agent("owner"));
-    work.events.started_at = hours.map(at);
+    work.execution.status = WorkStatus::InProgress;
+    work.execution.owner = Some(dpm_model::ActorId::agent("owner"));
+    work.execution.events.started_at = hours.map(at);
 }
 
 #[test]
@@ -394,8 +404,8 @@ fn finish_based_lag_from_submitted_but_unverified_work_is_kept_whole() {
         plan.dependencies.push(Dependency::new(a, b, kind, 2.0));
         let work = plan.work_items.get_mut(&a).expect("task");
         start(work, Some(0));
-        work.status = WorkStatus::Submitted;
-        work.events.submitted_at = Some(at(1));
+        work.execution.status = WorkStatus::Submitted;
+        work.execution.events.submitted_at = Some(at(1));
         let schedule = deterministic_remaining(&plan, at(50)).expect("remaining");
         assert_eq!(
             schedule.activities[&b].earliest_start_hours, expected,

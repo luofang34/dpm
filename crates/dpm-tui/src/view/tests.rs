@@ -47,8 +47,8 @@ fn selected_blocked_work_exposes_reason_and_invalid_plans_fail() {
     let mut plan = fixture();
     let id = plan.find_work_by_key("TEST-A").expect("task").id;
     let task = plan.work_items.get_mut(&id).expect("task");
-    task.status = WorkStatus::Blocked;
-    task.block_reason = Some("waiting for review".into());
+    task.execution.status = WorkStatus::Blocked;
+    task.execution.block_reason = Some("waiting for review".into());
     let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     view.state.select(view.work.iter().position(|w| w.id == id));
     view.page = Page::Detail;
@@ -103,9 +103,9 @@ fn partial_progress_and_milestone_status_are_visible() {
     let mut plan = fixture();
     let task = plan.find_work_by_key("TEST-A").expect("task").id;
     let item = plan.work_items.get_mut(&task).expect("task");
-    item.owner = Some(dpm_model::ActorId::agent("owner"));
-    item.status = WorkStatus::InProgress;
-    item.reported_progress_percent = 45;
+    item.execution.owner = Some(dpm_model::ActorId::agent("owner"));
+    item.execution.status = WorkStatus::InProgress;
+    item.execution.reported_progress_percent = 45;
     let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
     view.handle_key(KeyCode::Char('g'));
     assert!(render(&mut view).contains(" 45%"));
@@ -128,13 +128,13 @@ fn reached_pending_and_partial_progress_are_visible() {
     let d = plan.find_work_by_key("TEST-D").expect("d").id;
     for (id, percent) in [(a, 100), (b, 40), (d, 20)] {
         let item = plan.work_items.get_mut(&id).expect("task");
-        item.owner = Some(dpm_model::ActorId::agent("owner"));
-        item.status = if id == a {
+        item.execution.owner = Some(dpm_model::ActorId::agent("owner"));
+        item.execution.status = if id == a {
             WorkStatus::Verified
         } else {
             WorkStatus::InProgress
         };
-        item.reported_progress_percent = percent;
+        item.execution.reported_progress_percent = percent;
     }
     let mut reached = plan.find_work_by_key("TEST-M1").expect("milestone").clone();
     reached.id = dpm_model::WorkItemId::new();
@@ -228,7 +228,7 @@ fn file_preview_is_labeled_separately_from_database_snapshot() {
 fn detail_exposes_complete_contract_context_and_latest_review_by_scrolling() {
     let mut plan = fixture();
     let work = plan.find_work_by_key_mut("TEST-A").expect("work");
-    work.instructions = Some(dpm_model::WorkInstructions {
+    work.contract.instructions = Some(dpm_model::WorkInstructions {
         steps: vec![dpm_model::ExecutionStep {
             action: "Inspect the calibration sample".into(),
             expected_result: "Recorded sample measurements".into(),
@@ -237,9 +237,9 @@ fn detail_exposes_complete_contract_context_and_latest_review_by_scrolling() {
         out_of_scope: vec!["Hardware redesign".into()],
         verification: vec!["Compare calibration residuals".into()],
     });
-    work.owner = Some(dpm_model::ActorId::agent("owner"));
-    work.status = WorkStatus::InProgress;
-    work.last_rejection = Some(dpm_model::ReviewRejection {
+    work.execution.owner = Some(dpm_model::ActorId::agent("owner"));
+    work.execution.status = WorkStatus::InProgress;
+    work.execution.last_rejection = Some(dpm_model::ReviewRejection {
         actor: dpm_model::ActorId::human("reviewer"),
         at: "2026-09-26T00:00:00Z".parse().expect("timestamp"),
         reason: "Missing measured evidence".into(),
@@ -404,12 +404,12 @@ fn excluded_package_plan() -> Plan {
     let mut package = plan.find_work_by_key("SUP-PKG-A").expect("package").clone();
     package.id = dpm_model::WorkItemId::new();
     package.key = dpm_model::Key::new("X-PKG");
-    package.condition = None;
+    package.contract.condition = None;
     let mut task = plan.find_work_by_key("SUP-A-QUOTE").expect("task").clone();
     task.id = dpm_model::WorkItemId::new();
     task.key = dpm_model::Key::new("X-A1");
     task.parent = Some(package.id);
-    task.condition = Some(dpm_model::WorkCondition {
+    task.contract.condition = Some(dpm_model::WorkCondition {
         decision,
         option: "A".into(),
     });

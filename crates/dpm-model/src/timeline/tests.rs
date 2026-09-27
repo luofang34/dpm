@@ -22,9 +22,9 @@ fn id(plan: &Plan, key: &str) -> WorkItemId {
 
 fn verify(plan: &mut Plan, key: &str, at: Option<DateTime<Utc>>) {
     let work = plan.find_work_by_key_mut(key).expect("work");
-    work.status = WorkStatus::Verified;
-    work.owner = Some(ActorId::agent("worker"));
-    work.events.verified_at = at;
+    work.execution.status = WorkStatus::Verified;
+    work.execution.owner = Some(ActorId::agent("worker"));
+    work.execution.events.verified_at = at;
 }
 
 fn gate(plan: &mut Plan, key: &str, blocks: WorkItemId, resolved: Option<DateTime<Utc>>) {
@@ -121,21 +121,22 @@ fn start_events_come_from_the_start_command_or_a_started_lifecycle() {
     let timeline = Timeline::at(&plan, t(0));
     assert_eq!(timeline.event(&plan, a, Endpoint::Start), None);
     let work = plan.find_work_by_key_mut("TEST-A").expect("work");
-    work.status = WorkStatus::Claimed;
-    work.owner = Some(ActorId::agent("worker"));
+    work.execution.status = WorkStatus::Claimed;
+    work.execution.owner = Some(ActorId::agent("worker"));
     assert_eq!(
         Timeline::at(&plan, t(0)).event(&plan, a, Endpoint::Start),
         None,
         "a claim reserves work; it is not a start"
     );
     let work = plan.find_work_by_key_mut("TEST-A").expect("work");
-    work.status = WorkStatus::InProgress;
+    work.execution.status = WorkStatus::InProgress;
     assert_eq!(
         Timeline::at(&plan, t(0)).event(&plan, a, Endpoint::Start),
         Some(EventTime::Unrecorded)
     );
     plan.find_work_by_key_mut("TEST-A")
         .expect("work")
+        .execution
         .events
         .started_at = Some(t(3));
     let timeline = Timeline::at(&plan, t(3));
@@ -171,26 +172,29 @@ fn waived_edges_do_not_gate_milestones_and_packages_roll_up_child_times() {
 fn event_validation_rejects_backdated_or_mismatched_times() {
     let mut plan = fixture();
     let work = plan.find_work_by_key_mut("TEST-A").expect("work");
-    work.status = WorkStatus::Verified;
-    work.owner = Some(ActorId::agent("worker"));
-    work.events.started_at = Some(t(5));
-    work.events.submitted_at = Some(t(6));
-    work.events.verified_at = Some(t(7));
+    work.execution.status = WorkStatus::Verified;
+    work.execution.owner = Some(ActorId::agent("worker"));
+    work.execution.events.started_at = Some(t(5));
+    work.execution.events.submitted_at = Some(t(6));
+    work.execution.events.verified_at = Some(t(7));
     plan.validate().expect("ordered events");
     plan.find_work_by_key_mut("TEST-A")
         .expect("work")
+        .execution
         .events
         .verified_at = Some(t(4));
     assert!(plan.validate().is_err());
     let mut plan = fixture();
     plan.find_work_by_key_mut("TEST-A")
         .expect("work")
+        .execution
         .events
         .started_at = Some(t(1));
     assert!(plan.validate().is_err(), "a planned task has not started");
     let mut plan = fixture();
     plan.find_work_by_key_mut("TEST-M1")
         .expect("work")
+        .execution
         .events
         .started_at = Some(t(1));
     assert!(plan.validate().is_err(), "milestones have derived events");

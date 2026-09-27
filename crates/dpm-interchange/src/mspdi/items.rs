@@ -4,6 +4,7 @@ mod changes;
 mod fields;
 mod identity;
 mod matching;
+mod order;
 
 pub(crate) use identity::Resolver;
 
@@ -157,6 +158,7 @@ pub(crate) fn map(
         }
     }
     keep_outer_parents(current, &mut outline);
+    order::assign(current, &mut outline)?;
     finish_reports(current, &mut outline);
     Ok(outline)
 }
@@ -284,7 +286,7 @@ fn finish_reports(current: &Plan, outline: &mut Outline) {
             id: work.id,
             key: work.key.clone(),
             kind: work.kind,
-            status: work.status,
+            status: work.execution.status,
         });
     }
 }

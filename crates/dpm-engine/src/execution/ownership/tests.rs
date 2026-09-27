@@ -130,13 +130,13 @@ fn an_agent_releases_its_own_claim_and_the_task_is_ready_again() {
     assert!(matches!(operation.command, Command::Release { work, .. } if work == a));
     let item = &plan.work_items[&a];
     assert_eq!(
-        (item.status, item.owner.clone()),
+        (item.execution.status, item.execution.owner.clone()),
         (WorkStatus::Planned, None)
     );
-    assert!(item.events.is_empty() && item.handoffs.is_empty());
+    assert!(item.execution.events.is_empty() && item.execution.handoffs.is_empty());
     assert!(is_ready(&plan, item, t(1)) && listed(&plan, a, 1));
     ok(&mut plan, &second(), Command::Claim { work: a }, 2);
-    assert_eq!(plan.work_items[&a].owner, Some(second()));
+    assert_eq!(plan.work_items[&a].execution.owner, Some(second()));
 }
 
 #[test]
@@ -240,14 +240,17 @@ fn only_humans_and_services_authorize_a_handoff_and_every_fact_stays() {
     let before = plan.work_items[&a].clone();
     ok(&mut plan, &lead(), handoff(a, first(), second()), 2);
     let item = &plan.work_items[&a];
-    assert_eq!(item.owner, Some(second()));
-    assert_eq!((item.status, item.events), (before.status, before.events));
-    assert_eq!(item.reported_progress_percent, 40);
+    assert_eq!(item.execution.owner, Some(second()));
     assert_eq!(
-        (&item.attempts, &item.basis),
-        (&before.attempts, &before.basis)
+        (item.execution.status, item.execution.events),
+        (before.execution.status, before.execution.events)
     );
-    let record = item.handoffs.last().expect("handoff record");
+    assert_eq!(item.execution.reported_progress_percent, 40);
+    assert_eq!(
+        (&item.execution.attempts, &item.execution.basis),
+        (&before.execution.attempts, &before.execution.basis)
+    );
+    let record = item.execution.handoffs.last().expect("handoff record");
     assert_eq!(
         (&record.from, &record.to, &record.actor),
         (&first(), &second(), &lead())
@@ -278,7 +281,7 @@ fn a_human_may_take_over_work_but_never_review_it_afterwards() {
     let (mut plan, a, _, _) = fs();
     ok(&mut plan, &first(), Command::Claim { work: a }, 0);
     ok(&mut plan, &lead(), handoff(a, first(), lead()), 1);
-    assert_eq!(plan.work_items[&a].status, WorkStatus::Claimed);
+    assert_eq!(plan.work_items[&a].execution.status, WorkStatus::Claimed);
     ok(&mut plan, &lead(), Command::Start { work: a }, 2);
     ok(&mut plan, &lead(), handoff(a, lead(), second()), 3);
     ok(&mut plan, &second(), submit(a), 4);
@@ -347,14 +350,14 @@ fn handoff_is_refused_without_a_current_owner_or_on_submitted_work() {
     ok(&mut plan, &ActorId::human("reviewer"), reject, 4);
     ok(&mut plan, &lead(), handoff(a, second(), first()), 5);
     let item = &plan.work_items[&a];
-    assert_eq!(item.status, WorkStatus::InProgress);
+    assert_eq!(item.execution.status, WorkStatus::InProgress);
     assert_eq!(
-        item.attempts.len(),
+        item.execution.attempts.len(),
         1,
         "the rejected attempt stays in history"
     );
-    assert!(item.last_rejection.is_some());
-    assert_eq!(item.handoffs.len(), 2);
+    assert!(item.execution.last_rejection.is_some());
+    assert_eq!(item.execution.handoffs.len(), 2);
 }
 
 #[test]
@@ -368,32 +371,35 @@ fn blocked_work_changes_hands_with_its_blocker_and_resumes_where_it_stopped() {
     ok(&mut plan, &first(), block, 1);
     ok(&mut plan, &lead(), handoff(a, first(), second()), 2);
     let item = &plan.work_items[&a];
-    assert_eq!(item.status, WorkStatus::Blocked);
-    assert_eq!(item.block_reason.as_deref(), Some("credentials expired"));
+    assert_eq!(item.execution.status, WorkStatus::Blocked);
+    assert_eq!(
+        item.execution.block_reason.as_deref(),
+        Some("credentials expired")
+    );
     assert!(matches!(
         refused(&mut plan, &first(), Command::Unblock { work: a }, 3),
         EngineError::OwnedByAnother { .. }
     ));
     ok(&mut plan, &second(), Command::Unblock { work: a }, 3);
-    assert_eq!(plan.work_items[&a].status, WorkStatus::InProgress);
-    assert_eq!(plan.work_items[&a].events.started_at, Some(t(0)));
+    assert_eq!(plan.work_items[&a].execution.status, WorkStatus::InProgress);
+    assert_eq!(plan.work_items[&a].execution.events.started_at, Some(t(0)));
 }
 
 #[test]
 fn legacy_started_blocked_work_keeps_its_unrecorded_start_across_a_handoff() {
     let (mut plan, a, _, _) = fs();
     let item = plan.work_items.get_mut(&a).expect("a");
-    item.status = WorkStatus::InProgress;
-    item.owner = Some(first());
+    item.execution.status = WorkStatus::InProgress;
+    item.execution.owner = Some(first());
     let block = Command::Block {
         work: a,
         reason: "host down".into(),
     };
     ok(&mut plan, &first(), block, 0);
     ok(&mut plan, &lead(), handoff(a, first(), second()), 1);
-    assert!(plan.work_items[&a].events.start_unrecorded);
+    assert!(plan.work_items[&a].execution.events.start_unrecorded);
     ok(&mut plan, &second(), Command::Unblock { work: a }, 2);
-    assert_eq!(plan.work_items[&a].status, WorkStatus::InProgress);
+    assert_eq!(plan.work_items[&a].execution.status, WorkStatus::InProgress);
 }
 
 #[test]
@@ -402,11 +408,11 @@ fn a_handoff_keeps_the_provisional_basis_and_its_invalidation() {
     start(&mut plan, &first(), a, 0);
     ok(&mut plan, &first(), submit(a), 1);
     start(&mut plan, &second(), b, 2);
-    let basis = plan.work_items[&b].basis.clone();
+    let basis = plan.work_items[&b].execution.basis.clone();
     assert_eq!(basis.len(), 1);
     let builder = ActorId::agent("builder");
     ok(&mut plan, &lead(), handoff(b, second(), builder.clone()), 3);
-    assert_eq!(plan.work_items[&b].basis, basis);
+    assert_eq!(plan.work_items[&b].execution.basis, basis);
     let reject = Command::Reject {
         work: a,
         reason: "interface changed".into(),
@@ -457,42 +463,6 @@ fn a_former_owner_cannot_waive_or_restore_an_edge_of_the_work_it_held() {
     assert!(is_ready(&plan, &plan.work_items[&b], t(2)));
 }
 
-#[test]
-fn a_plan_change_cannot_move_owners_or_rewrite_handoffs() {
-    let (mut plan, a, _, _) = fs();
-    ok(&mut plan, &first(), Command::Claim { work: a }, 0);
-    ok(&mut plan, &lead(), handoff(a, first(), second()), 1);
-    ok(&mut plan, &second(), release(a), 2);
-    reviewed_edit_refused(&mut plan, a, |w| w.handoffs.clear());
-    reviewed_edit_refused(&mut plan, a, |w| w.releases.clear());
-    ok(&mut plan, &first(), Command::Claim { work: a }, 3);
-    reviewed_edit_refused(&mut plan, a, |w| w.owner = Some(ActorId::agent("third")));
-    reviewed_edit_refused(&mut plan, a, |w| {
-        let mut forged = w.handoffs[0].clone();
-        forged.from = ActorId::human("reviewer");
-        w.handoffs.push(forged);
-    });
-}
-
-/// Ownership is changed only by claim, release and handoff, never by a reviewed plan change.
-fn reviewed_edit_refused(plan: &mut Plan, work: WorkItemId, edit: fn(&mut dpm_model::WorkItem)) {
-    let mut proposed = plan.clone();
-    edit(proposed.work_items.get_mut(&work).expect("work"));
-    let before = plan.clone();
-    let error = crate::apply_plan_change(
-        plan,
-        lead(),
-        &proposed,
-        "reassign",
-        t(4),
-        dpm_model::OperationId::new(),
-    )
-    .expect_err("refused");
-    assert_eq!(*plan, before, "a refused change alters nothing");
-    assert!(
-        matches!(error, EngineError::InvalidCommand { .. }),
-        "{error:?}"
-    );
-}
+mod transfers;
 
 mod independence;

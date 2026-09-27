@@ -83,7 +83,10 @@ fn agent_and_human_execution_loop_unlocks_work_semantically() {
         dpm_model::OperationId::new(),
     )
     .expect("block");
-    assert_eq!(plan.work_items[&branch].status, WorkStatus::Blocked);
+    assert_eq!(
+        plan.work_items[&branch].execution.status,
+        WorkStatus::Blocked
+    );
     let keys = next_work(&plan, &query, chrono::Utc::now())
         .expect("next work")
         .into_iter()

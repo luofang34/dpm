@@ -1,24 +1,24 @@
-use crate::{Key, Plan, ResourceId, ValidationError, validation::invalid};
+use crate::{AssetId, Key, Plan, ValidationError, validation::invalid};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-/// Shared resource identity independent of local paths and remote addresses.
+/// Shared asset identity independent of local paths and remote addresses.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Resource {
+pub struct WorkspaceAsset {
     /// Stable identity matching its map key.
-    pub id: ResourceId,
-    /// Human-readable key unique within the workspace's resources.
+    pub id: AssetId,
+    /// Human-readable key unique within the workspace's assets.
     pub key: Key,
-    /// Human-readable resource label.
+    /// Human-readable asset label.
     pub label: String,
-    /// Kind of resource; none grants evidence or task completion.
-    pub kind: ResourceKind,
+    /// Kind of asset; none grants evidence or task completion.
+    pub kind: AssetKind,
 }
 
-/// Resource category supporting both code and non-code work.
+/// WorkspaceAsset category supporting both code and non-code work.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ResourceKind {
+pub enum AssetKind {
     /// A repository; remote URLs are attributes, not its identity.
     GitRepository {
         /// Public remote addresses without credentials.
@@ -28,32 +28,32 @@ pub enum ResourceKind {
     Folder,
     /// Documents used independently of a Git repository.
     DocumentCollection,
-    /// Author-defined resource category.
+    /// Author-defined asset category.
     Other(String),
 }
 
 /// The access a task needs; this describes scope, not an authorization grant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ResourceAccess {
-    /// Consume the resource without changing it.
+pub enum AssetAccess {
+    /// Consume the asset without changing it.
     Read,
-    /// Change the resource as part of the task contract.
+    /// Change the asset as part of the task contract.
     Write,
 }
 
-/// One explicit resource needed to perform a task.
+/// One explicit asset needed to perform a task.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ResourceRequirement {
-    /// Resource in the workspace registry.
-    pub resource: ResourceId,
-    /// Required access; one entry per resource.
-    pub access: ResourceAccess,
+pub struct AssetRequirement {
+    /// WorkspaceAsset in the workspace registry.
+    pub asset: AssetId,
+    /// Required access; one entry per asset.
+    pub access: AssetAccess,
 }
 
 pub(crate) fn validate(plan: &Plan) -> Result<(), ValidationError> {
     let mut keys = BTreeSet::new();
-    for (id, r) in &plan.resources {
+    for (id, r) in &plan.assets {
         if id != &r.id
             || r.key.0.trim().is_empty()
             || r.key.0.trim() != r.key.0
@@ -61,23 +61,21 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), ValidationError> {
             || r.label.trim().is_empty()
         {
             return Err(invalid(
-                "resource",
+                "asset",
                 id,
-                "resource id, unique key and label are required",
+                "asset id, unique key and label are required",
             ));
         }
         match &r.kind {
-            ResourceKind::Other(name) if name.trim().is_empty() => {
-                return Err(invalid("resource kind", id, "category cannot be empty"));
+            AssetKind::Other(name) if name.trim().is_empty() => {
+                return Err(invalid("asset kind", id, "category cannot be empty"));
             }
-            ResourceKind::GitRepository { remotes }
-                if remotes.iter().any(|r| r.trim().is_empty()) =>
-            {
-                return Err(invalid("resource remote", id, "address cannot be empty"));
+            AssetKind::GitRepository { remotes } if remotes.iter().any(|r| r.trim().is_empty()) => {
+                return Err(invalid("asset remote", id, "address cannot be empty"));
             }
-            ResourceKind::GitRepository { remotes } if remotes.iter().any(|r| has_password(r)) => {
+            AssetKind::GitRepository { remotes } if remotes.iter().any(|r| has_password(r)) => {
                 return Err(invalid(
-                    "resource remote",
+                    "asset remote",
                     id,
                     "shared plans cannot carry remote credentials",
                 ));
@@ -87,14 +85,12 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), ValidationError> {
     }
     for work in plan.work_items.values() {
         let mut seen = BTreeSet::new();
-        for requirement in &work.resources {
-            if !plan.resources.contains_key(&requirement.resource)
-                || !seen.insert(requirement.resource)
-            {
+        for requirement in &work.contract.assets {
+            if !plan.assets.contains_key(&requirement.asset) || !seen.insert(requirement.asset) {
                 return Err(invalid(
-                    "work resource",
+                    "work asset",
                     work.id,
-                    format!("missing or repeated resource {}", requirement.resource),
+                    format!("missing or repeated asset {}", requirement.asset),
                 ));
             }
         }

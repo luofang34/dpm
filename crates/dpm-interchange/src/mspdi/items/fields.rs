@@ -103,32 +103,39 @@ fn new_work(id: WorkItemId, key: Key, kind: WorkKind, project: ProjectId) -> Wor
         parent: None,
         kind,
         title: String::new(),
-        objective: String::new(),
-        acceptance: Vec::new(),
-        instructions: None,
-        // MSPDI has no acceptance criteria, so imported tasks wait for ratification.
-        status: if kind == WorkKind::Task {
-            WorkStatus::Proposed
-        } else {
-            WorkStatus::Planned
+        order: Default::default(),
+        contract: dpm_model::WorkContract {
+            objective: String::new(),
+            acceptance: Vec::new(),
+            instructions: None,
+            capabilities: BTreeSet::new(),
+            requirement_ids: BTreeSet::new(),
+            assets: Vec::new(),
+            condition: None,
+            join: dpm_model::JoinPolicy::default(),
         },
-        reported_progress_percent: 0,
-        priority: dpm_model::Priority::default(),
-        estimate: None,
-        capabilities: BTreeSet::new(),
-        requirement_ids: BTreeSet::new(),
-        artifact_ids: BTreeSet::new(),
-        owner: None,
-        handoffs: Vec::new(),
-        releases: Vec::new(),
-        resources: Vec::new(),
-        last_rejection: None,
-        attempts: Vec::new(),
-        basis: Vec::new(),
-        block_reason: None,
-        events: Default::default(),
-        condition: None,
-        join: dpm_model::JoinPolicy::default(),
+        execution: dpm_model::ExecutionRecord {
+            // MSPDI has no acceptance criteria, so imported tasks wait for ratification.
+            status: if kind == WorkKind::Task {
+                WorkStatus::Proposed
+            } else {
+                WorkStatus::Planned
+            },
+            reported_progress_percent: 0,
+            artifact_ids: BTreeSet::new(),
+            owner: None,
+            handoffs: Vec::new(),
+            releases: Vec::new(),
+            last_rejection: None,
+            attempts: Vec::new(),
+            basis: Vec::new(),
+            block_reason: None,
+            events: Default::default(),
+        },
+        schedule: dpm_model::ScheduleInputs {
+            priority: dpm_model::Priority::default(),
+            estimate: None,
+        },
     }
 }
 
@@ -158,8 +165,8 @@ fn map_objective(
     report: &mut ItemReport,
 ) {
     if let Some(notes) = &task.notes {
-        if !existing.is_some_and(|e| e.objective.trim_end() == notes) {
-            work.objective = notes.clone();
+        if !existing.is_some_and(|e| e.contract.objective.trim_end() == notes) {
+            work.contract.objective = notes.clone();
         }
         report.preserved.push("notes".into());
     } else if existing.is_some() {
@@ -170,7 +177,7 @@ fn map_objective(
 /// Existing work keeps its priority by request; a differing source value stays visible.
 fn keep_priority(task: &SourceTask, existing: &WorkItem, report: &mut ItemReport) {
     match task.priority {
-        Some(value) if priority_value(existing.priority) == value => {
+        Some(value) if priority_value(existing.schedule.priority) == value => {
             report.preserved.push("priority".into());
         }
         Some(value) => {
@@ -179,7 +186,7 @@ fn keep_priority(task: &SourceTask, existing: &WorkItem, report: &mut ItemReport
                 "priority",
                 format!(
                     "source priority {value} not applied; existing {:?} kept",
-                    existing.priority
+                    existing.schedule.priority
                 ),
             ));
         }
@@ -197,28 +204,31 @@ fn map_priority(
         if existing.is_some() {
             report.kept.push("priority".into());
         } else {
-            work.priority = priority_from_value(DEFAULT_PRIORITY);
+            work.schedule.priority = priority_from_value(DEFAULT_PRIORITY);
             report.approximated.push(Finding::new(
                 "priority",
                 format!(
                     "source omits Priority; the MSPDI default {DEFAULT_PRIORITY} applies ({:?})",
-                    work.priority
+                    work.schedule.priority
                 ),
             ));
         }
         return;
     };
-    if existing.is_some_and(|e| priority_value(e.priority) == value) {
+    if existing.is_some_and(|e| priority_value(e.schedule.priority) == value) {
         report.preserved.push("priority".into());
         return;
     }
-    work.priority = priority_from_value(value);
-    if priority_value(work.priority) == value {
+    work.schedule.priority = priority_from_value(value);
+    if priority_value(work.schedule.priority) == value {
         report.preserved.push("priority".into());
     } else {
         report.approximated.push(Finding::new(
             "priority",
-            format!("source priority {value} mapped to {:?}", work.priority),
+            format!(
+                "source priority {value} mapped to {:?}",
+                work.schedule.priority
+            ),
         ));
     }
 }
@@ -239,7 +249,7 @@ fn map_duration(
     };
     match work.kind {
         WorkKind::WorkPackage => {
-            if work.estimate.take().is_some() {
+            if work.schedule.estimate.take().is_some() {
                 report.approximated.push(Finding::new(
                     "duration",
                     "work packages carry no estimate; the local estimate is removed",
@@ -253,7 +263,7 @@ fn map_duration(
             }
         }
         WorkKind::Milestone => {
-            work.estimate = None;
+            work.schedule.estimate = None;
             if let Some(seconds) = seconds.filter(|s| *s > 0) {
                 report.approximated.push(Finding::new(
                     "duration",
@@ -283,20 +293,20 @@ fn task_estimate(
 ) {
     let unchanged = existing
         .filter(|e| e.kind == WorkKind::Task)
-        .is_some_and(|e| duration_seconds(e.estimate) == seconds);
-    if unchanged || (seconds == 0 && work.estimate.is_none()) {
+        .is_some_and(|e| duration_seconds(e.schedule.estimate) == seconds);
+    if unchanged || (seconds == 0 && work.schedule.estimate.is_none()) {
         report.preserved.push("duration".into());
         return;
     }
     if seconds == 0 {
-        work.estimate = None;
+        work.schedule.estimate = None;
         report.approximated.push(Finding::new(
             "duration",
             "zero source duration removes the local estimate; the task becomes unestimated",
         ));
         return;
     }
-    work.estimate = estimate_from_seconds(seconds);
+    work.schedule.estimate = estimate_from_seconds(seconds);
     let basis = task.duration_format.and_then(time_basis);
     let detail = match basis {
         Some(TimeBasis::Elapsed) => format!(

@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 pub struct Plan {
     /// Portable domain format version; unsupported formats are rejected.
     pub format_version: u32,
-    /// Resources shared across code and non-code work.
-    pub resources: BTreeMap<ResourceId, Resource>,
+    /// Assets shared across code and non-code work.
+    pub assets: BTreeMap<AssetId, WorkspaceAsset>,
     /// Namespace containing the graph.
     pub workspace: Workspace,
     /// Wrapping operation sequence for optimistic concurrency.
@@ -39,8 +39,8 @@ impl Plan {
     /// Create an empty namespace at revision zero.
     pub fn empty(name: impl Into<String>) -> Self {
         Self {
-            format_version: 2,
-            resources: BTreeMap::new(),
+            format_version: 3,
+            assets: BTreeMap::new(),
             workspace: Workspace {
                 id: WorkspaceId::new(),
                 name: name.into(),

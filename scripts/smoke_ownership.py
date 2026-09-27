@@ -58,9 +58,9 @@ def ownership_smoke(directory):
         assert released['command'] == {'Release': {'work': work, 'reason': 'wrong task'}}
         shown = worker.call('get_work', {'key': 'TEST-A'})['data']
         assert shown == run_cli(database, 'show', 'TEST-A')
-        assert shown['status'] == 'Planned' and shown['owner'] is None and 'handoffs' not in shown
-        assert [(r['actor']['name'], r['reason']) for r in shown['releases']] == [
-            ('parity', 'evidence first'), ('parity', 'wrong task')], shown['releases']
+        assert shown['execution']['status'] == 'Planned' and shown['execution']['owner'] is None and 'handoffs' not in shown
+        assert [(r['actor']['name'], r['reason']) for r in shown['execution']['releases']] == [
+            ('parity', 'evidence first'), ('parity', 'wrong task')], shown['execution']['releases']
         run_cli(database, 'claim', 'TEST-A', '--actor', 'agent:parity')
         local = run_cli(database, *release, '--actor', 'agent:parity')
         assert local['command'] == released['command'] and local['actor'] == released['actor']
@@ -85,8 +85,8 @@ def ownership_smoke(directory):
             'reason': 'parity agent stopped'}}
         after = worker.call('get_work', {'key': 'TEST-A'})['data']
         assert after == run_cli(database, 'show', 'TEST-A')
-        assert after['owner'] == {'kind': 'Agent', 'name': 'second'} and after['events'] == before['events']
-        assert after['status'] == 'InProgress' and after['handoffs'][0]['actor'] == {'kind': 'Human', 'name': 'lead'}
+        assert after['execution']['owner'] == {'kind': 'Agent', 'name': 'second'} and after['execution']['events'] == before['execution']['events']
+        assert after['execution']['status'] == 'InProgress' and after['execution']['handoffs'][0]['actor'] == {'kind': 'Human', 'name': 'lead'}
         run_cli(database, *handoff[:2], '--to', 'agent:parity', '--reason', 'back', '--actor', 'human:lead')
         run_cli(database, *handoff, '--actor', 'human:lead')
         run_cli(database, 'submit', 'TEST-A', '--actor', 'agent:second')
@@ -117,7 +117,7 @@ def ownership_smoke(directory):
     worker = Agent(database, 'agent:parity')
     try:
         assert worker.call('get_work', {'key': 'TEST-A'})['data'] == shown == run_cli(database, 'show', 'TEST-A')
-        assert len(shown['releases']) == 3 and len(shown['handoffs']) == 4, shown
+        assert len(shown['execution']['releases']) == 3 and len(shown['execution']['handoffs']) == 4, shown
         history = worker.call('history', {})['data']
         assert history == run_cli(database, 'history')
         kinds = [next(iter(e['operation']['command'])) for e in history['entries']]
@@ -134,7 +134,7 @@ def independent_evidence(directory):
     artifact, _ = evidence(directory, 'human:auditor')
     plan['artifacts'][artifact['id']] = artifact
     work = next(w for w in plan['work_items'].values() if w['key'] == 'TEST-A')
-    work['artifact_ids'] = [artifact['id']]
+    work['execution']['artifact_ids'] = [artifact['id']]
     imported = directory / 'evidence-plan.json'
     imported.write_text(json.dumps(plan))
     run_cli(database, 'import', str(imported))

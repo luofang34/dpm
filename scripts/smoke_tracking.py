@@ -61,7 +61,7 @@ def link_and_refuse(database, worker):
         assert explained == run_cli(database, 'explain', key)
         [reference] = explained['context']['external_references']
         assert reference['links'] == [{'work': explained['work']['id'], 'role': 'Tracks'}]
-        assert explained['context']['artifacts'] == [] and explained['work']['status'] == 'Planned'
+        assert explained['context']['artifacts'] == [] and explained['work']['execution']['status'] == 'Planned'
     message = refused(database, worker, 'link_external', {'key': 'TEST-D', 'identity': ALPHA, 'base_revision': 3},
                       ['link-external', 'TEST-D', *flags(ALPHA)], 'tracking_conflict')
     assert 'already tracked by TEST-A' in message
@@ -93,7 +93,7 @@ def unlink_and_merge(database, worker, reviewer):
     run_cli(database, 'link-external', 'TEST-A', *flags(PULL), '--observed', 'merged', '--actor', 'agent:parity')
     shown = worker.call('get_work', {'key': 'TEST-A'})['data']
     assert shown == run_cli(database, 'show', 'TEST-A')
-    assert shown['status'] == 'Submitted' and shown['artifact_ids'] == [], 'a merged PR is neither evidence nor verification'
+    assert shown['execution']['status'] == 'Submitted' and shown['execution']['artifact_ids'] == [], 'a merged PR is neither evidence nor verification'
     worker.call('verify_work', {'key': 'TEST-A', 'base_revision': 8}, error='invalid_command')
     reviewer.call('verify_work', {'key': 'TEST-A', 'base_revision': 8})
     history = worker.call('history', {})['data']

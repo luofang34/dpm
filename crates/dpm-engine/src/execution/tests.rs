@@ -90,8 +90,11 @@ fn blocking_and_resuming_preserve_the_owner() {
         },
     );
     apply(&mut plan, "owner", Command::Unblock { work });
-    assert_eq!(plan.work_items[&work].owner, Some(ActorId::agent("owner")));
-    assert_eq!(plan.work_items[&work].status, WorkStatus::Claimed);
+    assert_eq!(
+        plan.work_items[&work].execution.owner,
+        Some(ActorId::agent("owner"))
+    );
+    assert_eq!(plan.work_items[&work].execution.status, WorkStatus::Claimed);
     assert!(
         next_work(&plan, &NextWorkQuery::default(), chrono::Utc::now())
             .expect("query")
@@ -158,10 +161,14 @@ fn milestone_completion_unlocks_successors_without_mutating_authoritative_state(
         0.0,
     ));
     finish(&mut plan, work);
-    assert_eq!(plan.work_items[&milestone].status, WorkStatus::Planned);
+    assert_eq!(
+        plan.work_items[&milestone].execution.status,
+        WorkStatus::Planned
+    );
     assert_eq!(
         show_work(&plan, milestone, chrono::Utc::now())
             .expect("projection")
+            .execution
             .status,
         WorkStatus::Verified
     );
@@ -259,6 +266,7 @@ fn empty_commands_and_invalid_plans_do_not_change_state() {
     plan.work_items
         .get_mut(&work)
         .expect("work")
+        .contract
         .acceptance
         .clear();
     let before = plan.clone();

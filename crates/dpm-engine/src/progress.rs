@@ -139,12 +139,12 @@ pub(crate) fn progress_with(plan: &Plan, timeline: &Timeline) -> ProgressProject
 
 fn task_percent(work: &WorkItem) -> f64 {
     if matches!(
-        work.status,
+        work.execution.status,
         WorkStatus::Submitted | WorkStatus::Verified | WorkStatus::Done
     ) {
         100.0
     } else {
-        f64::from(work.reported_progress_percent)
+        f64::from(work.execution.reported_progress_percent)
     }
 }
 

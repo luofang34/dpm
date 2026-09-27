@@ -116,7 +116,7 @@ pub(crate) fn derive(plan: &Plan) -> Derived {
         };
         // A selected task already verified has taken every transition; its prerequisites no longer
         // decide whether it can proceed, so a later choice change cannot strand it.
-        let finished = work.is_executable() && work.status.satisfies_dependency();
+        let finished = work.is_executable() && work.execution.status.satisfies_dependency();
         if work.kind == WorkKind::WorkPackage || finished || !derived.states[&id].is_applicable() {
             continue;
         }
@@ -205,7 +205,7 @@ fn conditions(plan: &Plan, work: &WorkItem) -> (Applicability, Option<EventTime>
     let mut next = Some(work);
     let mut depth = 0_usize;
     while let Some(item) = next {
-        if let Some(condition) = &item.condition
+        if let Some(condition) = &item.contract.condition
             && let Some(decision) = effective_decision(plan, condition.decision)
         {
             match (standing_since(plan, decision), decision.outcome.as_deref()) {
@@ -254,7 +254,7 @@ fn through_constraints(
             continue;
         };
         match states.get(&edge.predecessor) {
-            Some(state) if state.is_not_selected() && work.join.skips_unselected() => {}
+            Some(state) if state.is_not_selected() && work.contract.join.skips_unselected() => {}
             Some(
                 Applicability::NotSelected { .. }
                 | Applicability::AllChildrenExcluded { .. }
@@ -278,10 +278,10 @@ fn through_constraints(
         return Applicability::AwaitingChoice { predecessor };
     }
     let permits_empty = matches!(
-        work.join,
+        work.contract.join,
         crate::JoinPolicy::ActiveBranches { allow_empty: true }
     );
-    if work.join.skips_unselected() && incoming > 0 && active == 0 && !permits_empty {
+    if work.contract.join.skips_unselected() && incoming > 0 && active == 0 && !permits_empty {
         return Applicability::EmptyJoin;
     }
     Applicability::Applicable

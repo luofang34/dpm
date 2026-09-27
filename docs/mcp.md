@@ -10,7 +10,7 @@ Every CLI mutation likewise requires an explicit `--actor KIND:NAME`; there is n
 omitting it can never make one caller its own reviewer.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
-The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:8`
+The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:9`
 and the observed `revision`; every MCP mutation tool requires that `base_revision`, and a call without it
 is refused with `invalid_request`. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
@@ -27,7 +27,7 @@ which the store still checks atomically. Presentation text is not the API contra
 | plan export-mspdi --project-key KEY | export_mspdi | One project's work as MSPDI with a report of omitted data |
 | history --after-sequence N --limit N | history | Chronological operation pages with actor, time, reason and command |
 | status | project_status | Counts and optional Monte Carlo forecast |
-| next --project-key KEY --resource-key KEY | next_work | Full-graph ranking, then [scope](#scoped-next) and limit; outside-scope work stays visible |
+| next --project-key KEY --asset-key KEY | next_work | Full-graph ranking, then [scope](#scoped-next) and limit; outside-scope work stays visible |
 | show KEY | get_work | Objective, steps/results, scope, acceptance/checks and derived status |
 | explain KEY | explain_work | Readiness, dependencies, resolved requirements/gates/risks/evidence |
 | ratify KEY | ratify_contract | Human/service approves a complete Proposed contract |
@@ -43,7 +43,7 @@ which the store still checks atomically. Presentation text is not the API contra
 | verify KEY --note TEXT | verify_work | Refuse holders and evidence authors; re-check every relation and decision; record the finish event |
 | decide KEY OUTCOME | decide_gate | Human/service resolves an open decision (agents are refused); with `options`, OUTCOME is exactly one option key |
 | artifact KEY FILE.json | add_artifact | Owner attaches the same Artifact JSON object to its task |
-| attach-git-head KEY --resource KEY | attach_git_head | Owner captures HEAD for an explicit task resource; locator binding is the default |
+| attach-git-head KEY --asset KEY | attach_git_head | Owner captures HEAD for an explicit workspace asset; locator binding is the default |
 | link-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | link_external | Link work to a provider-scoped external object; context only |
 | unlink-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | unlink_external | Remove one link; the work graph is unchanged |
 | workspace list | workspace_list | List device-local bindings without changing the plan |
@@ -61,9 +61,9 @@ human/service actor. Agents draft scope; they do not approve their own expansion
 
 New tasks must be Proposed, without execution/evidence. Existing work keys/kinds, lifecycle, owners,
 progress, reviews and artifacts cannot be changed through this route. Started work, its
-prerequisites and containing packages, and the projects, requirements and resources it names are
+prerequisites and containing packages, and the projects, requirements and assets it names are
 protected, and no new gate may block them; add follow-up work instead. Unstarted contracts,
-dependencies, projects, requirements, resources and risks can be maintained after review, but no
+dependencies, projects, requirements, assets and risks can be maintained after review, but no
 actor may apply a change that relaxes a constraint on work it owns or on the work waiting for it
 (see dependency policy below). New
 decisions are Open questions; decision replacement below may list started work for reassessment.
@@ -272,7 +272,7 @@ is not an operation backup; use the CLI's `backup`, `restore` and `verify-store`
 holds only what the review changed. Its command is
 `{"ApplyChange": {"changes": [...], "reason": "..."}}`, where `changes` is exactly the `changes`
 array `plan diff` / `propose_change` reported for that proposal: one entry per changed entity with
-`collection` (`workspace`, `projects`, `resources`, `work_items`, `requirements`, `decisions`,
+`collection` (`workspace`, `projects`, `assets`, `work_items`, `requirements`, `decisions`,
 `risks`, `external_references`, `dependencies` or `links`), `id` (absent for `workspace` and
 `links`), the changed `fields`, and the full `before` and `after` values (`before: null` is an
 addition, `after: null` a removal). Read `fields` for what changed and `after` for the result; a
@@ -280,7 +280,17 @@ one-field edit of a large plan records one entity, not the plan. Recorded artifa
 evidence changes only through `add_artifact` and `attach_git_head`. A recorded change applies only onto the state its
 `before` values describe; replaying it onto anything else is refused as a stale change. This shape is
 not additive: `api_version` 7 clients, whose `ApplyChange` held the whole proposed `plan`, must read
-`changes` under `api_version` 8.
+`changes` under `api_version` 9.
+
+Portable plan format 3 groups each work item into `contract` (objective, acceptance, instructions,
+capabilities, requirements, asset needs and applicability), `execution` (lifecycle, ownership,
+evidence, reviews and recorded events), and `schedule` (priority and three-point estimate).
+Identity, title and hierarchy stay at the work root. `order` is a lexicographic array of unsigned
+16-bit digits; it must have 1–128 digits and end in a nonzero digit. `SiblingOrder::between` inserts
+without changing neighbours; concurrent equal positions use the stable work ID to break ties.
+The plan's `assets` registry and `contract.assets` describe repositories/folders/documents, not labor.
+CLI flags use `--asset` / `--asset-key`, and locator version 3 uses `asset`. API version 9 exposes
+these grouped values consistently in CLI and MCP. Execution commands and their arguments are unchanged.
 
 ## Microsoft Project XML interchange
 
@@ -402,11 +412,10 @@ a milestone flag flipped) fails the import with the same source context.
 
 `plan export-mspdi --project-key KEY [--output FILE]` and `export_mspdi` (`project_key`) return
 `{xml, report}`; without `--json` the CLI prints the document itself. Output is deterministic:
-siblings follow natural key order (digit runs compare by value, so `OP-2` precedes `OP-10`; the
-same order as the terminal outline), `UID`s number that order (they are local to the file), and `GUID`s are
+siblings follow explicit `order`, breaking ties by stable work ID (the same order as the terminal outline), `UID`s number that order (they are local to the file), and `GUID`s are
 the stable project and work identities. Tasks carry the PERT expectation in elapsed hours, and
 links carry elapsed-hour lags. The report lists per-item omissions (acceptance, instructions,
-lifecycle, owner, requirements, evidence, resources) and project-level data outside the subset.
+lifecycle, owner, requirements, evidence, assets) and project-level data outside the subset.
 MSPDI has no conditional work: every task is written unconditionally, never dropped, and the item
 report names its `condition`, an active-branch `join`, and any current non-applicable state
 (`applicability`); a link from not-selected work carries a note that it is written as enforced.
@@ -515,7 +524,7 @@ The workflow below applies to an authorized execution workspace; tool availabili
 
 1. Call project_status and next_work. Supply actual capabilities; an empty capability set is the
    unfiltered operator view, not a claim that the actor has every skill. Default limit is 5.
-2. Call explain_work. Read `work.objective`, `work.instructions`, `work.acceptance`, predecessor
+2. Call explain_work. Read `work.contract.objective`, `work.contract.instructions`, `work.contract.acceptance`, predecessor
    evidence and unresolved gates. Steps describe the procedure, not permission to execute it.
 3. Call claim_work using the observed revision. Refresh after a revision_conflict. A claim only
    reserves the task.
@@ -528,8 +537,8 @@ The workflow below applies to an authorized execution workspace; tool availabili
 7. Call report_blocker when blocked; do not silently ignore dependencies or change lifecycle fields.
 
 `probabilistic:false` matches CLI `status --no-simulation` or `next --deterministic-only`.
-Capabilities and limit map to repeated `--capability` and `--limit`; `project_keys` and `resource_keys`
-map to repeated `--project-key` and `--resource-key`. Work identifiers in tool arguments
+Capabilities and limit map to repeated `--capability` and `--limit`; `project_keys` and `asset_keys`
+map to repeated `--project-key` and `--asset-key`. Work identifiers in tool arguments
 are human keys; returned records also include stable UUIDs. Domain errors use stable `code` plus
 human-readable `message` and the `api_version`; the CLI `--json` output is `{"error": {...}}` and MCP
 uses `isError:true` with the same object as structuredContent. When `--json` appears anywhere before
@@ -645,7 +654,7 @@ changes claims, graph membership, readiness or scores, and it grants no filesyst
 | Field | Meaning |
 | --- | --- |
 | result_version | Shape version of this object, independent of `api_version` |
-| scope.projects[] / scope.resources[] | Resolved `{id, key}` entries actually applied; both empty means unscoped |
+| scope.projects[] / scope.assets[] | Resolved `{id, key}` entries actually applied; both empty means unscoped |
 | capabilities | Capabilities used for eligibility; not a scope axis |
 | limit | Maximum in-scope candidates returned |
 | eligible_count | Ready, capability-eligible work in the whole workspace |
@@ -659,13 +668,13 @@ Membership, applied to eligible work; each empty axis does not filter and non-em
 
 - **Project** (`--project-key`, `project_keys`): the work's project is a listed project or a descendant.
   `--project DIR` still selects a project directory; the key filter is a separate option.
-- **Resource** (`--resource-key`, `resource_keys`): the work names at least one listed resource, and every
-  resource it writes is listed. Reads of unlisted resources are allowed. Work naming no resources
-  (for example non-code work) never matches a resource scope; if eligible it is in `outside_scope`.
+- **Asset** (`--asset-key`, `asset_keys`): the work names at least one listed asset, and every
+  asset it writes is listed. Reads of unlisted assets are allowed. Work naming no assets
+  (for example non-code work) never matches a asset scope; if eligible it is in `outside_scope`.
 - **Capability** (`--capability`, `capabilities`): eligibility, not scope. Work the caller cannot
   perform is neither a candidate nor counted in `outside_scope`.
 
-Unknown project or resource keys fail with `not_found` instead of matching nothing. A dependency
+Unknown project or asset keys fail with `not_found` instead of matching nothing. A dependency
 outside the scope is evaluated like any other: in-scope work waiting on it stays unready, and the
 blocking work appears in `outside_scope` when it is itself eligible.
 
@@ -678,10 +687,10 @@ the same types and never synthesize or truncate task instructions.
 | Field under WorkItem | Meaning |
 | --- | --- |
 | objective | Purpose and observable goal |
-| instructions.steps[] | Ordered actions, each with `action` and `expected_result` |
-| instructions.in_scope[] | Permitted changes/deliverables |
-| instructions.out_of_scope[] | Explicit exclusions |
-| instructions.verification[] | Checks and evidence to collect |
+| contract.instructions.steps[] | Ordered actions, each with `action` and `expected_result` |
+| contract.instructions.in_scope[] | Permitted changes/deliverables |
+| contract.instructions.out_of_scope[] | Explicit exclusions |
+| contract.instructions.verification[] | Checks and evidence to collect |
 | acceptance[].text | Conditions a separate reviewer must assess |
 | capabilities / requirement_ids / artifact_ids | Skill requirements and stable context references |
 
@@ -774,4 +783,4 @@ Registration accepts `database` and optional `replace`; neither tool takes a pro
 `workspace_list` reports each store's `store.status` and `shared_with`, and registration refuses a path
 bound to another identity with `workspace_path_bound` (see [project selection](projects.md)).
 Their results contain `local_config: true` and `data`, without a project operation or revision.
-`attach_git_head` accepts an explicit `resource` key when the selected locator does not bind one.
+`attach_git_head` accepts an explicit `asset` key when the selected locator does not bind one.

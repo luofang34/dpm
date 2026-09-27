@@ -385,11 +385,11 @@ Decisions and reasons:
   cannot finish releases an unstarted claim, or blocks with a reason and asks for a handoff.
 - **The authorizer may be the current or the new owner.** A person taking over an interrupted
   agent's work is the common recovery, and a single-person workspace has no one else to ask.
-  Independence does not depend on who authorized the move but on the record: `WorkItem.handoffs` is
+  Independence does not depend on who authorized the move but on the record: `WorkItem.execution.handoffs` is
   append-only (from, to, actor, at, reason), and `WorkItem::held_by` treats every earlier `from` as
   a holder. Verification, rejection, basis revalidation and waivers all refuse a holder, so an
   actor that executed any part of the work never reviews it, whoever holds it now.
-- **Releases are recorded too.** `WorkItem.releases` is append-only (actor, at, reason) and every
+- **Releases are recorded too.** `WorkItem.execution.releases` is append-only (actor, at, reason) and every
   releaser is a holder: a claimant may attach evidence before it releases, so giving back a claim
   never turns the claimant into the reviewer of the result it contributed to.
 - **Everything recorded stays.** Status, events (including `start_unrecorded`), attempts, the last
@@ -425,7 +425,7 @@ and remote synchronization are future milestones.
 
 A reviewed plan change is logged as a delta, not as the proposal. Adapters still submit a full
 proposed plan; `plan_change` validates it exactly as `propose_change` does and records the canonical
-entity-level difference: one entry per changed workspace, project, resource, work item,
+entity-level difference: one entry per changed workspace, project, workspace asset, work item,
 requirement, decision, risk, external reference or dependency edge, plus the link set, each with its
 full `before` and `after` value and the changed field names. `patch` applies such a delta only if
 every `before` still equals the current entity, otherwise it fails with a stale-change error, and
@@ -513,7 +513,7 @@ CPM/Monte Carlo duration inputs.
 
 ## Inspectable execution instructions
 
-`WorkItem.instructions` optionally holds ordered action/result pairs, scope inclusions/exclusions
+`WorkItem.contract.instructions` optionally holds ordered action/result pairs, scope inclusions/exclusions
 and verification checks. Acceptance criteria remain the conditions for independent review. The
 model validates present instructions at import/command boundaries; plans may omit instructions. Both CLI and MCP serialize these same domain values through `dpm-app`.
 Instructions contain no execution code, grant no authorization and never bypass decision gates.

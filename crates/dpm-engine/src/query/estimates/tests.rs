@@ -26,14 +26,14 @@ fn conditional() -> Plan {
 fn drop_estimate(plan: &mut Plan, key: &str) {
     let id = plan.find_work_by_key(key).expect("work").id;
     if let Some(work) = plan.work_items.get_mut(&id) {
-        work.estimate = None;
+        work.schedule.estimate = None;
     }
 }
 
 fn set_status(plan: &mut Plan, key: &str, status: WorkStatus) {
     let id = plan.find_work_by_key(key).expect("work").id;
     if let Some(work) = plan.work_items.get_mut(&id) {
-        work.status = status;
+        work.execution.status = status;
     }
 }
 
@@ -48,7 +48,10 @@ fn listed(plan: &Plan) -> Vec<String> {
 fn only_outstanding_tasks_without_an_estimate_are_listed_in_key_order() {
     let mut plan = execution();
     let milestone = plan.find_work_by_key("TEST-M1").expect("milestone");
-    assert!(milestone.estimate.is_none(), "milestones carry no estimate");
+    assert!(
+        milestone.schedule.estimate.is_none(),
+        "milestones carry no estimate"
+    );
     assert!(listed(&plan).is_empty(), "estimated tasks and milestones");
 
     for key in ["TEST-E", "TEST-C", "TEST-A"] {
@@ -206,8 +209,8 @@ fn the_list_matches_the_tasks_the_remaining_projection_runs_at_zero_hours() {
     let projected: Vec<String> = plan
         .work_items
         .values()
-        .filter(|w| w.is_executable() && w.estimate.is_none())
-        .filter(|w| !w.status.satisfies_dependency())
+        .filter(|w| w.is_executable() && w.schedule.estimate.is_none())
+        .filter(|w| !w.execution.status.satisfies_dependency())
         .filter(|w| schedule.activities.contains_key(&w.id))
         .map(|w| w.key.0.clone())
         .collect::<std::collections::BTreeSet<_>>()

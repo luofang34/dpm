@@ -139,17 +139,18 @@ fn simulate_inner(
         let at = network
             .position(id)
             .ok_or(ScheduleError::MissingWorkItem(*id))?;
-        let activity =
-            if !work.is_executable() || (remaining_only && work.status.satisfies_dependency()) {
-                Activity::Fixed(0.0)
-            } else if let Some(estimate) = work.estimate {
-                estimate
-                    .validate()
-                    .map_err(|_| ScheduleError::InvalidDuration(*id))?;
-                Activity::Sampled(estimate)
-            } else {
-                Activity::Fixed(work.expected_duration_hours())
-            };
+        let activity = if !work.is_executable()
+            || (remaining_only && work.execution.status.satisfies_dependency())
+        {
+            Activity::Fixed(0.0)
+        } else if let Some(estimate) = work.schedule.estimate {
+            estimate
+                .validate()
+                .map_err(|_| ScheduleError::InvalidDuration(*id))?;
+            Activity::Sampled(estimate)
+        } else {
+            Activity::Fixed(work.expected_duration_hours())
+        };
         sampled.push((at, *id, activity));
     }
     for _ in 0..config.iterations {

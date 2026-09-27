@@ -53,7 +53,7 @@ def provisional_smoke(directory):
         builder.call('claim_work', {'key': 'TEST-B', 'base_revision': 3})
         run_cli(database, 'start', 'TEST-B', '--actor', 'agent:builder')
         started = same_views(builder, database)
-        assert [(b['attempt'], b['source']['kind']) for b in started['work']['basis']] == [(1, 'start')]
+        assert [(b['attempt'], b['source']['kind']) for b in started['work']['execution']['basis']] == [(1, 'start')]
         verify_gate = [g for g in started['transitions']['verify']['unmet'] if g['type'] == 'dependency']
         assert verify_gate[0]['start_basis'] == 'Provisional' and 'accepts_submission' not in verify_gate[0]
         reviewer.call('reject_work', {'key': 'TEST-A', 'reason': 'fails acceptance', 'base_revision': 5})

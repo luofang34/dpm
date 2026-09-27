@@ -143,7 +143,7 @@ fn task_mut(plan: &mut Plan, work: WorkItemId) -> Result<&mut WorkItem, EngineEr
 }
 
 fn owns(item: &WorkItem, actor: &ActorId) -> Result<(), EngineError> {
-    if let Some(owner) = &item.owner
+    if let Some(owner) = &item.execution.owner
         && owner != actor
     {
         return Err(EngineError::OwnedByAnother {
@@ -167,6 +167,7 @@ fn refuse_evidence_author(
         .get(&work)
         .ok_or(EngineError::MissingWorkItem(work))?;
     let authored = item
+        .execution
         .artifact_ids
         .iter()
         .filter_map(|id| plan.artifacts.get(id))
@@ -193,7 +194,7 @@ fn attach(
         .ok_or(EngineError::MissingWorkItem(work))?;
     owns(item, actor)?;
     // Evidence authors cannot review the task, so only the executor attaches evidence to it.
-    if item.is_executable() && item.owner.is_none() {
+    if item.is_executable() && item.execution.owner.is_none() {
         return Err(EngineError::ActorNotAllowed {
             actor: actor.clone(),
             action: "attach evidence to an unclaimed task; claim it first",
@@ -216,7 +217,7 @@ fn attach(
         .work_items
         .get_mut(&work)
         .ok_or(EngineError::MissingWorkItem(work))?;
-    item.artifact_ids.insert(artifact.id);
+    item.execution.artifact_ids.insert(artifact.id);
     plan.artifacts.insert(artifact.id, artifact.clone());
     Ok(())
 }

@@ -5,7 +5,7 @@
 //! so a higher-ranked blocker in another project or repository cannot be hidden by a filter.
 
 use crate::{EngineError, NextWorkCandidate, NextWorkQuery, next_work};
-use dpm_model::{Key, Plan, ProjectId, ResourceAccess, ResourceId, WorkItem};
+use dpm_model::{AssetAccess, AssetId, Key, Plan, ProjectId, WorkItem};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use thiserror::Error;
@@ -19,8 +19,8 @@ pub enum ScopeError {
     /// Project scope key is not in the plan.
     #[error("unknown project key {0}")]
     UnknownProject(String),
-    /// Resource scope key is not in the plan.
-    #[error("unknown resource key {0}")]
+    /// WorkspaceAsset scope key is not in the plan.
+    #[error("unknown asset key {0}")]
     UnknownResource(String),
 }
 
@@ -33,18 +33,18 @@ pub struct ScopeMember<I> {
     pub key: Key,
 }
 
-/// Project and resource membership filter; an empty axis does not filter.
+/// Project and asset membership filter; an empty axis does not filter.
 ///
 /// A work item is in scope when it passes every non-empty axis:
 /// - projects: its project is one of the listed projects or a descendant of one;
-/// - resources: it names at least one listed resource, and every resource it writes is listed.
-///   Work naming no resources never positively matches, so it is outside a resource scope.
+/// - assets: it names at least one listed asset, and every asset it writes is listed.
+///   Work naming no assets never positively matches, so it is outside an asset scope.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkScope {
     /// Project subtrees to include.
     pub projects: Vec<ScopeMember<ProjectId>>,
-    /// Resources the returned work must fit.
-    pub resources: Vec<ScopeMember<ResourceId>>,
+    /// Assets the returned work must fit.
+    pub assets: Vec<ScopeMember<AssetId>>,
 }
 
 impl WorkScope {
@@ -52,7 +52,7 @@ impl WorkScope {
     pub fn resolve<'a>(
         plan: &Plan,
         project_keys: impl IntoIterator<Item = &'a str>,
-        resource_keys: impl IntoIterator<Item = &'a str>,
+        asset_keys: impl IntoIterator<Item = &'a str>,
     ) -> Result<Self, ScopeError> {
         let projects = unique(project_keys)
             .into_iter()
@@ -67,10 +67,10 @@ impl WorkScope {
                     .ok_or_else(|| ScopeError::UnknownProject(key.into()))
             })
             .collect::<Result<_, _>>()?;
-        let resources = unique(resource_keys)
+        let assets = unique(asset_keys)
             .into_iter()
             .map(|key| {
-                plan.resources
+                plan.assets
                     .values()
                     .find(|r| r.key.0 == key)
                     .map(|r| ScopeMember {
@@ -80,20 +80,17 @@ impl WorkScope {
                     .ok_or_else(|| ScopeError::UnknownResource(key.into()))
             })
             .collect::<Result<_, _>>()?;
-        Ok(Self {
-            projects,
-            resources,
-        })
+        Ok(Self { projects, assets })
     }
 
     /// Whether neither axis restricts membership.
     pub fn is_unscoped(&self) -> bool {
-        self.projects.is_empty() && self.resources.is_empty()
+        self.projects.is_empty() && self.assets.is_empty()
     }
 
     /// Whether the work satisfies every non-empty axis of this scope.
     pub fn contains(&self, plan: &Plan, work: &WorkItem) -> bool {
-        self.contains_project(plan, work.project) && self.fits_resources(work)
+        self.contains_project(plan, work.project) && self.fits_assets(work)
     }
 
     fn contains_project(&self, plan: &Plan, project: ProjectId) -> bool {
@@ -115,19 +112,21 @@ impl WorkScope {
         false
     }
 
-    fn fits_resources(&self, work: &WorkItem) -> bool {
-        if self.resources.is_empty() {
+    fn fits_assets(&self, work: &WorkItem) -> bool {
+        if self.assets.is_empty() {
             return true;
         }
-        let allowed = self.resources.iter().map(|m| m.id).collect::<BTreeSet<_>>();
-        work.resources
+        let allowed = self.assets.iter().map(|m| m.id).collect::<BTreeSet<_>>();
+        work.contract
+            .assets
             .iter()
-            .any(|need| allowed.contains(&need.resource))
+            .any(|need| allowed.contains(&need.asset))
             && work
-                .resources
+                .contract
+                .assets
                 .iter()
-                .filter(|need| need.access == ResourceAccess::Write)
-                .all(|need| allowed.contains(&need.resource))
+                .filter(|need| need.access == AssetAccess::Write)
+                .all(|need| allowed.contains(&need.asset))
     }
 }
 

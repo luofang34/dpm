@@ -187,12 +187,12 @@ fn status_colors_and_symbols_win_over_criticality_and_monochrome_retains_meaning
     ] {
         let mut plan = fixture();
         let work = plan.find_work_by_key_mut("TEST-A").expect("a");
-        work.status = status;
+        work.execution.status = status;
         if status != WorkStatus::Planned {
-            work.owner = Some(ActorId::agent("owner"));
+            work.execution.owner = Some(ActorId::agent("owner"));
         }
         if status == WorkStatus::Blocked {
-            work.block_reason = Some("waiting".into());
+            work.execution.block_reason = Some("waiting".into());
         }
         let mut gantt = Gantt::new(&plan, chrono::Utc::now()).expect("gantt");
         let buffer = draw(&mut gantt, &plan, 0, 100, 30);
@@ -238,8 +238,8 @@ fn milestone_name_badge_survives_panning_and_monochrome_and_tracks_completion() 
         let mut plan = fixture();
         if complete {
             for work in plan.work_items.values_mut().filter(|w| w.is_executable()) {
-                work.status = WorkStatus::Verified;
-                work.owner = Some(ActorId::agent("worker"));
+                work.execution.status = WorkStatus::Verified;
+                work.execution.owner = Some(ActorId::agent("worker"));
             }
             for decision in plan.decisions.values_mut() {
                 decision.status = dpm_model::DecisionStatus::Decided;

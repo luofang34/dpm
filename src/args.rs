@@ -62,9 +62,9 @@ pub(crate) enum Commands {
         /// Limit results to this project key's subtree; repeatable. Unlike --project, not a directory.
         #[arg(long = "project-key")]
         project_keys: Vec<String>,
-        /// Limit results to work fitting these resource keys; repeatable.
-        #[arg(long = "resource-key")]
-        resource_keys: Vec<String>,
+        /// Limit results to work fitting these asset keys; repeatable.
+        #[arg(long = "asset-key")]
+        asset_keys: Vec<String>,
         #[arg(long, default_value_t = 5)]
         limit: usize,
         #[arg(long)]
@@ -145,9 +145,9 @@ pub(crate) enum Commands {
         key: String,
         #[arg(long)]
         actor: String,
-        /// Repository resource represented by the current checkout; defaults to the locator binding.
+        /// Repository asset represented by the current checkout; defaults to the locator binding.
         #[arg(long)]
-        resource: Option<String>,
+        asset: Option<String>,
     },
     /// Attach an Artifact JSON object through the shared command API.
     Artifact {

@@ -17,14 +17,14 @@ pub(super) fn ratify(
         });
     }
     let item = task_mut(plan, work)?;
-    if item.status != WorkStatus::Proposed {
+    if item.execution.status != WorkStatus::Proposed {
         return Err(EngineError::InvalidTransition {
             work,
-            status: item.status,
+            status: item.execution.status,
         });
     }
     // The command's candidate validation enforces the complete executable contract atomically.
-    item.status = WorkStatus::Planned;
+    item.execution.status = WorkStatus::Planned;
     Ok(())
 }
 
@@ -37,10 +37,10 @@ pub(super) fn reject(
 ) -> Result<(), EngineError> {
     nonempty(&work.to_string(), "rejection reason", reason)?;
     let item = task_mut(plan, work)?;
-    if item.status != WorkStatus::Submitted {
+    if item.execution.status != WorkStatus::Submitted {
         return Err(EngineError::InvalidTransition {
             work,
-            status: item.status,
+            status: item.execution.status,
         });
     }
     // A former owner or releaser may have produced part of the result, so neither a handoff nor a
@@ -53,11 +53,12 @@ pub(super) fn reject(
     }
     super::refuse_evidence_author(plan, actor, work, "review work whose evidence it authored")?;
     let item = task_mut(plan, work)?;
-    item.status = WorkStatus::InProgress;
+    item.execution.status = WorkStatus::InProgress;
     // The rejected submission is no longer a finish claim; resubmission records a new time.
-    item.events.submitted_at = None;
+    item.execution.events.submitted_at = None;
     // The attempt stays in history so bases that relied on it remain visibly invalidated.
     if let Some(attempt) = item
+        .execution
         .attempts
         .last_mut()
         .filter(|a| a.outcome == AttemptOutcome::Pending)
@@ -68,7 +69,7 @@ pub(super) fn reject(
             reason: reason.into(),
         };
     }
-    item.last_rejection = Some(ReviewRejection {
+    item.execution.last_rejection = Some(ReviewRejection {
         actor: actor.clone(),
         at,
         reason: reason.into(),

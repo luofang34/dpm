@@ -176,7 +176,7 @@ def smoke(database):
         reviewer.call('start_work', {'key': 'TEST-A', 'base_revision': 1}, error='invalid_command')
         started = worker.call('start_work', {'key': 'TEST-A', 'base_revision': 1})['data']
         assert started['command'] == {'Start': {'work': claim['command']['Claim']['work']}}
-        events = worker.call('get_work', {'key': 'TEST-A'})['data']['events']
+        events = worker.call('get_work', {'key': 'TEST-A'})['data']['execution']['events']
         assert events == {'started_at': started['timestamp']}
         run_cli(database, 'progress', 'TEST-A', '25', '--actor', 'agent:parity')
         worker.call('report_progress', {'key': 'TEST-A', 'percent': 50, 'note': 'Half the acceptance work is implemented', 'base_revision': 3})
@@ -185,15 +185,15 @@ def smoke(database):
         shown = worker.call('get_work', {'key': 'TEST-A'})['data']
         assert shown == run_cli(database, 'show', 'TEST-A')
         assert shown['progress'] == {'percent_complete': 50.0, 'verified': False}
-        assert shown['reported_progress_percent'] == 50 and shown['status'] == 'InProgress'
+        assert shown['execution']['reported_progress_percent'] == 50 and shown['execution']['status'] == 'InProgress'
         summary = worker.call('project_status', {})['data']
         assert summary == run_cli(database, 'status') and summary['progress']['percent_complete'] > 0
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
-        worker.call('attach_git_head', {'key': 'TEST-A', 'resource': 'TEST-REPO', 'base_revision': 4})
+        worker.call('attach_git_head', {'key': 'TEST-A', 'asset': 'TEST-REPO', 'base_revision': 4})
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')
         assert worker.call('next_work', {})['data']['candidates'] == []
         worker.call('unblock_work', {'key': 'TEST-A', 'base_revision': 6})
-        assert worker.call('get_work', {'key': 'TEST-A'})['data']['status'] == 'InProgress'
+        assert worker.call('get_work', {'key': 'TEST-A'})['data']['execution']['status'] == 'InProgress'
         worker.call('submit_work', {'key': 'TEST-A', 'base_revision': 7, 'note': 'Acceptance evidence reviewed'})
         worker.call('verify_work', {'key': 'TEST-A', 'base_revision': 8}, error='invalid_command')
         run_cli(database, 'verify', 'TEST-A', '--actor', 'agent:parity', error='invalid_command')
@@ -206,8 +206,8 @@ def smoke(database):
         assert worker.call('project_status', {})['data']['revision'] == 10
         verified = worker.call('explain_work', {'key': 'TEST-A'})['data']
         assert verified == run_cli(database, 'explain', 'TEST-A')
-        assert verified['progress']['completed_at'] == {'recorded': verified['work']['events']['verified_at']}
-        assert set(verified['work']['events']) == {'started_at', 'submitted_at', 'verified_at'}
+        assert verified['progress']['completed_at'] == {'recorded': verified['work']['execution']['events']['verified_at']}
+        assert set(verified['work']['execution']['events']) == {'started_at', 'submitted_at', 'verified_at'}
         decided = next(d for d in run_cli(database, 'export')['decisions'].values() if d['key'] == 'TEST-GATE')
         assert decided['resolved_at']
     finally:
@@ -218,7 +218,7 @@ def smoke(database):
 def review_smoke(directory):
     plan = json.loads((ROOT / 'tests/support/execution-plan.json').read_text())
     task = next(w for w in plan['work_items'].values() if w['key'] == 'TEST-A')
-    task['status'] = 'Proposed'
+    task['execution']['status'] = 'Proposed'
     fixture = directory / 'proposed.json'
     fixture.write_text(json.dumps(plan))
     database = directory / 'review.sqlite'
@@ -241,9 +241,9 @@ def review_smoke(directory):
         assert review['data']['command']['Reject']['reason'] == 'Missing acceptance evidence'
         detail = worker.call('explain_work', {'key': 'TEST-A'})['data']
         assert detail == run_cli(database, 'explain', 'TEST-A')
-        assert detail['work']['status'] == 'InProgress'
-        assert detail['work']['last_rejection']['reason'] == 'Missing acceptance evidence'
-        assert 'submitted_at' not in detail['work']['events'] and detail['work']['events']['started_at']
+        assert detail['work']['execution']['status'] == 'InProgress'
+        assert detail['work']['execution']['last_rejection']['reason'] == 'Missing acceptance evidence'
+        assert 'submitted_at' not in detail['work']['execution']['events'] and detail['work']['execution']['events']['started_at']
         assert worker.call('next_work', {})['data']['candidates'] == []
         run_cli(database, 'submit', 'TEST-A', '--actor', 'agent:worker')
         run_cli(database, 'reject', 'TEST-A', 'Still missing evidence', '--actor', 'human:reviewer')
@@ -259,16 +259,16 @@ def review_smoke(directory):
 
 
 def scoped_plan():
-    """Ready tasks across a project subtree, two repositories and a resource-less task."""
+    """Ready tasks across a project subtree, two repositories and an asset-less task."""
     plan = json.loads((ROOT / 'tests/support/execution-plan.json').read_text())
     template = next(w for w in plan['work_items'].values() if w['key'] == 'TEST-A')
     edge = plan['dependencies'][0]
     root = next(iter(plan['projects']))
-    repo_a = next(iter(plan['resources']))
+    repo_a = next(iter(plan['assets']))
     sub, other, repo_b = (str(uuid.uuid4()) for _ in range(3))
     plan['projects'][sub] = {**plan['projects'][root], 'id': sub, 'key': 'SUB', 'parent': root}
     plan['projects'][other] = {**plan['projects'][root], 'id': other, 'key': 'OTHER'}
-    plan['resources'][repo_b] = {**plan['resources'][repo_a], 'id': repo_b, 'key': 'REPO-B'}
+    plan['assets'][repo_b] = {**plan['assets'][repo_a], 'id': repo_b, 'key': 'REPO-B'}
     plan['decisions'], plan['risks'], plan['work_items'], plan['dependencies'] = {}, {}, {}, []
     tasks = [
         ('W-A', root, [(repo_a, 'Write')], 'P2'), ('W-B', other, [(repo_b, 'Write')], 'P0'),
@@ -279,8 +279,9 @@ def scoped_plan():
     for key, project, needs, priority in tasks:
         ids[key] = str(uuid.uuid4())
         plan['work_items'][ids[key]] = {
-            **template, 'id': ids[key], 'key': key, 'project': project, 'priority': priority,
-            'resources': [{'resource': r, 'access': a} for r, a in needs],
+            **template, 'id': ids[key], 'key': key, 'project': project,
+            'schedule': {**template['schedule'], 'priority': priority},
+            'contract': {**template['contract'], 'assets': [{'asset': r, 'access': a} for r, a in needs]},
         }
     plan['dependencies'].append({**edge, 'predecessor': ids['W-B'], 'successor': ids['DEP']})
     return plan
@@ -297,11 +298,11 @@ def scope_smoke(directory):
         results = {}
         for name, arguments, flags in [
             ('all', {}, ()),
-            ('repo-a', {'resource_keys': ['TEST-REPO']}, ('--resource-key', 'TEST-REPO')),
-            ('both', {'resource_keys': ['TEST-REPO', 'REPO-B']}, ('--resource-key', 'TEST-REPO', '--resource-key', 'REPO-B')),
+            ('repo-a', {'asset_keys': ['TEST-REPO']}, ('--asset-key', 'TEST-REPO')),
+            ('both', {'asset_keys': ['TEST-REPO', 'REPO-B']}, ('--asset-key', 'TEST-REPO', '--asset-key', 'REPO-B')),
             ('subtree', {'project_keys': ['TEST']}, ('--project-key', 'TEST')),
             ('other', {'project_keys': ['OTHER']}, ('--project-key', 'OTHER')),
-            ('intersect', {'project_keys': ['OTHER'], 'resource_keys': ['TEST-REPO']}, ('--project-key', 'OTHER', '--resource-key', 'TEST-REPO')),
+            ('intersect', {'project_keys': ['OTHER'], 'asset_keys': ['TEST-REPO']}, ('--project-key', 'OTHER', '--asset-key', 'TEST-REPO')),
             ('limited', {'project_keys': ['TEST'], 'limit': 1}, ('--project-key', 'TEST', '--limit', '1')),
         ]:
             remote = agent.call('next_work', {'probabilistic': False, **arguments})['data']
@@ -329,7 +330,7 @@ def scope_smoke(directory):
         assert len(limited['candidates']) == 1 and limited['in_scope_count'] == 3
         assert limited['outside_scope'] == results['subtree']['outside_scope']
         for arguments, flags in [({'project_keys': ['MISSING']}, ('--project-key', 'MISSING')),
-                                 ({'resource_keys': ['MISSING']}, ('--resource-key', 'MISSING'))]:
+                                 ({'asset_keys': ['MISSING']}, ('--asset-key', 'MISSING'))]:
             remote = agent.call('next_work', arguments, error='not_found')
             assert remote['message'] == run_cli(database, 'next', *flags, error='not_found')['error']['message']
         agent.call('next_work', {'project': 'TEST'}, error='invalid_request')
@@ -445,7 +446,7 @@ def timing_plan(kind, lag, legacy=False):
             edge['kind'], edge['lag_hours'] = kind, lag
     if legacy:
         task = plan['work_items'][keys['TEST-A']]
-        task['status'], task['owner'] = 'Verified', {'kind': 'Agent', 'name': 'legacy'}
+        task['execution']['status'], task['execution']['owner'] = 'Verified', {'kind': 'Agent', 'name': 'legacy'}
     return plan
 
 

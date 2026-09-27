@@ -30,8 +30,8 @@ fn proposals_show_semantic_changes_and_apply_as_one_reviewed_operation() {
     let mut added = proposal.find_work_by_key("TEST-A").expect("task").clone();
     added.id = WorkItemId::new();
     added.key = Key::new("NEW");
-    added.status = WorkStatus::Proposed;
-    added.artifact_ids.clear();
+    added.execution.status = WorkStatus::Proposed;
+    added.execution.artifact_ids.clear();
     proposal.work_items.insert(added.id, added.clone());
     let preview = propose_change(&plan, &proposal).expect("proposal");
     assert_eq!(plan, before);
@@ -104,13 +104,16 @@ fn invalid_graphs_and_fabricated_execution_fail_without_changes() {
                 0.0,
             )),
             1 => {
-                proposal.find_work_by_key_mut("TEST-A").expect("task").owner =
-                    Some(ActorId::agent("fake"));
+                proposal
+                    .find_work_by_key_mut("TEST-A")
+                    .expect("task")
+                    .execution
+                    .owner = Some(ActorId::agent("fake"));
             }
             2 => {
                 let work = proposal.find_work_by_key_mut("TEST-A").expect("task");
-                work.status = WorkStatus::Verified;
-                work.owner = Some(ActorId::agent("fake"));
+                work.execution.status = WorkStatus::Verified;
+                work.execution.owner = Some(ActorId::agent("fake"));
             }
             3 => {
                 let decision = proposal.decisions.values_mut().next().expect("gate");
@@ -146,6 +149,7 @@ fn execution_locks_its_contract_context_and_dependencies_but_not_future_work() {
                 .work_items
                 .get_mut(&work)
                 .expect("work")
+                .contract
                 .acceptance
                 .clear(),
             1 => {
@@ -157,12 +161,8 @@ fn execution_locks_its_contract_context_and_dependencies_but_not_future_work() {
                     .statement = "lowered bar".into();
             }
             2 => {
-                proposal
-                    .resources
-                    .values_mut()
-                    .next()
-                    .expect("resource")
-                    .label = "other repository".into();
+                proposal.assets.values_mut().next().expect("asset").label =
+                    "other repository".into();
             }
             _ => {
                 let mut gate = proposal
@@ -220,7 +220,7 @@ fn dangling_references_and_illegal_milestones_fail_before_any_change() {
     let before = plan.clone();
     let task = plan.find_work_by_key("TEST-F").expect("task").id;
     let milestone = plan.find_work_by_key("TEST-M1").expect("milestone").id;
-    let estimate = plan.work_items[&task].estimate;
+    let estimate = plan.work_items[&task].schedule.estimate;
     for case in 0..10 {
         let mut proposal = plan.clone();
         match case {
@@ -237,13 +237,14 @@ fn dangling_references_and_illegal_milestones_fail_before_any_change() {
             }
             3 => drop(
                 work(&mut proposal, task)
+                    .contract
                     .requirement_ids
                     .insert(dpm_model::RequirementId::new()),
             ),
-            4 => proposal.resources.clear(),
+            4 => proposal.assets.clear(),
             5 => work(&mut proposal, task).parent = Some(WorkItemId::new()),
-            6 => work(&mut proposal, milestone).estimate = estimate,
-            7 => work(&mut proposal, milestone).owner = Some(ActorId::agent("fake")),
+            6 => work(&mut proposal, milestone).schedule.estimate = estimate,
+            7 => work(&mut proposal, milestone).execution.owner = Some(ActorId::agent("fake")),
             8 => work(&mut proposal, task).parent = Some(milestone),
             _ => work(&mut proposal, milestone).kind = dpm_model::WorkKind::Task,
         }
@@ -288,7 +289,7 @@ fn plan_changes_cannot_author_or_rewrite_event_times() {
         match case {
             0 => {
                 let work = proposal.work_items.get_mut(&task).expect("task");
-                work.events.started_at = Some(earlier);
+                work.execution.events.started_at = Some(earlier);
             }
             1 => proposal.decisions.get_mut(&gate).expect("gate").resolved_at = Some(earlier),
             _ => proposal.decisions.get_mut(&gate).expect("gate").resolved_at = None,

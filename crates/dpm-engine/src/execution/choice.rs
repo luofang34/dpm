@@ -53,7 +53,12 @@ pub(super) fn decide(
     let affected: Vec<_> = plan
         .work_items
         .values()
-        .filter(|w| !matches!(w.status, WorkStatus::Proposed | WorkStatus::Planned))
+        .filter(|w| {
+            !matches!(
+                w.execution.status,
+                WorkStatus::Proposed | WorkStatus::Planned
+            )
+        })
         .filter(|w| {
             let now = after.get(&w.id);
             now != before.get(&w.id) && now.is_some_and(|a| !a.is_applicable())

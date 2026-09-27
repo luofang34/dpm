@@ -110,7 +110,7 @@ fn document_findings(root: Node, resources: usize) -> Vec<Finding> {
     if resources > 0 {
         findings.push(Finding::new(
             "resources",
-            format!("{resources} resource(s) not imported; DPM resources are explicit repositories and tools"),
+            format!("{resources} resource(s) not imported; DPM workspace assets are repositories and tools"),
         ));
     }
     let definitions = children(root, "ExtendedAttributes")

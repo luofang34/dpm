@@ -2,7 +2,7 @@ use super::*;
 use crate::{Command, apply_command};
 use chrono::Utc;
 use dpm_model::{
-    ActorId, Priority, Project, Resource, ResourceKind, ResourceRequirement, WorkItemId,
+    ActorId, AssetKind, AssetRequirement, Priority, Project, WorkItemId, WorkspaceAsset,
 };
 
 const ROOT: &str = "TEST";
@@ -26,11 +26,11 @@ fn project_id(plan: &Plan, key: &str) -> ProjectId {
         .id
 }
 
-fn resource_id(plan: &Plan, key: &str) -> ResourceId {
-    plan.resources
+fn asset_id(plan: &Plan, key: &str) -> AssetId {
+    plan.assets
         .values()
         .find(|r| r.key.0 == key)
-        .expect("resource")
+        .expect("asset")
         .id
 }
 
@@ -57,26 +57,26 @@ fn scoped_plan() -> Plan {
             },
         );
     }
-    let b = ResourceId::new();
-    plan.resources.insert(
+    let b = AssetId::new();
+    plan.assets.insert(
         b,
-        Resource {
+        WorkspaceAsset {
             id: b,
             key: Key::new(REPO_B),
             label: "Second repository".into(),
-            kind: ResourceKind::GitRepository {
+            kind: AssetKind::GitRepository {
                 remotes: Vec::new(),
             },
         },
     );
-    let a = resource_id(&plan, REPO_A);
-    let read = |resource| ResourceRequirement {
-        resource,
-        access: ResourceAccess::Read,
+    let a = asset_id(&plan, REPO_A);
+    let read = |asset| AssetRequirement {
+        asset,
+        access: AssetAccess::Read,
     };
-    let write = |resource| ResourceRequirement {
-        resource,
-        access: ResourceAccess::Write,
+    let write = |asset| AssetRequirement {
+        asset,
+        access: AssetAccess::Write,
     };
     let tasks = [
         ("W-A", ROOT, vec![write(a)], Priority::P2),
@@ -88,15 +88,15 @@ fn scoped_plan() -> Plan {
         ("DEP", ROOT, vec![write(a)], Priority::P0),
         ("CAP", ROOT, vec![write(a)], Priority::P0),
     ];
-    for (key, project, resources, priority) in tasks {
+    for (key, project, assets, priority) in tasks {
         let mut work = template.clone();
         work.id = WorkItemId::new();
         work.key = Key::new(key);
         work.project = project_id(&plan, project);
-        work.resources = resources;
-        work.priority = priority;
+        work.contract.assets = assets;
+        work.schedule.priority = priority;
         if key == "CAP" {
-            work.capabilities = BTreeSet::from(["design".to_string()]);
+            work.contract.capabilities = BTreeSet::from(["design".to_string()]);
         }
         plan.work_items.insert(work.id, work);
     }
@@ -115,9 +115,9 @@ fn query() -> NextWorkQuery {
     }
 }
 
-fn run(plan: &Plan, projects: &[&str], resources: &[&str], limit: usize) -> NextWorkResult {
-    let scope = WorkScope::resolve(plan, projects.iter().copied(), resources.iter().copied())
-        .expect("scope");
+fn run(plan: &Plan, projects: &[&str], assets: &[&str], limit: usize) -> NextWorkResult {
+    let scope =
+        WorkScope::resolve(plan, projects.iter().copied(), assets.iter().copied()).expect("scope");
     next_in_scope(plan, &query(), &scope, limit, chrono::Utc::now()).expect("next")
 }
 
@@ -159,7 +159,7 @@ fn unscoped_result_equals_the_global_ranking_and_hides_nothing() {
 }
 
 #[test]
-fn resource_scope_requires_a_positive_match_and_every_write_to_fit() {
+fn asset_scope_requires_a_positive_match_and_every_write_to_fit() {
     let plan = scoped_plan();
     let only_a = run(&plan, &[], &[REPO_A], 100);
     let mut inside = keys(&only_a);
@@ -177,11 +177,11 @@ fn resource_scope_requires_a_positive_match_and_every_write_to_fit() {
 }
 
 #[test]
-fn resource_less_work_is_outside_a_resource_scope_but_inside_a_project_scope() {
+fn asset_less_work_is_outside_a_asset_scope_but_inside_a_project_scope() {
     let plan = scoped_plan();
-    let by_resource = run(&plan, &[], &[REPO_B], 100);
-    assert!(!keys(&by_resource).contains(&"NOCODE".to_string()));
-    assert!(outside(&by_resource).contains(&"NOCODE".to_string()));
+    let by_asset = run(&plan, &[], &[REPO_B], 100);
+    assert!(!keys(&by_asset).contains(&"NOCODE".to_string()));
+    assert!(outside(&by_asset).contains(&"NOCODE".to_string()));
     let by_project = run(&plan, &[OTHER], &[], 100);
     let mut inside = keys(&by_project);
     inside.sort();
@@ -189,7 +189,7 @@ fn resource_less_work_is_outside_a_resource_scope_but_inside_a_project_scope() {
 }
 
 #[test]
-fn project_scope_includes_descendants_and_intersects_with_resources() {
+fn project_scope_includes_descendants_and_intersects_with_assets() {
     let plan = scoped_plan();
     let mut subtree = keys(&run(&plan, &[ROOT], &[], 100));
     subtree.sort();
@@ -204,12 +204,12 @@ fn project_scope_includes_descendants_and_intersects_with_resources() {
 fn filtered_candidates_retain_global_order_and_rank() {
     let plan = scoped_plan();
     let global = global_order(&plan);
-    for (projects, resources) in [
+    for (projects, assets) in [
         (vec![ROOT], vec![]),
         (vec![], vec![REPO_A]),
         (vec![SUB], vec![REPO_A, REPO_B]),
     ] {
-        let result = run(&plan, &projects, &resources, 100);
+        let result = run(&plan, &projects, &assets, 100);
         for candidate in &result.candidates {
             assert_eq!(
                 global[candidate.global_rank - 1],
@@ -286,14 +286,14 @@ fn higher_ranked_count_is_relative_to_the_best_in_scope_work() {
 #[test]
 fn empty_scope_reports_all_eligible_outside_work_as_higher_ranked() {
     let mut plan = scoped_plan();
-    let docs = ResourceId::new();
-    plan.resources.insert(
+    let docs = AssetId::new();
+    plan.assets.insert(
         docs,
-        Resource {
+        WorkspaceAsset {
             id: docs,
             key: Key::new("DOCS"),
             label: "Documents".into(),
-            kind: ResourceKind::DocumentCollection,
+            kind: AssetKind::DocumentCollection,
         },
     );
     let result = run(&plan, &[], &["DOCS"], 5);

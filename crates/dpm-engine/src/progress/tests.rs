@@ -44,7 +44,10 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
             note: None,
         },
     );
-    assert_eq!(plan.work_items[&work].status, WorkStatus::InProgress);
+    assert_eq!(
+        plan.work_items[&work].execution.status,
+        WorkStatus::InProgress
+    );
     assert_eq!(
         dpm_schedule::deterministic_remaining(&plan, chrono::Utc::now())
             .expect("schedule")
@@ -81,11 +84,15 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
     assert_eq!(
         reached.completed_at,
         plan.work_items[&work]
+            .execution
             .events
             .verified_at
             .map(dpm_model::EventTime::Recorded)
     );
-    assert_eq!(plan.work_items[&milestone].status, WorkStatus::Planned);
+    assert_eq!(
+        plan.work_items[&milestone].execution.status,
+        WorkStatus::Planned
+    );
     assert_eq!(plan.work_items[&milestone].expected_duration_hours(), 0.0);
 }
 #[test]
@@ -151,9 +158,9 @@ fn report_validation_is_atomic_and_blocked_corrections_preserve_the_blocker() {
             note: Some("rework discovered".into()),
         },
     );
-    assert_eq!(plan.work_items[&work].status, WorkStatus::Blocked);
+    assert_eq!(plan.work_items[&work].execution.status, WorkStatus::Blocked);
     assert_eq!(
-        plan.work_items[&work].block_reason.as_deref(),
+        plan.work_items[&work].execution.block_reason.as_deref(),
         Some("waiting")
     );
     assert_eq!(
@@ -172,7 +179,7 @@ fn nested_packages_average_leaf_tasks_once_and_legacy_submissions_show_100_perce
     package.id = WorkItemId::new();
     package.key = Key::new("WP");
     package.kind = WorkKind::WorkPackage;
-    package.estimate = None;
+    package.schedule.estimate = None;
     let parent = package.id;
     plan.work_items.insert(parent, package.clone());
     package.id = WorkItemId::new();
@@ -201,7 +208,7 @@ fn nested_packages_average_leaf_tasks_once_and_legacy_submissions_show_100_perce
             note: None,
         },
     );
-    assert_eq!(plan.work_items[&b].reported_progress_percent, 0);
+    assert_eq!(plan.work_items[&b].execution.reported_progress_percent, 0);
     let before = plan.clone();
     let projection = progress(&plan, chrono::Utc::now()).expect("progress");
     assert_eq!(projection.work[&parent].percent_complete, 75.0);
@@ -221,17 +228,19 @@ fn import_defaults_reports_to_zero_and_rejects_invalid_progress() {
     assert!(
         plan.work_items
             .values()
-            .all(|w| w.reported_progress_percent == 0)
+            .all(|w| w.execution.reported_progress_percent == 0)
     );
     let task = plan.find_work_by_key("TEST-A").expect("task").id;
     plan.work_items
         .get_mut(&task)
         .expect("task")
+        .execution
         .reported_progress_percent = 50;
     assert!(plan.validate().is_err());
     plan.work_items
         .get_mut(&task)
         .expect("task")
+        .execution
         .reported_progress_percent = 101;
     assert!(plan.validate().is_err());
     let empty = progress(&Plan::empty("empty"), chrono::Utc::now()).expect("empty");

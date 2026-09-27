@@ -28,10 +28,14 @@ impl Application {
         let item = plan
             .find_work_by_key(key)
             .ok_or_else(|| AppError::UnknownWork(key.into()))?;
-        let from = item.owner.clone().ok_or(EngineError::InvalidTransition {
-            work: item.id,
-            status: item.status,
-        })?;
+        let from = item
+            .execution
+            .owner
+            .clone()
+            .ok_or(EngineError::InvalidTransition {
+                work: item.id,
+                status: item.execution.status,
+            })?;
         Ok(Command::Handoff {
             work: item.id,
             from,

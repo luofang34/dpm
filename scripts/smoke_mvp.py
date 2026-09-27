@@ -58,9 +58,9 @@ def smoke(binary, directory):
     run('submit', 'TEST-A', '--actor', 'agent:smoke', error='has not started')
     run('start', 'TEST-A', '--actor', 'agent:other', error='owned by')
     assert run('start', 'TEST-A', '--actor', 'agent:smoke', structured=True)['resulting_revision'] == 2
-    assert run('show', 'TEST-A', structured=True)['events']['started_at']
-    run('attach-git-head', 'TEST-A', '--resource', 'TEST-REPO', '--actor', 'agent:smoke')
-    assert len(run('show', 'TEST-A', structured=True)['artifact_ids']) == 1
+    assert run('show', 'TEST-A', structured=True)['execution']['events']['started_at']
+    run('attach-git-head', 'TEST-A', '--asset', 'TEST-REPO', '--actor', 'agent:smoke')
+    assert len(run('show', 'TEST-A', structured=True)['execution']['artifact_ids']) == 1
     run('submit', 'TEST-A', '--actor', 'agent:smoke')
     revision = run('status', structured=True)['revision']
     run('verify', 'TEST-A', '--actor', 'agent:smoke', error='cannot verify')
@@ -83,7 +83,7 @@ def smoke(binary, directory):
     assert final['complete'] == 7 and final['total_work'] == 7
     assert final['expected_finish_hours'] == 0
     assert final['p50_finish_hours'] == final['p80_finish_hours'] == final['p95_finish_hours'] == 0
-    assert run('show', 'TEST-M1', structured=True)['status'] == 'Verified'
+    assert run('show', 'TEST-M1', structured=True)['execution']['status'] == 'Verified'
     run('claim', 'TEST-M1', '--actor', 'agent:smoke', error='not a task')
     with sqlite3.connect(database) as connection:
         count = connection.execute('SELECT COUNT(*) FROM operations').fetchone()[0]
@@ -94,7 +94,7 @@ def smoke(binary, directory):
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         assert artifact['metadata']['commit'] == head
     exported = run('export', structured=True)
-    assert next(w for w in exported['work_items'].values() if w['key'] == 'TEST-M1')['status'] == 'Planned'
+    assert next(w for w in exported['work_items'].values() if w['key'] == 'TEST-M1')['execution']['status'] == 'Planned'
     export_path = directory / 'export.json'
     export_path.write_text(json.dumps(exported))
     assert run('validate', str(export_path), structured=True)['valid']

@@ -182,7 +182,7 @@ fn started_on_first_attempt(p: &mut Pair) {
     );
     ok(&mut p.plan, &builder(), Command::Claim { work: b }, 2);
     ok(&mut p.plan, &builder(), Command::Start { work: b }, 3);
-    let recorded = &p.plan.work_items[&b].basis;
+    let recorded = &p.plan.work_items[&b].execution.basis;
     assert_eq!(recorded.len(), 1);
     assert_eq!(
         (
@@ -257,6 +257,7 @@ fn a_rejected_basis_stays_flagged_through_resubmission_and_verification_until_re
         "a verification never validates B: {flagged:?}"
     );
     let outcomes: Vec<_> = p.plan.work_items[&a]
+        .execution
         .attempts
         .iter()
         .map(|x| &x.outcome)
@@ -281,7 +282,7 @@ fn a_rejected_basis_stays_flagged_through_resubmission_and_verification_until_re
 
     ok(&mut p.plan, &reviewer(), revalidate(p.b, p.edge, 2), 8);
     assert!(agree(&p.plan, 8).is_empty());
-    let history = &p.plan.work_items[&b].basis;
+    let history = &p.plan.work_items[&b].execution.basis;
     assert_eq!(
         history.iter().map(|x| x.attempt).collect::<Vec<_>>(),
         [1, 2]
@@ -328,12 +329,14 @@ fn repeated_rejection_needs_a_revalidation_for_every_rejected_basis() {
     );
     assert!(agree(&p.plan, 10).is_empty());
     let numbers: Vec<_> = p.plan.work_items[&a]
+        .execution
         .attempts
         .iter()
         .map(|x| x.number)
         .collect();
     assert_eq!(numbers, [1, 2, 3]);
     let relied: Vec<_> = p.plan.work_items[&p.b]
+        .execution
         .basis
         .iter()
         .map(|x| x.attempt)
@@ -414,7 +417,7 @@ fn verifying_the_attempt_never_delays_an_elapsing_provisional_start() {
     ok(&mut p.plan, &builder(), Command::Claim { work: b }, 25);
     ok(&mut p.plan, &builder(), Command::Start { work: b }, 25);
     assert!(
-        p.plan.work_items[&b].basis.is_empty(),
+        p.plan.work_items[&b].execution.basis.is_empty(),
         "a verified attempt is not a provisional basis"
     );
 }
@@ -468,31 +471,4 @@ fn a_waived_edge_keeps_its_invalidated_basis_as_context_only() {
     assert_eq!(dependent.successor, p.b);
 }
 
-#[test]
-fn reviewed_changes_set_the_basis_policy_only_before_execution_and_never_author_history() {
-    let mut p = provisional(0.0, DependencyPolicy::Hard);
-    let mut verified = p.plan.clone();
-    verified.dependencies[0].start_basis = StartBasis::Verified;
-    let reason = "B waits for verified A";
-    let mut probe = p.plan.clone();
-    let change = crate::plan_change(&probe, &verified, reason).expect("delta");
-    ok(&mut probe, &reviewer(), change, 0);
-    started_on_first_attempt(&mut p);
-    verified = p.plan.clone();
-    verified.dependencies[0].start_basis = StartBasis::Verified;
-    let mut forged = p.plan.clone();
-    forged.work_items.get_mut(&p.b).expect("b").basis.clear();
-    for proposal in [verified, forged] {
-        let before = p.plan.clone();
-        crate::apply_plan_change(
-            &mut p.plan,
-            reviewer(),
-            &proposal,
-            reason,
-            t(4),
-            dpm_model::OperationId::new(),
-        )
-        .expect_err("refused");
-        assert_eq!(p.plan, before, "a refused change alters nothing");
-    }
-}
+mod refusals;

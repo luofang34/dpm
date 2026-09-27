@@ -264,7 +264,7 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
         baseline,
         "next, status and schedule are unchanged"
     );
-    assert_eq!(plan.work_items[&b].status, WorkStatus::Planned);
+    assert_eq!(plan.work_items[&b].execution.status, WorkStatus::Planned);
 
     run(&mut plan, "worker", Command::Claim { work: a }).expect("claim");
     run(&mut plan, "worker", Command::Start { work: a }).expect("start");
@@ -293,12 +293,12 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
     assert_eq!(projections(&plan), submitted);
     let task = &plan.work_items[&a];
     assert_eq!(
-        task.status,
+        task.execution.status,
         WorkStatus::Submitted,
         "merge is not verification"
     );
     assert!(
-        task.artifact_ids.is_empty(),
+        task.execution.artifact_ids.is_empty(),
         "a tracking link is not evidence"
     );
     assert!(plan.artifacts.is_empty());
@@ -331,10 +331,10 @@ fn explain_exposes_package_references_and_survives_reviewed_renames() {
     package.id = WorkItemId::new();
     package.key = Key::new("TEST-PKG");
     package.kind = WorkKind::WorkPackage;
-    package.acceptance.clear();
-    package.instructions = None;
-    package.estimate = None;
-    package.status = WorkStatus::Planned;
+    package.contract.acceptance.clear();
+    package.contract.instructions = None;
+    package.schedule.estimate = None;
+    package.execution.status = WorkStatus::Planned;
     plan.work_items.insert(package.id, package.clone());
     plan.work_items.get_mut(&a).expect("task").parent = Some(package.id);
     plan.validate().expect("package");

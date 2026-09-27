@@ -34,7 +34,7 @@ pub fn deterministic_remaining(
         .map(|(id, work)| {
             (
                 *id,
-                if work.status.satisfies_dependency() {
+                if work.execution.status.satisfies_dependency() {
                     0.0
                 } else {
                     work.expected_duration_hours()
@@ -82,7 +82,7 @@ pub(crate) fn remaining_plan(plan: &Plan, now: chrono::DateTime<chrono::Utc>) ->
         .collect();
     for id in &excluded {
         if let Some(work) = remaining.work_items.get_mut(id) {
-            work.estimate = None;
+            work.schedule.estimate = None;
         }
     }
     remaining.dependencies = plan

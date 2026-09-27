@@ -9,27 +9,27 @@ impl Application {
         &self,
         actor: ActorId,
         work: dpm_model::WorkItemId,
-        resource: Option<&str>,
+        asset: Option<&str>,
     ) -> Result<Artifact, AppError> {
         self.ensure_writable()?;
         let plan = self.plan_blocking()?;
-        let selected = if let Some(key) = resource {
+        let selected = if let Some(key) = asset {
             let id = plan
-                .resources
+                .assets
                 .values()
                 .find(|r| r.key.0 == key)
-                .ok_or_else(|| AppError::InvalidRequest(format!("unknown resource {key}")))?
+                .ok_or_else(|| AppError::InvalidRequest(format!("unknown asset {key}")))?
                 .id;
-            if self.project_resource.is_some_and(|bound| bound != id) {
+            if self.project_asset.is_some_and(|bound| bound != id) {
                 return Err(AppError::InvalidRequest(
-                    "resource differs from this checkout's locator binding".into(),
+                    "asset differs from this checkout's locator binding".into(),
                 ));
             }
             id
         } else {
-            self.project_resource.ok_or_else(|| {
+            self.project_asset.ok_or_else(|| {
                 AppError::InvalidRequest(
-                    "Git evidence needs a locator resource or explicit --resource key".into(),
+                    "Git evidence needs a locator asset or explicit --asset key".into(),
                 )
             })?
         };
@@ -37,14 +37,14 @@ impl Application {
             .work_items
             .get(&work)
             .ok_or(dpm_engine::EngineError::MissingWorkItem(work))?;
-        if !item.resources.iter().any(|r| r.resource == selected)
+        if !item.contract.assets.iter().any(|r| r.asset == selected)
             || !matches!(
-                plan.resources[&selected].kind,
-                dpm_model::ResourceKind::GitRepository { .. }
+                plan.assets[&selected].kind,
+                dpm_model::AssetKind::GitRepository { .. }
             )
         {
             return Err(AppError::InvalidRequest(
-                "Git resource must belong to the task's requirements".into(),
+                "Git asset must belong to the task's requirements".into(),
             ));
         }
         let mut artifact = git_head_at_blocking(
@@ -53,8 +53,8 @@ impl Application {
         )?;
         artifact
             .metadata
-            .insert("resource_id".into(), selected.to_string());
-        artifact.uri = format!("git:resource:{selected}@{}", artifact.metadata["commit"]);
+            .insert("asset_id".into(), selected.to_string());
+        artifact.uri = format!("git:asset:{selected}@{}", artifact.metadata["commit"]);
         Ok(artifact)
     }
 }

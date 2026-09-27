@@ -1,6 +1,6 @@
 //! Write one project's work as the supported MSPDI subset.
 //!
-//! Output depends only on the plan: tasks follow the outline with siblings in key order, UIDs
+//! Output depends only on the plan: tasks follow the outline with siblings in explicit order, UIDs
 //! number that order, and GUIDs are the stable work and project identities. Durations and lags
 //! are written in elapsed hours because DPM schedules elapsed hours.
 
@@ -85,7 +85,7 @@ fn outline<'a>(plan: &'a Plan, project: &Project) -> Vec<Row<'a>> {
         children.entry(work.parent).or_default().push(work);
     }
     for siblings in children.values_mut() {
-        siblings.sort_by(|a, b| a.key.natural_cmp(&b.key));
+        siblings.sort_by(|a, b| a.order.cmp(&b.order).then(a.id.cmp(&b.id)));
     }
     let mut rows = Vec::new();
     let roots = children.get(&None).cloned().unwrap_or_default();
@@ -129,13 +129,16 @@ fn write_task(
         ("Name", escape(&work.title)?),
         ("OutlineNumber", row.outline_number.clone()),
         ("OutlineLevel", row.level.to_string()),
-        ("Priority", priority_value(work.priority).to_string()),
+        (
+            "Priority",
+            priority_value(work.schedule.priority).to_string(),
+        ),
     ] {
         push_line(xml, 3, &format!("<{name}>{value}</{name}>"));
     }
     if work.kind != WorkKind::WorkPackage {
         let seconds = match work.kind {
-            WorkKind::Task => duration_seconds(work.estimate),
+            WorkKind::Task => duration_seconds(work.schedule.estimate),
             WorkKind::Milestone | WorkKind::WorkPackage => 0,
         };
         push_line(
@@ -166,11 +169,11 @@ fn write_task(
             flag(work.kind == WorkKind::WorkPackage)
         ),
     );
-    if !work.objective.trim().is_empty() {
+    if !work.contract.objective.trim().is_empty() {
         push_line(
             xml,
             3,
-            &format!("<Notes>{}</Notes>", escape(&work.objective)?),
+            &format!("<Notes>{}</Notes>", escape(&work.contract.objective)?),
         );
     }
     write_links(xml, plan, work.id, uids);
@@ -221,15 +224,15 @@ fn item_report(
         "priority".into(),
     ];
     let mut approximated = Vec::new();
-    if !work.objective.trim().is_empty() {
+    if !work.contract.objective.trim().is_empty() {
         preserved.push("objective".into());
     }
     if work.kind == WorkKind::Task {
-        let exact = work.estimate.is_none_or(|e| {
+        let exact = work.schedule.estimate.is_none_or(|e| {
             e.optimistic_hours == e.pessimistic_hours
                 && duration_seconds(Some(e)) as f64 == e.likely_hours * 3600.0
         });
-        match work.estimate {
+        match work.schedule.estimate {
             Some(e) if !exact => approximated.push(Finding::new(
                 "estimate",
                 format!(
@@ -266,56 +269,60 @@ fn omissions(work: &WorkItem) -> Vec<Finding> {
         WorkStatus::Planned
     };
     note(
-        work.status != initial,
+        work.execution.status != initial,
         "status",
         format!(
             "lifecycle {:?} is not written; MSPDI progress fields stay empty",
-            work.status
+            work.execution.status
         ),
     );
     note(
-        !work.acceptance.is_empty(),
+        !work.contract.acceptance.is_empty(),
         "acceptance",
-        format!("{} acceptance criteria", work.acceptance.len()),
+        format!("{} acceptance criteria", work.contract.acceptance.len()),
     );
     note(
-        work.instructions.is_some(),
+        work.contract.instructions.is_some(),
         "instructions",
         "execution instructions".into(),
     );
-    note(work.owner.is_some(), "owner", "claim owner".into());
     note(
-        work.reported_progress_percent != 0,
-        "reported_progress_percent",
-        format!("{}% owner report", work.reported_progress_percent),
+        work.execution.owner.is_some(),
+        "owner",
+        "claim owner".into(),
     );
     note(
-        !work.capabilities.is_empty(),
+        work.execution.reported_progress_percent != 0,
+        "reported_progress_percent",
+        format!("{}% owner report", work.execution.reported_progress_percent),
+    );
+    note(
+        !work.contract.capabilities.is_empty(),
         "capabilities",
         "required capabilities".into(),
     );
     note(
-        !work.requirement_ids.is_empty(),
+        !work.contract.requirement_ids.is_empty(),
         "requirement_ids",
         "requirement links".into(),
     );
     note(
-        !work.artifact_ids.is_empty(),
+        !work.execution.artifact_ids.is_empty(),
         "artifact_ids",
         "attached evidence".into(),
     );
     note(
-        !work.resources.is_empty(),
-        "resources",
-        "resource requirements".into(),
+        !work.contract.assets.is_empty(),
+        "assets",
+        "workspace asset requirements".into(),
     );
     note(
-        work.last_rejection.is_some(),
+        work.execution.last_rejection.is_some(),
         "last_rejection",
         "latest review rejection".into(),
     );
     note(
-        work.block_reason.is_some(),
+        work.execution.block_reason.is_some(),
         "block_reason",
         "blocker".into(),
     );

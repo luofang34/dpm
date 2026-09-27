@@ -67,14 +67,14 @@ fn edge_mut<'a>(plan: &'a mut Plan, from: &str, to: &str) -> &'a mut Dependency 
 /// A with rejected attempts `1..rejected` and a final attempt in `outcome`, as commands record them.
 fn attempts(plan: &mut Plan, key: &str, rejected: u32, last: AttemptOutcome) {
     let work = plan.find_work_by_key_mut(key).expect("work");
-    work.owner = Some(ActorId::agent("author"));
-    work.events.started_at = Some(t(0));
+    work.execution.owner = Some(ActorId::agent("author"));
+    work.execution.events.started_at = Some(t(0));
     let rejection = |n: u32| AttemptOutcome::Rejected {
         actor: reviewer(),
         at: t(i64::from(n) * 2),
         reason: "fails".into(),
     };
-    work.attempts = (1..=rejected)
+    work.execution.attempts = (1..=rejected)
         .map(|n| SubmissionAttempt {
             number: n,
             submitted_at: t(i64::from(n) * 2 - 1),
@@ -82,19 +82,19 @@ fn attempts(plan: &mut Plan, key: &str, rejected: u32, last: AttemptOutcome) {
         })
         .collect();
     let submitted_at = t(i64::from(rejected) * 2 + 1);
-    work.status = match &last {
+    work.execution.status = match &last {
         AttemptOutcome::Pending => WorkStatus::Submitted,
         AttemptOutcome::Verified { .. } => WorkStatus::Verified,
         AttemptOutcome::Rejected { .. } => WorkStatus::InProgress,
     };
     if last == AttemptOutcome::Pending {
-        work.events.submitted_at = Some(submitted_at);
+        work.execution.events.submitted_at = Some(submitted_at);
     }
     if let AttemptOutcome::Verified { at, .. } = &last {
-        work.events.submitted_at = Some(submitted_at);
-        work.events.verified_at = Some(*at);
+        work.execution.events.submitted_at = Some(submitted_at);
+        work.execution.events.verified_at = Some(*at);
     }
-    work.attempts.push(SubmissionAttempt {
+    work.execution.attempts.push(SubmissionAttempt {
         number: rejected + 1,
         submitted_at,
         outcome: last,
@@ -116,8 +116,8 @@ fn legacy_records_load_and_serialize_without_attempts_basis_or_policy() {
         assert!(!text.contains(field), "{field} is omitted by default");
     }
     let work = plan.find_work_by_key_mut("TEST-A").expect("a");
-    work.status = WorkStatus::Submitted;
-    work.owner = Some(ActorId::agent("legacy"));
+    work.execution.status = WorkStatus::Submitted;
+    work.execution.owner = Some(ActorId::agent("legacy"));
     plan.validate()
         .expect("a legacy submission without attempts stays valid");
     let reloaded: Plan = serde_json::from_str(&text).expect("reload");
@@ -161,8 +161,8 @@ fn only_a_pending_attempt_releases_a_provisional_start_and_never_a_finish() {
 
     let mut legacy = provisional_pair();
     let work = legacy.find_work_by_key_mut("TEST-A").expect("a");
-    work.status = WorkStatus::Submitted;
-    work.owner = Some(ActorId::agent("legacy"));
+    work.execution.status = WorkStatus::Submitted;
+    work.execution.owner = Some(ActorId::agent("legacy"));
     let unreferenced = Timeline::at(&legacy, t(2)).start_edge(&legacy, &provisional);
     assert_eq!(
         (unreferenced.release, unreferenced.attempt),
@@ -205,11 +205,11 @@ fn attempt_history_must_match_the_lifecycle() {
         .expect("two rejections then a pending attempt");
     let a = id(&plan, "TEST-A");
     let corrupt: [fn(&mut WorkItem); 5] = [
-        |w| w.attempts[0].number = 2,
-        |w| w.attempts[0].outcome = AttemptOutcome::Pending,
-        |w| w.status = WorkStatus::InProgress,
-        |w| w.events.submitted_at = Some(t(99)),
-        |w| w.attempts[2].submitted_at = t(3),
+        |w| w.execution.attempts[0].number = 2,
+        |w| w.execution.attempts[0].outcome = AttemptOutcome::Pending,
+        |w| w.execution.status = WorkStatus::InProgress,
+        |w| w.execution.events.submitted_at = Some(t(99)),
+        |w| w.execution.attempts[2].submitted_at = t(3),
     ];
     for (index, corrupt) in corrupt.into_iter().enumerate() {
         let mut broken = plan.clone();
@@ -235,15 +235,15 @@ fn a_basis_needs_a_started_successor_and_a_resolving_attempt() {
         source,
     };
     let successor = plan.work_items.get_mut(&b).expect("b");
-    successor.basis.push(entry(1, BasisSource::Start));
+    successor.execution.basis.push(entry(1, BasisSource::Start));
     assert!(
         plan.validate().is_err(),
         "an unstarted task relies on nothing"
     );
     let successor = plan.work_items.get_mut(&b).expect("b");
-    successor.status = WorkStatus::InProgress;
-    successor.owner = Some(ActorId::agent("builder"));
-    successor.events.started_at = Some(t(2));
+    successor.execution.status = WorkStatus::InProgress;
+    successor.execution.owner = Some(ActorId::agent("builder"));
+    successor.execution.events.started_at = Some(t(2));
     plan.validate().expect("started on attempt 1");
     let [status] = basis_status(&plan, &plan.work_items[&b])
         .try_into()
@@ -261,12 +261,21 @@ fn a_basis_needs_a_started_successor_and_a_resolving_attempt() {
         entry(2, revalidation(ActorId::agent("builder"))),
     ] {
         let mut broken = plan.clone();
-        broken.work_items.get_mut(&b).expect("b").basis.push(bad);
+        broken
+            .work_items
+            .get_mut(&b)
+            .expect("b")
+            .execution
+            .basis
+            .push(bad);
         assert!(broken.validate().is_err());
     }
     let mut revalidated = plan.clone();
     let successor = revalidated.work_items.get_mut(&b).expect("b");
-    successor.basis.push(entry(2, revalidation(reviewer())));
+    successor
+        .execution
+        .basis
+        .push(entry(2, revalidation(reviewer())));
     revalidated.validate().expect("independent revalidation");
     let [status] = basis_status(&revalidated, &revalidated.work_items[&b])
         .try_into()

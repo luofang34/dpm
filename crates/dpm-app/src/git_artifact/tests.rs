@@ -1,6 +1,6 @@
 use crate::{AppError, Application, ProjectLocation, WorkspaceRegistry};
 use dpm_model::{
-    ActorId, Key, Plan, Resource, ResourceAccess, ResourceId, ResourceKind, ResourceRequirement,
+    ActorId, AssetAccess, AssetId, AssetKind, AssetRequirement, Key, Plan, WorkspaceAsset,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -13,20 +13,14 @@ fn plan() -> Plan {
     .expect("fixture");
     let work = plan.find_work_by_key("TEST-A").expect("task").id;
     for (key, kind) in [
-        (
-            "SECOND-REPO",
-            ResourceKind::GitRepository { remotes: vec![] },
-        ),
-        ("NOTES", ResourceKind::DocumentCollection),
-        (
-            "UNUSED-REPO",
-            ResourceKind::GitRepository { remotes: vec![] },
-        ),
+        ("SECOND-REPO", AssetKind::GitRepository { remotes: vec![] }),
+        ("NOTES", AssetKind::DocumentCollection),
+        ("UNUSED-REPO", AssetKind::GitRepository { remotes: vec![] }),
     ] {
-        let id = ResourceId::new();
-        plan.resources.insert(
+        let id = AssetId::new();
+        plan.assets.insert(
             id,
-            Resource {
+            WorkspaceAsset {
                 id,
                 key: Key::new(key),
                 label: key.into(),
@@ -37,20 +31,21 @@ fn plan() -> Plan {
             plan.work_items
                 .get_mut(&work)
                 .expect("task")
-                .resources
-                .push(ResourceRequirement {
-                    resource: id,
-                    access: ResourceAccess::Write,
+                .contract
+                .assets
+                .push(AssetRequirement {
+                    asset: id,
+                    access: AssetAccess::Write,
                 });
         }
     }
-    plan.validate().expect("valid multi-resource plan");
+    plan.validate().expect("valid multi-asset plan");
     plan
 }
 
-fn rejected(app: &Application, resource: Option<&str>) -> String {
+fn rejected(app: &Application, asset: Option<&str>) -> String {
     let work = app.work_id_blocking("TEST-A").expect("task");
-    match app.git_head_artifact_blocking(ActorId::agent("worker"), work, resource) {
+    match app.git_head_artifact_blocking(ActorId::agent("worker"), work, asset) {
         Err(AppError::InvalidRequest(message)) => message,
         other => panic!("expected an invalid request, got {other:?}"),
     }
@@ -63,8 +58,8 @@ fn capture_without_one_explicit_task_repository_is_rejected_before_reading_git()
     let database = temp.path().join("shared.sqlite");
     Application::initialize_blocking(&database, &plan).expect("store");
     let unbound = Application::open_blocking(&database).expect("open");
-    assert!(rejected(&unbound, None).contains("explicit --resource"));
-    assert!(rejected(&unbound, Some("MISSING")).contains("unknown resource"));
+    assert!(rejected(&unbound, None).contains("explicit --asset"));
+    assert!(rejected(&unbound, Some("MISSING")).contains("unknown asset"));
     assert!(rejected(&unbound, Some("NOTES")).contains("task's requirements"));
     assert!(rejected(&unbound, Some("UNUSED-REPO")).contains("task's requirements"));
 
@@ -77,7 +72,7 @@ fn capture_without_one_explicit_task_repository_is_rejected_before_reading_git()
     fs::write(
         checkout.join(".dpm/project.toml"),
         format!(
-            "version = 2\nworkspace = '{}'\nresource = 'TEST-REPO'\n",
+            "version = 3\nworkspace = '{}'\nasset = 'TEST-REPO'\n",
             plan.workspace.id
         ),
     )
