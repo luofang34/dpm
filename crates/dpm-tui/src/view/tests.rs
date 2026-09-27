@@ -485,3 +485,5 @@ fn gantt_minimum_size_message_states_the_terminal_size_it_needs() {
     let screen = screen_rows(&mut view, 38, 17);
     assert!(screen.contains("18 rows"), "{screen}");
 }
+
+mod order;

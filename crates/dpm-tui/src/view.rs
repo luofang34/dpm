@@ -59,7 +59,18 @@ impl View {
         let timeline = Timeline::at(plan, clock);
         let now = crate::now::text(plan, &summary, &timeline, candidates);
         let mut work: Vec<_> = plan.work_items.values().cloned().collect();
-        work.sort_by_cached_key(|item| hierarchy_path(plan, item));
+        let mut paths: Vec<_> = work
+            .drain(..)
+            .map(|item| (hierarchy_path(plan, &item), item))
+            .collect();
+        paths.sort_by(|(a, _), (b, _)| {
+            a.iter()
+                .zip(b)
+                .map(|(a, b)| a.natural_cmp(b))
+                .find(|order| order.is_ne())
+                .unwrap_or_else(|| a.len().cmp(&b.len()))
+        });
+        work.extend(paths.into_iter().map(|(_, item)| item));
         let done = completion(plan, clock);
         for item in &mut work {
             if !item.is_executable() && done.contains(&item.id) {
@@ -294,11 +305,11 @@ impl View {
     }
 }
 
-fn hierarchy_path(plan: &Plan, work: &WorkItem) -> Vec<String> {
-    let mut path = vec![work.key.to_string()];
+fn hierarchy_path(plan: &Plan, work: &WorkItem) -> Vec<dpm_model::Key> {
+    let mut path = vec![work.key.clone()];
     let mut parent = work.parent;
     while let Some(item) = parent.and_then(|id| plan.work_items.get(&id)) {
-        path.push(item.key.to_string());
+        path.push(item.key.clone());
         parent = item.parent;
     }
     path.reverse();

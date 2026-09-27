@@ -388,7 +388,8 @@ a milestone flag flipped) fails the import with the same source context.
 
 `plan export-mspdi --project-key KEY [--output FILE]` and `export_mspdi` (`project_key`) return
 `{xml, report}`; without `--json` the CLI prints the document itself. Output is deterministic:
-siblings follow key order, `UID`s number that order (they are local to the file), and `GUID`s are
+siblings follow natural key order (digit runs compare by value, so `OP-2` precedes `OP-10`; the
+same order as the terminal outline), `UID`s number that order (they are local to the file), and `GUID`s are
 the stable project and work identities. Tasks carry the PERT expectation in elapsed hours, and
 links carry elapsed-hour lags. The report lists per-item omissions (acceptance, instructions,
 lifecycle, owner, requirements, evidence, resources) and project-level data outside the subset.

@@ -26,7 +26,8 @@ reports rather than drops.
   export format and is not an external fixture.
 - `mpxj-rewrite-of-dpm-export.xml`: MPXJ's `MSPDIReader` reading `dpm-export-release-plan.xml`
   and its `MSPDIWriter` writing it again ([MpxjRewrite.java](MpxjRewrite.java)), so DPM's export
-  is checked against another implementation's reading of it.
+  is checked against another implementation's reading of it. The rewrite is compared by meaning,
+  not byte for byte, so it does not depend on sibling order.
 
 ## OmniPlan fixtures
 
@@ -63,6 +64,6 @@ importer needs an explicit key prefix for them.
   as 1000/714/428, one DPM band higher each, which `--keep-existing-priority` leaves unapplied.
 
 In the other direction, DPM's export of the imported `omniplan-native.xml` opened in OmniPlan 4.10.3
-with the same groups, milestones, relation kinds, lead times and CJK names (top-level items in DPM
-key order); OmniPlan's MSPDI export of that document imports back with no changes under
+with the same groups, milestones, relation kinds, lead times and CJK names (top-level items in the
+export's sibling order); OmniPlan's MSPDI export of that document imports back with no changes under
 `--match-existing-by title-path`.

@@ -85,7 +85,7 @@ fn outline<'a>(plan: &'a Plan, project: &Project) -> Vec<Row<'a>> {
         children.entry(work.parent).or_default().push(work);
     }
     for siblings in children.values_mut() {
-        siblings.sort_by(|a, b| a.key.cmp(&b.key));
+        siblings.sort_by(|a, b| a.key.natural_cmp(&b.key));
     }
     let mut rows = Vec::new();
     let roots = children.get(&None).cloned().unwrap_or_default();

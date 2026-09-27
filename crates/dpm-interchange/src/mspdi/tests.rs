@@ -427,3 +427,26 @@ fn rejected_links_carry_only_the_rejection_and_zero_durations_are_reported() {
     assert!(spec.approximated.iter().any(|f| f.field == "duration"));
     assert_eq!(work(&result.candidate, "MSP-2").estimate, None);
 }
+
+#[test]
+fn export_orders_siblings_by_natural_key_order() {
+    let tasks: Vec<String> = (1..=12)
+        .map(|uid| {
+            task(
+                uid,
+                1,
+                &format!("Step {uid}"),
+                "<Duration>PT1H0M0S</Duration>",
+            )
+        })
+        .collect();
+    let current = import(&workspace(), &document(&tasks)).candidate;
+    let xml = export_mspdi(&current, "REL").expect("export").xml;
+    let names: Vec<_> = xml
+        .split("<Name>")
+        .skip(2)
+        .filter_map(|rest| rest.split('<').next())
+        .collect();
+    let expected: Vec<_> = (1..=12).map(|uid| format!("Step {uid}")).collect();
+    assert_eq!(names, expected, "MSP-2 precedes MSP-10");
+}
