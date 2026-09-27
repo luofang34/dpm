@@ -54,6 +54,8 @@ fn keys(result: &ImportResult) -> Vec<String> {
 #[test]
 fn guidless_documents_import_under_the_source_prefix_and_reimport_unchanged() {
     let first = import(&workspace(), &release(), "OP");
+    // OmniPlan names the project only in <Title>.
+    assert_eq!(first.report.source.name.as_deref(), Some("Tool plan"));
     let root = &first.report.items[0];
     assert_eq!(root.outcome, ItemOutcome::Skipped);
     assert_eq!(root.rejected[0].field, "project_summary");

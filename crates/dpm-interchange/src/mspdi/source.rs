@@ -87,7 +87,10 @@ pub(crate) fn parse(xml: &str) -> Result<SourceProject, InterchangeError> {
     Ok(SourceProject {
         guid: optional_guid(text(root, "GUID"))
             .map_err(|reason| InterchangeError::MalformedProject { reason })?,
-        name: text(root, "Name").map(str::to_owned),
+        // OmniPlan names the project only in <Title>.
+        name: text(root, "Name")
+            .or_else(|| text(root, "Title"))
+            .map(str::to_owned),
         tasks,
         rejected: document_findings(root, resources.len()),
     })

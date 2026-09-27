@@ -54,7 +54,7 @@ pub struct SourceSummary {
     pub format: String,
     /// Source project GUID, when the document records one.
     pub project_guid: Option<String>,
-    /// Source project name, when present.
+    /// Source project `Name`, or its `Title` when the document has no name, when present.
     pub name: Option<String>,
     /// What an import carries: plan structure, never calendar dates.
     pub scope: String,
