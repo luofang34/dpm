@@ -164,9 +164,9 @@ pub(crate) fn evaluate(
         });
     }
     let mut provisional = Vec::new();
-    for dep in plan
-        .enforced_dependencies()
-        .filter(|dep| dep.successor == work.id && transition.governs(dep.kind))
+    for dep in timeline
+        .incoming(plan, work.id)
+        .filter(|dep| transition.governs(dep.kind))
     {
         let Some(item) = plan.work_items.get(&dep.predecessor) else {
             continue;

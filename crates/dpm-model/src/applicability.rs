@@ -99,6 +99,10 @@ pub(crate) struct Derived {
 /// Derive applicability: conditions through containment first, then constraints in dependency
 /// order, then work packages from their children.
 pub(crate) fn derive(plan: &Plan) -> Derived {
+    derive_indexed(plan, &crate::graph_index::GraphIndex::new(plan))
+}
+
+pub(crate) fn derive_indexed(plan: &Plan, index: &crate::graph_index::GraphIndex) -> Derived {
     let mut derived = Derived {
         states: BTreeMap::new(),
         choice_at: BTreeMap::new(),
@@ -120,10 +124,10 @@ pub(crate) fn derive(plan: &Plan) -> Derived {
         if work.kind == WorkKind::WorkPackage || finished || !derived.states[&id].is_applicable() {
             continue;
         }
-        let state = through_constraints(plan, work, &derived.states);
+        let state = through_constraints(plan, index, work, &derived.states);
         derived.states.insert(id, state);
     }
-    packages::derive(plan, &mut derived);
+    packages::derive(plan, index, &mut derived);
     derived
 }
 
@@ -240,14 +244,18 @@ fn conditions(plan: &Plan, work: &WorkItem) -> (Applicability, Option<EventTime>
 
 fn through_constraints(
     plan: &Plan,
+    index: &crate::graph_index::GraphIndex,
     work: &WorkItem,
     states: &BTreeMap<WorkItemId, Applicability>,
 ) -> Applicability {
     let mut awaiting = None;
     let (mut incoming, mut active) = (0_usize, 0_usize);
-    for edge in plan
-        .enforced_dependencies()
-        .filter(|e| e.successor == work.id)
+    for edge in index
+        .incoming
+        .get(&work.id)
+        .into_iter()
+        .flatten()
+        .filter_map(|i| plan.dependencies.get(*i))
     {
         incoming = incoming.wrapping_add(1);
         let Some(predecessor) = plan.work_items.get(&edge.predecessor) else {

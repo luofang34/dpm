@@ -4,7 +4,7 @@ use dpm_model::{
     Applicability, BasisStatus, DecisionStatus, Plan, Priority, Timeline, WorkItem, WorkItemId,
     WorkStatus, basis_status,
 };
-use dpm_schedule::{SimulationConfig, deterministic_remaining, simulate_remaining};
+use dpm_schedule::{SimulationConfig, deterministic_remaining_at, simulate_remaining_at};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -92,7 +92,7 @@ pub fn status(
 ) -> Result<StatusSummary, EngineError> {
     plan.validate()?;
     let timeline = Timeline::at(plan, now);
-    let schedule = deterministic_remaining(plan, now)?;
+    let schedule = deterministic_remaining_at(plan, &timeline)?;
     let open_choices = choices::open_choices(plan, probabilistic, now)?;
     // Mutually exclusive branches have no probability model, so no single percentile is given.
     let simulation = if probabilistic
@@ -102,7 +102,7 @@ pub fn status(
             .values()
             .any(|w| w.schedule.estimate.is_some())
     {
-        Some(simulate_remaining(plan, simulation_config(), now)?)
+        Some(simulate_remaining_at(plan, simulation_config(), &timeline)?)
     } else {
         None
     };
@@ -181,7 +181,11 @@ pub fn excluded_in_flight<'a>(plan: &'a Plan, timeline: &Timeline) -> Vec<&'a Wo
 /// Transitive successors that completing work could still release; excluded or stranded work
 /// is not counted because no completion releases it. Only enforced edges count: a waived edge
 /// gates nothing, so ranking must not reward releasing it.
-fn downstream_counts(plan: &Plan, timeline: &Timeline) -> BTreeMap<WorkItemId, usize> {
+fn downstream_counts(
+    plan: &Plan,
+    timeline: &Timeline,
+    starts: impl IntoIterator<Item = WorkItemId>,
+) -> BTreeMap<WorkItemId, usize> {
     let mut outgoing = BTreeMap::<WorkItemId, Vec<WorkItemId>>::new();
     for dep in plan.enforced_dependencies().filter(|d| {
         let state = timeline.applicability(d.successor);
@@ -200,9 +204,9 @@ fn downstream_counts(plan: &Plan, timeline: &Timeline) -> BTreeMap<WorkItemId, u
     }
 
     let mut result = BTreeMap::new();
-    for start in plan.work_items.keys() {
+    for start in starts {
         let mut seen = BTreeSet::new();
-        let mut queue = VecDeque::from([*start]);
+        let mut queue = VecDeque::from([start]);
         while let Some(node) = queue.pop_front() {
             if let Some(next) = outgoing.get(&node) {
                 for child in next {
@@ -212,7 +216,7 @@ fn downstream_counts(plan: &Plan, timeline: &Timeline) -> BTreeMap<WorkItemId, u
                 }
             }
         }
-        result.insert(*start, seen.len());
+        result.insert(start, seen.len());
     }
     result
 }
@@ -264,19 +268,31 @@ pub fn next_work(
 ) -> Result<Vec<NextWorkCandidate>, EngineError> {
     plan.validate()?;
     let timeline = Timeline::at(plan, now);
-    let schedule = deterministic_remaining(plan, now)?;
-    let downstream = downstream_counts(plan, &timeline);
+    let schedule = deterministic_remaining_at(plan, &timeline)?;
     let simulation = if query.use_probabilistic_criticality
         && plan
             .work_items
             .values()
             .any(|w| w.schedule.estimate.is_some())
     {
-        Some(simulate_remaining(plan, simulation_config(), now)?)
+        Some(simulate_remaining_at(plan, simulation_config(), &timeline)?)
     } else {
         None
     };
     let reports = claim_reports(plan, &timeline);
+    let downstream = downstream_counts(
+        plan,
+        &timeline,
+        reports
+            .iter()
+            .filter(|(_, r)| r.ready)
+            .filter_map(|(id, _)| plan.work_items.get(id))
+            .filter(|w| {
+                query.capabilities.is_empty()
+                    || w.contract.capabilities.is_subset(&query.capabilities)
+            })
+            .map(|w| w.id),
+    );
 
     let mut candidates = plan
         .work_items

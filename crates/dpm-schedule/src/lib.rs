@@ -6,7 +6,12 @@ mod network;
 mod projection;
 mod simulation;
 
-pub use cpm::{deterministic, deterministic_remaining, deterministic_with_durations};
+pub use cpm::{
+    deterministic, deterministic_remaining, deterministic_remaining_at,
+    deterministic_with_durations,
+};
 pub use error::ScheduleError;
 pub use projection::{ActivitySchedule, Schedule};
-pub use simulation::{SimulationConfig, SimulationSummary, simulate, simulate_remaining};
+pub use simulation::{
+    SimulationConfig, SimulationSummary, simulate, simulate_remaining, simulate_remaining_at,
+};

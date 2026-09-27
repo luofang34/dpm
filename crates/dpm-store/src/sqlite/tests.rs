@@ -187,3 +187,5 @@ fn corrupt_revision_and_lifecycle_are_rejected_on_load() {
         Err(StoreError::Validation(_))
     ));
 }
+
+mod cache;

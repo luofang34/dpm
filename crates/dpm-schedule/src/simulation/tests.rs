@@ -243,7 +243,7 @@ fn remaining_simulation_equals_one_projection_of_the_remaining_graph_per_sample(
     };
     for now in [at(10), at(25), at(400)] {
         let fast = simulate_remaining(&plan, config, now).expect("remaining");
-        let remaining = crate::cpm::remaining_plan(&plan, now);
+        let remaining = crate::cpm::remaining_plan_at(&plan, &dpm_model::Timeline::at(&plan, now));
         assert!(remaining.excluded.is_empty());
         let slow = reference(&remaining.plan, config, true);
         assert_eq!(fast.p50_finish_hours, slow.p50_finish_hours);

@@ -12,7 +12,7 @@ use crate::{Applicability, Key, Plan, WorkItem, WorkItemId, WorkKind};
 /// the package is excluded too, as of the latest excluding choice. Otherwise a child still waiting
 /// for a choice leaves the package awaiting it, and a package left only with stranded children
 /// can never complete.
-pub(super) fn derive(plan: &Plan, derived: &mut Derived) {
+pub(super) fn derive(plan: &Plan, index: &crate::graph_index::GraphIndex, derived: &mut Derived) {
     let mut packages: Vec<_> = plan
         .work_items
         .values()
@@ -28,10 +28,12 @@ pub(super) fn derive(plan: &Plan, derived: &mut Derived) {
         {
             continue;
         }
-        let mut children: Vec<_> = plan
-            .work_items
-            .values()
-            .filter(|w| w.parent == Some(package.id))
+        let mut children: Vec<_> = index
+            .children
+            .get(&package.id)
+            .into_iter()
+            .flatten()
+            .filter_map(|id| plan.work_items.get(id))
             .collect();
         children.sort_by(|a, b| a.key.cmp(&b.key));
         if let Some(state) = from_children(&children, derived) {

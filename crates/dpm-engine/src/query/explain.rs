@@ -5,7 +5,7 @@ use dpm_model::{
     Applicability, BasisStatus, Plan, Timeline, WorkItem, WorkItemId, basis_dependents,
     basis_status,
 };
-use dpm_schedule::{deterministic_remaining, simulate_remaining};
+use dpm_schedule::{deterministic_remaining_at, simulate_remaining_at};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -66,15 +66,15 @@ pub fn explain_work(
     plan.validate()?;
     let timeline = Timeline::at(plan, now);
     let item = show_with(plan, work, &timeline)?;
-    let schedule = deterministic_remaining(plan, now)?;
-    let simulation = simulate_remaining(plan, simulation_config(), now)?;
+    let schedule = deterministic_remaining_at(plan, &timeline)?;
+    let simulation = simulate_remaining_at(plan, simulation_config(), &timeline)?;
     let predecessors = plan
         .dependencies
         .iter()
         .filter(|dep| dep.successor == work)
         .filter_map(|dep| plan.work_items.get(&dep.predecessor).cloned())
         .collect::<Vec<_>>();
-    let downstream_count = downstream_counts(plan, &timeline)
+    let downstream_count = downstream_counts(plan, &timeline, [work])
         .get(&work)
         .copied()
         .unwrap_or(0);

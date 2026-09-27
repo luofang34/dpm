@@ -104,8 +104,17 @@ pub fn simulate_remaining(
     config: SimulationConfig,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<SimulationSummary, ScheduleError> {
+    simulate_remaining_at(plan, config, &dpm_model::Timeline::at(plan, now))
+}
+
+/// Sample the remaining graph sharing the gate timeline for the same immutable plan snapshot.
+pub fn simulate_remaining_at(
+    plan: &Plan,
+    config: SimulationConfig,
+    timeline: &dpm_model::Timeline,
+) -> Result<SimulationSummary, ScheduleError> {
     plan.validate()?;
-    let remaining = crate::cpm::remaining_plan(plan, now);
+    let remaining = crate::cpm::remaining_plan_at(plan, timeline);
     let mut summary = simulate_inner(&remaining.plan, config, true)?;
     summary
         .criticality

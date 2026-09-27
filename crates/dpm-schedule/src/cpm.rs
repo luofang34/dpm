@@ -25,8 +25,16 @@ pub fn deterministic_remaining(
     plan: &Plan,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<Schedule, ScheduleError> {
+    deterministic_remaining_at(plan, &dpm_model::Timeline::at(plan, now))
+}
+
+/// Remaining projection sharing the gate timeline for the same immutable plan snapshot.
+pub fn deterministic_remaining_at(
+    plan: &Plan,
+    timeline: &dpm_model::Timeline,
+) -> Result<Schedule, ScheduleError> {
     plan.validate()?;
-    let remaining = remaining_plan(plan, now);
+    let remaining = remaining_plan_at(plan, timeline);
     let plan = &remaining.plan;
     let durations = plan
         .work_items
@@ -70,9 +78,9 @@ pub(crate) struct Remaining {
 /// started is treated the same way from its start event; the started predecessor projects at the
 /// origin unless its own remaining constraints push it later, which only delays the forecast. Work the shared evaluator reports
 /// as not applicable keeps no duration and no edge, so it cannot move applicable work.
-pub(crate) fn remaining_plan(plan: &Plan, now: chrono::DateTime<chrono::Utc>) -> Remaining {
+pub(crate) fn remaining_plan_at(plan: &Plan, timeline: &dpm_model::Timeline) -> Remaining {
     let mut remaining = plan.clone();
-    let timeline = dpm_model::Timeline::at(plan, now);
+    let now = timeline.now();
     let completed = timeline.completed();
     let excluded: BTreeSet<_> = plan
         .work_items
@@ -90,7 +98,7 @@ pub(crate) fn remaining_plan(plan: &Plan, now: chrono::DateTime<chrono::Utc>) ->
         .filter(|d| !excluded.contains(&d.predecessor) && !excluded.contains(&d.successor))
         .filter(|d| !completed.contains(&d.successor))
         .filter_map(|d| {
-            if !completed.contains(&d.predecessor) && !started_from(plan, &timeline, d) {
+            if !completed.contains(&d.predecessor) && !started_from(plan, timeline, d) {
                 return Some(d.clone());
             }
             let lag_hours = match timeline.edge(plan, d) {

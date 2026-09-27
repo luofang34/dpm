@@ -49,7 +49,7 @@ pub(super) fn load_blocking(
     path: &Path,
 ) -> Result<Option<Plan>, StoreError> {
     let query = "SELECT revision, snapshot_json FROM plan_state WHERE singleton = 1";
-    load_plan_blocking(connection, path, query, StoredRecord::Snapshot)
+    load_plan_blocking(connection, path, query, StoredRecord::Snapshot, None)
 }
 
 /// The plan the operation history replays from; `None` for an uninitialized store.
@@ -58,7 +58,16 @@ pub(super) fn genesis_blocking(
     path: &Path,
 ) -> Result<Option<Plan>, StoreError> {
     let query = "SELECT revision, plan_json FROM genesis WHERE singleton = 1";
-    load_plan_blocking(connection, path, query, StoredRecord::Genesis)
+    load_plan_blocking(connection, path, query, StoredRecord::Genesis, None)
+}
+
+pub(super) fn load_cached_blocking(
+    connection: &Connection,
+    path: &Path,
+    cache: &super::snapshot_cache::SnapshotCache,
+) -> Result<Option<Plan>, StoreError> {
+    let query = "SELECT revision, snapshot_json FROM plan_state WHERE singleton = 1";
+    load_plan_blocking(connection, path, query, StoredRecord::Snapshot, Some(cache))
 }
 
 fn load_plan_blocking(
@@ -66,6 +75,7 @@ fn load_plan_blocking(
     path: &Path,
     query: &str,
     record: StoredRecord,
+    cache: Option<&super::snapshot_cache::SnapshotCache>,
 ) -> Result<Option<Plan>, StoreError> {
     let mut statement = connection
         .prepare(query)
@@ -82,7 +92,14 @@ fn load_plan_blocking(
         StoredRecord::Genesis | StoredRecord::Operation { .. } => "plan_json",
     };
     let json: String = column(row, 1, path, record, field)?;
-    let plan: Plan = decode(&json, path, record, field)?;
+    let plan: Plan = match cache {
+        Some(cache) => cache.decode(&json, path)?,
+        None => {
+            let plan: Plan = decode(&json, path, record, field)?;
+            plan.validate()?;
+            plan
+        }
+    };
     if stored_revision != plan.revision {
         return Err(StoreError::CorruptSnapshot {
             path: path.to_path_buf(),
@@ -91,7 +108,6 @@ fn load_plan_blocking(
             json: plan.revision,
         });
     }
-    plan.validate()?;
     Ok(Some(plan))
 }
 

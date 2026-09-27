@@ -3,6 +3,7 @@
 mod actor;
 mod events;
 pub use events::*;
+mod graph_index;
 mod provisional;
 mod timeline;
 pub use provisional::*;

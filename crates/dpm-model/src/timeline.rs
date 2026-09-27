@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// they cannot disagree. It is derived from authoritative facts and never persisted.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Timeline {
+    index: crate::graph_index::GraphIndex,
     now: DateTime<Utc>,
     complete: BTreeMap<WorkItemId, EventTime>,
     applicability: BTreeMap<WorkItemId, Applicability>,
@@ -33,8 +34,10 @@ impl Timeline {
     /// so it is never complete.
     #[must_use]
     pub fn at(plan: &Plan, now: DateTime<Utc>) -> Self {
-        let Derived { states, choice_at } = applicability::derive(plan);
+        let index = crate::graph_index::GraphIndex::new(plan);
+        let Derived { states, choice_at } = applicability::derive_indexed(plan, &index);
         let mut timeline = Self {
+            index,
             now,
             complete: plan
                 .work_items
@@ -62,6 +65,20 @@ impl Timeline {
             }
             timeline.complete.extend(reached);
         }
+    }
+
+    /// Enforced incoming edges in source order, for the same immutable plan used by this timeline.
+    pub fn incoming<'a>(
+        &'a self,
+        plan: &'a Plan,
+        work: WorkItemId,
+    ) -> impl Iterator<Item = &'a Dependency> {
+        self.index
+            .incoming
+            .get(&work)
+            .into_iter()
+            .flatten()
+            .filter_map(|i| plan.dependencies.get(*i))
     }
 
     /// Clock reading this timeline was evaluated at.
@@ -127,9 +144,12 @@ impl Timeline {
         let Some(scope) = ancestors(plan, work) else {
             return Vec::new();
         };
-        plan.decisions
-            .values()
-            .filter(|d| !d.blocks.is_disjoint(&scope))
+        let ids: BTreeSet<_> = scope
+            .iter()
+            .flat_map(|id| self.index.decisions.get(id).into_iter().flatten())
+            .collect();
+        ids.into_iter()
+            .filter_map(|id| plan.decisions.get(id))
             .map(|d| (d, Release::evaluate(gate_event(d), 0.0, self.now)))
             .collect()
     }
@@ -142,15 +162,17 @@ impl Timeline {
         }
         let prerequisites: Vec<Release> = match work.kind {
             WorkKind::Task => return None,
-            WorkKind::Milestone => plan
-                .enforced_dependencies()
-                .filter(|d| d.successor == work.id)
+            WorkKind::Milestone => self
+                .incoming(plan, work.id)
                 .map(|d| self.edge(plan, d))
                 .collect(),
-            WorkKind::WorkPackage => plan
-                .work_items
-                .values()
-                .filter(|w| w.parent == Some(work.id))
+            WorkKind::WorkPackage => self
+                .index
+                .children
+                .get(&work.id)
+                .into_iter()
+                .flatten()
+                .filter_map(|id| plan.work_items.get(id))
                 .map(|w| match self.choice_at.get(&w.id) {
                     Some(at) if self.applicability(w.id).is_not_selected() => {
                         Release::SkippedBranch { at: *at }

@@ -19,11 +19,13 @@ mod replay;
 pub use history::{HistoryEntry, HistoryPage};
 pub use recovery::{IntegrityReport, restore_store_blocking, verify_store_blocking};
 mod snapshot;
+mod snapshot_cache;
 use snapshot::load_blocking;
 
 /// A synchronous local database with validated snapshots and immutable operation history.
 pub struct SqliteStore {
     connection: Connection,
+    cache: snapshot_cache::SnapshotCache,
     path: PathBuf,
 }
 
@@ -65,7 +67,11 @@ impl SqliteStore {
         connection
             .execute_batch("PRAGMA foreign_keys = ON;")
             .map_err(database_error(&path, "configure database"))?;
-        Ok(Self { connection, path })
+        Ok(Self {
+            connection,
+            path,
+            cache: Default::default(),
+        })
     }
 
     /// Read and validate the authoritative snapshot, if initialized.
@@ -73,7 +79,7 @@ impl SqliteStore {
         if schema::check_blocking(&self.connection, &self.path)? == Layout::Empty {
             return Ok(None);
         }
-        load_blocking(&self.connection, &self.path)
+        snapshot::load_cached_blocking(&self.connection, &self.path, &self.cache)
     }
 
     /// Initialize an empty database with `plan` as both the snapshot and the genesis plan the
@@ -127,7 +133,7 @@ impl SqliteStore {
         if prepare_write_blocking(&transaction, &self.path)? == Layout::Empty {
             return Err(StoreError::NotInitialized(self.path.clone()));
         }
-        let mut expected = load_blocking(&transaction, &self.path)?
+        let mut expected = snapshot::load_cached_blocking(&transaction, &self.path, &self.cache)?
             .ok_or_else(|| StoreError::NotInitialized(self.path.clone()))?;
         if expected.revision != operation.base_revision {
             return Err(StoreError::RevisionConflict {
