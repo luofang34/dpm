@@ -285,8 +285,14 @@ impl<'de> Deserializer<'de> for Tracer<'_> {
         deserialize_i8 => visit_i8, deserialize_i16 => visit_i16,
         deserialize_i32 => visit_i32, deserialize_i64 => visit_i64,
         deserialize_u8 => visit_u8, deserialize_u16 => visit_u16,
-        deserialize_u32 => visit_u32, deserialize_u64 => visit_u64
+        deserialize_u64 => visit_u64
     );
+
+    fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, TraceError> {
+        self.put(Shape::Int);
+        // Format validation needs a supported representative value to complete the shape trace.
+        visitor.visit_u32(Plan::empty("schema trace").format_version)
+    }
 
     fn deserialize_f32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, TraceError> {
         self.deserialize_f64(visitor)

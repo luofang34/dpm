@@ -24,7 +24,7 @@ database = "state.sqlite"
 ```
 
 The UUID must match the actual store. Paths are relative to `.dpm/`; absolute paths and unknown
-fields are rejected. Only the locator and ignore rules belong in Git. Plan JSON uses format 2;
+fields are rejected. Only the locator and ignore rules belong in Git. Plan JSON uses format 3;
 unsupported formats fail explicitly. A portable plan contains no device bindings or derived schedule.
 
 `import PLAN.json` initializes an absent store from a validated plan; it never replaces live state.

@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 #[serde(deny_unknown_fields)]
 pub struct Plan {
     /// Portable domain format version; unsupported formats are rejected.
+    #[serde(deserialize_with = "read_format_version")]
     pub format_version: u32,
     /// Assets shared across code and non-code work.
     pub assets: BTreeMap<AssetId, WorkspaceAsset>,
@@ -87,3 +88,17 @@ impl Plan {
             .find(|decision| decision.key.0 == key)
     }
 }
+
+fn read_format_version<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
+    let version = u32::deserialize(deserializer)?;
+    if version != 3 {
+        return Err(serde::de::Error::custom(format!(
+            "unsupported plan format {version}; expected 3. Preserve the original database and export with its original DPM release; convert that export before initializing a new store"
+        )));
+    }
+    Ok(version)
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic)]
+mod tests;
