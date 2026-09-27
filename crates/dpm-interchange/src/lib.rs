@@ -10,7 +10,8 @@ mod mspdi;
 
 pub use error::InterchangeError;
 pub use mspdi::{
-    DependencyExportReport, ExportReport, ExportResult, FieldChange, Finding, ImportOptions,
-    ImportReport, ImportResult, ItemExportReport, ItemOutcome, ItemReport, LinkOutcome, LinkReport,
-    RemovedDependency, SourceChange, SourceSummary, WorkReference, export_mspdi, import_mspdi,
+    DependencyChange, DependencyExportReport, ExportReport, ExportResult, FieldChange, Finding,
+    ImportOptions, ImportReport, ImportResult, ItemExportReport, ItemOutcome, ItemReport,
+    LinkOutcome, LinkReport, RemovedDependency, SourceChange, SourceSummary, WorkReference,
+    export_mspdi, import_mspdi,
 };

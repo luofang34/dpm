@@ -1,6 +1,7 @@
-use crate::mspdi::tests::{document, import, outline_document, task, work, workspace};
-use crate::{FieldChange, ImportResult, ItemOutcome};
-use dpm_model::{Plan, Priority, WorkKind};
+use crate::mspdi::tests::{document, import, link, outline_document, task, work, workspace};
+use crate::{FieldChange, ImportResult, ItemOutcome, LinkOutcome};
+use dpm_model::{Plan, Priority, WorkItemId, WorkKind};
+use std::collections::BTreeSet;
 
 fn reimport(edit: impl Fn(String) -> String) -> (Plan, ImportResult) {
     let current = import(&workspace(), &outline_document("")).candidate;
@@ -176,11 +177,52 @@ fn assert_report_matches_mutation(current: &Plan, result: &ImportResult) {
             assert!(!item.kept.iter().any(|k| k == field), "{item:?}");
         }
     }
+    assert_links_match_mutation(current, result);
+}
+
+/// A link whose dependency differs from the local edge it updates is never `Preserved` and lists
+/// that change, and every local edge between imported work that the candidate drops is listed as
+/// removed.
+fn assert_links_match_mutation(current: &Plan, result: &ImportResult) {
+    for link in &result.report.links {
+        for id in &link.dependencies {
+            let after = result.candidate.find_dependency(*id).expect("dependency");
+            let changed = current.find_dependency(*id).is_some_and(|b| b != after);
+            let listed = link.changes.iter().any(|c| c.dependency == *id);
+            assert_eq!(changed, listed, "{link:?}");
+            if changed {
+                assert_ne!(link.outcome, LinkOutcome::Preserved, "{link:?}");
+            }
+        }
+    }
+    let imported: BTreeSet<WorkItemId> = result
+        .report
+        .items
+        .iter()
+        .filter_map(|i| i.work.as_ref().map(|w| w.id))
+        .collect();
+    for edge in &current.dependencies {
+        let owned = imported.contains(&edge.predecessor) && imported.contains(&edge.successor);
+        if owned && result.candidate.find_dependency(edge.id).is_none() {
+            assert!(
+                result
+                    .report
+                    .removed_dependencies
+                    .iter()
+                    .any(|r| r.id == edge.id),
+                "{edge:?}"
+            );
+        }
+    }
 }
 
 #[test]
 fn every_report_describes_its_mutation() {
-    let edits: [fn(String) -> String; 7] = [
+    let edits: [fn(String) -> String; 10] = [
+        // Review -> Approved: the local 2 h lag resets to 0 h, or the relation becomes SS.
+        |xml| xml.replace(&link(3, 1, 1200, 6), &link(3, 1, 0, 6)),
+        |xml| xml.replace(&link(3, 1, 1200, 6), &link(3, 3, 1200, 6)),
+        |xml| xml.replace(&link(2, 1, 0, 7), ""),
         |xml| xml.replace("<Priority>700</Priority>", ""),
         |xml| xml.replace("<Priority>700</Priority>", "<Priority>650</Priority>"),
         |xml| xml.replace("<Name>Spec</Name>", "<Name></Name>"),

@@ -9,7 +9,7 @@
 
 use super::encoding::{TimeBasis, lag_hours, lag_tenths, relation_from_code, time_basis};
 use super::items::Outline;
-use super::report::{LinkOutcome, LinkReport, RemovedDependency};
+use super::report::{DependencyChange, LinkOutcome, LinkReport, RemovedDependency};
 use super::source::{SourceLink, SourceProject, SourceTask};
 use dpm_model::{Dependency, DependencyKind, Plan, WorkItemId, WorkKind};
 use std::collections::{BTreeMap, BTreeSet};
@@ -40,6 +40,7 @@ pub(crate) fn map(current: &Plan, source: &SourceProject, outline: &Outline) -> 
                 lag_format: link.lag_format,
                 outcome: LinkOutcome::Preserved,
                 notes: Vec::new(),
+                changes: Vec::new(),
                 dependencies: Vec::new(),
             };
             let mapped = match anchors(outline, task, link, &mut report) {
@@ -117,13 +118,25 @@ fn describe(
             "{edge} repeats another link on the same relation; one dependency carries both"
         ));
     }
-    if let Some(local) = current.dependencies.iter().find(|d| d.id == dependency.id)
+    // Merge matches local edges by endpoints and kind and keeps every other field, so the lag is
+    // the only field an import can change on an existing dependency.
+    if let Some(local) = current.find_dependency(dependency.id)
         && local.lag_hours != dependency.lag_hours
     {
         report.notes.push(format!(
             "{edge} changes the local lag {} h to {} h",
             local.lag_hours, dependency.lag_hours
         ));
+        report.changes.push(DependencyChange {
+            dependency: dependency.id,
+            relation: edge,
+            field: "lag".into(),
+            before: format!("{} h", local.lag_hours),
+            after: format!("{} h", dependency.lag_hours),
+        });
+        if report.outcome == LinkOutcome::Preserved {
+            report.outcome = LinkOutcome::Changed;
+        }
     }
 }
 

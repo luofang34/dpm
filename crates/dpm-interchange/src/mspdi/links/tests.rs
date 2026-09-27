@@ -1,5 +1,5 @@
-use crate::LinkOutcome;
 use crate::mspdi::tests::{import, link, outline_document, work, workspace};
+use crate::{DependencyChange, LinkOutcome};
 use dpm_model::DependencyKind;
 
 #[test]
@@ -48,7 +48,7 @@ fn changed_local_lags_and_dropped_edges_are_reported() {
     let edited = outline_document("").replace(&link(3, 1, 1200, 6), &link(3, 1, 600, 6));
     let result = import(&current, &edited);
     let review = &result.report.links[1];
-    assert_eq!(review.outcome, LinkOutcome::Preserved);
+    assert_eq!(review.outcome, LinkOutcome::Changed);
     assert!(
         review
             .notes
@@ -74,5 +74,32 @@ fn changed_local_lags_and_dropped_edges_are_reported() {
     );
     let unchanged = import(&current, &outline_document(&link(2, 1, 0, 7)));
     assert!(unchanged.report.removed_dependencies.is_empty());
-    assert!(unchanged.report.links.iter().all(|l| l.notes.is_empty()));
+    assert!(
+        unchanged
+            .report
+            .links
+            .iter()
+            .all(|l| l.notes.is_empty() && l.changes.is_empty())
+    );
+}
+
+#[test]
+fn a_link_that_resets_a_local_lag_is_not_preserved() {
+    let current = import(&workspace(), &outline_document("")).candidate;
+    // Review -> Approved lag 2 h becomes 0 h.
+    let edited = outline_document("").replace(&link(3, 1, 1200, 6), &link(3, 1, 0, 6));
+    let result = import(&current, &edited);
+    let review = &result.report.links[1];
+    assert_eq!(review.outcome, LinkOutcome::Changed, "{review:?}");
+    let change = &review.changes[..];
+    assert_eq!(
+        change,
+        [DependencyChange {
+            dependency: review.dependencies[0],
+            relation: "FS MSP-3 -> MSP-4".into(),
+            field: "lag".into(),
+            before: "2 h".into(),
+            after: "0 h".into(),
+        }]
+    );
 }

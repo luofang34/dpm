@@ -185,16 +185,19 @@ between a summary and its own descendant, and summaries without imported descend
 Relations that expand onto the same pair and kind merge, keeping the larger lag; every link merged
 that way names the shared dependency, and a link whose own lag is not the one carried is
 `Approximated` with the merged lag in its notes. A link that changes the lag of an existing local
-edge notes the old and new lag, and `report.removed_dependencies` lists local edges between imported
-work that the candidate removes because the document omits them.
+edge is never `Preserved`: it is `Changed` (or `Approximated`, when its own lag is approximated) and
+its `changes` list the dependency, relation, field and `before`/`after` values.
+`report.removed_dependencies` lists local edges between imported work that the candidate removes
+because the document omits them.
 
 `report.items` has one entry per source task with `outcome` (`Created`, `Updated`, `Unchanged`,
 `Skipped`), the mapped `work`, and `preserved`, `approximated` and `rejected` findings. Fields the
 source omits never count as preserved: `kept` names them, and existing work keeps the local value.
 `changes` lists every local field an `Updated` item changes (`title`, `objective`, `kind`, `parent`,
 `priority`, `estimate`) with `before` and `after` values, and is empty otherwise;
-`report.links` has one entry per `PredecessorLink` with `outcome` (`Preserved`, `Approximated`,
-`Rejected`), notes and the resulting dependency IDs. Rejected data includes constraints,
+`report.links` has one entry per `PredecessorLink` with `outcome` (`Preserved`, `Changed`,
+`Approximated`, `Rejected`), notes, `changes` to existing local dependencies and the resulting
+dependency IDs. Rejected data includes constraints,
 deadlines, calendars, resources and assignments, baselines, custom fields and outline codes,
 manual scheduling, recurrence, cost, timephased data, and percent complete or actuals. Source
 progress never submits, verifies or completes local work. Inactive, blank, external and subproject

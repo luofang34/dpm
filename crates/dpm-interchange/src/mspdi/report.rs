@@ -32,6 +32,21 @@ pub struct FieldChange {
     pub after: String,
 }
 
+/// One field that the candidate changes on an existing local dependency.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DependencyChange {
+    /// Stable dependency identity.
+    pub dependency: DependencyId,
+    /// Local relation, as `KIND PREDECESSOR -> SUCCESSOR` with work keys.
+    pub relation: String,
+    /// Dependency field; an import changes only `lag`.
+    pub field: String,
+    /// Local value before the import.
+    pub before: String,
+    /// Value in the candidate.
+    pub after: String,
+}
+
 /// Identity of the source project named by the document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceSummary {
@@ -100,9 +115,13 @@ pub struct ItemReport {
 /// How one source `PredecessorLink` maps to dependencies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LinkOutcome {
-    /// Relation and lag carried over exactly.
+    /// Relation and lag carried over exactly, and every local dependency it updates already
+    /// matches.
     Preserved,
-    /// Carried over with an approximated lag.
+    /// Relation and lag carried over exactly, but a local dependency it updates changes; `changes`
+    /// gives before and after values.
+    Changed,
+    /// Carried over with an approximated lag; `changes` still lists any local dependency change.
     Approximated,
     /// Not carried over; `notes` gives the reason.
     Rejected,
@@ -125,6 +144,10 @@ pub struct LinkReport {
     pub outcome: LinkOutcome,
     /// Expansion, merge, approximation or rejection details.
     pub notes: Vec<String>,
+    /// Every field the candidate changes on an existing local dependency this link maps to; empty
+    /// when each one already matches.
+    #[serde(default)]
+    pub changes: Vec<DependencyChange>,
     /// Candidate dependencies carrying this link.
     pub dependencies: Vec<DependencyId>,
 }

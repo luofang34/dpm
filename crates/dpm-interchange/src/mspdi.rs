@@ -21,9 +21,9 @@ use serde::{Deserialize, Serialize};
 pub use export::{ExportResult, export_mspdi};
 pub use refusal::SourceChange;
 pub use report::{
-    DependencyExportReport, ExportReport, FieldChange, Finding, ImportReport, ItemExportReport,
-    ItemOutcome, ItemReport, LinkOutcome, LinkReport, RemovedDependency, SourceSummary,
-    WorkReference,
+    DependencyChange, DependencyExportReport, ExportReport, FieldChange, Finding, ImportReport,
+    ItemExportReport, ItemOutcome, ItemReport, LinkOutcome, LinkReport, RemovedDependency,
+    SourceSummary, WorkReference,
 };
 
 /// Stated in every import report so no reader mistakes the candidate for a dated schedule.
