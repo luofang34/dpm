@@ -73,10 +73,11 @@ impl Action {
     }
 }
 
-/// Setting a gate aside, or re-imposing it, is a judgement about both endpoints. As with
-/// verification and basis revalidation, the owner of either task would otherwise relax a gate on
-/// its own work, or on the result it hands to others, so the actor must not own either task now
-/// or have owned it before a handoff.
+/// Setting a gate aside, or re-imposing it, is a judgement about both endpoints. As with basis
+/// revalidation and relaxing plan changes, the owner of either task would otherwise relax a gate on
+/// its own work, or on the result it hands to others, so the actor must not hold either task now or
+/// have held it before a handoff. Verification differs: it performs the check rather than skipping
+/// it, so only the verified task's holders are refused.
 fn authorized_edge<'a>(
     plan: &'a mut Plan,
     actor: &ActorId,

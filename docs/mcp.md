@@ -307,7 +307,9 @@ successor because of it, reports `relaxed: {type: "gate", work, transition, gate
 or stricter edge under any identity is accepted, and another human or service may apply the same
 proposal. Proposals cannot add,
 alter or remove waivers, nor edit or remove a waived edge, which must be restored first. `waive_dependency` and `restore_dependency` take `dependency`, a nonempty
-`reason` and `base_revision`. Only human/service actors that neither hold nor have held (before a handoff) either endpoint task may use them, only Soft edges can be waived,
+`reason` and `base_revision`. Only human/service actors that neither hold nor have held (before a handoff) either endpoint task may use them
+(`verify_work` differs: it refuses only holders of the verified task, so a successor's owner may verify
+the result it consumes; `revalidate_basis` refuses holders of either task), only Soft edges can be waived,
 and restoring requires a current waiver. The waiver's actor, time and reason stay on the edge until
 restoration; `history` records both operations with actor, time and reason. A waived edge is absent
 from `gates.unmet`, readiness, verification prerequisites, milestone completion and the remaining

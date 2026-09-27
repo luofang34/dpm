@@ -380,3 +380,37 @@ fn downstream_counts_ignore_waived_edges_like_gates_and_the_remaining_schedule()
     assert_eq!(counts(&plan), counts(&unlinked));
     assert!(counts(&plan) < enforced, "the waived edge released nothing");
 }
+
+/// Verification performs the check a waiver would skip, so only the verified task's owner is
+/// refused: the owner of a successor built on the result may accept it, but may not waive it.
+#[test]
+fn a_successor_owner_may_verify_the_result_it_consumes_but_not_waive_it() {
+    let (mut plan, edge, b) = soft_edge_plan();
+    let a = key(&plan, "TEST-A");
+    plan.dependencies
+        .iter_mut()
+        .find(|d| d.id == edge)
+        .expect("edge")
+        .start_basis = dpm_model::StartBasis::Provisional;
+    let (alice, bob) = (ActorId::human("alice"), ActorId::human("bob"));
+    run(&mut plan, alice.clone(), Command::Claim { work: a }).expect("claim A");
+    run(&mut plan, alice.clone(), Command::Start { work: a }).expect("start A");
+    let submit = Command::Submit {
+        work: a,
+        note: None,
+    };
+    run(&mut plan, alice.clone(), submit).expect("submit A");
+    run(&mut plan, bob.clone(), Command::Claim { work: b }).expect("claim B provisionally");
+    refused_to(&mut plan, &bob, waive(edge, "A is good enough for me"));
+    let verify = || Command::Verify {
+        work: a,
+        note: None,
+    };
+    let before = plan.clone();
+    assert!(matches!(
+        run(&mut plan, alice, verify()),
+        Err(EngineError::SelfVerification(_))
+    ));
+    assert_eq!(plan, before);
+    run(&mut plan, bob, verify()).expect("a consumer may verify the result");
+}

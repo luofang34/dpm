@@ -237,6 +237,22 @@ replacement re-selecting its excluded work), or any gate on a direct successor t
 actor's work (for example a join changed to release work stranded behind it), refuses the whole
 change. Another human or service may apply the same proposal.
 
+Independence differs by command because the acts differ:
+
+| Command | Refused actors |
+|---------|----------------|
+| `Verify` | the verified task's owner |
+| `WaiveDependency`, `RestoreDependency` | agents, and owners of either endpoint |
+| `RevalidateBasis` | agents, and owners of the successor or of its predecessor |
+| `ApplyChange` | agents; owners of work whose constraint the change relaxes, as above |
+
+Verification checks a submitted result against its acceptance criteria and evidence and re-checks
+every gate; it skips nothing, so the owner of a successor that consumes the result may verify it,
+as a downstream reviewer would, and a two-person team needs no third principal to accept work that
+the other person builds on. A waiver or a relaxing plan change removes a check instead of performing
+it, and a revalidation certifies the successor's own execution, so each of those needs someone with
+no stake in either task.
+
 A waived edge no longer gates any transition or milestone completion, and no longer bounds
 the remaining forecast or simulation, or the downstream count `next` and `explain` rank by. It still
 counts for cycle validation, the baseline schedule, review protection and execution context.
