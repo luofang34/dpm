@@ -36,7 +36,7 @@ impl Page {
 
 pub(crate) struct View {
     plan: Plan,
-    notice: Option<String>,
+    notice: Option<crate::notice::ReloadNotice>,
     pub(crate) preview: bool,
     pub(crate) page: Page,
     work: Vec<WorkItem>,
@@ -118,10 +118,10 @@ impl View {
     }
 
     pub(crate) fn reload_failed(&mut self, error: &impl std::fmt::Display) {
-        self.notice = Some(format!(
-            "Reload failed: {error}. Showing revision {}; [r] retry.",
-            self.plan.revision
-        ));
+        self.notice = Some(crate::notice::ReloadNotice {
+            error: error.to_string(),
+            revision: self.plan.revision,
+        });
     }
 
     #[cfg(test)]
@@ -193,15 +193,14 @@ impl View {
         self.text_panel.reset();
     }
 
-    pub(crate) fn render(&mut self, frame: &mut Frame<'_>) {
-        let areas = Layout::vertical([
-            Constraint::Length(if self.notice.is_some() { 6 } else { 3 }),
-            Constraint::Min(1),
-        ])
-        .split(frame.area());
+    fn render_header(&self, frame: &mut Frame<'_>, area: ratatui::layout::Rect) {
+        let block = Block::bordered();
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+        let rows = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(inner);
         frame.render_widget(
             Paragraph::new(format!(
-                "DPM · {} · {} revision {}  [1–5] Pages [↑↓/jk] Navigate [r] Reload [q] Quit{}",
+                "DPM · {} · {} revision {}  [1–5] Pages [↑↓/jk] Navigate [r] Reload [q] Quit",
                 self.page.title(),
                 if self.preview {
                     "PREVIEW read-only"
@@ -209,15 +208,23 @@ impl View {
                     "snapshot"
                 },
                 self.plan.revision,
-                self.notice
-                    .as_ref()
-                    .map(|s| format!("\n{s}"))
-                    .unwrap_or_default()
-            ))
-            .wrap(ratatui::widgets::Wrap { trim: false })
-            .block(Block::bordered()),
-            areas[0],
+            )),
+            rows[0],
         );
+        if let Some(notice) = &self.notice {
+            notice.render(frame, rows[1]);
+        }
+    }
+
+    pub(crate) fn render(&mut self, frame: &mut Frame<'_>) {
+        let header = if self.notice.is_some() {
+            3 + crate::notice::ROWS
+        } else {
+            3
+        };
+        let areas =
+            Layout::vertical([Constraint::Length(header), Constraint::Min(1)]).split(frame.area());
+        self.render_header(frame, areas[0]);
         if matches!(self.page, Page::Gantt) {
             self.gantt.render(
                 frame,
