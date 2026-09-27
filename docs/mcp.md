@@ -174,7 +174,11 @@ Work packages cannot be dependency endpoints. A summary finishes with its last c
 with its first, so a summary predecessor of an FS or FF link and a summary successor of an FS or
 SS link expand exactly into one edge per task/milestone descendant. The other combinations, links
 between a summary and its own descendant, and summaries without imported descendants are rejected.
-Relations that expand onto the same pair and kind merge, keeping the larger lag.
+Relations that expand onto the same pair and kind merge, keeping the larger lag; every link merged
+that way names the shared dependency, and a link whose own lag is not the one carried is
+`Approximated` with the merged lag in its notes. A link that changes the lag of an existing local
+edge notes the old and new lag, and `report.removed_dependencies` lists local edges between imported
+work that the candidate removes because the document omits them.
 
 `report.items` has one entry per source task with `outcome` (`Created`, `Updated`, `Unchanged`,
 `Skipped`), the mapped `work`, and `preserved`, `approximated` and `rejected` findings. Fields the

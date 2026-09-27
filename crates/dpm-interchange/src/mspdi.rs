@@ -20,7 +20,8 @@ use serde::{Deserialize, Serialize};
 pub use export::{ExportResult, export_mspdi};
 pub use report::{
     DependencyExportReport, ExportReport, FieldChange, Finding, ImportReport, ItemExportReport,
-    ItemOutcome, ItemReport, LinkOutcome, LinkReport, SourceSummary, WorkReference,
+    ItemOutcome, ItemReport, LinkOutcome, LinkReport, RemovedDependency, SourceSummary,
+    WorkReference,
 };
 
 /// Where imported work goes and how new work is keyed.
@@ -86,6 +87,7 @@ pub fn import_mspdi(
             target_project: dpm_model::Key::new(options.project_key.clone()),
             items: outline.reports,
             links: links.reports,
+            removed_dependencies: links.removed,
             rejected: source.rejected,
             retained,
         },

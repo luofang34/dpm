@@ -1,6 +1,6 @@
 //! Per-item interchange reports; they describe a candidate or export and never change state.
 
-use dpm_model::{DependencyId, Key, WorkItemId, WorkKind, WorkStatus};
+use dpm_model::{DependencyId, DependencyKind, Key, WorkItemId, WorkKind, WorkStatus};
 use serde::{Deserialize, Serialize};
 
 /// One field-level observation about a mapped value.
@@ -127,6 +127,21 @@ pub struct LinkReport {
     pub dependencies: Vec<DependencyId>,
 }
 
+/// A local dependency between imported work that the source no longer contains.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RemovedDependency {
+    /// Stable dependency identity.
+    pub id: DependencyId,
+    /// Predecessor work key.
+    pub predecessor: Key,
+    /// Successor work key.
+    pub successor: Key,
+    /// Relation kind.
+    pub kind: DependencyKind,
+    /// Local lag in hours.
+    pub lag_hours: f64,
+}
+
 /// Full import report returned with the candidate and its reviewed preview.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ImportReport {
@@ -138,6 +153,9 @@ pub struct ImportReport {
     pub items: Vec<ItemReport>,
     /// One entry per source link, in document order.
     pub links: Vec<LinkReport>,
+    /// Local dependencies between imported work that the candidate removes because the source
+    /// omits them.
+    pub removed_dependencies: Vec<RemovedDependency>,
     /// Document-level data the candidate does not carry, such as calendars and resources.
     pub rejected: Vec<Finding>,
     /// Work in the target project that the source does not name; the candidate keeps it unchanged.

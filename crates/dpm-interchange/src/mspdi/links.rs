@@ -9,21 +9,23 @@
 
 use super::encoding::{TimeBasis, lag_hours, lag_tenths, relation_from_code, time_basis};
 use super::items::Outline;
-use super::report::{LinkOutcome, LinkReport};
+use super::report::{LinkOutcome, LinkReport, RemovedDependency};
 use super::source::{SourceLink, SourceProject, SourceTask};
 use dpm_model::{Dependency, DependencyKind, Plan, WorkItemId, WorkKind};
 use std::collections::{BTreeMap, BTreeSet};
 
 type Edge = (WorkItemId, WorkItemId, DependencyKind);
 
-/// Candidate dependency list and one report per source link.
+/// Candidate dependency list, one report per source link, and the local edges the source drops.
 pub(crate) struct MappedLinks {
     pub(crate) dependencies: Vec<Dependency>,
     pub(crate) reports: Vec<LinkReport>,
+    pub(crate) removed: Vec<RemovedDependency>,
 }
 
 pub(crate) fn map(current: &Plan, source: &SourceProject, outline: &Outline) -> MappedLinks {
     let mut edges: BTreeMap<Edge, i64> = BTreeMap::new();
+    let mut sources: BTreeMap<Edge, usize> = BTreeMap::new();
     let mut reports = Vec::new();
     let mut produced: Vec<Vec<Edge>> = Vec::new();
     for task in &source.tasks {
@@ -50,34 +52,68 @@ pub(crate) fn map(current: &Plan, source: &SourceProject, outline: &Outline) -> 
             };
             for edge in &mapped {
                 let lag = edges.entry(*edge).or_insert(link.link_lag);
-                if *lag != link.link_lag {
-                    report.notes.push(format!(
-                        "{} repeats a relation between the same work; the larger lag applies",
-                        edge.2.abbreviation()
-                    ));
-                    *lag = (*lag).max(link.link_lag);
-                }
+                *lag = (*lag).max(link.link_lag);
+                *sources.entry(*edge).or_default() += 1;
             }
             produced.push(mapped);
             reports.push(report);
         }
     }
     let owned: BTreeSet<WorkItemId> = outline.mapped().map(|w| w.id).collect();
-    let dependencies = merge(current, &owned, edges);
+    let (dependencies, removed) = merge(current, &owned, edges);
     for (report, mapped) in reports.iter_mut().zip(produced) {
-        report.dependencies = mapped
-            .iter()
-            .filter_map(|(p, s, k)| {
-                dependencies
-                    .iter()
-                    .find(|d| d.predecessor == *p && d.successor == *s && d.kind == *k)
-                    .map(|d| d.id)
-            })
-            .collect();
+        for edge in mapped {
+            let Some(dependency) = dependencies
+                .iter()
+                .find(|d| (d.predecessor, d.successor, d.kind) == edge)
+            else {
+                continue;
+            };
+            let shared = sources.get(&edge).is_some_and(|n| *n > 1);
+            describe(current, report, dependency, shared);
+            report.dependencies.push(dependency.id);
+        }
     }
     MappedLinks {
         dependencies,
         reports,
+        removed,
+    }
+}
+
+/// State what the candidate dependency carries when it differs from this link or from the local
+/// edge it updates.
+fn describe(current: &Plan, report: &mut LinkReport, dependency: &Dependency, shared: bool) {
+    let key = |id| {
+        current
+            .work_items
+            .get(&id)
+            .map_or_else(|| id.to_string(), |w| w.key.0.clone())
+    };
+    let edge = format!(
+        "{} {} -> {}",
+        dependency.kind.abbreviation(),
+        key(dependency.predecessor),
+        key(dependency.successor)
+    );
+    if lag_tenths(dependency.lag_hours) != report.link_lag {
+        report.outcome = LinkOutcome::Approximated;
+        report.notes.push(format!(
+            "{edge} merges with another link on the same relation; the dependency carries the larger lag {} h",
+            dependency.lag_hours
+        ));
+    } else if shared {
+        report.notes.push(format!(
+            "{edge} repeats another link on the same relation; one dependency carries both"
+        ));
+    }
+    if let Some(local) = current.dependencies.iter().find(|d| d.id == dependency.id)
+        && local.lag_hours != dependency.lag_hours
+    {
+        report.notes.push(format!(
+            "{edge} changes the local lag {} h to {} h",
+            local.lag_hours, dependency.lag_hours
+        ));
     }
 }
 
@@ -201,8 +237,9 @@ fn merge(
     current: &Plan,
     owned: &BTreeSet<WorkItemId>,
     mut edges: BTreeMap<Edge, i64>,
-) -> Vec<Dependency> {
+) -> (Vec<Dependency>, Vec<RemovedDependency>) {
     let mut merged = Vec::new();
+    let mut removed = Vec::new();
     for edge in &current.dependencies {
         if !(owned.contains(&edge.predecessor) && owned.contains(&edge.successor)) {
             merged.push(edge.clone());
@@ -214,6 +251,19 @@ fn merge(
                 kept.lag_hours = lag_hours(tenths);
             }
             merged.push(kept);
+        } else {
+            let key = |id| current.work_items.get(&id).map(|w| w.key.clone());
+            if let (Some(predecessor), Some(successor)) =
+                (key(edge.predecessor), key(edge.successor))
+            {
+                removed.push(RemovedDependency {
+                    id: edge.id,
+                    predecessor,
+                    successor,
+                    kind: edge.kind,
+                    lag_hours: edge.lag_hours,
+                });
+            }
         }
     }
     merged.extend(
@@ -221,5 +271,9 @@ fn merge(
             .into_iter()
             .map(|((p, s, k), tenths)| Dependency::new(p, s, k, lag_hours(tenths))),
     );
-    merged
+    (merged, removed)
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic)]
+mod tests;
