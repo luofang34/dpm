@@ -1,5 +1,6 @@
 //! Shared query and mutation boundary for CLI and agent adapters.
 
+mod authoring;
 mod error;
 mod git_artifact;
 mod interchange;
@@ -15,6 +16,7 @@ pub use project::{
     open_workspace_blocking,
 };
 
+pub use authoring::plan_schema;
 pub use dpm_store::IntegrityReport;
 pub use error::{AppError, ErrorResponse};
 pub use service::{API_VERSION, Application, CommandRequest, Query, QueryResponse};

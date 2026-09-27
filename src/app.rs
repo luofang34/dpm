@@ -43,6 +43,10 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
         Commands::Import { file } => {
             initialize_blocking(root, database.as_deref(), read_plan_blocking(&file)?, json)
         }
+        // The format is readable before any workspace exists.
+        Commands::Plan {
+            command: PlanCommand::Schema,
+        } => output::json_blocking(&dpm_app::plan_schema()?),
         Commands::Validate { file } => {
             read_plan_blocking(&file)?;
             output::value_blocking(&serde_json::json!({"valid": true, "file": file}), json)
@@ -439,6 +443,8 @@ fn plan_command_blocking(
     base_revision: Option<u64>,
 ) -> Result<(), CliError> {
     match command {
+        PlanCommand::Template => query_blocking(app, Query::PlanTemplate, json),
+        PlanCommand::Schema => query_blocking(app, Query::PlanSchema, json),
         PlanCommand::Diff { file } => query_blocking(
             app,
             Query::ProposeChange {

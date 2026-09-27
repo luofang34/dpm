@@ -22,6 +22,14 @@ const NAMES: &[(&str, &str)] = &[
         "Write one project's work as the supported Microsoft Project XML subset with a report of omitted data",
     ),
     (
+        "plan_schema",
+        "Get the JSON Schema of the plan that export_plan returns and propose_change/apply_change accept",
+    ),
+    (
+        "plan_template",
+        "Get a minimal valid proposal for this workspace while it has no projects or work; edit it, then propose_change and apply_change",
+    ),
+    (
         "propose_change",
         "Validate an edited export and preview semantic differences without changing state; new tasks must be Proposed",
     ),
@@ -117,7 +125,7 @@ const NAMES: &[(&str, &str)] = &[
 
 pub(crate) fn definitions() -> Vec<Value> {
     NAMES.iter().map(|(name,description)| {
-        let read = matches!(*name, "export_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
+        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
         if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"start_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external"|"revalidate_basis") {
@@ -129,7 +137,7 @@ pub(crate) fn definitions() -> Vec<Value> {
         }
         match *name {
             "propose_change"|"apply_change" => {
-                properties.insert("plan".into(), json!({"type":"object","description":"Full export_plan data with the same workspace identity and observed revision; preserve execution/evidence fields. Omitted entities are reviewed deletions."})); required.push("plan");
+                properties.insert("plan".into(), json!({"type":"object","description":"Full export_plan data (shape: plan_schema; start an empty workspace from plan_template) with the same workspace identity and observed revision; preserve execution/evidence fields. Omitted entities are reviewed deletions."})); required.push("plan");
                 if *name == "apply_change" { properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.push("reason"); }
             },
             "import_mspdi" | "export_mspdi" => interchange::schema(name, &mut properties, &mut required),
@@ -241,6 +249,8 @@ pub(crate) fn call_tool_blocking(
     }
     let query = match name {
         "export_plan" => Some(Query::Export),
+        "plan_schema" => Some(Query::PlanSchema),
+        "plan_template" => Some(Query::PlanTemplate),
         "import_mspdi" | "export_mspdi" => Some(interchange::query(name, &args)?),
         "propose_change" => Some(Query::ProposeChange {
             plan: required(args.plan.clone(), "plan")?,

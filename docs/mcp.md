@@ -19,6 +19,8 @@ which the store still checks atomically. Presentation text is not the API contra
 | CLI | MCP tool | Shared behavior |
 | --- | --- | --- |
 | export | export_plan | Authoritative snapshot for proposals |
+| plan schema | plan_schema | JSON Schema of the plan used by export and proposals; the CLI needs no workspace |
+| plan template | plan_template | Minimal valid proposal for a workspace without projects or work |
 | plan diff FILE | propose_change | Validate a candidate and inspect entity/field differences |
 | plan apply FILE --reason TEXT | apply_change | Human/service applies an observed-revision proposal atomically |
 | plan import-mspdi FILE --project-key KEY | import_mspdi | [MSPDI](#microsoft-project-xml-interchange) candidate, preview and per-item report; no state change |
@@ -497,6 +499,26 @@ are rejected. The report is an additive serialized field; no stored schedule dat
 zero-duration schedules and derived states are exposed by the same queries. Execution gates follow
 [execution events and elapsed lag](#execution-events-and-elapsed-lag); progress reports never
 release a gate or shorten the remaining-duration forecast.
+
+## Authoring a plan
+
+`plan schema` / `plan_schema` returns the JSON Schema (draft 2020-12) of the portable plan: the shape
+of `export`, and of the `plan` that `plan diff` / `propose_change` and `plan apply` / `apply_change`
+accept. Unknown or misnamed fields are rejected, as the model rejects them. Fields the schema marks
+"managed" are written by execution commands; keep them as exported. In a workspace without
+projects or work, `plan template` / `plan_template` returns a minimal valid proposal with the
+workspace identity and revision: a project, a package, two Proposed tasks with complete contracts,
+a milestone, a requirement, a decision gate and a risk. Its identifiers derive from the workspace
+identity, so both adapters return the same document. Once the workspace has projects or work the
+template is refused with `invalid_request`: applying it would delete them, so edit `export` instead.
+
+```sh
+dpm init "Project name"
+dpm plan template --json > plan.json    # replace the TEMPLATE-* text and add work
+dpm plan diff plan.json --json
+dpm plan apply plan.json --reason "Initial plan" --actor human:NAME
+dpm ratify TEMPLATE-DESIGN --actor human:NAME
+```
 
 ## Protocol
 

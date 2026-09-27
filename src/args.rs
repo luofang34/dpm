@@ -291,6 +291,10 @@ pub(crate) enum WorkspaceCommand {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum PlanCommand {
+    /// Print the JSON Schema of the plan that export writes and plan diff / plan apply accept.
+    Schema,
+    /// Print a minimal valid proposal for this workspace while it has no projects or work.
+    Template,
     /// Validate a candidate exported plan and inspect its semantic differences.
     Diff { file: PathBuf },
     /// Apply a reviewed candidate with a reason, preserving execution and evidence.

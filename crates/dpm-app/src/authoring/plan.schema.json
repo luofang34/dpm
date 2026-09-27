@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/luofang34/dpm/plan.schema.json",
+  "title": "DPM plan",
+  "description": "Portable DPM plan, the shape of export_plan and of the plan argument of propose_change/apply_change. Maps are keyed by the entity's own UUID. Keep the workspace identity and revision you exported; omitted entities are reviewed deletions. New tasks must be Proposed with an objective and concrete acceptance. Fields marked 'managed' are written by execution commands: keep them exactly as exported and never author them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "resources", "workspace", "revision", "projects", "work_items", "requirements", "artifacts", "decisions", "risks", "dependencies"],
+  "properties": {
+    "format_version": {"const": 2, "description": "Portable format version; other versions are rejected."},
+    "workspace": {"$ref": "#/$defs/Workspace"},
+    "revision": {"type": "integer", "minimum": 0, "description": "Revision you observed; apply refuses a stale revision."},
+    "resources": {"type": "object", "propertyNames": {"format": "uuid"}, "additionalProperties": {"$ref": "#/$defs/Resource"}},
+    "projects": {"type": "object", "propertyNames": {"format": "uuid"}, "additionalProperties": {"$ref": "#/$defs/Project"}},
+    "work_items": {"type": "object", "propertyNames": {"format": "uuid"}, "additionalProperties": {"$ref": "#/$defs/WorkItem"}},
+    "requirements": {"type": "object", "propertyNames": {"format": "uuid"}, "additionalProperties": {"$ref": "#/$defs/Requirement"}},
+    "artifacts": {"type": "object", "propertyNames": {"format": "uuid"}, "additionalProperties": {"$ref": "#/$defs/Artifact"}, "description": "Managed evidence; never delete or rewrite recorded artifacts."},
+    "decisions": {"type": "object", "propertyNames": {"format": "uuid"}, "additionalProperties": {"$ref": "#/$defs/Decision"}},
+    "risks": {"type": "object", "propertyNames": {"format": "uuid"}, "additionalProperties": {"$ref": "#/$defs/Risk"}},
+    "dependencies": {"type": "array", "items": {"$ref": "#/$defs/Dependency"}},
+    "external_references": {"type": "object", "propertyNames": {"format": "uuid"}, "additionalProperties": {"$ref": "#/$defs/ExternalReference"}, "description": "Managed by link_external/unlink_external; context only."},
+    "links": {"type": "array", "items": {"$ref": "#/$defs/WorkLink"}, "description": "Contextual relationships that never gate readiness or scheduling."}
+  },
+  "$defs": {
+    "Id": {"type": "string", "format": "uuid"},
+    "Key": {"type": "string", "minLength": 1, "description": "Stable human key such as APP-API; unique per entity type."},
+    "Time": {"type": "string", "format": "date-time"},
+    "Text": {"type": "string", "minLength": 1},
+    "IdSet": {"type": "array", "items": {"$ref": "#/$defs/Id"}},
+    "Actor": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "name"],
+      "properties": {"kind": {"enum": ["Human", "Agent", "Service"]}, "name": {"$ref": "#/$defs/Text"}}
+    },
+    "Workspace": {
+      "type": "object", "additionalProperties": false, "required": ["id", "name"],
+      "properties": {"id": {"$ref": "#/$defs/Id"}, "name": {"$ref": "#/$defs/Text"}}
+    },
+    "Project": {
+      "type": "object", "additionalProperties": false, "required": ["id", "key", "title", "objective"],
+      "properties": {
+        "id": {"$ref": "#/$defs/Id"}, "key": {"$ref": "#/$defs/Key"},
+        "parent": {"anyOf": [{"$ref": "#/$defs/Id"}, {"type": "null"}], "description": "Containing project, or null at the top level."},
+        "title": {"$ref": "#/$defs/Text"}, "objective": {"$ref": "#/$defs/Text"}
+      }
+    },
+    "Resource": {
+      "type": "object", "additionalProperties": false, "required": ["id", "key", "label", "kind"],
+      "properties": {
+        "id": {"$ref": "#/$defs/Id"}, "key": {"$ref": "#/$defs/Key"}, "label": {"$ref": "#/$defs/Text"},
+        "kind": {"oneOf": [
+          {"type": "object", "additionalProperties": false, "required": ["GitRepository"], "properties": {"GitRepository": {"type": "object", "additionalProperties": false, "required": ["remotes"], "properties": {"remotes": {"type": "array", "items": {"type": "string"}}}}}},
+          {"enum": ["Folder", "DocumentCollection"]},
+          {"type": "object", "additionalProperties": false, "required": ["Other"], "properties": {"Other": {"type": "string"}}}
+        ]}
+      }
+    },
+    "ResourceRequirement": {
+      "type": "object", "additionalProperties": false, "required": ["resource", "access"],
+      "properties": {"resource": {"$ref": "#/$defs/Id"}, "access": {"enum": ["Read", "Write"]}}
+    },
+    "Estimate": {
+      "type": "object", "additionalProperties": false, "required": ["optimistic_hours", "likely_hours", "pessimistic_hours"],
+      "description": "Three-point duration in hours: optimistic <= likely <= pessimistic.",
+      "properties": {"optimistic_hours": {"type": "number", "minimum": 0}, "likely_hours": {"type": "number", "minimum": 0}, "pessimistic_hours": {"type": "number", "minimum": 0}}
+    },
+    "Instructions": {
+      "type": "object", "additionalProperties": false, "required": ["steps", "in_scope", "out_of_scope", "verification"],
+      "properties": {
+        "steps": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["action", "expected_result"], "properties": {"action": {"$ref": "#/$defs/Text"}, "expected_result": {"$ref": "#/$defs/Text"}}}},
+        "in_scope": {"type": "array", "items": {"type": "string"}},
+        "out_of_scope": {"type": "array", "items": {"type": "string"}},
+        "verification": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "Events": {
+      "type": "object", "additionalProperties": false, "description": "Managed execution event times.",
+      "properties": {"started_at": {"$ref": "#/$defs/Time"}, "submitted_at": {"$ref": "#/$defs/Time"}, "verified_at": {"$ref": "#/$defs/Time"}}
+    },
+    "Review": {
+      "type": "object", "additionalProperties": false, "required": ["actor", "at", "reason"],
+      "properties": {"actor": {"$ref": "#/$defs/Actor"}, "at": {"$ref": "#/$defs/Time"}, "reason": {"type": "string"}}
+    },
+    "Attempt": {
+      "type": "object", "additionalProperties": false, "required": ["number", "submitted_at", "outcome"],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1}, "submitted_at": {"$ref": "#/$defs/Time"},
+        "outcome": {"oneOf": [
+          {"type": "object", "additionalProperties": false, "required": ["state"], "properties": {"state": {"const": "pending"}}},
+          {"type": "object", "additionalProperties": false, "required": ["state", "actor", "at", "reason"], "properties": {"state": {"const": "rejected"}, "actor": {"$ref": "#/$defs/Actor"}, "at": {"$ref": "#/$defs/Time"}, "reason": {"type": "string"}}},
+          {"type": "object", "additionalProperties": false, "required": ["state", "actor", "at"], "properties": {"state": {"const": "verified"}, "actor": {"$ref": "#/$defs/Actor"}, "at": {"$ref": "#/$defs/Time"}}}
+        ]}
+      }
+    },
+    "Basis": {
+      "type": "object", "additionalProperties": false, "required": ["dependency", "predecessor", "attempt", "recorded_at", "source"],
+      "properties": {
+        "dependency": {"$ref": "#/$defs/Id"}, "predecessor": {"$ref": "#/$defs/Id"}, "attempt": {"type": "integer", "minimum": 1}, "recorded_at": {"$ref": "#/$defs/Time"},
+        "source": {"oneOf": [
+          {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"const": "start"}}},
+          {"type": "object", "additionalProperties": false, "required": ["kind", "actor", "reason"], "properties": {"kind": {"const": "revalidation"}, "actor": {"$ref": "#/$defs/Actor"}, "reason": {"type": "string"}}}
+        ]}
+      }
+    },
+    "WorkItem": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "key", "project", "kind", "title", "objective", "acceptance", "status", "priority", "capabilities", "requirement_ids", "artifact_ids", "resources"],
+      "properties": {
+        "id": {"$ref": "#/$defs/Id"}, "key": {"$ref": "#/$defs/Key"},
+        "project": {"$ref": "#/$defs/Id", "description": "Project containing the work."},
+        "parent": {"anyOf": [{"$ref": "#/$defs/Id"}, {"type": "null"}], "description": "Containing WorkPackage, or null."},
+        "kind": {"enum": ["WorkPackage", "Task", "Milestone"], "description": "Only Task is executable; packages and milestones are projections of their work."},
+        "title": {"$ref": "#/$defs/Text"},
+        "objective": {"$ref": "#/$defs/Text", "description": "Why the work matters."},
+        "acceptance": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["text"], "properties": {"text": {"$ref": "#/$defs/Text"}}}, "description": "Concrete, independently checkable criteria; required for tasks."},
+        "instructions": {"anyOf": [{"$ref": "#/$defs/Instructions"}, {"type": "null"}]},
+        "status": {"enum": ["Proposed", "Planned", "Claimed", "InProgress", "Blocked", "Submitted", "Verified", "Done"], "description": "New tasks are Proposed; later states are managed by commands."},
+        "reported_progress_percent": {"type": "integer", "minimum": 0, "maximum": 100, "description": "Managed by report_progress."},
+        "priority": {"enum": ["P0", "P1", "P2", "P3", "P4"], "description": "Human priority, independent of schedule criticality."},
+        "estimate": {"anyOf": [{"$ref": "#/$defs/Estimate"}, {"type": "null"}], "description": "Required for tasks; null for packages and milestones."},
+        "capabilities": {"type": "array", "items": {"type": "string"}, "description": "Skills next_work matches against --capability."},
+        "requirement_ids": {"$ref": "#/$defs/IdSet"},
+        "artifact_ids": {"$ref": "#/$defs/IdSet", "description": "Managed evidence links."},
+        "owner": {"anyOf": [{"$ref": "#/$defs/Actor"}, {"type": "null"}], "description": "Managed by claim."},
+        "resources": {"type": "array", "items": {"$ref": "#/$defs/ResourceRequirement"}},
+        "events": {"$ref": "#/$defs/Events"},
+        "last_rejection": {"anyOf": [{"$ref": "#/$defs/Review"}, {"type": "null"}], "description": "Managed by reject."},
+        "attempts": {"type": "array", "items": {"$ref": "#/$defs/Attempt"}, "description": "Managed submission attempts."},
+        "basis": {"type": "array", "items": {"$ref": "#/$defs/Basis"}, "description": "Managed provisional start bases."},
+        "block_reason": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Managed by block/unblock."},
+        "condition": {"anyOf": [{"type": "object", "additionalProperties": false, "required": ["decision", "option"], "properties": {"decision": {"$ref": "#/$defs/Id"}, "option": {"$ref": "#/$defs/Text"}}}, {"type": "null"}], "description": "Work applies only if the decision selects this option key."},
+        "join": {"oneOf": [
+          {"type": "object", "additionalProperties": false, "required": ["mode"], "properties": {"mode": {"const": "all_predecessors"}}},
+          {"type": "object", "additionalProperties": false, "required": ["mode"], "properties": {"mode": {"const": "active_branches"}, "allow_empty": {"type": "boolean"}}}
+        ]}
+      }
+    },
+    "Requirement": {
+      "type": "object", "additionalProperties": false, "required": ["id", "key", "project", "title", "statement"],
+      "properties": {"id": {"$ref": "#/$defs/Id"}, "key": {"$ref": "#/$defs/Key"}, "project": {"$ref": "#/$defs/Id"}, "title": {"$ref": "#/$defs/Text"}, "statement": {"$ref": "#/$defs/Text"}}
+    },
+    "Artifact": {
+      "type": "object", "additionalProperties": false, "required": ["id", "kind", "uri", "label", "metadata", "created_by", "created_at"],
+      "properties": {
+        "id": {"$ref": "#/$defs/Id"},
+        "kind": {"enum": ["GitCommit", "PullRequest", "File", "Build", "TestResult", "Datasheet", "Quote", "PurchaseOrder", "Cad", "Photo", "Other"]},
+        "uri": {"type": "string"}, "label": {"type": "string"},
+        "metadata": {"type": "object", "additionalProperties": {"type": "string"}},
+        "created_by": {"$ref": "#/$defs/Actor"}, "created_at": {"$ref": "#/$defs/Time"}
+      }
+    },
+    "Decision": {
+      "type": "object", "additionalProperties": false, "required": ["id", "key", "project", "question", "status", "blocks"],
+      "properties": {
+        "id": {"$ref": "#/$defs/Id"}, "key": {"$ref": "#/$defs/Key"}, "project": {"$ref": "#/$defs/Id"},
+        "question": {"$ref": "#/$defs/Text"},
+        "status": {"enum": ["Open", "Decided", "Superseded"], "description": "Author Open; decide_gate records the outcome."},
+        "outcome": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "resolved_at": {"anyOf": [{"$ref": "#/$defs/Time"}, {"type": "null"}], "description": "Managed by decide_gate."},
+        "rationale": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "related_work": {"$ref": "#/$defs/IdSet", "description": "Context only; never gates."},
+        "artifact_ids": {"$ref": "#/$defs/IdSet"},
+        "blocks": {"$ref": "#/$defs/IdSet", "description": "Work gated until this decision is resolved."},
+        "supersedes": {"anyOf": [{"$ref": "#/$defs/Id"}, {"type": "null"}]},
+        "options": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["key", "label"], "properties": {"key": {"$ref": "#/$defs/Text"}, "label": {"$ref": "#/$defs/Text"}}}, "description": "Choices that conditional work names by option key."}
+      }
+    },
+    "Risk": {
+      "type": "object", "additionalProperties": false, "required": ["id", "key", "project", "description", "probability", "impact", "related_work"],
+      "properties": {
+        "id": {"$ref": "#/$defs/Id"}, "key": {"$ref": "#/$defs/Key"}, "project": {"$ref": "#/$defs/Id"},
+        "description": {"$ref": "#/$defs/Text"},
+        "probability": {"type": "number", "minimum": 0, "maximum": 1},
+        "impact": {"enum": ["Low", "Medium", "High", "Critical"]},
+        "related_work": {"$ref": "#/$defs/IdSet"},
+        "mitigation": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+      }
+    },
+    "Dependency": {
+      "type": "object", "additionalProperties": false, "required": ["predecessor", "successor", "kind", "lag_hours"],
+      "properties": {
+        "id": {"$ref": "#/$defs/Id", "description": "Stable edge identity; derived from predecessor, successor and kind when omitted."},
+        "predecessor": {"$ref": "#/$defs/Id"}, "successor": {"$ref": "#/$defs/Id"},
+        "kind": {"enum": ["FinishStart", "StartStart", "FinishFinish", "StartFinish"]},
+        "lag_hours": {"type": "number", "description": "Positive lag delays, negative lead advances the successor."},
+        "policy": {"enum": ["Hard", "Soft"], "description": "Soft edges may be waived by a human or service; default Hard."},
+        "start_basis": {"enum": ["Verified", "Provisional"], "description": "Provisional lets the successor start on a submitted attempt; default Verified."},
+        "rationale": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "waiver": {"anyOf": [{"$ref": "#/$defs/Review"}, {"type": "null"}], "description": "Managed by waive_dependency."}
+      }
+    },
+    "WorkLink": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "source", "target"],
+      "properties": {
+        "kind": {"enum": ["RelatesTo", "Duplicates", "DerivedFrom", "Supersedes"]},
+        "source": {"$ref": "#/$defs/Id"}, "target": {"$ref": "#/$defs/Id"},
+        "note": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+      }
+    },
+    "ExternalReference": {
+      "type": "object", "additionalProperties": false, "required": ["id", "identity", "label", "links"],
+      "properties": {
+        "id": {"$ref": "#/$defs/Id"},
+        "identity": {
+          "type": "object", "additionalProperties": false, "required": ["provider", "instance", "kind", "external_id"],
+          "properties": {
+            "provider": {"oneOf": [{"enum": ["GitHub", "GitLab", "Forgejo", "Gitea", "Jira", "Linear"]}, {"type": "object", "additionalProperties": false, "required": ["Other"], "properties": {"Other": {"type": "string"}}}]},
+            "instance": {"type": "string"},
+            "namespace": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "kind": {"oneOf": [{"enum": ["Issue", "PullRequest"]}, {"type": "object", "additionalProperties": false, "required": ["Other"], "properties": {"Other": {"type": "string"}}}]},
+            "external_id": {"type": "string"}
+          }
+        },
+        "label": {"type": "string"},
+        "url": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "observation": {"anyOf": [{
+          "type": "object", "additionalProperties": false, "required": ["state", "observed_at", "observed_by"],
+          "properties": {"state": {"enum": ["Open", "Closed", "Merged"]}, "observed_at": {"$ref": "#/$defs/Time"}, "observed_by": {"$ref": "#/$defs/Actor"}}
+        }, {"type": "null"}]},
+        "links": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["work", "role"], "properties": {"work": {"$ref": "#/$defs/Id"}, "role": {"enum": ["Tracks", "Relates"]}}}}
+      }
+    }
+  }
+}

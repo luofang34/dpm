@@ -46,6 +46,10 @@ pub enum Query {
     },
     /// Export a validated authoritative snapshot for plan proposals.
     Export,
+    /// JSON Schema of the portable plan used by exports and proposals.
+    PlanSchema,
+    /// A minimal valid proposal for this workspace; refused once it has projects or work.
+    PlanTemplate,
     /// Map a Microsoft Project XML document onto a reviewed plan-change candidate.
     ImportMspdi {
         /// Complete MSPDI document text.
@@ -254,6 +258,8 @@ impl Application {
                 serde_json::to_value(dpm_engine::propose_change(&plan, &proposed)?)?
             }
             Query::Export => serde_json::to_value(&plan)?,
+            Query::PlanSchema => crate::plan_schema()?,
+            Query::PlanTemplate => crate::authoring::plan_template(&plan)?,
             interchange @ (Query::ImportMspdi { .. } | Query::ExportMspdi { .. }) => {
                 crate::interchange::query(&plan, interchange)?
             }

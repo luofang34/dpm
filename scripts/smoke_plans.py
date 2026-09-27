@@ -3,11 +3,12 @@
 import copy
 import json
 import sqlite3
+import subprocess
 import tempfile
 import uuid
 from pathlib import Path
 
-from smoke_agent import Agent, ROOT, run_cli
+from smoke_agent import Agent, CLI, ROOT, run_cli
 
 
 def smoke(directory):
@@ -192,8 +193,43 @@ def replace_invalid(database, worker, reviewer, candidate, current, choice):
         assert run_cli(database, 'export') == current
 
 
+def authoring(directory):
+    """An agent can go from an empty workspace to executable work using only the published contract."""
+    unconfigured = directory / 'no-project'
+    unconfigured.mkdir()
+    shown = subprocess.run([str(CLI), '--json', 'plan', 'schema'], cwd=unconfigured, capture_output=True, text=True, timeout=15)
+    assert shown.returncode == 0, shown
+    schema = json.loads(shown.stdout)
+    database = directory / 'authoring.sqlite'
+    template_file = directory / 'template.json'
+    run_cli(database, 'init', 'Authored workspace')
+    worker = Agent(database, 'agent:author')
+    try:
+        assert worker.call('plan_schema', {})['data'] == schema
+        template = run_cli(database, 'plan', 'template')
+        assert worker.call('plan_template', {})['data'] == template
+        assert template['workspace'] == run_cli(database, 'export')['workspace'] and template['revision'] == 0
+        try:
+            import jsonschema
+        except ImportError:
+            jsonschema = None
+        if jsonschema is not None:
+            jsonschema.Draft202012Validator(schema).validate(template)
+        template_file.write_text(json.dumps(template))
+        assert worker.call('propose_change', {'plan': template})['data'] == run_cli(database, 'plan', 'diff', str(template_file))
+        run_cli(database, 'plan', 'apply', str(template_file), '--reason', 'Start from the template', '--actor', 'human:lead')
+        run_cli(database, 'ratify', 'TEMPLATE-DESIGN', '--actor', 'human:lead')
+        worker.call('claim_work', {'key': 'TEMPLATE-DESIGN', 'base_revision': 2})
+        refused = worker.call('plan_template', {}, error='invalid_request')
+        assert refused == run_cli(database, 'plan', 'template', error='invalid_request')['error']
+    finally:
+        worker.close()
+    assert run_cli(directory / 'imported.sqlite', 'import', str(template_file))['revision'] == 0
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-plan-') as temporary:
         smoke(Path(temporary))
         replacement(Path(temporary))
-    print('PASS: empty workspace to reviewed graph, CLI/MCP plan diff/apply/history parity, protected execution, stale proposals, decision replacement with affected work and durable restart')
+        authoring(Path(temporary))
+    print('PASS: empty workspace to reviewed graph, CLI/MCP plan diff/apply/history parity, protected execution, stale proposals, decision replacement with affected work, durable restart and schema/template authoring')
