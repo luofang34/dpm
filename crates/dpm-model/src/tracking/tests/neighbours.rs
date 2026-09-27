@@ -170,6 +170,12 @@ fn fediverse_handles_are_labels_but_userinfo_with_a_path_is_not() {
     for label in ["see tok@github.com/o/r", "see @tok@github.com/o/r"] {
         assert!(check_reference(None, label).is_err(), "{label}");
     }
+    // Documented false positive: `name:x@host` reads as `user:pw@host` wherever it appears.
+    let prefixed = "https://github.com/o/r/issues?q=author:alice@corp.example";
+    assert!(
+        check_reference(Some(prefixed), "Tracked").is_err(),
+        "{prefixed}"
+    );
     let nested = "https://github.com/o/r/issues/6?next=https://tok@evil.example/x";
     assert!(
         check_reference(Some(nested), "Tracked").is_err(),

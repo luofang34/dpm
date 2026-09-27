@@ -298,6 +298,7 @@ def one_table_for_every_path(directory):
     database = directory / 'table.sqlite'
     run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
     worker = Agent(database, 'agent:table')
+    reviewer = Agent(database, 'human:table-reviewer')
     try:
         def conflict(key, identity, code='tracking_conflict'):
             return refused(database, worker, 'link_external',
@@ -353,9 +354,15 @@ def one_table_for_every_path(directory):
             local = run_cli(database, 'plan', 'diff', str(candidate), error='invalid_command')['error']
             assert remote['message'] == local['message'], (remote, local)
             assert expected in remote['message'], remote
+            applied = reviewer.call('apply_change', {'plan': proposal, 'reason': 'Re-add the object',
+                                                     'base_revision': current['revision']}, error='invalid_command')
+            local = run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'Re-add the object',
+                            '--actor', 'human:reviewer', error='invalid_command')['error']
+            assert applied['message'] == local['message'] == remote['message'], (applied, local)
         assert run_cli(database, 'export') == current
     finally:
         worker.close()
+        reviewer.close()
 
 
 if __name__ == '__main__':

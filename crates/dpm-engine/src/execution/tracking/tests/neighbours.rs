@@ -87,7 +87,23 @@ fn rekeyed(
         new.observation = None;
     }
     proposal.external_references.insert(new.id, new);
-    propose_change(plan, &proposal).map(|_| ())
+    let preview = propose_change(plan, &proposal).map(|_| ());
+    // Applying is the reviewed path that mutates; it must decide exactly as the preview does.
+    let mut applied = plan.clone();
+    let result = apply_command(
+        &mut applied,
+        ActorId::human("reviewer"),
+        Command::ApplyChange {
+            plan: Box::new(proposal),
+            reason: "re-add the object".into(),
+        },
+        Utc::now(),
+    );
+    assert_eq!(preview.is_ok(), result.is_ok(), "preview and apply agree");
+    if result.is_err() {
+        assert_eq!(&applied, plan, "a refused apply changes nothing");
+    }
+    result.map(|_| ())
 }
 
 fn github(kind: ExternalObjectKind) -> ExternalIdentity {

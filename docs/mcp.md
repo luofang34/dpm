@@ -130,10 +130,12 @@ GitHub numbers issues, pull requests and discussions in one repository sequence,
 sequence, so `#5` there has one record and one owner whichever kind is named. Forgejo and Gitea
 are one family on one instance; the first recorded family is kept for display. GitLab work items
 of project-level types (issue, incident, task, test case, Service Desk ticket, objective, key
-result) share the project's issue IID sequence, merge requests have their own project sequence,
-and epics have a group-scoped IID (`GET /groups/:id/epics/:epic_iid`); legacy requirements keep a
-separate IID and are rejected. Jira and Linear number every issue type in one key sequence, so the
-kind is a label there and never part of the key. On GitHub, Forgejo, Gitea and GitLab any kind
+result) share the project's issue IID sequence (a Service Desk ticket is tracked "as ticket
+`#<issue_iid>`"), merge requests have their own project sequence, and epics have a group-scoped IID
+(`GET /groups/:id/epics/:epic_iid`); requirements are numbered separately (`REQ-1`) and are
+rejected rather than guessed into a space. Sources: GitLab docs `user/work_items`, `api/epics`,
+`user/project/service_desk/using_service_desk` and `user/project/requirements`. Jira and Linear
+number every issue type in one key sequence, so the kind is a label there and never part of the key. On GitHub, Forgejo, Gitea and GitLab any kind
 outside the table is rejected (`invalid_command`, naming the accepted kinds), so no spelling can
 give one number a second identity; Jira and Linear accept any kind name, and have no pull requests.
 Every family stays distinct from the others, even on one host, and each instance is separate
@@ -216,8 +218,12 @@ word is percent-decoded until stable (deeper nesting is rejected) and `\` is rea
 - Intentional misses: a secret value under an ordinary name (`?q=ghp_abc`), a bare token in a
   label (`ghp_abc`), a secret in a path segment without `=` (`/token/abc`), one-letter or
   unrelated names (`?k=`, `?x=`), OAuth `state`, and a `name@host` pair with no path, port or `:`
-  inside a query value (`?next=tok@evil.example`), which reads as an address. The detector recognizes credential syntax, not credential
-  content; it is a guard against pasting live links, not a secret scanner.
+  inside a query value (`?next=tok@evil.example`), which reads as an address. The detector
+  recognizes credential syntax, not credential content; it is a guard against pasting live links,
+  not a secret scanner.
+- Intentional false positive: an address after a `:` inside a query value
+  (`?q=author:alice@corp.example`) reads as `user:pw@host` and is rejected; that is the price of
+  rejecting `?x=user:pw@evil.example`.
 
 The URL must also pass structural rules, so it is never looser than a label: `http://` or
 `https://` followed directly by an authority equal to the identity's instance after the same
@@ -243,6 +249,8 @@ reviews, observations are attributed records that a plan change cannot add, rewr
 record them with `link_external`. A removal in one reviewed change followed by a re-addition in a
 later one is indistinguishable from unlinking the last link and linking again, which starts a new
 record without history.
+
+### History
 
 `history` returns entries in append order with a `next_after_sequence` cursor (default limit 100,
 capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export
