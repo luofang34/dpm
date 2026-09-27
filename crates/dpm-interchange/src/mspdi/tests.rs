@@ -1,9 +1,9 @@
 use super::*;
 use dpm_model::{DependencyKind, Key, Project, WorkKind, WorkStatus};
 
-const PROJECT_GUID: &str = "11111111-1111-4111-8111-111111111111";
+pub(crate) const PROJECT_GUID: &str = "11111111-1111-4111-8111-111111111111";
 
-fn workspace() -> Plan {
+pub(crate) fn workspace() -> Plan {
     let mut plan = Plan::empty("Interchange");
     let project = Project {
         id: ProjectId::new(),
@@ -16,47 +16,47 @@ fn workspace() -> Plan {
     plan
 }
 
-fn guid(uid: i64) -> String {
+pub(crate) fn guid(uid: i64) -> String {
     format!("22222222-2222-4222-8222-{uid:012}")
 }
 
-fn task(uid: i64, level: u32, name: &str, body: &str) -> String {
+pub(crate) fn task(uid: i64, level: u32, name: &str, body: &str) -> String {
     format!(
         "<Task><UID>{uid}</UID><GUID>{}</GUID><Name>{name}</Name><OutlineLevel>{level}</OutlineLevel>{body}</Task>",
         guid(uid)
     )
 }
 
-fn link(predecessor: i64, kind: u32, lag: i64, format: u32) -> String {
+pub(crate) fn link(predecessor: i64, kind: u32, lag: i64, format: u32) -> String {
     format!(
         "<PredecessorLink><PredecessorUID>{predecessor}</PredecessorUID><Type>{kind}</Type><LinkLag>{lag}</LinkLag><LagFormat>{format}</LagFormat></PredecessorLink>"
     )
 }
 
-fn document(tasks: &[String]) -> String {
+pub(crate) fn document(tasks: &[String]) -> String {
     format!(
         "<?xml version=\"1.0\"?><Project xmlns=\"http://schemas.microsoft.com/project\"><Name>Source</Name><GUID>{PROJECT_GUID}</GUID><Tasks>{}</Tasks></Project>",
         tasks.concat()
     )
 }
 
-fn options() -> ImportOptions {
+pub(crate) fn options() -> ImportOptions {
     ImportOptions {
         project_key: "REL".into(),
         key_prefix: Some("MSP".into()),
     }
 }
 
-fn import(plan: &Plan, xml: &str) -> ImportResult {
+pub(crate) fn import(plan: &Plan, xml: &str) -> ImportResult {
     import_mspdi(plan, xml, &options()).expect("import")
 }
 
-fn work<'a>(plan: &'a Plan, key: &str) -> &'a dpm_model::WorkItem {
+pub(crate) fn work<'a>(plan: &'a Plan, key: &str) -> &'a dpm_model::WorkItem {
     plan.find_work_by_key(key).expect("work")
 }
 
 /// A summary with two tasks and a milestone, followed by a top-level task.
-fn outline_document(extra_links: &str) -> String {
+pub(crate) fn outline_document(extra_links: &str) -> String {
     document(&[
         task(1, 1, "Design", "<Summary>1</Summary>"),
         task(
@@ -124,9 +124,10 @@ fn outline_maps_to_packages_tasks_and_milestones_without_execution() {
             .any(|f| f.field == "duration" && f.detail.contains("elapsed"))
     );
     assert!(
-        result.report.items[1].approximated[0]
-            .detail
-            .contains("working-time")
+        result.report.items[1]
+            .approximated
+            .iter()
+            .any(|f| f.field == "duration" && f.detail.contains("working-time"))
     );
     let edges: Vec<_> = candidate
         .dependencies

@@ -1,13 +1,13 @@
 //! Map source tasks onto candidate work items, keeping each item's report beside it.
 
-use super::encoding::{
-    DEFAULT_PRIORITY, TimeBasis, derived_work_id, duration_seconds, estimate_from_seconds,
-    format_guid, hours, parse_duration, priority_from_value, priority_value, time_basis,
-};
+mod changes;
+mod fields;
+
+use super::encoding::{derived_work_id, format_guid};
 use super::report::{Finding, ItemOutcome, ItemReport, WorkReference};
 use super::source::{SourceProject, SourceTask};
 use crate::InterchangeError;
-use dpm_model::{Key, Plan, ProjectId, WorkItem, WorkItemId, WorkKind, WorkStatus};
+use dpm_model::{Key, Plan, ProjectId, WorkItem, WorkItemId, WorkKind};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Candidate work for every imported task, with the per-task reports in document order.
@@ -135,7 +135,7 @@ pub(crate) fn map(
                     });
                 }
                 let key = key_for(existing, task, prefix, &mut keys)?;
-                let (work, report) = build(task, existing, id, key, &placement);
+                let (work, report) = fields::build(task, existing, id, key, &placement);
                 outline.work.insert(task.uid, work);
                 outline.reports.push(report);
             }
@@ -207,235 +207,47 @@ fn key_for(
     Ok(Key(key))
 }
 
-fn build(
-    task: &SourceTask,
-    existing: Option<&WorkItem>,
-    id: WorkItemId,
-    key: Key,
-    placement: &Placement,
-) -> (WorkItem, ItemReport) {
-    let kind = if placement.has_children || task.summary {
-        WorkKind::WorkPackage
-    } else if task.milestone {
-        WorkKind::Milestone
-    } else {
-        WorkKind::Task
-    };
-    let mut report = ItemReport {
-        uid: task.uid,
-        guid: task.guid.map(format_guid),
-        name: task.name.clone(),
-        outcome: ItemOutcome::Created,
-        work: None,
-        preserved: vec!["kind".into(), "outline".into()],
-        approximated: Vec::new(),
-        rejected: task.rejected.clone(),
-    };
-    if task.guid.is_some() {
-        report.preserved.insert(0, "identity".into());
-    } else {
-        report.approximated.push(Finding::new(
-            "identity",
-            format!(
-                "no task GUID; identity derived from the project GUID and UID {}, so a renumbered UID imports as new work",
-                task.uid
-            ),
-        ));
-    }
-    let mut work = existing
-        .cloned()
-        .unwrap_or_else(|| new_work(id, key, kind, placement.project));
-    work.kind = kind;
-    work.parent = match placement.parent {
-        Parent::Imported(parent) => Some(parent),
-        Parent::TopLevel | Parent::NotImported(_) => None,
-    };
-    map_title(task, &mut work, &mut report);
-    map_objective(task, &mut work, &mut report);
-    map_priority(task, existing, &mut work, &mut report);
-    map_duration(task, existing, &mut work, &mut report);
-    (work, report)
-}
-
-fn new_work(id: WorkItemId, key: Key, kind: WorkKind, project: ProjectId) -> WorkItem {
-    WorkItem {
-        id,
-        key,
-        project,
-        parent: None,
-        kind,
-        title: String::new(),
-        objective: String::new(),
-        acceptance: Vec::new(),
-        instructions: None,
-        // MSPDI has no acceptance criteria, so imported tasks wait for ratification.
-        status: if kind == WorkKind::Task {
-            WorkStatus::Proposed
-        } else {
-            WorkStatus::Planned
-        },
-        reported_progress_percent: 0,
-        priority: dpm_model::Priority::default(),
-        estimate: None,
-        capabilities: BTreeSet::new(),
-        requirement_ids: BTreeSet::new(),
-        artifact_ids: BTreeSet::new(),
-        owner: None,
-        resources: Vec::new(),
-        last_rejection: None,
-        attempts: Vec::new(),
-        basis: Vec::new(),
-        block_reason: None,
-        events: Default::default(),
-        condition: None,
-        join: dpm_model::JoinPolicy::default(),
-    }
-}
-
-fn map_title(task: &SourceTask, work: &mut WorkItem, report: &mut ItemReport) {
-    if task.name.trim().is_empty() {
-        work.title = format!("MSPDI task {}", task.uid);
-        report
-            .approximated
-            .push(Finding::new("title", "source name is empty; titled by UID"));
-    } else {
-        work.title = task.name.clone();
-        report.preserved.push("title".into());
-    }
-}
-
-fn map_objective(task: &SourceTask, work: &mut WorkItem, report: &mut ItemReport) {
-    if let Some(notes) = &task.notes {
-        work.objective = notes.clone();
-        report.preserved.push("notes".into());
-    }
-}
-
-fn map_priority(
-    task: &SourceTask,
-    existing: Option<&WorkItem>,
-    work: &mut WorkItem,
-    report: &mut ItemReport,
-) {
-    let value = task.priority.unwrap_or(DEFAULT_PRIORITY);
-    if existing.is_some_and(|e| priority_value(e.priority) == value) {
-        report.preserved.push("priority".into());
-        return;
-    }
-    work.priority = priority_from_value(value);
-    if priority_value(work.priority) == value {
-        report.preserved.push("priority".into());
-    } else {
-        report.approximated.push(Finding::new(
-            "priority",
-            format!("source priority {value} mapped to {:?}", work.priority),
-        ));
-    }
-}
-
-fn map_duration(
-    task: &SourceTask,
-    existing: Option<&WorkItem>,
-    work: &mut WorkItem,
-    report: &mut ItemReport,
-) {
-    let seconds = match task.duration.as_deref().map(parse_duration) {
-        None => None,
-        Some(Ok(seconds)) => Some(seconds),
-        Some(Err(reason)) => {
-            report.rejected.push(Finding::new("duration", reason));
-            None
-        }
-    };
-    match work.kind {
-        WorkKind::WorkPackage => {
-            work.estimate = None;
-            if task.milestone {
-                report.approximated.push(Finding::new(
-                    "milestone",
-                    "milestone flag on a summary task ignored; summaries import as work packages",
-                ));
-            }
-        }
-        WorkKind::Milestone => {
-            work.estimate = None;
-            if let Some(seconds) = seconds.filter(|s| *s > 0) {
-                report.approximated.push(Finding::new(
-                    "duration",
-                    format!(
-                        "milestone duration {} h dropped; milestones have zero duration",
-                        hours(seconds)
-                    ),
-                ));
-            }
-        }
-        WorkKind::Task => {
-            let Some(seconds) = seconds else { return };
-            task_estimate(task, seconds, existing, work, report);
-        }
-    }
-}
-
-fn task_estimate(
-    task: &SourceTask,
-    seconds: u64,
-    existing: Option<&WorkItem>,
-    work: &mut WorkItem,
-    report: &mut ItemReport,
-) {
-    let unchanged = existing
-        .filter(|e| e.kind == WorkKind::Task)
-        .is_some_and(|e| duration_seconds(e.estimate) == seconds);
-    if unchanged || (seconds == 0 && work.estimate.is_none()) {
-        report.preserved.push("duration".into());
-        return;
-    }
-    if seconds == 0 {
-        work.estimate = None;
-        report.approximated.push(Finding::new(
-            "duration",
-            "zero source duration removes the local estimate; the task becomes unestimated",
-        ));
-        return;
-    }
-    work.estimate = estimate_from_seconds(seconds);
-    let basis = task.duration_format.and_then(time_basis);
-    let detail = match basis {
-        Some(TimeBasis::Elapsed) => format!(
-            "elapsed duration {} h becomes the single-point estimate O=M=P",
-            hours(seconds)
-        ),
-        _ => format!(
-            "working-time duration {} h treated as elapsed hours (calendar not applied); single-point estimate O=M=P",
-            hours(seconds)
-        ),
-    };
-    report.approximated.push(Finding::new("duration", detail));
-}
-
 /// A top-level source task keeps a local parent that the document does not describe, so importing
 /// a sub-schedule under an existing package does not detach it.
 fn keep_outer_parents(current: &Plan, outline: &mut Outline) {
     let imported: BTreeSet<_> = outline.work.values().map(|w| w.id).collect();
-    for work in outline.work.values_mut() {
+    let mut kept = BTreeSet::new();
+    for (uid, work) in &mut outline.work {
         if work.parent.is_none()
             && let Some(parent) = current.work_items.get(&work.id).and_then(|e| e.parent)
             && !imported.contains(&parent)
         {
             work.parent = Some(parent);
+            kept.insert(*uid);
         }
+    }
+    for report in outline.reports.iter_mut().filter(|r| kept.contains(&r.uid)) {
+        report.preserved.retain(|field| field != "outline");
+        report.kept.push("outline".into());
     }
 }
 
 fn finish_reports(current: &Plan, outline: &mut Outline) {
+    let keys: BTreeMap<WorkItemId, &Key> = current
+        .work_items
+        .values()
+        .chain(outline.work.values())
+        .map(|w| (w.id, &w.key))
+        .collect();
     for report in &mut outline.reports {
         let Some(work) = outline.work.get(&report.uid) else {
             continue;
         };
         report.outcome = match current.work_items.get(&work.id) {
             None => ItemOutcome::Created,
-            Some(existing) if existing == work => ItemOutcome::Unchanged,
-            Some(_) => ItemOutcome::Updated,
+            Some(existing) => {
+                report.changes = changes::between(existing, work, &keys);
+                if existing == work {
+                    ItemOutcome::Unchanged
+                } else {
+                    ItemOutcome::Updated
+                }
+            }
         };
         report.work = Some(WorkReference {
             id: work.id,
@@ -458,5 +270,11 @@ fn skipped(task: &SourceTask, field: &str, reason: impl Into<String>) -> ItemRep
         preserved: Vec::new(),
         approximated: Vec::new(),
         rejected,
+        kept: Vec::new(),
+        changes: Vec::new(),
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic)]
+mod tests;

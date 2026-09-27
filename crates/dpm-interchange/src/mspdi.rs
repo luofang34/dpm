@@ -19,8 +19,8 @@ use serde::{Deserialize, Serialize};
 
 pub use export::{ExportResult, export_mspdi};
 pub use report::{
-    DependencyExportReport, ExportReport, Finding, ImportReport, ItemExportReport, ItemOutcome,
-    ItemReport, LinkOutcome, LinkReport, SourceSummary, WorkReference,
+    DependencyExportReport, ExportReport, FieldChange, Finding, ImportReport, ItemExportReport,
+    ItemOutcome, ItemReport, LinkOutcome, LinkReport, SourceSummary, WorkReference,
 };
 
 /// Where imported work goes and how new work is keyed.

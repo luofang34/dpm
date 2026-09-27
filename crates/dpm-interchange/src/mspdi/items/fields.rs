@@ -1,0 +1,287 @@
+//! Field-by-field mapping of one source task onto candidate work.
+//!
+//! A field the source omits or leaves empty is not source data: existing work keeps its local
+//! value and the report lists the field as `kept`, never as `preserved`.
+
+use super::{Parent, Placement};
+use crate::mspdi::encoding::{
+    DEFAULT_PRIORITY, TimeBasis, duration_seconds, estimate_from_seconds, format_guid, hours,
+    parse_duration, priority_from_value, priority_value, time_basis,
+};
+use crate::mspdi::report::{Finding, ItemOutcome, ItemReport};
+use crate::mspdi::source::SourceTask;
+use dpm_model::{Key, ProjectId, WorkItem, WorkItemId, WorkKind, WorkStatus};
+use std::collections::BTreeSet;
+
+pub(super) fn build(
+    task: &SourceTask,
+    existing: Option<&WorkItem>,
+    id: WorkItemId,
+    key: Key,
+    placement: &Placement,
+) -> (WorkItem, ItemReport) {
+    let mut report = ItemReport {
+        uid: task.uid,
+        guid: task.guid.map(format_guid),
+        name: task.name.clone(),
+        outcome: ItemOutcome::Created,
+        work: None,
+        preserved: Vec::new(),
+        approximated: Vec::new(),
+        rejected: task.rejected.clone(),
+        kept: Vec::new(),
+        changes: Vec::new(),
+    };
+    if task.guid.is_some() {
+        report.preserved.push("identity".into());
+    } else {
+        report.approximated.push(Finding::new(
+            "identity",
+            format!(
+                "no task GUID; identity derived from the project GUID and UID {}, so a renumbered UID imports as new work",
+                task.uid
+            ),
+        ));
+    }
+    let kind = map_kind(task, existing, placement.has_children, &mut report);
+    let mut work = existing
+        .cloned()
+        .unwrap_or_else(|| new_work(id, key, kind, placement.project));
+    work.kind = kind;
+    work.parent = match placement.parent {
+        Parent::Imported(parent) => Some(parent),
+        Parent::TopLevel | Parent::NotImported(_) => None,
+    };
+    report.preserved.push("outline".into());
+    map_title(task, existing, &mut work, &mut report);
+    map_objective(task, existing, &mut work, &mut report);
+    map_priority(task, existing, &mut work, &mut report);
+    map_duration(task, existing, &mut work, &mut report);
+    (work, report)
+}
+
+/// A summary (or any task with children) is a work package; an absent milestone flag keeps an
+/// existing milestone rather than turning it into a task.
+pub(super) fn resolve_kind(
+    task: &SourceTask,
+    existing: Option<&WorkItem>,
+    has_children: bool,
+) -> WorkKind {
+    if has_children || task.summary {
+        WorkKind::WorkPackage
+    } else {
+        match task.milestone {
+            Some(true) => WorkKind::Milestone,
+            Some(false) => WorkKind::Task,
+            None if existing.is_some_and(|e| e.kind == WorkKind::Milestone) => WorkKind::Milestone,
+            None => WorkKind::Task,
+        }
+    }
+}
+
+fn map_kind(
+    task: &SourceTask,
+    existing: Option<&WorkItem>,
+    has_children: bool,
+    report: &mut ItemReport,
+) -> WorkKind {
+    let kind = resolve_kind(task, existing, has_children);
+    if kind == WorkKind::Milestone && task.milestone.is_none() {
+        report.kept.push("kind".into());
+    } else {
+        report.preserved.push("kind".into());
+    }
+    kind
+}
+
+fn new_work(id: WorkItemId, key: Key, kind: WorkKind, project: ProjectId) -> WorkItem {
+    WorkItem {
+        id,
+        key,
+        project,
+        parent: None,
+        kind,
+        title: String::new(),
+        objective: String::new(),
+        acceptance: Vec::new(),
+        instructions: None,
+        // MSPDI has no acceptance criteria, so imported tasks wait for ratification.
+        status: if kind == WorkKind::Task {
+            WorkStatus::Proposed
+        } else {
+            WorkStatus::Planned
+        },
+        reported_progress_percent: 0,
+        priority: dpm_model::Priority::default(),
+        estimate: None,
+        capabilities: BTreeSet::new(),
+        requirement_ids: BTreeSet::new(),
+        artifact_ids: BTreeSet::new(),
+        owner: None,
+        resources: Vec::new(),
+        last_rejection: None,
+        attempts: Vec::new(),
+        basis: Vec::new(),
+        block_reason: None,
+        events: Default::default(),
+        condition: None,
+        join: dpm_model::JoinPolicy::default(),
+    }
+}
+
+fn map_title(
+    task: &SourceTask,
+    existing: Option<&WorkItem>,
+    work: &mut WorkItem,
+    report: &mut ItemReport,
+) {
+    if !task.name.trim().is_empty() {
+        work.title = task.name.clone();
+        report.preserved.push("title".into());
+    } else if existing.is_some() {
+        report.kept.push("title".into());
+    } else {
+        work.title = format!("MSPDI task {}", task.uid);
+        report
+            .approximated
+            .push(Finding::new("title", "source name is empty; titled by UID"));
+    }
+}
+
+fn map_objective(
+    task: &SourceTask,
+    existing: Option<&WorkItem>,
+    work: &mut WorkItem,
+    report: &mut ItemReport,
+) {
+    if let Some(notes) = &task.notes {
+        work.objective = notes.clone();
+        report.preserved.push("notes".into());
+    } else if existing.is_some() {
+        report.kept.push("notes".into());
+    }
+}
+
+fn map_priority(
+    task: &SourceTask,
+    existing: Option<&WorkItem>,
+    work: &mut WorkItem,
+    report: &mut ItemReport,
+) {
+    let Some(value) = task.priority else {
+        if existing.is_some() {
+            report.kept.push("priority".into());
+        } else {
+            work.priority = priority_from_value(DEFAULT_PRIORITY);
+            report.approximated.push(Finding::new(
+                "priority",
+                format!(
+                    "source omits Priority; the MSPDI default {DEFAULT_PRIORITY} applies ({:?})",
+                    work.priority
+                ),
+            ));
+        }
+        return;
+    };
+    if existing.is_some_and(|e| priority_value(e.priority) == value) {
+        report.preserved.push("priority".into());
+        return;
+    }
+    work.priority = priority_from_value(value);
+    if priority_value(work.priority) == value {
+        report.preserved.push("priority".into());
+    } else {
+        report.approximated.push(Finding::new(
+            "priority",
+            format!("source priority {value} mapped to {:?}", work.priority),
+        ));
+    }
+}
+
+fn map_duration(
+    task: &SourceTask,
+    existing: Option<&WorkItem>,
+    work: &mut WorkItem,
+    report: &mut ItemReport,
+) {
+    let seconds = match task.duration.as_deref().map(parse_duration) {
+        None => None,
+        Some(Ok(seconds)) => Some(seconds),
+        Some(Err(reason)) => {
+            report.rejected.push(Finding::new("duration", reason));
+            None
+        }
+    };
+    match work.kind {
+        WorkKind::WorkPackage => {
+            if work.estimate.take().is_some() {
+                report.approximated.push(Finding::new(
+                    "duration",
+                    "work packages carry no estimate; the local estimate is removed",
+                ));
+            }
+            if task.milestone == Some(true) {
+                report.approximated.push(Finding::new(
+                    "milestone",
+                    "milestone flag on a summary task ignored; summaries import as work packages",
+                ));
+            }
+        }
+        WorkKind::Milestone => {
+            work.estimate = None;
+            if let Some(seconds) = seconds.filter(|s| *s > 0) {
+                report.approximated.push(Finding::new(
+                    "duration",
+                    format!(
+                        "milestone duration {} h dropped; milestones have zero duration",
+                        hours(seconds)
+                    ),
+                ));
+            }
+        }
+        WorkKind::Task => match seconds {
+            Some(seconds) => task_estimate(task, seconds, existing, work, report),
+            None if existing.is_some_and(|e| e.kind == WorkKind::Task) => {
+                report.kept.push("duration".into());
+            }
+            None => {}
+        },
+    }
+}
+
+fn task_estimate(
+    task: &SourceTask,
+    seconds: u64,
+    existing: Option<&WorkItem>,
+    work: &mut WorkItem,
+    report: &mut ItemReport,
+) {
+    let unchanged = existing
+        .filter(|e| e.kind == WorkKind::Task)
+        .is_some_and(|e| duration_seconds(e.estimate) == seconds);
+    if unchanged || (seconds == 0 && work.estimate.is_none()) {
+        report.preserved.push("duration".into());
+        return;
+    }
+    if seconds == 0 {
+        work.estimate = None;
+        report.approximated.push(Finding::new(
+            "duration",
+            "zero source duration removes the local estimate; the task becomes unestimated",
+        ));
+        return;
+    }
+    work.estimate = estimate_from_seconds(seconds);
+    let basis = task.duration_format.and_then(time_basis);
+    let detail = match basis {
+        Some(TimeBasis::Elapsed) => format!(
+            "elapsed duration {} h becomes the single-point estimate O=M=P",
+            hours(seconds)
+        ),
+        _ => format!(
+            "working-time duration {} h treated as elapsed hours (calendar not applied); single-point estimate O=M=P",
+            hours(seconds)
+        ),
+    };
+    report.approximated.push(Finding::new("duration", detail));
+}

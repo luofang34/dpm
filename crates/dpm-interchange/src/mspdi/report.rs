@@ -21,6 +21,17 @@ impl Finding {
     }
 }
 
+/// One local field that the candidate changes on existing work.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldChange {
+    /// DPM field: `title`, `objective`, `kind`, `parent`, `priority` or `estimate`.
+    pub field: String,
+    /// Local value before the import.
+    pub before: String,
+    /// Value in the candidate.
+    pub after: String,
+}
+
 /// Identity of the source project named by the document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceSummary {
@@ -71,12 +82,17 @@ pub struct ItemReport {
     pub outcome: ItemOutcome,
     /// Local work in the candidate; absent when skipped.
     pub work: Option<WorkReference>,
-    /// Fields carried over exactly.
+    /// Source fields carried over exactly.
     pub preserved: Vec<String>,
-    /// Fields carried over with a documented loss of precision or meaning.
+    /// Source fields carried over with a documented loss of precision or meaning, and defaults
+    /// applied to new work where the source omits a field.
     pub approximated: Vec<Finding>,
     /// Source data present in the document that the candidate does not carry.
     pub rejected: Vec<Finding>,
+    /// Fields the source omits or leaves empty, so existing work keeps its local value.
+    pub kept: Vec<String>,
+    /// Every local field the candidate changes on existing work; empty unless `Updated`.
+    pub changes: Vec<FieldChange>,
 }
 
 /// How one source `PredecessorLink` maps to dependencies.

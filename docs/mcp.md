@@ -155,10 +155,10 @@ revision and operation history unchanged.
 | --- | --- |
 | Task `GUID` | Work identity. Without one, an identity derived from the project `GUID` and task `UID`; neither skips the task |
 | `OutlineLevel` order | `parent`; a summary task (or any task with children) becomes a WorkPackage |
-| `Milestone=1` | Milestone; a nonzero source duration is dropped and reported |
+| `Milestone=1` | Milestone; a nonzero source duration is dropped and reported. Without the element, existing work keeps its kind |
 | other tasks | Task, `Proposed`, empty acceptance: never executable until ratified. A zero-duration task without the flag stays an unestimated Task, so exported unestimated tasks keep their kind |
-| `Name`, `Notes` | `title`, `objective` (absent notes keep the local objective) |
-| `Priority` 0..1000 | P0 ≥800, P1 ≥600, P2 ≥400, P3 ≥200, else P4; export writes 900/700/500/300/100 |
+| `Name`, `Notes` | `title`, `objective`; an empty name or absent notes keep the local value |
+| `Priority` 0..1000 | P0 ≥800, P1 ≥600, P2 ≥400, P3 ≥200, else P4; export writes 900/700/500/300/100. Absent: existing work keeps its priority; new work gets the MSPDI default 500 (P2), reported as approximated |
 | `Duration` `PTnHnMnS` | Single-point estimate O=M=P in hours; zero means unestimated |
 | `PredecessorLink` `Type` 0/1/2/3 | FF/FS/SF/SS dependency |
 | `LinkLag` | `lag_hours = LinkLag / 600` (tenths of a minute) |
@@ -177,7 +177,10 @@ between a summary and its own descendant, and summaries without imported descend
 Relations that expand onto the same pair and kind merge, keeping the larger lag.
 
 `report.items` has one entry per source task with `outcome` (`Created`, `Updated`, `Unchanged`,
-`Skipped`), the mapped `work`, and `preserved`, `approximated` and `rejected` findings;
+`Skipped`), the mapped `work`, and `preserved`, `approximated` and `rejected` findings. Fields the
+source omits never count as preserved: `kept` names them, and existing work keeps the local value.
+`changes` lists every local field an `Updated` item changes (`title`, `objective`, `kind`, `parent`,
+`priority`, `estimate`) with `before` and `after` values, and is empty otherwise;
 `report.links` has one entry per `PredecessorLink` with `outcome` (`Preserved`, `Approximated`,
 `Rejected`), notes and the resulting dependency IDs. Rejected data includes constraints,
 deadlines, calendars, resources and assignments, baselines, custom fields and outline codes,

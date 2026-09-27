@@ -30,7 +30,8 @@ pub(crate) struct SourceTask {
     pub(crate) outline_level: u32,
     pub(crate) duration: Option<String>,
     pub(crate) duration_format: Option<u32>,
-    pub(crate) milestone: bool,
+    /// `None` when the element is absent, so re-imports can keep the local kind.
+    pub(crate) milestone: Option<bool>,
     pub(crate) summary: bool,
     pub(crate) priority: Option<i64>,
     pub(crate) notes: Option<String>,
@@ -185,7 +186,7 @@ fn parse_task(node: Node, position: usize) -> Result<SourceTask, InterchangeErro
         outline_level,
         duration: text(node, "Duration").map(str::to_owned),
         duration_format: format("DurationFormat")?,
-        milestone: flag(node, "Milestone"),
+        milestone: text(node, "Milestone").map(|v| matches!(v.trim(), "1" | "true")),
         summary: flag(node, "Summary"),
         priority: integer("Priority")?,
         notes: text(node, "Notes")
