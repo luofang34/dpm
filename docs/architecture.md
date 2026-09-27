@@ -292,8 +292,7 @@ claim, start or submission, but it gates the successor's next governed transitio
 verification.
 
 Edges written without an `id` receive one derived deterministically from predecessor, successor and
-relation kind, so snapshots and operation logs that predate edge identity load unchanged and every
-reload agrees. Such edges are `Hard`. Serialization always writes the identity and policy.
+relation kind, so plans that predate edge identity load unchanged and every reload agrees. Such edges are `Hard`. Serialization always writes the identity and policy.
 
 `links` hold typed non-gating relationships (`RelatesTo`, `Duplicates`, `DerivedFrom`,
 `Supersedes`) from a `source` to a `target` work item with an optional note. Both endpoints must
@@ -418,9 +417,43 @@ the fraction of runs in which each activity is critical.
 ## Persistence
 
 SQLite v0.1 commits a JSON domain snapshot and a semantic operation record in one transaction.
-Operations already include actor, timestamp, command, base revision, and resulting revision. Full
-operation replay, semantic merge, CRDT text collaboration, and remote synchronization are future
-milestones.
+Operations include a caller-supplied identity, actor, timestamp, command, base revision and
+resulting revision; the engine mints no identities, so re-executing a recorded operation reproduces
+it exactly. The store keeps the genesis plan it was initialized or imported with, and the snapshot
+is always the result of replaying every operation from it. Semantic merge, CRDT text collaboration
+and remote synchronization are future milestones.
+
+A reviewed plan change is logged as a delta, not as the proposal. Adapters still submit a full
+proposed plan; `plan_change` validates it exactly as `propose_change` does and records the canonical
+entity-level difference: one entry per changed workspace, project, resource, work item,
+requirement, decision, risk, external reference or dependency edge, plus the link set, each with its
+full `before` and `after` value and the changed field names. `patch` applies such a delta only if
+every `before` still equals the current entity, otherwise it fails with a stale-change error, and
+applying the command then runs the same validation, protection, agent refusal, independence check
+and decision `resolved_at` stamping on the patched plan that applying the full proposal would.
+Artifacts are not part of the delta: evidence changes only through the evidence command, so a
+proposal that alters artifacts is refused before a delta exists.
+
+The difference identifies edges by ID and compares links as a set, so a delta does not record the
+order of `dependencies` or `links`. After a plan change both keep their current order, with removed
+entries dropped and added ones appended in the delta's order; a proposal that only reorders them is
+"no semantic changes". That order never changes schedule numbers (dates, float, critical-path
+membership, percentiles and criticality are the same for any order), but it is the display order of
+lists built from those collections: `critical_activities`, the dependency listings in `explain`,
+the TUI's dependency lines and the order of the exported JSON. Such a list can therefore differ from
+the order in the applied proposal file.
+
+The store records its layout version in SQLite's `user_version` header and checks it, together with
+the exact set of schema objects that version names, on every open and again inside every write
+transaction: newer versions, retired versions whose logs cannot be replayed, and altered layouts
+(including planted triggers, views or indexes) are refused untouched. Recovery uses `dpm backup`
+(SQLite online backup of one consistent snapshot, genesis plan, full operation history and schema
+version into a new file), `dpm restore` (into a new path only) and `dpm verify-store`, which writes
+nothing and creates no files (page integrity, exact layout, record decoding, snapshot validation,
+history contiguous from the genesis revision to the snapshot revision, and a replay from the genesis
+plan that must reproduce the snapshot). A divergence is reported, never repaired. JSON export is not
+a backup, and copying a live WAL database file is unsafe;
+see [backup and restore](projects.md#backup-restore-and-verification).
 
 The store records its layout version in SQLite's `user_version` header and checks it, together with
 the exact set of schema objects that version names, on every open and again inside every write
@@ -428,11 +461,6 @@ transaction: newer versions and altered layouts (including planted triggers, vie
 refused untouched, and an older layout is upgraded inside its next write transaction. The current
 layout records the revision the history starts from, so verification also detects lost leading
 operations. Recovery uses `dpm backup` (SQLite online backup of one consistent snapshot, full
-operation history and schema version into a new file), `dpm restore` (into a new path only) and
-`dpm verify-store`, which writes nothing and creates no files (page integrity, exact layout, record
-decoding, snapshot validation, history contiguous from the recorded origin to the snapshot
-revision). JSON export is not a backup, and copying a live WAL database file is unsafe;
-see [backup and restore](projects.md#backup-restore-and-verification).
 
 SQLite is durable operational state, not a disposable cache of an exported plan. A workspace can
 span multiple repositories and non-code projects; Git roots affect discovery, not domain scope.

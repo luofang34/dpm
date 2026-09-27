@@ -10,7 +10,7 @@ Every CLI mutation likewise requires an explicit `--actor KIND:NAME`; there is n
 omitting it can never make one caller its own reviewer.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
-The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:7`
+The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:8`
 and the observed `revision`; every MCP mutation tool requires that `base_revision`, and a call without it
 is refused with `invalid_request`. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
@@ -267,6 +267,20 @@ record without history.
 capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export
 is not an operation backup; use the CLI's `backup`, `restore` and `verify-store`
 ([recovery](projects.md#backup-restore-and-verification)).
+
+`plan apply` / `apply_change` take a full proposed plan, but the operation they return and record
+holds only what the review changed. Its command is
+`{"ApplyChange": {"changes": [...], "reason": "..."}}`, where `changes` is exactly the `changes`
+array `plan diff` / `propose_change` reported for that proposal: one entry per changed entity with
+`collection` (`workspace`, `projects`, `resources`, `work_items`, `requirements`, `decisions`,
+`risks`, `external_references`, `dependencies` or `links`), `id` (absent for `workspace` and
+`links`), the changed `fields`, and the full `before` and `after` values (`before: null` is an
+addition, `after: null` a removal). Read `fields` for what changed and `after` for the result; a
+one-field edit of a large plan records one entity, not the plan. Recorded artifacts never appear:
+evidence changes only through `add_artifact` and `attach_git_head`. A recorded change applies only onto the state its
+`before` values describe; replaying it onto anything else is refused as a stale change. This shape is
+not additive: `api_version` 7 clients, whose `ApplyChange` held the whole proposed `plan`, must read
+`changes` under `api_version` 8.
 
 ## Microsoft Project XML interchange
 

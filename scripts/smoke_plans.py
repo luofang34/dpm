@@ -43,7 +43,11 @@ def smoke(directory):
         diff = worker.call('propose_change', {'plan': changed})['data']
         assert diff == run_cli(database, 'plan', 'diff', str(candidate))
         assert diff['changes'][0]['fields'] == ['title']
-        reviewer.call('apply_change', {'plan': changed, 'reason': 'Clarify future integration', 'base_revision': 3})
+        clarified = reviewer.call('apply_change', {'plan': changed, 'reason': 'Clarify future integration', 'base_revision': 3})['data']
+        # The log records the reviewed difference, not the proposal: exactly what plan diff showed.
+        assert clarified['command'] == {'ApplyChange': {'changes': diff['changes'], 'reason': 'Clarify future integration'}}
+        assert len(json.dumps(clarified['command'])) * 2 < len(json.dumps(changed)), clarified
+        assert 'artifacts' not in {c['collection'] for c in approved['command']['ApplyChange']['changes']}
         current = run_cli(database, 'export')
         assert current['revision'] == 4
         stale = worker.call('propose_change', {'plan': changed}, error='revision_conflict')
@@ -53,7 +57,10 @@ def smoke(directory):
         assert history == run_cli(database, 'history')
         assert len(history['entries']) == 4 and history['revision'] == 4
         assert history['entries'][0]['operation'] == approved
-        assert history['entries'][-1]['operation']['command']['ApplyChange']['reason'] == 'Clarify future integration'
+        assert history['entries'][-1]['operation'] == clarified
+        first = history['entries'][0]['operation']['command']['ApplyChange']['changes']
+        assert {c['collection'] for c in first} >= {'work_items', 'dependencies', 'decisions'}, first
+        assert all(c['before'] is None for c in first if c['collection'] == 'work_items'), first
         for after in [0, 2, 4, 2**64-1]:
             assert worker.call('history', {'after_sequence': after, 'limit': 2})['data'] == run_cli(database, 'history', '--after-sequence', str(after), '--limit', '2')
         with sqlite3.connect(database) as connection:
@@ -70,7 +77,7 @@ def smoke(directory):
 
 
 def reject_invalid(database, worker, reviewer, candidate, current):
-    for error_case in ['acceptance', 'cycle', 'duplicate_edge', 'lifecycle', 'gate', 'noop']:
+    for error_case in ['acceptance', 'cycle', 'duplicate_edge', 'lifecycle', 'gate', 'protected', 'noop']:
         bad = copy.deepcopy(current)
         task = next(w for w in bad['work_items'].values() if w['key'] == 'TEST-A')
         if error_case == 'acceptance':
@@ -84,6 +91,8 @@ def reject_invalid(database, worker, reviewer, candidate, current):
             bad['dependencies'].append({**bad['dependencies'][-1], 'kind': 'StartStart'})
         elif error_case == 'lifecycle':
             task['status'] = 'Verified'
+        elif error_case == 'protected':
+            task['title'] = 'Rewritten while claimed'
         elif error_case == 'gate':
             gate = next(iter(bad['decisions'].values()))
             gate['status'], gate['outcome'] = 'Decided', 'Bypass'
