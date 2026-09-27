@@ -3000,7 +3000,7 @@
           "text": "A store in an older layout is refused unchanged with guidance to back up and re-initialize from a plan export."
         },
         {
-          "text": "Protection, independence and agent refusals of plan changes behave identically through CLI and MCP."
+          "text": "Protection, independence and agent refusals of plan changes are unchanged by the log shape."
         }
       ],
       "status": "Planned",
@@ -3031,8 +3031,8 @@
       "instructions": {
         "steps": [
           {
-            "action": "Review the prepared delta/genesis/replay implementation branch against AGENTS.md and the storage requirements.",
-            "expected_result": "Findings name each behaviour change, the schema version and the effect on existing stores."
+            "action": "Implement delta-logged plan changes, a genesis snapshot, replay verification and caller-supplied operation ids behind a new store schema version.",
+            "expected_result": "Tests show the delta round trip, replay equality after every command kind and refusal of older store layouts."
           },
           {
             "action": "Obtain an explicit user decision on re-initializing live stores that hold the older layout.",
@@ -3114,7 +3114,7 @@
             "expected_result": "A field table assigns each field to one group and lists affected adapters and fixtures."
           },
           {
-            "action": "Implement the split, sibling order and reference renaming in one format bump with no other worktrees open.",
+            "action": "Implement the split, sibling order and reference renaming in one format bump.",
             "expected_result": "The workspace builds with the new types and the schema guard matches the model."
           },
           {
@@ -3221,7 +3221,7 @@
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
       "parent": "87eb53a0-5839-51bf-bdb2-47371bf50315",
       "kind": "Task",
-      "title": "Carry estimates, keys and display order through MSPDI round trips",
+      "title": "Carry estimates and keys through MSPDI round trips",
       "objective": "Stop losing three-point estimates and DPM keys when a plan passes through another scheduler: write them to MSPDI custom fields, read them back when the source did not change the duration, and report WBS values that differ from the outline.",
       "acceptance": [
         {
@@ -3273,10 +3273,10 @@
           }
         ],
         "in_scope": [
-          "MSPDI export/import of estimates, keys, sibling order hints and WBS reporting."
+          "MSPDI export/import of three-point estimates and keys, and WBS reporting."
         ],
         "out_of_scope": [
-          "Calendars, resources, .mpp parsing or linking LGPL code into DPM binaries."
+          "Sibling order (CORE-50), calendars, resources, .mpp parsing or linking LGPL code into DPM binaries."
         ],
         "verification": [
           "Round-trip tests on pinned fixtures from each tool; smoke_interchange parity; ./ci.sh passes."
@@ -3876,7 +3876,7 @@
       "status": "Open",
       "outcome": null,
       "related_work": [
-        "0a56edde-c1d2-51ba-8e5d-cb300b45a512"
+        "7ecf321a-a725-5fe1-89b1-0f1ee02fc525"
       ],
       "blocks": []
     }
@@ -4440,6 +4440,46 @@
       "id": "891707d9-152d-5a12-9bb0-0b2cf84014c8",
       "predecessor": "fbc7b449-1cf3-5b2f-a04c-55243540e7c4",
       "successor": "17391553-5a97-5278-a8b7-472eca8a3992",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "3b4c9a8a-fc33-5a67-887e-a53fb5ad08c6",
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "2cf9a33a-0e8d-5f25-a626-b68116b6d608",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "d8d35a68-b3ee-5ecb-b729-bad639843e4d",
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "dbf3bbfe-6850-5233-ab5e-c790d969bafa",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "09fd18bf-bebd-5c15-94c1-bb6ae5965c30",
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "ecb79224-1746-510c-bc2d-a0c2048310f1",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "3ca8cd50-d18e-501b-94a0-fbd715483a9a",
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "fbc7b449-1cf3-5b2f-a04c-55243540e7c4",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "18956ecd-8e7b-59bf-a3c7-1494b1e7ad87",
+      "predecessor": "dbf3bbfe-6850-5233-ab5e-c790d969bafa",
+      "successor": "0a56edde-c1d2-51ba-8e5d-cb300b45a512",
       "kind": "FinishStart",
       "lag_hours": 0.0,
       "policy": "Hard"
