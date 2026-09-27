@@ -382,3 +382,31 @@ fn linear_keys_workspaces_and_forge_spellings_collapse() {
         "keys are not numbers"
     );
 }
+
+#[test]
+fn forgejo_and_gitea_on_one_instance_are_one_object_family() {
+    let mut plan = fixture();
+    let (a, b) = (work(&plan, "TEST-A"), work(&plan, "TEST-B"));
+    let forgejo = identity(ExternalProvider::Forgejo, "codeberg.org", "ops/dpm");
+    let mut gitea = identity(ExternalProvider::Gitea, "codeberg.org", "ops/dpm");
+    gitea.kind = ExternalObjectKind::PullRequest;
+    assert_eq!(forgejo.object_key(), gitea.object_key());
+    insert(&mut plan, reference(forgejo, a, ExternalLinkRole::Tracks));
+    let second = insert(&mut plan, reference(gitea, b, ExternalLinkRole::Tracks));
+    assert!(reason(&plan).contains("already recorded"), "two owners");
+    plan.external_references.remove(&second);
+    // Other instances, and forges with separate numbering on one host, stay distinct.
+    for (provider, instance) in [
+        (ExternalProvider::Gitea, "gitea.com"),
+        (ExternalProvider::GitHub, "codeberg.org"),
+        (ExternalProvider::GitLab, "codeberg.org"),
+        (ExternalProvider::GitHub, "github.com"),
+        (ExternalProvider::GitHub, "ghe.corp.example"),
+    ] {
+        let other = identity(provider.clone(), instance, "ops/dpm");
+        let id = insert(&mut plan, reference(other, b, ExternalLinkRole::Tracks));
+        plan.validate()
+            .unwrap_or_else(|error| panic!("{provider:?} {instance}: {error}"));
+        plan.external_references.remove(&id);
+    }
+}

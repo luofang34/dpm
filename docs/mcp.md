@@ -85,7 +85,11 @@ state authoritative. Its identity is the tuple provider family (`GitHub`, `GitLa
 or self-hosted server), `namespace` (owner/repository, group path, tenant or project; required for
 repository forges and Linear; rejected for Jira, whose keys such as `PROJ-1` are unique per
 instance), `kind` (`Issue`, `PullRequest` or `{"Other":"name"}`) and
-`external_id`. Equal IDs on another instance or namespace are different objects. Kind separates
+`external_id`. Equal IDs on another instance or namespace are different objects. Forgejo is a fork
+of Gitea with the same repository paths and issue/pull numbering, so on one instance `Forgejo` and
+`Gitea` name the same objects and collide; the first recorded family is kept for display. Every
+other family stays distinct, even on one host (GitHub and GitLab on `codeberg.org` do not collide),
+and each instance is separate (`github.com` and a GitHub Enterprise host never collide). Kind separates
 objects only where the provider numbers them separately (GitLab issues and merge requests); GitHub,
 Forgejo and Gitea number issues and pull requests together, so `#5` is one object whichever kind is
 named, and the first recorded kind is kept. The label

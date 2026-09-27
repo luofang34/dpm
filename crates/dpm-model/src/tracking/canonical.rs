@@ -34,11 +34,19 @@ impl ExternalIdentity {
 
     /// The part of a canonical identity that decides whether two records name one object.
     ///
-    /// The recorded kind stays authoritative for kind-specific rules such as `Merged`; only
-    /// the collision check ignores it where issues and pull requests share numbers.
+    /// Forgejo is a fork of Gitea that keeps its repository paths and issue/pull numbering, so
+    /// one instance addressed as either family names the same objects; the key uses Forgejo for
+    /// both. Other families stay distinct even on one host, and every family stays distinct
+    /// across instances.
+    ///
+    /// The recorded provider and kind stay authoritative for display and for kind-specific rules
+    /// such as `Merged`; only the collision check folds them.
     #[must_use]
     pub fn object_key(&self) -> Self {
         let mut key = self.clone();
+        if key.provider == ExternalProvider::Gitea {
+            key.provider = ExternalProvider::Forgejo;
+        }
         if self.provider.shares_issue_and_review_numbers()
             && key.kind == ExternalObjectKind::PullRequest
         {

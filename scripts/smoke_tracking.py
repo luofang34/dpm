@@ -164,6 +164,27 @@ def jira_identity(directory):
         worker.close()
 
 
+
+def forge_family(directory):
+    """Forgejo and Gitea number one instance's objects alike, so either family names one object."""
+    database = directory / 'forge-family.sqlite'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    worker = Agent(database, 'agent:family')
+    try:
+        forgejo = {'provider': 'Forgejo', 'instance': 'codeberg.org', 'namespace': 'ops/dpm', 'kind': 'Issue', 'external_id': '6'}
+        worker.call('link_external', {'key': 'TEST-A', 'identity': forgejo, 'base_revision': 0})
+        gitea = {**forgejo, 'provider': 'Gitea'}
+        message = refused(database, worker, 'link_external', {'key': 'TEST-B', 'identity': gitea, 'base_revision': 1},
+                          ['link-external', 'TEST-B', *flags(gitea)], 'tracking_conflict')
+        assert 'already tracked by TEST-A' in message, message
+        run_cli(database, 'link-external', 'TEST-B', *flags(gitea), '--role', 'relates', '--actor', 'agent:family')
+        worker.call('link_external', {'key': 'TEST-C', 'identity': {**gitea, 'instance': 'gitea.com'}, 'base_revision': 2})
+        stored = run_cli(database, 'export')['external_references'].values()
+        assert sorted((r['identity']['provider'], r['identity']['instance'], len(r['links'])) for r in stored) == [
+            ('Forgejo', 'codeberg.org', 2), ('Gitea', 'gitea.com', 1)], stored
+    finally:
+        worker.close()
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-tracking-') as temporary:
         directory = Path(temporary)
@@ -178,6 +199,7 @@ if __name__ == '__main__':
             unlink_and_merge(database, worker, reviewer)
             final = review_and_round_trip(database, directory, worker, reviewer)
             jira_identity(directory)
+            forge_family(directory)
         finally:
             worker.close()
             reviewer.close()
@@ -186,4 +208,4 @@ if __name__ == '__main__':
             assert reopened.call('export_plan', {})['data'] == final
         finally:
             reopened.close()
-    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, reviewed rename and export/import round trip')
+    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, one Forgejo/Gitea object family per instance, reviewed rename and export/import round trip')
