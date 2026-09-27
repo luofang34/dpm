@@ -2,9 +2,12 @@ use super::*;
 use crate::{Application, CommandRequest, Query};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use dpm_engine::{Command, apply_command};
-use dpm_model::{ActorId, DependencyPolicy, StartBasis};
-use std::collections::BTreeSet;
+use dpm_model::{ActorId, DependencyPolicy, ExecutionEvents, StartBasis, WorkStatus};
+use std::collections::{BTreeMap, BTreeSet};
 
+mod model_record;
+mod model_trace;
+mod schema_walk;
 mod validator;
 use validator::Validator;
 
@@ -177,6 +180,27 @@ fn authored_extremes() -> Value {
     doc
 }
 
+/// Work started before start times were recorded, then blocked: the only writer of
+/// `events.start_unrecorded`.
+fn legacy_blocked() -> Value {
+    let mut plan = plan(&fixture("execution"));
+    let worker = ActorId::agent("w");
+    let work = plan.find_work_by_key_mut("TEST-A").expect("work");
+    work.status = WorkStatus::InProgress;
+    work.owner = Some(worker.clone());
+    work.events = ExecutionEvents::default();
+    let id = work.id.to_string();
+    let block = json!({"Block": {"work": id, "reason": "waiting on a vendor"}});
+    let command: Command = serde_json::from_value(block).expect("command shape");
+    apply_command(&mut plan, worker, command, at(0)).expect("block");
+    let document = serde_json::to_value(plan).expect("serialize");
+    assert_eq!(
+        document["work_items"][&id]["events"],
+        json!({"start_unrecorded": true})
+    );
+    document
+}
+
 fn documents() -> Vec<(&'static str, Value)> {
     let empty = Plan::empty("Authoring");
     vec![
@@ -185,6 +209,7 @@ fn documents() -> Vec<(&'static str, Value)> {
         ("conditional fixture", fixture("conditional")),
         ("executed", executed()),
         ("authored extremes", authored_extremes()),
+        ("legacy blocked", legacy_blocked()),
         ("empty", serde_json::to_value(&empty).expect("empty")),
         ("template", plan_template(&empty).expect("template")),
     ]
@@ -208,6 +233,99 @@ fn the_schema_accepts_every_plan_the_model_writes_and_names_no_field_it_lacks() 
         unseen.is_empty(),
         "schema properties no document exercises: {unseen:?}"
     );
+}
+
+/// Disagreements between `schema` and the model's own serde field and variant names.
+fn model_gaps(schema: &Value) -> Vec<String> {
+    let types = model_trace::trace_plan().expect("trace the model");
+    let tags: BTreeMap<String, String> = types
+        .iter()
+        .filter_map(|(name, container)| match container {
+            model_trace::Container::Tagged { tag, .. } => Some((name.clone(), tag.clone())),
+            _ => None,
+        })
+        .collect();
+    let mut tagged = model_record::TaggedFields::new();
+    for (name, document) in documents() {
+        if let Err(error) = model_record::record(&plan(&document), &tags, &mut tagged) {
+            panic!("{name}: {error}");
+        }
+    }
+    // A work item omits its default join, so no plan serializes that variant.
+    model_record::record(&dpm_model::JoinPolicy::default(), &tags, &mut tagged).expect("join");
+    schema_walk::compare(schema, &types, &tagged)
+}
+
+#[test]
+fn the_schema_declares_exactly_the_fields_and_variants_the_model_serializes() {
+    let gaps = model_gaps(&plan_schema().expect("schema"));
+    assert!(
+        gaps.is_empty(),
+        "schema and model disagree:\n{}",
+        gaps.join("\n")
+    );
+}
+
+#[test]
+fn the_model_comparison_reports_each_kind_of_drift() {
+    let schema = plan_schema().expect("schema");
+    let join = "/$defs/WorkItem/properties/join/oneOf/1/properties";
+    let drifts = [
+        ("writes `join`", "/$defs/WorkItem/properties", "join", None),
+        ("writes `allow_empty`", join, "allow_empty", None),
+        (
+            "declares `bogus`",
+            join,
+            "bogus",
+            Some(json!({"type": "string"})),
+        ),
+        (
+            "declares `bogus`",
+            "/$defs/Events/properties",
+            "bogus",
+            Some(json!({"type": "boolean"})),
+        ),
+        (
+            "writes `Soft`",
+            "/$defs/Dependency/properties/policy",
+            "enum",
+            Some(json!(["Hard"])),
+        ),
+        (
+            "declares Some(\"number\")",
+            "/$defs/Attempt/properties/number",
+            "type",
+            Some("number".into()),
+        ),
+        (
+            "allows null",
+            "/$defs/WorkItem/properties",
+            "title",
+            Some(json!({"anyOf": [{"type": "string"}, {"type": "null"}]})),
+        ),
+        (
+            "reaches this definition",
+            "/$defs",
+            "Stale",
+            Some(json!({"type": "string"})),
+        ),
+    ];
+    for (expected, at, key, value) in drifts {
+        let mut drifted = schema.clone();
+        let object = drifted
+            .pointer_mut(at)
+            .and_then(Value::as_object_mut)
+            .expect("schema object");
+        match value {
+            Some(value) => drop(object.insert(key.into(), value)),
+            None => drop(object.remove(key).expect("declared")),
+        }
+        let gaps = model_gaps(&drifted);
+        assert!(
+            gaps.iter().any(|gap| gap.contains(expected)),
+            "{expected} not reported: {gaps:?}"
+        );
+    }
 }
 
 #[test]

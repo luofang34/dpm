@@ -73,8 +73,11 @@
       }
     },
     "Events": {
-      "type": "object", "additionalProperties": false, "description": "Managed execution event times.",
-      "properties": {"started_at": {"$ref": "#/$defs/Time"}, "submitted_at": {"$ref": "#/$defs/Time"}, "verified_at": {"$ref": "#/$defs/Time"}}
+      "type": "object", "additionalProperties": false, "description": "Managed execution events.",
+      "properties": {
+        "started_at": {"$ref": "#/$defs/Time"}, "submitted_at": {"$ref": "#/$defs/Time"}, "verified_at": {"$ref": "#/$defs/Time"},
+        "start_unrecorded": {"type": "boolean", "description": "Set when work that started before start times were recorded is blocked, so resuming it keeps the start."}
+      }
     },
     "Review": {
       "type": "object", "additionalProperties": false, "required": ["actor", "at", "reason"],
