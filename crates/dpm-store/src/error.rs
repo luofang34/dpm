@@ -144,6 +144,92 @@ pub enum StoreError {
         /// Resulting revision of the last operation.
         last_operation: u64,
     },
+    /// A stored JSON field no longer decodes.
+    #[error("corrupt {record} {field} in {path}: {source}")]
+    CorruptJson {
+        /// Database containing the record.
+        path: PathBuf,
+        /// Snapshot or operation holding the field.
+        record: StoredRecord,
+        /// Column holding the damaged JSON.
+        field: &'static str,
+        /// Decoding failure.
+        #[source]
+        source: serde_json::Error,
+    },
+    /// A stored column holds a value of the wrong type.
+    #[error("corrupt {record} {field} in {path}: {source}")]
+    CorruptColumn {
+        /// Database containing the record.
+        path: PathBuf,
+        /// Snapshot or operation holding the field.
+        record: StoredRecord,
+        /// Damaged column.
+        field: &'static str,
+        /// Column decoding failure.
+        #[source]
+        source: rusqlite::Error,
+    },
+    /// Local append sequences skip a value, so an operation row was removed.
+    #[error("history of {path} skips from sequence {previous} to {sequence}")]
+    SequenceGap {
+        /// Inspected database.
+        path: PathBuf,
+        /// Sequence of the preceding operation.
+        previous: u64,
+        /// Next sequence found.
+        sequence: u64,
+    },
+    /// The store records where its history starts, but no operation leads to the snapshot.
+    #[error(
+        "history of {path} is empty, but the snapshot moved from origin revision {origin} to {snapshot}"
+    )]
+    MissingHistory {
+        /// Inspected database.
+        path: PathBuf,
+        /// Revision the history must start from.
+        origin: u64,
+        /// Revision of the stored snapshot.
+        snapshot: u64,
+    },
+    /// A store in the current layout has a snapshot but no recorded history origin.
+    #[error("{path} has a snapshot but no recorded history origin")]
+    MissingOrigin {
+        /// Inspected database.
+        path: PathBuf,
+    },
+    /// Backup and restore targets must be a plain database file name in an existing directory.
+    #[error("cannot write a store to {path}: {reason}")]
+    InvalidTarget {
+        /// Requested destination.
+        path: PathBuf,
+        /// Why the destination is unusable.
+        reason: &'static str,
+    },
+}
+
+/// Which stored record a corruption report refers to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoredRecord {
+    /// The authoritative plan snapshot.
+    Snapshot,
+    /// One operation, addressed by its local append sequence.
+    Operation {
+        /// Local append sequence.
+        sequence: u64,
+    },
+    /// The recorded revision the operation history starts from.
+    Origin,
+}
+
+impl std::fmt::Display for StoredRecord {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Snapshot => formatter.write_str("snapshot"),
+            Self::Operation { sequence } => write!(formatter, "operation sequence {sequence}"),
+            Self::Origin => formatter.write_str("history origin"),
+        }
+    }
 }
 
 impl StoreError {
@@ -154,6 +240,11 @@ impl StoreError {
             | Self::HistoryDiscontinuity { .. }
             | Self::SnapshotRevisionMismatch { .. }
             | Self::CorruptSnapshot { .. }
+            | Self::CorruptJson { .. }
+            | Self::CorruptColumn { .. }
+            | Self::SequenceGap { .. }
+            | Self::MissingHistory { .. }
+            | Self::MissingOrigin { .. }
             | Self::UnrecognizedSchema { .. } => true,
             Self::Database { source, .. } => matches!(
                 source.sqlite_error_code(),

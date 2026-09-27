@@ -55,30 +55,71 @@ dpm verify-store            # the selected workspace's live store
   result. It never overwrites live state and never changes locators or device bindings: point a
   locator's `database` at the restored file, or run `dpm workspace register --replace --database
   NEW_PATH`, once you have checked the reported workspace identity and revision.
-- `verify-store [PATH]` opens the file read-only and checks SQLite page integrity, the schema
-  version and layout, that the snapshot loads and validates, that operation revisions form one
-  consecutive chain, and that the snapshot revision equals the last operation's result. It reports
-  the workspace identity, revision and operation count.
+- `verify-store [PATH]` reads the store without writing to it or creating any file next to it, so it
+  also works in a read-only directory. When no `-wal`, `-shm` or `-journal` file exists it opens the
+  file as immutable; otherwise another process is using it or it holds committed pages in its WAL,
+  and it reads through the side files that are already there.
 
-Any destination that already exists, including a leftover `-wal`, `-shm` or `-journal` side file,
-fails with `target_exists`; damaged files fail with `corrupt_store`. These are device-local operator
-commands, so they are CLI-only; MCP tools do not read or write arbitrary local paths.
+All three report canonical absolute paths. Any destination that already exists, including a
+leftover `-wal`, `-shm` or `-journal` side file, fails with `target_exists`; a destination whose
+name itself ends in `-wal`, `-shm` or `-journal` fails with `invalid_request`, because SQLite would
+treat it as another database's side file and later delete it. Damaged files fail with
+`corrupt_store`, naming the file and the damaged record. These are device-local operator commands,
+so they are CLI-only; MCP tools do not read or write arbitrary local paths.
+
+### What verification guarantees
+
+`verify-store`, and `restore` before and after copying, check:
+
+- SQLite page integrity (`PRAGMA integrity_check`);
+- the schema version and the exact set of schema objects that version names: every table, index,
+  trigger and view is compared with its normalized SQL, so an extra trigger, view, index or table,
+  a missing one or an altered definition is `corrupt_store`. Statistics tables created by a manual
+  `ANALYZE` are also refused. Every open checks the same layout, and every write re-checks it inside
+  its transaction, so a planted trigger never runs inside a DPM write;
+- that the snapshot and every operation decode, with the damaged file, record (`snapshot` or
+  `operation sequence N`) and column in the error;
+- that the snapshot validates and its revision column matches its JSON;
+- that local sequences have no gaps, every operation's resulting revision is its base revision + 1,
+  consecutive operations chain, the first operation starts at the recorded history origin (or, with
+  no operations, the snapshot is still at the origin), and the last operation produced the
+  snapshot revision.
+
+They do not detect an edit that keeps every record valid and consistent, such as a changed work
+title inside the snapshot or a rewritten command, nor a deliberate rewrite of the origin, sequences
+and revisions together: records are not signed. Verification detects accidental damage and
+inconsistent tampering, not an adversary with write access to the file.
 
 ## Store schema version
 
-The store records its layout version in SQLite's `user_version` header. Every open checks it
-before writing anything:
+The store records its layout version in SQLite's `user_version` header. Every open checks it, and
+the exact layout it names, before writing anything:
 
 - a newer version than this binary supports fails with `unsupported_schema_version` and leaves the
   file untouched; use the release that wrote it, and take a backup with that release before
   upgrading or downgrading;
-- version 1 is the current layout; a store created before versioning (header 0 with exactly the
-  version 1 tables) opens normally, read-only commands leave it untouched, and its next write
-  records version 1 in the same transaction;
-- an SQLite file with other tables is refused rather than modified.
+- version 2 is the current layout: the snapshot, the operation log and `history_origin`, the
+  revision the history starts from, written when the store is initialized;
+- version 1, and header 0 (stores created before versioning), name the same layout without
+  `history_origin`. Such a store opens normally and read-only commands leave it byte-for-byte
+  untouched. Its next write first checks that its history is contiguous and ends at the snapshot,
+  then records the first operation's base revision (or the snapshot revision, without operations)
+  as the origin and stamps version 2, in the same transaction as the write. Operations lost from
+  the start of such a history before that first write cannot be detected; `verify-store` reports
+  `origin_revision: null` until then;
+- an SQLite file with any other layout is refused rather than modified, and a refused `import` or
+  `init` onto an existing store writes nothing.
 
-A future layout change will migrate a known older version in one transaction when the store is
-opened for writing; an older version without a migration is refused with instructions.
+A future layout change raises the version and adds an upgrade that runs inside the first write
+transaction; an older version without an upgrade is refused with instructions.
+
+Compatibility policy: the version check protects only binaries that read the header. Binaries that
+know version 1 refuse version 2 with `unsupported_schema_version`. Binaries from before versioning
+never read the header and ignore tables they do not query; they can still append operations to a
+version 2 store, which keeps its recorded origin valid because they only append. A future layout
+change whose data older binaries would misread must therefore also change the layout in a way every
+older binary fails on loudly, for example by renaming a table those binaries query, rather than
+relying on the version number alone.
 
 ## One workspace, several entry points
 

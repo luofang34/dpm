@@ -1,5 +1,8 @@
-use super::{SqliteStore, load_blocking};
-use crate::{StoreError, error::database_error};
+use super::{
+    SqliteStore, load_blocking,
+    snapshot::{column, decode, revision_from_sql},
+};
+use crate::{StoreError, StoredRecord, error::database_error};
 use dpm_engine::Operation;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -72,28 +75,28 @@ impl SqliteStore {
 pub(crate) const OPERATION_COLUMNS: &str = "SELECT sequence, operation_id, base_revision, \
      resulting_revision, actor_json, timestamp, command_json FROM operations";
 
-/// Decode one row selected with [`OPERATION_COLUMNS`].
+/// Decode one row selected with [`OPERATION_COLUMNS`], attributing damage to its sequence.
 pub(crate) fn read_entry(row: &rusqlite::Row<'_>, path: &Path) -> Result<HistoryEntry, StoreError> {
-    let get_string = |index| {
-        row.get::<_, String>(index)
-            .map_err(database_error(path, "read operation field"))
-    };
-    let get_revision = |index| {
-        row.get::<_, i64>(index)
-            .map(|n| u64::from_ne_bytes(n.to_ne_bytes()))
-            .map_err(database_error(path, "read operation revision"))
-    };
+    let sequence: u64 = row
+        .get(0)
+        .map_err(database_error(path, "read history cursor"))?;
+    let record = StoredRecord::Operation { sequence };
+    let text = |index, field| column::<String>(row, index, path, record, field);
+    let revision =
+        |index, field| column::<i64>(row, index, path, record, field).map(revision_from_sql);
+    // Identifier and timestamp columns hold bare strings; decoding them as JSON strings reuses
+    // the serde formats the operation itself declares.
+    let scalar =
+        |index, field| text(index, field).map(|value| serde_json::Value::String(value).to_string());
     Ok(HistoryEntry {
-        sequence: row
-            .get(0)
-            .map_err(database_error(path, "read history cursor"))?,
+        sequence,
         operation: Operation {
-            id: serde_json::from_value(serde_json::Value::String(get_string(1)?))?,
-            base_revision: get_revision(2)?,
-            resulting_revision: get_revision(3)?,
-            actor: serde_json::from_str(&get_string(4)?)?,
-            timestamp: serde_json::from_value(serde_json::Value::String(get_string(5)?))?,
-            command: serde_json::from_str(&get_string(6)?)?,
+            id: decode(&scalar(1, "operation_id")?, path, record, "operation_id")?,
+            base_revision: revision(2, "base_revision")?,
+            resulting_revision: revision(3, "resulting_revision")?,
+            actor: decode(&text(4, "actor_json")?, path, record, "actor_json")?,
+            timestamp: decode(&scalar(5, "timestamp")?, path, record, "timestamp")?,
+            command: decode(&text(6, "command_json")?, path, record, "command_json")?,
         },
     })
 }

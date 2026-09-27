@@ -149,7 +149,7 @@ fn snapshot_write_failure_rolls_back_the_operation_insert() {
     let mut plan = fixture();
     let initial = plan.clone();
     store.initialize_blocking(&plan).expect("initialize");
-    store.connection.execute_batch("CREATE TRIGGER fail_snapshot BEFORE UPDATE ON plan_state BEGIN SELECT RAISE(ABORT, 'injected write failure'); END;").expect("trigger");
+    store.connection.execute_batch("CREATE TEMP TRIGGER fail_snapshot BEFORE UPDATE ON plan_state BEGIN SELECT RAISE(ABORT, 'injected write failure'); END;").expect("trigger");
     let op = claim(&mut plan, "owner");
     assert!(store.persist_blocking(&plan, &op).is_err());
     assert_eq!(store.load_blocking().expect("load"), Some(initial));
@@ -197,16 +197,21 @@ fn stores_written_before_edge_identity_keep_history_and_accept_new_operations() 
     renamed["revision"] = 1.into();
     let change = serde_json::json!({"ApplyChange": {"plan": legacy, "reason": "rename"}});
     {
-        let store = SqliteStore::open_blocking(&path).expect("schema");
-        store
-            .connection
+        let connection = Connection::open(&path).expect("raw connection");
+        connection
+            .execute_batch(&format!(
+                "{}; {};",
+                crate::schema::TEST_PLAN_STATE_DDL,
+                crate::schema::TEST_OPERATIONS_DDL
+            ))
+            .expect("originless layout");
+        connection
             .execute(
                 "INSERT INTO plan_state(singleton, revision, plan_json) VALUES(1, 1, ?1)",
                 [renamed.to_string()],
             )
             .expect("legacy snapshot");
-        store
-            .connection
+        connection
             .execute(
                 "INSERT INTO operations(operation_id, base_revision, resulting_revision, actor_json, timestamp, command_json)
                  VALUES('6f1c1a52-7d1e-4d57-9d53-0d3f7a1b2c3d', 0, 1, '{\"kind\":\"Human\",\"name\":\"lead\"}', '2026-01-01T00:00:00+00:00', ?1)",

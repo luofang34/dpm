@@ -25,6 +25,18 @@ fn recovery_failures_carry_stable_codes() {
         code(restore_store_blocking(&backup, &live).expect_err("live state")),
         "target_exists"
     );
+    assert_eq!(
+        code(restore_store_blocking(&backup, &dir.path().join("x.sqlite-wal")).expect_err("side")),
+        "invalid_request"
+    );
+    rusqlite::Connection::open(&live)
+        .expect("raw connection")
+        .execute("UPDATE plan_state SET plan_json = '['", [])
+        .expect("damage snapshot");
+    let damaged = Application::open_blocking(&live)
+        .and_then(|app| app.plan_blocking())
+        .expect_err("damaged snapshot");
+    assert_eq!(code(damaged), "corrupt_store");
     let truncated = dir.path().join("truncated.sqlite");
     let bytes = std::fs::read(&backup).expect("bytes");
     std::fs::write(&truncated, &bytes[..bytes.len() / 2]).expect("truncate");

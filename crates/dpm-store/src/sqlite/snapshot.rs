@@ -1,7 +1,7 @@
-use crate::{StoreError, error::database_error};
+use crate::{StoreError, StoredRecord, error::database_error};
 use dpm_engine::Operation;
 use dpm_model::Plan;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 use std::path::Path;
 
 pub(super) fn revision_to_sql(value: u64) -> i64 {
@@ -9,23 +9,58 @@ pub(super) fn revision_to_sql(value: u64) -> i64 {
     i64::from_ne_bytes(value.to_ne_bytes())
 }
 
+pub(super) fn revision_from_sql(value: i64) -> u64 {
+    u64::from_ne_bytes(value.to_ne_bytes())
+}
+
+/// Decode one column of a stored record, attributing a type mismatch to that record.
+pub(super) fn column<T: rusqlite::types::FromSql>(
+    row: &rusqlite::Row<'_>,
+    index: usize,
+    path: &Path,
+    record: StoredRecord,
+    field: &'static str,
+) -> Result<T, StoreError> {
+    row.get(index).map_err(|source| StoreError::CorruptColumn {
+        path: path.to_path_buf(),
+        record,
+        field,
+        source,
+    })
+}
+
+/// Decode stored JSON, attributing a failure to its record rather than to the caller's request.
+pub(super) fn decode<T: serde::de::DeserializeOwned>(
+    json: &str,
+    path: &Path,
+    record: StoredRecord,
+    field: &'static str,
+) -> Result<T, StoreError> {
+    serde_json::from_str(json).map_err(|source| StoreError::CorruptJson {
+        path: path.to_path_buf(),
+        record,
+        field,
+        source,
+    })
+}
+
 pub(super) fn load_blocking(
     connection: &Connection,
     path: &Path,
 ) -> Result<Option<Plan>, StoreError> {
-    let row: Option<(i64, String)> = connection
-        .query_row(
-            "SELECT revision, plan_json FROM plan_state WHERE singleton = 1",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .optional()
+    let mut statement = connection
+        .prepare("SELECT revision, plan_json FROM plan_state WHERE singleton = 1")
+        .map_err(database_error(path, "prepare snapshot query"))?;
+    let mut rows = statement
+        .query([])
         .map_err(database_error(path, "load snapshot"))?;
-    let Some((revision, json)) = row else {
+    let Some(row) = rows.next().map_err(database_error(path, "load snapshot"))? else {
         return Ok(None);
     };
-    let plan: Plan = serde_json::from_str(&json)?;
-    let stored_revision = u64::from_ne_bytes(revision.to_ne_bytes());
+    let record = StoredRecord::Snapshot;
+    let stored_revision = revision_from_sql(column(row, 0, path, record, "revision")?);
+    let json: String = column(row, 1, path, record, "plan_json")?;
+    let plan: Plan = decode(&json, path, record, "plan_json")?;
     if stored_revision != plan.revision {
         return Err(StoreError::CorruptSnapshot {
             path: path.to_path_buf(),
@@ -35,6 +70,47 @@ pub(super) fn load_blocking(
     }
     plan.validate()?;
     Ok(Some(plan))
+}
+
+/// The revision the stored history starts from, as recorded when the store was initialized or
+/// upgraded; `None` when no origin has been recorded.
+pub(super) fn origin_blocking(
+    connection: &Connection,
+    path: &Path,
+) -> Result<Option<u64>, StoreError> {
+    let mut statement = connection
+        .prepare("SELECT revision FROM history_origin WHERE singleton = 1")
+        .map_err(database_error(path, "prepare history origin query"))?;
+    let mut rows = statement
+        .query([])
+        .map_err(database_error(path, "load history origin"))?;
+    match rows
+        .next()
+        .map_err(database_error(path, "load history origin"))?
+    {
+        Some(row) => Ok(Some(revision_from_sql(column(
+            row,
+            0,
+            path,
+            StoredRecord::Origin,
+            "revision",
+        )?))),
+        None => Ok(None),
+    }
+}
+
+pub(super) fn write_origin_blocking(
+    connection: &Connection,
+    path: &Path,
+    origin: u64,
+) -> Result<(), StoreError> {
+    connection
+        .execute(
+            "INSERT INTO history_origin(singleton, revision) VALUES(1, ?1)",
+            [revision_to_sql(origin)],
+        )
+        .map_err(database_error(path, "record history origin"))?;
+    Ok(())
 }
 
 pub(super) fn write_operation_blocking(

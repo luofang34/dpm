@@ -36,7 +36,7 @@ def live_store(directory):
     live = directory / 'live.sqlite'
     cli('--database', live, 'import', ROOT / 'tests/support/execution-plan.json')
     cli('--database', live, 'claim', 'TEST-A')
-    assert pragma(live, 'user_version') == 1
+    assert pragma(live, 'user_version') == 2
     return live
 
 
@@ -61,7 +61,8 @@ def backups_during_writes(directory, live):
 def round_trip(directory, live):
     backup = directory / 'backup.sqlite'
     report = cli('--database', live, 'backup', '--to', backup)
-    assert report['schema_version'] == 1 and report['operation_count'] == 13, report
+    assert report['schema_version'] == 2 and report['operation_count'] == 13, report
+    assert report['origin_revision'] == 0 and report['first_base_revision'] == 0, report
     assert pragma(backup, 'journal_mode') == 'delete'
     before = backup.read_bytes()
     cli('--database', live, 'backup', '--to', backup, error='target_exists')
@@ -91,6 +92,31 @@ def damage(directory, backup):
     with sqlite3.connect(gap) as connection:
         connection.execute('DELETE FROM operations WHERE sequence = 2')
     cli('verify-store', gap, error='corrupt_store')
+    tampered(directory, backup)
+
+
+def tampered(directory, backup):
+    edits = {
+        'trigger': 'CREATE TRIGGER wipe AFTER INSERT ON operations BEGIN '
+                   'DELETE FROM operations WHERE sequence < NEW.sequence; END',
+        'head': 'DELETE FROM operations WHERE sequence = 1',
+        'json': "UPDATE operations SET command_json = '{' WHERE sequence = 2",
+    }
+    for name, sql in edits.items():
+        path = directory / f'{name}.sqlite'
+        shutil.copyfile(backup, path)
+        with sqlite3.connect(path) as connection:
+            connection.execute(sql)
+        failure = cli('verify-store', path, error='corrupt_store')['error']['message']
+        assert str(path.resolve()) in failure, failure
+    assert 'operation sequence 2 command_json' in failure, failure
+    before = (directory / 'trigger.sqlite').read_bytes()
+    cli('--database', directory / 'trigger.sqlite', 'unblock', 'TEST-A', error='corrupt_store')
+    assert (directory / 'trigger.sqlite').read_bytes() == before
+    for arguments in [('backup', '--to', directory / 'live.sqlite-journal'),
+                      ('restore', '--from', backup, '--to', directory / 'x.sqlite-wal')]:
+        cli('--database', directory / 'live.sqlite', *arguments, error='invalid_request')
+    assert not list(directory.glob('*.sqlite-journal')) and not list(directory.glob('x.sqlite*'))
 
 
 def versions(directory, backup):
@@ -106,13 +132,18 @@ def versions(directory, backup):
     baseline = directory / 'baseline.sqlite'
     shutil.copyfile(backup, baseline)
     with sqlite3.connect(baseline) as connection:
-        connection.execute('PRAGMA user_version = 0')
-    assert cli('verify-store', baseline)['schema_version'] == 0
+        connection.executescript('DROP TABLE history_origin; PRAGMA user_version = 0;')
+    report = cli('verify-store', baseline)
+    assert report['schema_version'] == 0 and report['origin_revision'] is None, report
+    before = baseline.read_bytes()
+    cli('--database', baseline, 'import', ROOT / 'tests/support/execution-plan.json', error='storage_error')
+    assert baseline.read_bytes() == before, 'a refused import writes nothing'
     revision = cli('--database', baseline, 'status', '--no-simulation')['revision']
     assert pragma(baseline, 'user_version') == 0, 'reads never stamp'
     cli('--database', baseline, '--base-revision', revision, 'block', 'TEST-A', 'stamped')
-    assert pragma(baseline, 'user_version') == 1
-    assert cli('verify-store', baseline)['operation_count'] == 14
+    assert pragma(baseline, 'user_version') == 2
+    report = cli('verify-store', baseline)
+    assert report['operation_count'] == 14 and report['origin_revision'] == 0, report
 
 
 def discovered(directory):
@@ -120,8 +151,18 @@ def discovered(directory):
     root.mkdir()
     cli('init', 'Store smoke', cwd=root)
     report = cli('verify-store', cwd=root)
-    assert Path(report['path']).resolve() == (root / '.dpm/state.sqlite').resolve(), report
+    assert report['path'] == str((root / '.dpm/state.sqlite').resolve()), report
     assert report['operation_count'] == 0
+    restored = cli('restore', '--from', '.dpm/state.sqlite', '--to', 'copy.sqlite', cwd=root)
+    assert restored['path'] == str((root / 'copy.sqlite').resolve()), restored
+    assert sorted(path.name for path in root.iterdir()) == ['.dpm', 'copy.sqlite']
+    state = root / '.dpm'
+    state.chmod(0o555)
+    try:
+        assert cli('verify-store', '.dpm/state.sqlite', cwd=root)['path'] == report['path']
+    finally:
+        state.chmod(0o755)
+    assert sorted(path.name for path in state.iterdir()) == ['.gitignore', 'project.toml', 'state.sqlite']
 
 
 if __name__ == '__main__':
@@ -134,5 +175,6 @@ if __name__ == '__main__':
         damage(directory, backup)
         versions(directory, backup)
         discovered(directory)
-    print('PASS: schema version refusal and baseline stamping, consistent backups during writes, '
-          'verified restore to new paths only, and corruption detection through the CLI')
+    print('PASS: schema version refusal and origin upgrade, consistent backups during writes, '
+          'verified restore to new paths only, exact-layout and history-origin corruption detection, '
+          'side-file target refusal and read-only verification through the CLI')

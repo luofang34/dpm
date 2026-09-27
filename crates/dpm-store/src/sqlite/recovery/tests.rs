@@ -115,7 +115,10 @@ fn restore_round_trip_preserves_snapshot_history_and_version_exactly() {
     assert_eq!(journal_mode(&backup), [[Value::Text("delete".into())]]);
     assert!(!dir.path().join("backup.sqlite-wal").exists());
     let report = restore_store_blocking(&backup, &restored).expect("restore");
-    assert_eq!(report.path, restored);
+    assert_eq!(
+        report.path,
+        std::fs::canonicalize(&restored).expect("canonical")
+    );
     assert_eq!(
         (report.workspace_id, report.revision),
         (backed_up.workspace_id, backed_up.revision)
@@ -147,7 +150,7 @@ fn backup_and_restore_never_overwrite_existing_files() {
     std::fs::write(&backup, b"keep me").expect("existing file");
     assert!(matches!(
         store.backup_blocking(&backup),
-        Err(StoreError::TargetExists { path }) if path == backup
+        Err(StoreError::TargetExists { path }) if *path == std::fs::canonicalize(&backup).expect("canonical")
     ));
     assert_eq!(std::fs::read(&backup).expect("bytes"), b"keep me");
     std::fs::remove_file(&backup).expect("remove");
@@ -163,7 +166,7 @@ fn backup_and_restore_never_overwrite_existing_files() {
     std::fs::write(&stale_wal, b"stale").expect("stale side file");
     assert!(matches!(
         restore_store_blocking(&backup, &fresh),
-        Err(StoreError::TargetExists { path }) if path == stale_wal
+        Err(StoreError::TargetExists { path }) if *path == std::fs::canonicalize(&stale_wal).expect("canonical")
     ));
     assert!(!fresh.exists());
 }
@@ -217,7 +220,26 @@ fn history_gaps_and_stale_snapshots_fail_verification() {
     edit(&gap, "DELETE FROM operations WHERE sequence = 2");
     assert!(matches!(
         verify_store_blocking(&gap),
-        Err(StoreError::HistoryDiscontinuity { sequence: 3, .. })
+        Err(StoreError::SequenceGap {
+            previous: 1,
+            sequence: 3,
+            ..
+        })
+    ));
+    let broken = dir.path().join("broken.sqlite");
+    store.backup_blocking(&broken).expect("backup");
+    edit(
+        &broken,
+        "UPDATE operations SET base_revision = 7, resulting_revision = 8 WHERE sequence = 2",
+    );
+    assert!(matches!(
+        verify_store_blocking(&broken),
+        Err(StoreError::HistoryDiscontinuity {
+            sequence: 2,
+            expected: 1,
+            found: 7,
+            ..
+        })
     ));
     edit(&stale, "DELETE FROM operations WHERE sequence = 3");
     assert!(matches!(
@@ -240,6 +262,11 @@ fn verification_is_read_only() {
     let before = std::fs::read(&backup).expect("bytes");
     let report = verify_store_blocking(&backup).expect("verify");
     assert_eq!((report.revision, report.operation_count), (2, 2));
-    assert_eq!(report.first_base_revision, Some(0));
+    assert_eq!(
+        (report.origin_revision, report.first_base_revision),
+        (Some(0), Some(0))
+    );
     assert_eq!(std::fs::read(&backup).expect("bytes"), before);
 }
+
+mod tampering;

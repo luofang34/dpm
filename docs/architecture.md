@@ -354,13 +354,16 @@ Operations already include actor, timestamp, command, base revision, and resulti
 operation replay, semantic merge, CRDT text collaboration, and remote synchronization are future
 milestones.
 
-The store records its layout version in SQLite's `user_version` header and checks it on every
-open before any write: newer versions are refused untouched, the unversioned baseline layout is
-stamped by its next write transaction, and layout migrations run in one transaction or are refused.
-Recovery uses `dpm backup` (SQLite online backup of one consistent snapshot, full operation history
-and schema version into a new file), `dpm restore` (into a new path only) and read-only
-`dpm verify-store` (page integrity, layout, snapshot validation, contiguous history ending at the
-snapshot revision). JSON export is not a backup, and copying a live WAL database file is unsafe;
+The store records its layout version in SQLite's `user_version` header and checks it, together with
+the exact set of schema objects that version names, on every open and again inside every write
+transaction: newer versions and altered layouts (including planted triggers, views or indexes) are
+refused untouched, and an older layout is upgraded inside its next write transaction. The current
+layout records the revision the history starts from, so verification also detects lost leading
+operations. Recovery uses `dpm backup` (SQLite online backup of one consistent snapshot, full
+operation history and schema version into a new file), `dpm restore` (into a new path only) and
+`dpm verify-store`, which writes nothing and creates no files (page integrity, exact layout, record
+decoding, snapshot validation, history contiguous from the recorded origin to the snapshot
+revision). JSON export is not a backup, and copying a live WAL database file is unsafe;
 see [backup and restore](projects.md#backup-restore-and-verification).
 
 SQLite is durable operational state, not a disposable cache of an exported plan. A workspace can

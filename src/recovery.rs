@@ -37,8 +37,8 @@ fn present_blocking(label: &str, report: &IntegrityReport, json: bool) -> Result
     if json {
         return output::json_blocking(report);
     }
-    let baseline = if report.schema_version == 0 {
-        " (unversioned baseline; its next write records version 1)"
+    let baseline = if report.origin_revision.is_none() {
+        " (history origin not yet recorded; the next write upgrades the schema and records it)"
     } else {
         ""
     };

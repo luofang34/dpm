@@ -116,6 +116,7 @@ impl AppError {
                 "unsupported_schema_version"
             }
             Self::Store(dpm_store::StoreError::TargetExists { .. }) => "target_exists",
+            Self::Store(dpm_store::StoreError::InvalidTarget { .. }) => "invalid_request",
             Self::Store(error) if error.is_corruption() => "corrupt_store",
             Self::Store(_) => "storage_error",
             Self::Json(_) | Self::InvalidRequest(_) | Self::Actor(_) => "invalid_request",
