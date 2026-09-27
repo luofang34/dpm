@@ -164,3 +164,60 @@ fn status_counts_only_in_flight_work_that_progress_counts() {
     );
     assert_eq!(summary.blocked + summary.awaiting_verification, 0);
 }
+
+/// Supplier A is chosen at +1h and its branch reaches SUP-MERGE at +4h; SUP-BUILD waits three
+/// hours after the join and is claimed at +8h.
+fn merged_and_claimed() -> (Plan, DecisionId) {
+    let mut plan = fixture();
+    let (merge, build) = (id(&plan, "SUP-MERGE"), id(&plan, "SUP-BUILD"));
+    plan.dependencies
+        .iter_mut()
+        .find(|d| d.predecessor == merge && d.successor == build)
+        .expect("merge edge")
+        .lag_hours = 3.0;
+    let supplier = plan
+        .find_decision_by_key("DEC-SUPPLIER")
+        .expect("decision")
+        .id;
+    let decide = Command::Decide {
+        decision: supplier,
+        outcome: "A".into(),
+    };
+    run(&mut plan, &lead(), decide, t(1));
+    complete(&mut plan, "SUP-DESIGN", t(2));
+    complete(&mut plan, "SUP-A-QUOTE", t(3));
+    complete(&mut plan, "SUP-A-QUAL", t(4));
+    run(&mut plan, &worker(), Command::Claim { work: build }, t(8));
+    (plan, supplier)
+}
+
+#[test]
+fn reaffirming_a_choice_does_not_move_a_reached_join_or_reclose_claimed_work() {
+    let (mut plan, supplier) = merged_and_claimed();
+    let (merge, build) = (id(&plan, "SUP-MERGE"), id(&plan, "SUP-BUILD"));
+    let reached = progress(&plan, t(8)).expect("progress").work[&merge].completed_at;
+    assert_eq!(reached, Some(EventTime::Recorded(t(4))));
+    let mut proposed = switch_to_b(&plan, supplier);
+    for decision in proposed.decisions.values_mut() {
+        if decision.supersedes == Some(supplier) {
+            decision.outcome = Some("A".into());
+            decision.rationale = Some("Supplier A renewed its quote".into());
+        }
+    }
+    let change = Command::ApplyChange {
+        plan: Box::new(proposed),
+        reason: "reaffirm supplier A".into(),
+    };
+    run(&mut plan, &lead(), change, t(9));
+    let after = progress(&plan, t(9)).expect("progress").work[&merge].completed_at;
+    assert_eq!(
+        after, reached,
+        "the unchanged outcome has stood since +1h, so the skipped branch released then"
+    );
+    let start = gate_report(&plan, build, Transition::Start, t(9)).expect("gates");
+    assert!(
+        start.ready,
+        "a released start gate stays released: {:?}",
+        start.reasons()
+    );
+}

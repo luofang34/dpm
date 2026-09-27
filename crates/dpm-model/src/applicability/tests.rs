@@ -300,3 +300,67 @@ fn plans_without_conditions_serialize_without_the_new_fields() {
         "unconditional plans stay fully applicable"
     );
 }
+
+/// Supersede the standing supplier choice with a replacement resolved at `at`.
+fn supersede(plan: &mut Plan, option: &str, at: DateTime<Utc>) {
+    let standing = plan
+        .decisions
+        .values()
+        .find(|d| d.key.0.starts_with("DEC-SUPPLIER") && d.status == DecisionStatus::Decided)
+        .expect("standing choice")
+        .clone();
+    let mut replacement = standing.clone();
+    replacement.id = DecisionId::new();
+    replacement.key = Key::new(format!("DEC-SUPPLIER-{}", plan.decisions.len()));
+    replacement.outcome = Some(option.into());
+    replacement.resolved_at = Some(at);
+    replacement.rationale = Some("revisited".into());
+    replacement.supersedes = Some(standing.id);
+    if let Some(old) = plan.decisions.get_mut(&standing.id) {
+        old.status = DecisionStatus::Superseded;
+    }
+    plan.decisions.insert(replacement.id, replacement);
+    plan.validate().expect("valid replacement");
+}
+
+fn skipped_at(plan: &Plan) -> Release {
+    let (b, merge) = (id(plan, "SUP-B-QUAL"), id(plan, "SUP-MERGE"));
+    let edge = plan
+        .dependencies
+        .iter()
+        .find(|d| d.predecessor == b && d.successor == merge)
+        .expect("branch edge");
+    Timeline::at(plan, t(20)).edge(plan, edge)
+}
+
+#[test]
+fn a_reaffirmed_outcome_keeps_its_first_resolution_and_a_changed_one_starts_anew() {
+    let mut plan = fixture();
+    decide(&mut plan, "A", Some(t(1)));
+    supersede(&mut plan, "A", t(5));
+    assert_eq!(
+        skipped_at(&plan),
+        Release::SkippedBranch {
+            at: EventTime::Recorded(t(1))
+        }
+    );
+    supersede(&mut plan, "B", t(6));
+    supersede(&mut plan, "A", t(7));
+    assert_eq!(
+        skipped_at(&plan),
+        Release::SkippedBranch {
+            at: EventTime::Recorded(t(7))
+        },
+        "the run of A restarted when B interrupted it"
+    );
+    let mut legacy = fixture();
+    decide(&mut legacy, "A", None);
+    supersede(&mut legacy, "A", t(5));
+    assert_eq!(
+        skipped_at(&legacy),
+        Release::SkippedBranch {
+            at: EventTime::Unrecorded
+        },
+        "a reaffirmed legacy choice was made before times were recorded"
+    );
+}

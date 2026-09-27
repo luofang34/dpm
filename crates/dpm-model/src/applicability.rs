@@ -159,13 +159,44 @@ pub(crate) fn effective_decision(plan: &Plan, id: DecisionId) -> Option<&Decisio
     Some(current)
 }
 
-/// When a resolved decision was resolved; `None` while open or withdrawn without replacement.
-pub(crate) fn resolution(decision: &Decision) -> Option<EventTime> {
-    (decision.status == DecisionStatus::Decided).then(|| {
-        decision
-            .resolved_at
-            .map_or(EventTime::Unrecorded, EventTime::Recorded)
-    })
+/// Since when the standing outcome of a resolved decision has held; `None` while open or withdrawn
+/// without replacement.
+///
+/// A replacement that reaffirms the outcome it supersedes does not re-make the choice: work the
+/// outcome selected or excluded was already released at the earlier resolution, and moving that
+/// time would re-close gates that execution has relied on. The time is therefore the earliest
+/// resolution in the unbroken run of equal outcomes ending at `decision`; a changed outcome starts
+/// a new run at its own resolution.
+pub(crate) fn standing_since(plan: &Plan, decision: &Decision) -> Option<EventTime> {
+    if decision.status != DecisionStatus::Decided {
+        return None;
+    }
+    let mut since = own_time(decision);
+    let mut current = decision;
+    let mut steps = 0_usize;
+    while let Some(previous) = current.supersedes.and_then(|id| plan.decisions.get(&id)) {
+        steps = steps.wrapping_add(1);
+        if previous.outcome != decision.outcome || steps > plan.decisions.len() {
+            break;
+        }
+        since = earliest(since, own_time(previous));
+        current = previous;
+    }
+    Some(since)
+}
+
+fn own_time(decision: &Decision) -> EventTime {
+    decision
+        .resolved_at
+        .map_or(EventTime::Unrecorded, EventTime::Recorded)
+}
+
+/// An unrecorded time predates recording, so it is the earlier of the two.
+fn earliest(a: EventTime, b: EventTime) -> EventTime {
+    match (a, b) {
+        (EventTime::Recorded(a), EventTime::Recorded(b)) => EventTime::Recorded(a.min(b)),
+        _ => EventTime::Unrecorded,
+    }
 }
 
 fn conditions(plan: &Plan, work: &WorkItem) -> (Applicability, Option<EventTime>) {
@@ -177,7 +208,7 @@ fn conditions(plan: &Plan, work: &WorkItem) -> (Applicability, Option<EventTime>
         if let Some(condition) = &item.condition
             && let Some(decision) = effective_decision(plan, condition.decision)
         {
-            match (resolution(decision), decision.outcome.as_deref()) {
+            match (standing_since(plan, decision), decision.outcome.as_deref()) {
                 (Some(at), Some(selected)) if selected != condition.option => {
                     let state = Applicability::NotSelected {
                         decision: decision.key.clone(),

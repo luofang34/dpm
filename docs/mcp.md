@@ -338,8 +338,10 @@ A refused transition reports `{type: "applicability", applicability}` in `unmet`
 not-selected work reports `release.state = "not_selected"` into an ordinary successor and
 `"skipped_branch"` (released at the choice time) into an active-branch join. A join is reached when
 at least one branch is verified (or `allow_empty` is set and every branch was skipped), every active
-branch is released, and its gates are resolved; its time includes the `resolved_at` of the choices
-that selected it or skipped its branches. A work package completes when every child that a choice
+branch is released, and its gates are resolved; its time includes the effective time of the choices
+that selected it or skipped its branches: the earliest `resolved_at` in the unbroken run of equal
+outcomes along the `supersedes` chain, so a replacement reaffirming the standing outcome moves no
+completion and re-closes no released gate, while a changed outcome counts from its own resolution. A work package completes when every child that a choice
 did not exclude is complete, with at least one; its applicability follows the same children: with
 no applicable child it is `all_children_excluded` (every child excluded, handled like
 `not_selected`, including as a skipped branch of its parent package), `awaiting_choice` (a child

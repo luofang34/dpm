@@ -265,7 +265,7 @@ children (innermost first), and every projection reads that result:
 | Ordinary edge (`all_predecessors`) from not-selected work | never released (`release = not_selected`); the successor is `stranded` |
 | Edge from stranded work, or from an empty join | never released; the successor is `stranded` |
 | Edge from undecided or awaiting work | the successor is `awaiting_choice`: not committed until the choice is made |
-| `active_branches` join, edge from not-selected work | a skipped branch, released at the choice's `resolved_at` |
+| `active_branches` join, edge from not-selected work | a skipped branch, released at the choice's effective time (below) |
 | `active_branches` join, every branch skipped | `empty_join` unless `allow_empty`; with it, reached at the latest choice time |
 | Work package with an applicable child | `applicable`; complete when every child a choice did not exclude is complete, and at least one is |
 | Work package whose every child is excluded (`not_selected` or itself `all_children_excluded`) | `all_children_excluded`: treated exactly as `not_selected` (listed, not counted, never completion, a skipped branch of its parent at the latest excluding choice) |
@@ -285,7 +285,12 @@ outstanding in progress, so a plan that can no longer finish never reports compl
 or package time includes the resolution times of the choices that selected it or skipped its
 branches; a replacement created by a reviewed plan change is resolved at the time of the
 `ApplyChange` operation that records it, so completions and lag that depend on it have a recorded
-time.
+time. That time counts only when the replacement changes the outcome: a choice's effective time is
+the earliest resolution in the unbroken run of equal outcomes along its `supersedes` chain, so a
+replacement that reaffirms the standing outcome moves no milestone, package or skipped-branch time
+and never re-closes a gate that has already released (a reaffirmed choice first made before
+resolution times were recorded stays unrecorded). A changed outcome starts a new run at its own
+resolution time.
 
 While open decisions condition work, `status` reports one forecast per option combination instead
 of a single percentile: with no probability model, blending mutually exclusive branches would be a
