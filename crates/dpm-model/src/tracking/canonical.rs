@@ -54,6 +54,16 @@ impl ExternalIdentity {
         }
         key
     }
+
+    /// Whether this identity names `recorded`'s object as a pull request where the record says
+    /// issue. Only shared-number forges give both kinds one object key, and there the pull
+    /// request is the more specific kind, so a link may upgrade the record but never downgrade it.
+    #[must_use]
+    pub fn refines_kind_of(&self, recorded: &Self) -> bool {
+        recorded.kind == ExternalObjectKind::Issue
+            && self.kind == ExternalObjectKind::PullRequest
+            && self.object_key() == recorded.object_key()
+    }
 }
 
 /// Repeat a stripping step until it removes nothing; each step returns a shorter subslice or

@@ -195,6 +195,36 @@ def forge_family(directory):
     finally:
         worker.close()
 
+
+def issue_then_pull(directory):
+    """A shared-number object first recorded as an issue becomes a pull request when relinked as one."""
+    database = directory / 'issue-then-pull.sqlite'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    worker = Agent(database, 'agent:upgrade')
+    try:
+        issue = {'provider': 'GitHub', 'instance': 'github.com', 'namespace': 'o/r', 'kind': 'Issue', 'external_id': '5'}
+        worker.call('link_external', {'key': 'TEST-A', 'identity': issue, 'base_revision': 0})
+        pulls = {**issue, 'kind': 'pulls'}
+        run_cli(database, 'link-external', 'TEST-A', *flags(pulls), '--observed', 'merged', '--actor', 'agent:upgrade')
+        explained = worker.call('explain_work', {'key': 'TEST-A'})['data']
+        assert explained == run_cli(database, 'explain', 'TEST-A')
+        [reference] = explained['context']['external_references']
+        assert reference['identity'] == {**issue, 'kind': 'PullRequest'}, reference
+        assert reference['observation']['state'] == 'Merged' and len(reference['links']) == 1, reference
+        worker.call('link_external', {'key': 'TEST-B', 'identity': issue, 'role': 'Relates', 'observed': 'Closed',
+                                      'base_revision': 2})
+        [stored] = run_cli(database, 'export')['external_references'].values()
+        assert stored['identity']['kind'] == 'PullRequest', 'an issue-kind link never downgrades the record'
+        pull = {**issue, 'kind': 'PullRequest'}
+        refused(database, worker, 'link_external', {'key': 'TEST-A', 'identity': pull, 'base_revision': 3},
+                ['link-external', 'TEST-A', *flags(pull)], 'invalid_command')
+        history = worker.call('history', {})['data']
+        assert history == run_cli(database, 'history')
+        upgrade = history['entries'][1]['operation']['command']['LinkExternal']
+        assert upgrade['identity']['kind'] == 'PullRequest' and upgrade['observed'] == 'Merged', upgrade
+    finally:
+        worker.close()
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-tracking-') as temporary:
         directory = Path(temporary)
@@ -210,6 +240,7 @@ if __name__ == '__main__':
             final = review_and_round_trip(database, directory, worker, reviewer)
             jira_identity(directory)
             forge_family(directory)
+            issue_then_pull(directory)
         finally:
             worker.close()
             reviewer.close()
@@ -218,4 +249,4 @@ if __name__ == '__main__':
             assert reopened.call('export_plan', {})['data'] == final
         finally:
             reopened.close()
-    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, one Forgejo/Gitea object family per instance, scheme-less and percent-encoded credential rejection, reviewed rename and export/import round trip')
+    print('PASS: provider-scoped identities without collisions, exclusive tracking, atomic stale/credential/missing rejections, unlink without graph change, observations never verify, CLI/MCP parity, per-provider key normalization, one Forgejo/Gitea object family per instance, scheme-less and percent-encoded credential rejection, issue-to-pull-request kind upgrade, reviewed rename and export/import round trip')

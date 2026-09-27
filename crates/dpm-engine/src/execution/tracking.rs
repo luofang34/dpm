@@ -4,8 +4,8 @@
 use crate::{EngineError, ExternalLinkRequest};
 use chrono::{DateTime, Utc};
 use dpm_model::{
-    ActorId, ExternalLink, ExternalLinkRole, ExternalObservation, ExternalReference,
-    ExternalReferenceId, Plan, WorkItemId,
+    ActorId, ExternalLink, ExternalLinkRole, ExternalObjectKind, ExternalObservation,
+    ExternalReference, ExternalReferenceId, Plan, WorkItemId,
 };
 use std::collections::BTreeSet;
 
@@ -30,7 +30,11 @@ pub(super) fn link(
             observation: None,
             links: BTreeSet::new(),
         });
-    if reference.links.iter().any(|l| l.work == request.work) {
+    // Relinking with the same role may only upgrade the kind; any other repeat is a duplicate.
+    let upgrade = request.identity.refines_kind_of(&reference.identity);
+    if let Some(existing) = reference.links.iter().find(|l| l.work == request.work)
+        && !(upgrade && existing.role == request.role)
+    {
         return Err(EngineError::DuplicateExternalLink {
             work: request.work,
             reference: request.reference,
@@ -38,6 +42,7 @@ pub(super) fn link(
     }
     if request.role == ExternalLinkRole::Tracks
         && let Some(owner) = reference.tracking_owner()
+        && owner != request.work
     {
         return Err(EngineError::TrackingOwned {
             identity: reference.identity.to_string(),
@@ -47,6 +52,9 @@ pub(super) fn link(
                 .map(|w| w.key.clone())
                 .ok_or(EngineError::MissingWorkItem(owner))?,
         });
+    }
+    if upgrade {
+        reference.identity.kind = ExternalObjectKind::PullRequest;
     }
     reference.label.clone_from(&request.label);
     reference.url.clone_from(&request.url);

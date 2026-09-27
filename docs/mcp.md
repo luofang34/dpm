@@ -92,7 +92,9 @@ other family stays distinct, even on one host (GitHub and GitLab on `codeberg.or
 and each instance is separate (`github.com` and a GitHub Enterprise host never collide). Kind separates
 objects only where the provider numbers them separately (GitLab issues and merge requests); GitHub,
 Forgejo and Gitea number issues and pull requests together, so `#5` is one object whichever kind is
-named, and the first recorded kind is kept. The label
+named. A pull request is the more specific kind of that one object: linking `PullRequest` for an
+object recorded as `Issue` upgrades the record in the same operation (so a later `Merged`
+observation is accepted), while linking `Issue` never downgrades a pull request. The label
 and URL are display data. Adapters canonicalize equivalent spellings (host and forge namespace
 case, `https://` prefixes, default ports `:443`/`:80`, `#`/`!` ID prefixes, a `.git` repository suffix in any case, leading zeros in forge
 numbers, Jira and Linear key and Linear workspace case) before lookup, and validation rejects any other form.
@@ -104,7 +106,8 @@ canonical identity leaves it unchanged and a suggested spelling is always accept
 lowercase flag values. Each identity is recorded once, under a stable reference ID that survives
 relabeling and namespace moves; links name work by stable ID, so key changes keep them. One work
 item may track an identity (`tracking_conflict` otherwise); any number may relate to it. A work item
-links an identity at most once. `unlink_external` removes one link, and removing the last one
+links an identity at most once; relinking with the same role is accepted only when it upgrades an
+issue record to a pull request, and records its label, URL and observation with the upgrade. `unlink_external` removes one link, and removing the last one
 removes the record. Unknown work, identities or links are `not_found`; stale revisions are
 `revision_conflict`. Every failure leaves the snapshot and revision unchanged.
 

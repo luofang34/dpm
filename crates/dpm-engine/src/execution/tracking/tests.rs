@@ -445,3 +445,5 @@ fn reviewed_changes_cannot_author_or_rewrite_observations() {
     authored.external_references.insert(added.id, added);
     propose_change(&plan, &authored).expect("reviewed reference without observation");
 }
+
+mod kind;
