@@ -108,6 +108,11 @@ fn executed() -> Value {
         (&worker, json!({"Start": {"work": b}})),
         (&worker, json!({"Submit": {"work": b, "note": null}})),
         (&worker, json!({"Claim": {"work": c}})),
+        (
+            &worker,
+            json!({"Release": {"work": c, "reason": "claimed early"}}),
+        ),
+        (&worker, json!({"Claim": {"work": c}})),
         (&worker, json!({"Start": {"work": c}})),
         (
             &reviewer,

@@ -44,7 +44,7 @@ fn execute(
         Command::RatifyContract { work } => review::ratify(plan, actor, *work),
         Command::Reject { work, reason } => review::reject(plan, actor, *work, reason, at),
         Command::Claim { work } => claim(plan, actor, *work, at),
-        Command::Release { work, reason } => ownership::release(plan, actor, *work, reason),
+        Command::Release { work, reason } => ownership::release(plan, actor, *work, reason, at),
         Command::Handoff {
             work,
             from,
@@ -152,6 +152,32 @@ fn owns(item: &WorkItem, actor: &ActorId) -> Result<(), EngineError> {
     Ok(())
 }
 
+/// Refuse a reviewer that wrote evidence attached to the task: its review would judge its own
+/// contribution. Only the task's own artifacts count; evidence on a containing package is context.
+fn refuse_evidence_author(
+    plan: &Plan,
+    actor: &ActorId,
+    work: WorkItemId,
+    action: &'static str,
+) -> Result<(), EngineError> {
+    let item = plan
+        .work_items
+        .get(&work)
+        .ok_or(EngineError::MissingWorkItem(work))?;
+    let authored = item
+        .artifact_ids
+        .iter()
+        .filter_map(|id| plan.artifacts.get(id))
+        .any(|artifact| artifact.created_by == *actor);
+    if authored {
+        return Err(EngineError::ActorNotAllowed {
+            actor: actor.clone(),
+            action,
+        });
+    }
+    Ok(())
+}
+
 fn attach(
     plan: &mut Plan,
     actor: &ActorId,
@@ -163,6 +189,13 @@ fn attach(
         .get(&work)
         .ok_or(EngineError::MissingWorkItem(work))?;
     owns(item, actor)?;
+    // Evidence authors cannot review the task, so only the executor attaches evidence to it.
+    if item.is_executable() && item.owner.is_none() {
+        return Err(EngineError::ActorNotAllowed {
+            actor: actor.clone(),
+            action: "attach evidence to an unclaimed task; claim it first",
+        });
+    }
     if artifact.created_by != *actor || plan.artifacts.contains_key(&artifact.id) {
         return Err(EngineError::InvalidCommand {
             entity: artifact.id.to_string(),

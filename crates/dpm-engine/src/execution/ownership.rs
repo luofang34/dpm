@@ -6,19 +6,21 @@
 use super::{nonempty, owns, task_mut};
 use crate::EngineError;
 use chrono::{DateTime, Utc};
-use dpm_model::{ActorId, ActorKind, Handoff, Plan, WorkItemId, WorkStatus};
+use dpm_model::{ActorId, ActorKind, ClaimRelease, Handoff, Plan, WorkItemId, WorkStatus};
 
 /// Return an unstarted claim to Planned without an owner.
 ///
 /// Only the owner may release, and only before the start: a claim reserves work without
 /// executing it, so nothing downstream (SS/SF successors, provisional bases) has relied on it
 /// and the reservation can be undone without losing a fact. Started work has recorded events a
-/// release would orphan, so it moves only through an authorized handoff.
+/// release would orphan, so it moves only through an authorized handoff. The release is recorded
+/// because a claimant may already have attached evidence, and so is never an independent reviewer.
 pub(super) fn release(
     plan: &mut Plan,
     actor: &ActorId,
     work: WorkItemId,
     reason: &str,
+    at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     nonempty(&work.to_string(), "release reason", reason)?;
     let item = task_mut(plan, work)?;
@@ -34,6 +36,11 @@ pub(super) fn release(
     }
     item.owner = None;
     item.status = WorkStatus::Planned;
+    item.releases.push(ClaimRelease {
+        actor: actor.clone(),
+        at,
+        reason: reason.into(),
+    });
     Ok(())
 }
 

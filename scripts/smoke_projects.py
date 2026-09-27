@@ -97,10 +97,15 @@ def git_evidence(directory):
     cli(root, 'import', ROOT / 'tests/support/execution-plan.json')
     cli(directory, '--project', root, 'attach-git-head', 'TEST-A', error='invalid_request')
     cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--resource', 'UNKNOWN', error='invalid_request')
+    # Evidence authors are never independent reviewers, so only the task's owner attaches evidence.
+    cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--resource', 'TEST-REPO', error='invalid_command')
+    cli(directory, '--project', root, 'claim', 'TEST-A')
     cli(directory, '--project', root, 'attach-git-head', 'TEST-A', '--resource', 'TEST-REPO')
+    cli(directory, '--project', root, 'release', 'TEST-A', '--reason', 'evidence recorded', '--actor', 'agent:local')
     actor = Agent(None, 'agent:evidence', cwd=directory, project=root)
     try:
-        actor.call('attach_git_head', {'key': 'TEST-A', 'resource': 'TEST-REPO', 'base_revision': 1})
+        actor.call('claim_work', {'key': 'TEST-A', 'base_revision': 3})
+        actor.call('attach_git_head', {'key': 'TEST-A', 'resource': 'TEST-REPO', 'base_revision': 4})
     finally:
         actor.close()
     exported = cli(root, 'export')

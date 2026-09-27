@@ -71,6 +71,27 @@ fn handoffs(work: &WorkItem) -> Result<(), ValidationError> {
             "handoffs are recorded in time order",
         ));
     }
+    releases(work)
+}
+
+fn releases(work: &WorkItem) -> Result<(), ValidationError> {
+    if !work.is_executable() && !work.releases.is_empty() {
+        return Err(invalid("work release", work.id, "only tasks are claimed"));
+    }
+    if work.releases.iter().any(|r| r.reason.trim().is_empty()) {
+        return Err(invalid(
+            "work release",
+            work.id,
+            "a release names a nonempty reason",
+        ));
+    }
+    if work.releases.windows(2).any(|pair| pair[0].at > pair[1].at) {
+        return Err(invalid(
+            "work release",
+            work.id,
+            "releases are recorded in time order",
+        ));
+    }
     Ok(())
 }
 

@@ -228,7 +228,7 @@ A dependency's `policy` is `Hard` (the default) or `Soft`, with an optional `rat
 kind, lag and rationale change only through a reviewed plan change; edges into started work stay
 protected like the rest of its prerequisite basis. A human or service may waive an unwaived `Soft`
 edge, or restore a waived one, with a nonempty reason; `Hard` edges cannot be waived and agents may
-do neither. The actor must not hold, or have held before a handoff, either endpoint task, so no
+do neither. The actor must not hold, or have held before a handoff or release, either endpoint task, so no
 owner relaxes a gate on its own work or on the result it hands on. The waiver's actor, time and reason stay on the edge until restoration, and each waiver
 or restoration is a semantic operation in the history. Plan changes cannot add, alter or remove a
 waiver, and a waived edge must be restored before a reviewed change edits or removes it.
@@ -249,10 +249,26 @@ Independence differs by command because the acts differ:
 
 | Command | Refused actors |
 |---------|----------------|
-| `Verify` | the verified task's owner |
-| `WaiveDependency`, `RestoreDependency` | agents, and owners of either endpoint |
-| `RevalidateBasis` | agents, and owners of the successor or of its predecessor |
-| `ApplyChange` | agents; owners of work whose constraint the change relaxes, as above |
+| `Verify`, `Reject` | holders of the task, and authors of evidence attached to it |
+| `WaiveDependency`, `RestoreDependency` | agents, and holders of either endpoint |
+| `RevalidateBasis` | agents, and holders of the successor or of its predecessor |
+| `ApplyChange` | agents; holders of work whose constraint the change relaxes, as above |
+| `AttachArtifact` on a task | everyone but its current owner |
+
+A holder is the current owner or any actor that owned the task before a handoff or gave back a
+claim on it (`WorkItem::held_by`). Evidence is attached to a task only by its current owner, because
+an evidence author is not an independent reviewer: whoever wrote the proof would be judging it.
+Verification and rejection still refuse any author of an artifact on the task, which also covers
+evidence imported with a snapshot. Only artifacts on the task itself count; evidence attached to a
+containing work package or milestone (any actor may attach there, since aggregates are never
+reviewed) and a decision's source artifacts do not. A single-person workspace therefore reviews
+through a second actor, such as the person's human principal reviewing an agent's result.
+
+A recorded rejection or basis revalidation is judged against the holders at its own time
+(`WorkItem::holding_at`): the owner then, every handoff and release recorded at or before it (a
+handoff at the same instant counts as earlier, since equal times cannot be ordered). A reviewer who
+rejects a result may therefore take over the rework by a later handoff, while a record whose actor
+held the task when it was made is invalid and the error names the handoff, release or ownership.
 
 Verification checks a submitted result against its acceptance criteria and evidence and re-checks
 every gate; it skips nothing, so the owner of a successor that consumes the result may verify it,
@@ -367,8 +383,10 @@ Decisions and reasons:
   Independence does not depend on who authorized the move but on the record: `WorkItem.handoffs` is
   append-only (from, to, actor, at, reason), and `WorkItem::held_by` treats every earlier `from` as
   a holder. Verification, rejection, basis revalidation and waivers all refuse a holder, so an
-  actor that executed any part of the work never reviews it, whoever holds it now. A releaser is not
-  recorded as a holder, because a release happens before any execution.
+  actor that executed any part of the work never reviews it, whoever holds it now.
+- **Releases are recorded too.** `WorkItem.releases` is append-only (actor, at, reason) and every
+  releaser is a holder: a claimant may attach evidence before it releases, so giving back a claim
+  never turns the claimant into the reviewer of the result it contributed to.
 - **Everything recorded stays.** Status, events (including `start_unrecorded`), attempts, the last
   rejection, basis entries, progress, blocker and evidence are untouched; an invalidated basis is
   still invalidated for the new owner and still needs an independent revalidation.
@@ -381,7 +399,8 @@ Decisions and reasons:
   it counting in `excluded_in_flight`, and handing it off moves ownership only; the work still takes
   no lifecycle transition until the plan changes.
 
-Plan changes still cannot change owners or handoff records, and new work cannot carry either.
+Plan changes still cannot change owners, handoff or release records, and new work cannot carry
+any of them.
 A released task is no longer claimed, so its unstarted contract becomes reviewable again.
 
 ### Uncertain durations

@@ -217,9 +217,10 @@ pub(super) fn verify(
     if item.held_by(actor) {
         return Err(EngineError::ActorNotAllowed {
             actor: actor.clone(),
-            action: "verify work it held before a handoff",
+            action: "verify work it held before a handoff or release",
         });
     }
+    super::refuse_evidence_author(plan, actor, work, "verify work whose evidence it authored")?;
     permit(plan, work, Transition::Verify, at)?;
     let item = task_mut(plan, work)?;
     item.status = WorkStatus::Verified;

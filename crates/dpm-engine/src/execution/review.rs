@@ -43,13 +43,16 @@ pub(super) fn reject(
             status: item.status,
         });
     }
-    // A former owner executed part of the result, so a handoff does not make it independent.
+    // A former owner or releaser may have produced part of the result, so neither a handoff nor a
+    // release makes it independent.
     if item.held_by(actor) {
         return Err(EngineError::ActorNotAllowed {
             actor: actor.clone(),
             action: "review work it has owned",
         });
     }
+    super::refuse_evidence_author(plan, actor, work, "review work whose evidence it authored")?;
+    let item = task_mut(plan, work)?;
     item.status = WorkStatus::InProgress;
     // The rejected submission is no longer a finish claim; resubmission records a new time.
     item.events.submitted_at = None;

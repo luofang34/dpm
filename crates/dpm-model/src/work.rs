@@ -166,7 +166,10 @@ pub struct WorkItem {
     pub owner: Option<ActorId>,
     /// Authorized ownership transfers in order; append-only, so every earlier holder stays known.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub handoffs: Vec<Handoff>,
+    pub handoffs: Vec<crate::Handoff>,
+    /// Claims given back before a start, in order; append-only, so a releaser stays a holder.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub releases: Vec<crate::ClaimRelease>,
     /// Explicit read/write needs; an empty set permits work without repository resources.
     pub resources: Vec<crate::ResourceRequirement>,
     /// Execution event times recorded by lifecycle commands.
@@ -203,32 +206,7 @@ pub struct ReviewRejection {
     pub reason: String,
 }
 
-/// Authorized transfer of claimed or started work between owners.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Handoff {
-    /// Owner the work was taken from.
-    pub from: ActorId,
-    /// Owner the work was given to.
-    pub to: ActorId,
-    /// Human or service that authorized the transfer.
-    pub actor: ActorId,
-    /// Caller-supplied UTC operation time.
-    pub at: chrono::DateTime<chrono::Utc>,
-    /// Why the executor changed.
-    pub reason: String,
-}
-
 impl WorkItem {
-    /// Whether the actor owns this work now or owned it before a handoff.
-    ///
-    /// Independent review reads this rather than the current owner alone, so handing work away
-    /// never turns the actor who executed it into its reviewer.
-    #[must_use]
-    pub fn held_by(&self, actor: &ActorId) -> bool {
-        self.owner.as_ref() == Some(actor) || self.handoffs.iter().any(|h| h.from == *actor)
-    }
-
     #[must_use]
     /// Expected task duration; containers and milestones contribute zero.
     pub fn expected_duration_hours(&self) -> f64 {

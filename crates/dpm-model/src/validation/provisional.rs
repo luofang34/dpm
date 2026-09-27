@@ -131,18 +131,33 @@ fn basis(plan: &Plan, work: &WorkItem) -> Result<(), ValidationError> {
                 "a basis is recorded at or after the start and in time order",
             ));
         }
-        if let crate::BasisSource::Revalidation { actor, reason } = &entry.source
-            && (actor.kind == crate::ActorKind::Agent
-                || reason.trim().is_empty()
-                || work.owner.as_ref() == Some(actor))
-        {
-            return Err(invalid(
-                "dependency basis",
-                work.id,
-                "revalidation requires an independent human or service reviewer and a reason",
-            ));
+        if let crate::BasisSource::Revalidation { actor, reason } = &entry.source {
+            revalidation(work, entry.recorded_at, actor, reason)?;
         }
         previous = entry.recorded_at;
+    }
+    Ok(())
+}
+
+fn revalidation(
+    work: &WorkItem,
+    at: chrono::DateTime<chrono::Utc>,
+    actor: &crate::ActorId,
+    reason: &str,
+) -> Result<(), ValidationError> {
+    if actor.kind == crate::ActorKind::Agent || reason.trim().is_empty() {
+        return Err(invalid(
+            "dependency basis",
+            work.id,
+            "revalidation requires a human or service reviewer and a reason",
+        ));
+    }
+    if let Some(holding) = work.holding_at(actor, at) {
+        return Err(invalid(
+            "dependency basis",
+            work.id,
+            format!("revalidation recorded at {at} is not independent: {actor} {holding}"),
+        ));
     }
     Ok(())
 }

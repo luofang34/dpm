@@ -108,6 +108,7 @@ fn validate_new_work(current: &Plan, proposed: &Plan) -> Result<(), EngineError>
             || !work.attempts.is_empty()
             || !work.basis.is_empty()
             || !work.handoffs.is_empty()
+            || !work.releases.is_empty()
         {
             return Err(invalid(
                 &work.key,
@@ -129,6 +130,7 @@ fn same_execution(a: &WorkItem, b: &WorkItem) -> bool {
         && a.attempts == b.attempts
         && a.basis == b.basis
         && a.handoffs == b.handoffs
+        && a.releases == b.releases
 }
 
 fn execution_basis(plan: &Plan) -> BTreeSet<WorkItemId> {

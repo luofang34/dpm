@@ -73,14 +73,21 @@ fn validate_work(plan: &Plan, work: &WorkItem) -> Result<(), ValidationError> {
     if let Some(review) = &work.last_rejection {
         nonempty("review reason", work.id, &review.reason)?;
         nonempty("review actor", work.id, &review.actor.name)?;
-        if !work.is_executable()
-            || work.owner.is_none()
-            || work.owner.as_ref() == Some(&review.actor)
-        {
+        if !work.is_executable() || work.owner.is_none() {
             return Err(invalid(
                 "review",
                 work.id,
-                "rejection requires an owned task and an independent reviewer",
+                "rejection requires an owned task",
+            ));
+        }
+        if let Some(holding) = work.holding_at(&review.actor, review.at) {
+            return Err(invalid(
+                "review",
+                work.id,
+                format!(
+                    "rejection at {} is not independent: {} {holding}",
+                    review.at, review.actor
+                ),
             ));
         }
     }

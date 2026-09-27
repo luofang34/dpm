@@ -31,19 +31,19 @@ which the store still checks atomically. Presentation text is not the API contra
 | show KEY | get_work | Objective, steps/results, scope, acceptance/checks and derived status |
 | explain KEY | explain_work | Readiness, dependencies, resolved requirements/gates/risks/evidence |
 | ratify KEY | ratify_contract | Human/service approves a complete Proposed contract |
-| reject KEY REASON | reject_work | Independent reviewer returns Submitted work for rework |
+| reject KEY REASON | reject_work | Independent reviewer (never a holder or evidence author) returns Submitted work for rework |
 | claim KEY | claim_work | Reserve only ready tasks; a claim is not a start |
-| release KEY --reason TEXT | release_work | Owner gives up an unstarted claim; the task returns to Planned without an owner |
+| release KEY --reason TEXT | release_work | Owner gives up an unstarted claim; the task returns to Planned without an owner and the release is recorded |
 | handoff KEY --to KIND:NAME --reason TEXT | handoff_work | Human/service moves claimed, started or blocked work to another owner; every recorded fact stays |
 | start KEY | start_work | Owner starts claimed work; records the start event SS/SF successors wait for |
 | block KEY REASON | report_blocker | Record blocker and preserve owner |
 | unblock KEY | unblock_work | Resume without changing owner |
 | progress KEY PERCENT --note TEXT | report_progress | Owner reports 0..100 execution; verification remains separate |
 | submit KEY --note TEXT | submit_work | Request independent verification of started work once FF/SF gates are released |
-| verify KEY --note TEXT | verify_work | Reject self-verification; re-check every relation and decision; record the finish event |
+| verify KEY --note TEXT | verify_work | Refuse holders and evidence authors; re-check every relation and decision; record the finish event |
 | decide KEY OUTCOME | decide_gate | Human/service resolves an open decision (agents are refused); with `options`, OUTCOME is exactly one option key |
-| artifact KEY FILE.json | add_artifact | Attach the same Artifact JSON object |
-| attach-git-head KEY --resource KEY | attach_git_head | Capture HEAD for an explicit task resource; locator binding is the default |
+| artifact KEY FILE.json | add_artifact | Owner attaches the same Artifact JSON object to its task |
+| attach-git-head KEY --resource KEY | attach_git_head | Owner captures HEAD for an explicit task resource; locator binding is the default |
 | link-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | link_external | Link work to a provider-scoped external object; context only |
 | unlink-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | unlink_external | Remove one link; the work graph is unchanged |
 | workspace list | workspace_list | List device-local bindings without changing the plan |
@@ -86,8 +86,8 @@ changes, with `in_flight`, `before` and `after`.
 ## Release and handoff
 
 `release_work` (`key`, nonempty `reason`, `base_revision`) lets the owner give up a claim it has
-not started: the task returns to `Planned` with no owner and is claimable again. Any actor kind may
-release its own claim. Anything else is refused with no change: another actor's claim, unowned or
+not started: the task returns to `Planned` with no owner and is claimable again, and the work's
+`releases` list keeps `{actor, at, reason}`. Any actor kind may release its own claim. Anything else is refused with no change: another actor's claim, unowned or
 blocked work (unblock first), and started or submitted work (`has started`; use a handoff).
 
 `handoff_work` (`key`, `to` as `KIND:NAME`, nonempty `reason`, `base_revision`) moves claimed,
@@ -96,8 +96,12 @@ are refused. The command records the observed owner as `from`, and the work's `h
 `{from, to, actor, at, reason}` for every transfer. Status, events, attempts, basis, progress,
 blocker and evidence are unchanged, so the new owner continues where the work stopped. Submitted
 work is refused (reject it first), as are unowned work, `to` equal to the owner and a malformed
-`to` (`invalid_request`). No actor that has held the work, now or before a handoff, may verify,
-reject, revalidate its basis or waive its edges. Plan changes cannot change owners or handoffs.
+`to` (`invalid_request`). No actor that has held the work, now or before a handoff or release, may
+verify, reject, revalidate its basis or waive its edges, and no author of evidence attached to the
+task may verify or reject it. Only a task's current owner attaches evidence to it (`add_artifact`,
+`attach_git_head`); unclaimed tasks are refused. A recorded rejection or revalidation stays valid
+when its reviewer later takes the work over: independence is judged against the holders at the
+review time. Plan changes cannot change owners, handoffs or releases.
 See [the decision log](architecture.md#release-and-handoff).
 
 ## External tracking references
@@ -369,7 +373,7 @@ successor because of it, reports `relaxed: {type: "gate", work, transition, gate
 or stricter edge under any identity is accepted, and another human or service may apply the same
 proposal. Proposals cannot add,
 alter or remove waivers, nor edit or remove a waived edge, which must be restored first. `waive_dependency` and `restore_dependency` take `dependency`, a nonempty
-`reason` and `base_revision`. Only human/service actors that neither hold nor have held (before a handoff) either endpoint task may use them
+`reason` and `base_revision`. Only human/service actors that neither hold nor have held (before a handoff or release) either endpoint task may use them
 (`verify_work` differs: it refuses only holders of the verified task, so a successor's owner may verify
 the result it consumes; `revalidate_basis` refuses holders of either task), only Soft edges can be waived,
 and restoring requires a current waiver. The waiver's actor, time and reason stay on the edge until
@@ -458,7 +462,7 @@ The workflow below applies to an authorized execution workspace; tool availabili
 4. Call start_work when execution begins. Its operation time is the start event that SS/SF
    successors wait for; report_progress and submit_work are refused until the task has started.
 5. Perform the work and acceptance checks. Use report_progress for intermediate execution reports;
-   use add_artifact or attach_git_head to record evidence.
+   use add_artifact or attach_git_head to record evidence while you own the task.
 6. Call submit_work with an evidence summary once `explain_work.transitions.submit.ready` holds.
    Another configured actor verifies the result.
 7. Call report_blocker when blocked; do not silently ignore dependencies or change lifecycle fields.
