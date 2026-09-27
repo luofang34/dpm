@@ -315,3 +315,34 @@ fn an_owner_cannot_relax_the_result_it_hands_on_through_a_milestone() {
         apply(&mut independent, reviewer(), proposal).expect("an independent reviewer may apply");
     }
 }
+
+#[test]
+fn other_inputs_into_a_downstream_milestone_are_not_the_owners_result() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let mut proposal = plan.clone();
+    let mut milestone = proposal.work_items[&id(&plan, "TEST-M1")].clone();
+    milestone.id = WorkItemId::new();
+    milestone.key = Key::new("TEST-M2");
+    let (a, c, d, m2) = (
+        id(&plan, "TEST-A"),
+        id(&plan, "TEST-C"),
+        id(&plan, "TEST-D"),
+        milestone.id,
+    );
+    proposal.work_items.insert(m2, milestone);
+    for (from, to) in [(a, m2), (d, m2), (m2, c)] {
+        proposal
+            .dependencies
+            .push(Dependency::new(from, to, DependencyKind::FinishStart, 0.0));
+    }
+    apply(&mut plan, reviewer(), proposal).expect("reviewer adds the milestone");
+    run(&mut plan, owner(), Command::Claim { work: a }, t(1));
+    let mut proposal = plan.clone();
+    proposal
+        .dependencies
+        .retain(|e| !(e.predecessor == d && e.successor == m2));
+    apply(&mut plan, owner(), proposal).expect("another task's input is not the owner's result");
+}

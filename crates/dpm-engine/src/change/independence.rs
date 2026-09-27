@@ -101,23 +101,26 @@ pub(crate) fn refuse_own_relaxation(
     if owned.is_empty() {
         return Ok(());
     }
-    let owned = through_milestones(current, owned);
+    let downstream = through_milestones(current, &owned, Direction::Downstream);
+    let upstream = through_milestones(current, &owned, Direction::Upstream);
     let refuse = |work: Key, relaxed| EngineError::OwnGateRelaxed {
         actor: actor.clone(),
         work,
         relaxed: Box::new(relaxed),
     };
-    for edge in current
-        .dependencies
-        .iter()
-        .filter(|e| owned.contains(&e.predecessor) || owned.contains(&e.successor))
-    {
+    for edge in current.dependencies.iter().filter(|e| {
+        owned.contains(&e.predecessor)
+            || owned.contains(&e.successor)
+            || downstream.contains(&e.predecessor)
+            || upstream.contains(&e.successor)
+    }) {
         if let Some(relaxation) = edge_relaxation(edge, proposed) {
-            let mine = if owned.contains(&edge.predecessor) {
-                edge.predecessor
-            } else {
-                edge.successor
-            };
+            let mine =
+                if owned.contains(&edge.predecessor) || downstream.contains(&edge.predecessor) {
+                    edge.predecessor
+                } else {
+                    edge.successor
+                };
             let relaxed = RelaxedConstraint::Dependency {
                 dependency: edge.id,
                 predecessor: key(current, edge.predecessor),
@@ -127,33 +130,47 @@ pub(crate) fn refuse_own_relaxation(
             return Err(refuse(key(current, mine), relaxed));
         }
     }
-    match relaxed_gate(current, proposed, &owned, at) {
+    // Gates downstream of a forwarding milestone wait on the owned result as if it were direct.
+    let forwarding: BTreeSet<WorkItemId> = owned.union(&downstream).copied().collect();
+    match relaxed_gate(current, proposed, &owned, &forwarding, at) {
         Some((mine, relaxed)) => Err(refuse(mine, relaxed)),
         None => Ok(()),
     }
 }
 
-/// Owned work plus every milestone joined to it through milestones only.
+/// Which way a milestone chain is followed from the owned work.
+#[derive(Clone, Copy)]
+enum Direction {
+    /// Milestones forwarding the owned work's result to later work.
+    Downstream,
+    /// Milestones forwarding earlier results into the owned work.
+    Upstream,
+}
+
+/// Milestones reached from owned work through milestone-only chains in one direction.
 ///
-/// A milestone is a zero-duration point that forwards its prerequisites' results, so relaxing an
-/// edge beyond it relaxes what the owned work hands on (or waits for) exactly as if the edge touched
-/// the owned work directly.
-fn through_milestones(plan: &Plan, owned: BTreeSet<WorkItemId>) -> BTreeSet<WorkItemId> {
+/// A milestone is a zero-duration point that forwards its prerequisites' results, so an edge out of
+/// a downstream milestone carries the owned result on, and an edge into an upstream milestone gates
+/// the owned work, exactly as if the edge touched the owned work directly. Other edges of those
+/// milestones concern other work and stay outside the rule.
+fn through_milestones(
+    plan: &Plan,
+    owned: &BTreeSet<WorkItemId>,
+    direction: Direction,
+) -> BTreeSet<WorkItemId> {
     let is_milestone = |id: &WorkItemId| {
         plan.work_items
             .get(id)
             .is_some_and(|w| w.kind == WorkKind::Milestone)
     };
-    let mut reached = owned;
-    let mut frontier: Vec<WorkItemId> = reached.iter().copied().collect();
+    let mut reached = BTreeSet::new();
+    let mut frontier: Vec<WorkItemId> = owned.iter().copied().collect();
     while let Some(node) = frontier.pop() {
         for edge in &plan.dependencies {
-            let next = if edge.predecessor == node {
-                edge.successor
-            } else if edge.successor == node {
-                edge.predecessor
-            } else {
-                continue;
+            let next = match direction {
+                Direction::Downstream if edge.predecessor == node => edge.successor,
+                Direction::Upstream if edge.successor == node => edge.predecessor,
+                _ => continue,
             };
             if is_milestone(&next) && reached.insert(next) {
                 frontier.push(next);
@@ -226,16 +243,17 @@ fn relaxed_gate(
     current: &Plan,
     proposed: &Plan,
     owned: &BTreeSet<WorkItemId>,
+    forwarding: &BTreeSet<WorkItemId>,
     at: DateTime<Utc>,
 ) -> Option<(Key, RelaxedConstraint)> {
     let (before, after) = (Timeline::at(current, at), Timeline::at(proposed, at));
-    let owned_keys: BTreeSet<Key> = owned.iter().map(|id| key(current, *id)).collect();
+    let forwarding_keys: BTreeSet<Key> = forwarding.iter().map(|id| key(current, *id)).collect();
     let successors = current
         .dependencies
         .iter()
-        .filter(|e| owned.contains(&e.predecessor))
+        .filter(|e| forwarding.contains(&e.predecessor))
         .map(|e| e.successor);
-    let scope: BTreeSet<_> = owned.iter().copied().chain(successors).collect();
+    let scope: BTreeSet<_> = forwarding.iter().copied().chain(successors).collect();
     for id in scope {
         let (Some(old), Some(new)) = (current.work_items.get(&id), proposed.work_items.get(&id))
         else {
@@ -248,7 +266,7 @@ fn relaxed_gate(
                 let concerns = if owned.contains(&id) {
                     Some(old.key.clone())
                 } else {
-                    owned_subject(&gate, owned, &owned_keys)
+                    owned_subject(&gate, forwarding, &forwarding_keys)
                 };
                 if let Some(mine) = concerns
                     && !now.iter().any(|g| same_gate(g, &gate))
