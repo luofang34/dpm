@@ -267,9 +267,13 @@ fn lag_units_are_converted_or_reported_never_guessed() {
             "<PredecessorLink><PredecessorUID>1</PredecessorUID><Type>1</Type><LinkLag>600</LinkLag></PredecessorLink>",
         ),
     ]);
-    assert_eq!(
-        import(&plan, &no_format).report.links[0].outcome,
-        LinkOutcome::Rejected
+    // OmniPlan writes lags this way; the schema fixes the unit (tenths of a minute) and the
+    // missing format means MS Project's default, working time.
+    let unformatted = &import(&plan, &no_format).report.links[0];
+    assert_eq!(unformatted.outcome, LinkOutcome::Approximated, "{unformatted:?}");
+    assert!(
+        unformatted.notes[0].contains("no LagFormat") && unformatted.notes[0].contains("1 h"),
+        "{unformatted:?}"
     );
 }
 

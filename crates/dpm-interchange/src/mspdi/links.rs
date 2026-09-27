@@ -211,22 +211,27 @@ fn check_lag(link: &SourceLink, report: &mut LinkReport) -> Result<(), String> {
     if link.link_lag == 0 {
         return Ok(());
     }
-    match link.lag_format.and_then(time_basis) {
+    // `LinkLag` always counts tenths of a minute; `LagFormat` only selects the display unit and
+    // elapsed versus working time, so an absent format is Microsoft Project's default, working
+    // time. OmniPlan writes every lag that way.
+    let (basis, origin) = match link.lag_format {
+        None => (Some(TimeBasis::Working), "no LagFormat, so "),
+        Some(format) => (time_basis(format), ""),
+    };
+    match basis {
         Some(TimeBasis::Elapsed) => Ok(()),
         Some(TimeBasis::Working) => {
             report.outcome = LinkOutcome::Approximated;
             report.notes.push(format!(
-                "working-time lag {} h treated as elapsed hours (calendar not applied)",
+                "{origin}working-time lag {} h treated as elapsed hours (calendar not applied)",
                 lag_hours(link.link_lag)
             ));
             Ok(())
         }
-        None => Err(match link.lag_format {
-            Some(format) => format!(
-                "lag format {format} is a percentage or unknown unit with no hour equivalent"
-            ),
-            None => "nonzero lag without LagFormat has no known unit".into(),
-        }),
+        None => Err(format!(
+            "lag format {} is a percentage or unknown unit with no hour equivalent",
+            link.lag_format.unwrap_or_default()
+        )),
     }
 }
 

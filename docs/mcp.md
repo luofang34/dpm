@@ -306,8 +306,11 @@ reported as not imported. `report.source.scope` states this boundary in every im
 DPM schedules elapsed hours. Elapsed duration/lag formats (`em`, `eh`, `ed`, `ew`, `emo`) convert
 exactly. Working-time formats (`m`, `h`, `d`, `w`, `mo`) keep their hour value but lose the
 calendar: 1 working day (`LinkLag` 4800 on an 8-hour calendar) becomes 8 elapsed hours, not a
-calendar day. The report marks those values as approximations. Percentage lags, unknown formats,
-and nonzero lags without `LagFormat` are rejected with the link rather than guessed. Durations
+calendar day. The report marks those values as approximations. `LinkLag` always counts tenths of a
+minute; `LagFormat` only selects the display unit and elapsed versus working time, so a lag without
+`LagFormat` (OmniPlan writes every lag that way) is Microsoft Project's default, working time, and
+is approximated like any other working-time lag. Percentage lags and unknown formats are rejected
+with the link rather than guessed. Durations
 with day, week or month designators are rejected. Cross-project links are rejected.
 
 Work packages cannot be dependency endpoints. A summary finishes with its last child and starts
