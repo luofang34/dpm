@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path, PurePosixPath
@@ -87,13 +88,17 @@ def exercise(root, manifest, directory):
     run('restore', '--from', str(backup), '--to', str(restored), '--json')
     assert json.loads(run('--database', str(restored), 'export')) == json.loads(run('export'))
     assert json.loads(run('--database', str(restored), 'history', '--json')) == json.loads(run('history', '--json'))
+    return env
 
 
 def verify(archive):
     with tempfile.TemporaryDirectory(prefix='dpm-installed-') as temporary:
         directory = Path(temporary)
         root, manifest = unpack(archive, directory)
-        exercise(root, manifest, directory)
+        env = exercise(root, manifest, directory)
+        env.update(DPM_BIN=str(root / 'bin/dpm'), DPM_MCP_BIN=str(root / 'bin/dpm-mcp'))
+        subprocess.run([sys.executable, str(root / 'source/scripts/smoke_terminal.py')],
+                       cwd=directory, env=env, check=True, timeout=120)
         corrupt = directory / 'corrupt.tar.gz'
         corrupt.write_bytes(archive.read_bytes()[:-16])
         Path(str(corrupt) + '.sha256').write_text(
@@ -105,7 +110,7 @@ def verify(archive):
         else:
             raise AssertionError('corrupt archive accepted')
         assert not (directory / 'refused').exists()
-    print(f'PASS: {manifest["target"]} package checksums, corresponding source, isolated CLI/MCP, ownership and history recovery')
+    print(f'PASS: {manifest["target"]} package checksums, corresponding source, isolated CLI/MCP/TUI, ownership and history recovery')
 
 
 if __name__ == '__main__':

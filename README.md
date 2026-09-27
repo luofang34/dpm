@@ -201,7 +201,8 @@ python3 scripts/smoke_release.py /tmp/dpm-release/*.tar.gz
 
 Each archive includes `dpm`, `dpm-mcp`, AGPL licensing, the exact corresponding source and a build
 manifest. An adjacent SHA-256 file verifies the archive. The smoke check runs extracted binaries
-outside the checkout with isolated local state, tests CLI/MCP parity and verifies history recovery.
+outside the checkout with isolated local state, tests CLI/MCP parity, exercises Gantt navigation
+and terminal cleanup, and verifies history recovery.
 Use a new output directory for each build. Package-manager publication and signing remain separate.
 
 The self-host integration checks are read-only and require revision 0 with an empty operation log.
