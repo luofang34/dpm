@@ -228,6 +228,10 @@ word is percent-decoded until stable (deeper nesting is rejected) and `\` is rea
 - Intentional false positive: an address after a `:` inside a query value
   (`?q=author:alice@corp.example`) reads as `user:pw@host` and is rejected; that is the price of
   rejecting `?x=user:pw@evil.example`.
+- Intentional false positive: an `@` anywhere after a `//` in the same word reads as userinfo in
+  an authority and is rejected, so `see //TODO@alice`, `a//b@c` or `[a](https://example.com)@bob`
+  fail; that is the price of rejecting `x=https://tok@host` and `see:https://tok@host`. Separate the
+  words with a space.
 
 The URL must also pass structural rules, so it is never looser than a label: `http://` or
 `https://` followed directly by an authority equal to the identity's instance after the same
