@@ -36,7 +36,7 @@ def live_store(directory):
     live = directory / 'live.sqlite'
     cli('--database', live, 'import', ROOT / 'tests/support/execution-plan.json')
     cli('--database', live, 'claim', 'TEST-A')
-    assert pragma(live, 'user_version') == 2
+    assert pragma(live, 'user_version') == 3
     return live
 
 
@@ -61,8 +61,8 @@ def backups_during_writes(directory, live):
 def round_trip(directory, live):
     backup = directory / 'backup.sqlite'
     report = cli('--database', live, 'backup', '--to', backup)
-    assert report['schema_version'] == 2 and report['operation_count'] == 13, report
-    assert report['origin_revision'] == 0 and report['first_base_revision'] == 0, report
+    assert report['schema_version'] == 3 and report['operation_count'] == 13, report
+    assert report['genesis_revision'] == 0 and 'origin_revision' not in report, report
     assert pragma(backup, 'journal_mode') == 'delete'
     before = backup.read_bytes()
     cli('--database', live, 'backup', '--to', backup, error='target_exists')
@@ -100,6 +100,9 @@ def tampered(directory, backup):
         'trigger': 'CREATE TRIGGER wipe AFTER INSERT ON operations BEGIN '
                    'DELETE FROM operations WHERE sequence < NEW.sequence; END',
         'head': 'DELETE FROM operations WHERE sequence = 1',
+        'snapshot': "UPDATE plan_state SET snapshot_json = "
+                    "json_set(snapshot_json, '$.workspace.name', 'Rewritten')",
+        'genesis': "UPDATE genesis SET plan_json = json_set(plan_json, '$.workspace.name', 'Rewritten')",
         'json': "UPDATE operations SET command_json = '{' WHERE sequence = 2",
     }
     for name, sql in edits.items():
@@ -109,6 +112,12 @@ def tampered(directory, backup):
             connection.execute(sql)
         failure = cli('verify-store', path, error='corrupt_store')['error']['message']
         assert str(path.resolve()) in failure, failure
+        if name in ('snapshot', 'genesis'):
+            # Replay findings are reported, never repaired.
+            assert 'does not reproduce the snapshot' in failure and 'workspace' in failure, failure
+            target = directory / f'{name}-restored.sqlite'
+            cli('restore', '--from', path, '--to', target, error='corrupt_store')
+            assert not target.exists()
     assert 'operation sequence 2 command_json' in failure, failure
     before = (directory / 'trigger.sqlite').read_bytes()
     cli('--database', directory / 'trigger.sqlite', 'unblock', 'TEST-A', error='corrupt_store')
@@ -129,21 +138,37 @@ def versions(directory, backup):
         cli('--database', future, *arguments, error='unsupported_schema_version')
     cli('verify-store', future, error='unsupported_schema_version')
     assert future.read_bytes() == before and not (directory / 'x.sqlite').exists()
-    baseline = directory / 'baseline.sqlite'
-    shutil.copyfile(backup, baseline)
-    with sqlite3.connect(baseline) as connection:
-        connection.executescript('DROP TABLE history_origin; PRAGMA user_version = 0;')
-    report = cli('verify-store', baseline)
-    assert report['schema_version'] == 0 and report['origin_revision'] is None, report
-    before = baseline.read_bytes()
-    cli('--database', baseline, 'import', ROOT / 'tests/support/execution-plan.json', error='storage_error')
-    assert baseline.read_bytes() == before, 'a refused import writes nothing'
-    revision = cli('--database', baseline, 'status', '--no-simulation')['revision']
-    assert pragma(baseline, 'user_version') == 0, 'reads never stamp'
-    cli('--database', baseline, '--base-revision', revision, 'block', 'TEST-A', 'stamped')
-    assert pragma(baseline, 'user_version') == 2
-    report = cli('verify-store', baseline)
-    assert report['operation_count'] == 14 and report['origin_revision'] == 0, report
+    retired(directory, backup)
+
+
+RETIRED_LAYOUTS = {
+    # Version 2 recorded only a history origin; 0 (no header) and 1 recorded nothing.
+    2: 'CREATE TABLE history_origin (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), '
+       'revision INTEGER NOT NULL); INSERT INTO history_origin VALUES (1, 0);',
+    1: '',
+    0: '',
+}
+
+
+def retired(directory, backup):
+    for version, extra in RETIRED_LAYOUTS.items():
+        old = directory / f'retired-{version}.sqlite'
+        shutil.copyfile(backup, old)
+        with sqlite3.connect(old) as connection:
+            connection.executescript(
+                'ALTER TABLE plan_state RENAME COLUMN snapshot_json TO plan_json; DROP TABLE genesis; '
+                f'{extra} PRAGMA user_version = {version};')
+        before = old.read_bytes()
+        for arguments in [('status', '--no-simulation'), ('history',), ('export',), ('claim', 'TEST-B'),
+                          ('backup', '--to', directory / 'x.sqlite'),
+                          ('import', ROOT / 'tests/support/execution-plan.json')]:
+            failure = cli('--database', old, *arguments, error='unsupported_schema_version')['error']['message']
+            assert f'schema version {version}' in failure and 'dpm export' in failure, failure
+            assert 'dpm import' in failure and 'nothing was written' in failure, failure
+        cli('verify-store', old, error='unsupported_schema_version')
+        assert old.read_bytes() == before, f'a retired version {version} store is never modified'
+        assert not (directory / 'x.sqlite').exists()
+        assert not list(directory.glob(f'retired-{version}.sqlite-*'))
 
 
 def discovered(directory):
@@ -175,6 +200,7 @@ if __name__ == '__main__':
         damage(directory, backup)
         versions(directory, backup)
         discovered(directory)
-    print('PASS: schema version refusal and origin upgrade, consistent backups during writes, '
-          'verified restore to new paths only, exact-layout and history-origin corruption detection, '
+    print('PASS: newer and retired schema versions refused unchanged with guidance, consistent backups '
+          'during writes, verified restore to new paths only, exact-layout corruption detection, '
+          'replay from genesis reproducing the snapshot with divergence reported and never restored, '
           'side-file target refusal and read-only verification through the CLI')

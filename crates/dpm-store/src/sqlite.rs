@@ -5,7 +5,7 @@ use crate::{
 };
 use dpm_engine::{Operation, apply_command};
 use dpm_model::Plan;
-use rusqlite::{Connection, OpenFlags, TransactionBehavior, params};
+use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 use std::{
     path::{Path, PathBuf},
     time::Duration,
@@ -14,10 +14,12 @@ use std::{
 mod history;
 mod integrity;
 mod recovery;
+use recovery::files;
+mod replay;
 pub use history::{HistoryEntry, HistoryPage};
 pub use recovery::{IntegrityReport, restore_store_blocking, verify_store_blocking};
 mod snapshot;
-use snapshot::{load_blocking, revision_to_sql};
+use snapshot::load_blocking;
 
 /// A synchronous local database with validated snapshots and immutable operation history.
 pub struct SqliteStore {
@@ -30,14 +32,16 @@ impl SqliteStore {
     /// schema.
     pub fn open_blocking(path: impl AsRef<Path>) -> Result<Self, StoreError> {
         let path = path.as_ref().to_path_buf();
+        check_existing_read_only_blocking(&path)?;
         let connection = Connection::open(&path).map_err(database_error(&path, "open database"))?;
         Self::prepare_blocking(connection, path)
     }
 
-    /// Open an existing database without creating a new file or writing to it; a store written
-    /// before the current schema version is upgraded by its next write.
+    /// Open an existing database without creating a new file or writing to it; a store in a
+    /// retired or newer layout is refused unchanged.
     pub fn open_existing_blocking(path: impl AsRef<Path>) -> Result<Self, StoreError> {
         let path = path.as_ref().to_path_buf();
+        check_existing_read_only_blocking(&path)?;
         let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE)
             .map_err(database_error(&path, "open existing database"))?;
         Self::prepare_blocking(connection, path)
@@ -56,7 +60,7 @@ impl SqliteStore {
             .busy_timeout(Duration::from_secs(5))
             .map_err(database_error(&path, "set busy timeout"))?;
         // Opening writes nothing, so an unsupported or refused store is left byte-for-byte
-        // untouched; schema creation and upgrades happen inside the first write transaction.
+        // untouched; schema creation happens inside the initializing write transaction.
         schema::check_blocking(&connection, &path)?;
         connection
             .execute_batch("PRAGMA foreign_keys = ON;")
@@ -72,11 +76,11 @@ impl SqliteStore {
         load_blocking(&self.connection, &self.path)
     }
 
-    /// Initialize an empty database; an existing snapshot or operation history is never erased,
-    /// and a refused initialization writes nothing.
+    /// Initialize an empty database with `plan` as both the snapshot and the genesis plan the
+    /// history replays from; an existing snapshot or operation history is never erased, and a
+    /// refused initialization writes nothing.
     pub fn initialize_blocking(&mut self, plan: &Plan) -> Result<(), StoreError> {
         plan.validate()?;
-        let json = serde_json::to_string(plan)?;
         if occupied_blocking(&self.connection, &self.path)? {
             return Err(StoreError::AlreadyInitialized(self.path.clone()));
         }
@@ -93,13 +97,7 @@ impl SqliteStore {
         if occupied_blocking(&transaction, &self.path)? {
             return Err(StoreError::AlreadyInitialized(self.path.clone()));
         }
-        transaction
-            .execute(
-                "INSERT INTO plan_state(singleton, revision, plan_json) VALUES(1, ?1, ?2)",
-                params![revision_to_sql(plan.revision), json],
-            )
-            .map_err(database_error(&self.path, "initialize snapshot"))?;
-        snapshot::write_origin_blocking(&transaction, &self.path, plan.revision)?;
+        snapshot::write_initial_blocking(&transaction, &self.path, plan)?;
         transaction
             .commit()
             .map_err(database_error(&self.path, "commit initialization"))?;
@@ -167,6 +165,25 @@ impl SqliteStore {
     }
 }
 
+/// Check the version and layout of an existing file through a read-only connection first.
+///
+/// Closing the last read-write connection to a WAL store checkpoints the log into the main file and
+/// deletes the side files, so a store this binary refuses must never be opened read-write at all.
+fn check_existing_read_only_blocking(path: &Path) -> Result<(), StoreError> {
+    let exists = path.try_exists().map_err(|source| StoreError::Io {
+        action: "inspect",
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if !exists {
+        return Ok(());
+    }
+    let mode = files::read_mode_blocking(path)?;
+    let connection = files::open_read_only_blocking(path, mode)?;
+    schema::check_blocking(&connection, path)?;
+    Ok(())
+}
+
 fn occupied_blocking(connection: &Connection, path: &Path) -> Result<bool, StoreError> {
     if schema::check_blocking(connection, path)? == Layout::Empty {
         return Ok(false);
@@ -180,37 +197,17 @@ fn occupied_blocking(connection: &Connection, path: &Path) -> Result<bool, Store
         .map_err(database_error(path, "check initialization"))
 }
 
-/// Bring the schema to the current layout inside a caller-owned write transaction and return the
+/// Create the schema of an empty store inside a caller-owned write transaction and return the
 /// layout found before that.
 ///
 /// The exact layout is re-checked under the write lock, so a schema object added by another
-/// process after open never runs inside this write. An originless store records the revision its
-/// history starts from, derived once from a history that must already be consistent.
+/// process after open never runs inside this write.
 fn prepare_write_blocking(connection: &Connection, path: &Path) -> Result<Layout, StoreError> {
     let found = schema::check_blocking(connection, path)?;
-    match found {
-        Layout::Empty => schema::create_blocking(connection, path)?,
-        Layout::Originless => {
-            let origin = derived_origin_blocking(connection, path)?;
-            schema::upgrade_blocking(connection, path)?;
-            if let Some(origin) = origin {
-                snapshot::write_origin_blocking(connection, path, origin)?;
-            }
-        }
-        Layout::Current => {}
+    if found == Layout::Empty {
+        schema::create_blocking(connection, path)?;
     }
     Ok(found)
-}
-
-fn derived_origin_blocking(
-    connection: &Connection,
-    path: &Path,
-) -> Result<Option<u64>, StoreError> {
-    let Some(plan) = load_blocking(connection, path)? else {
-        return Ok(None);
-    };
-    let history = integrity::check_history_blocking(connection, path, plan.revision, None)?;
-    Ok(Some(history.first_base_revision.unwrap_or(plan.revision)))
 }
 
 #[cfg(test)]

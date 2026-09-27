@@ -8,7 +8,8 @@ use super::{
     SqliteStore,
     integrity::{check_history_blocking, integrity_check_blocking},
     load_blocking,
-    snapshot::origin_blocking,
+    replay::replay_blocking,
+    snapshot::genesis_blocking,
 };
 use crate::{
     StoreError,
@@ -30,7 +31,7 @@ use std::{
     time::Duration,
 };
 
-mod files;
+pub(super) mod files;
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const BUSY_RETRY_DELAY: Duration = Duration::from_millis(100);
@@ -41,7 +42,7 @@ const BUSY_RETRIES: u32 = 50;
 pub struct IntegrityReport {
     /// Verified database file as a canonical absolute path.
     pub path: PathBuf,
-    /// Version stored in the header; 0 and 1 name the layout without a recorded history origin.
+    /// Version stored in the header.
     pub schema_version: i64,
     /// Workspace identity a device binding or project locator must match.
     pub workspace_id: WorkspaceId,
@@ -51,12 +52,8 @@ pub struct IntegrityReport {
     pub revision: u64,
     /// Number of committed operations in the history.
     pub operation_count: u64,
-    /// Revision the history must start from, recorded at initialization or by the upgrade that
-    /// first wrote the current schema; absent for a store not yet upgraded, whose lost leading
-    /// operations cannot be detected.
-    pub origin_revision: Option<u64>,
-    /// Revision the history starts from, absent for a store without operations.
-    pub first_base_revision: Option<u64>,
+    /// Revision of the genesis plan recorded at initialization, which the history starts from.
+    pub genesis_revision: u64,
 }
 
 impl SqliteStore {
@@ -97,8 +94,9 @@ pub fn restore_store_blocking(from: &Path, to: &Path) -> Result<IntegrityReport,
     discard_on_error_blocking(&to, result)
 }
 
-/// Check pages, exact layout, snapshot and history of a store in one read transaction, without
-/// writing to the store or creating any file next to it.
+/// Check pages, exact layout, snapshot and history of a store in one read transaction, then replay
+/// the history from the genesis plan and compare it with the snapshot, without writing to the store
+/// or creating any file next to it. A divergence is reported, never repaired.
 pub fn verify_store_blocking(path: &Path) -> Result<IntegrityReport, StoreError> {
     let path = canonical_blocking(path)?;
     if read_mode_blocking(&path)? == ReadMode::Immutable {
@@ -129,16 +127,13 @@ fn verify_with_blocking(path: &Path, mode: ReadMode) -> Result<IntegrityReport, 
     integrity_check_blocking(&transaction, path)?;
     let plan = load_blocking(&transaction, path)?
         .ok_or_else(|| StoreError::NotInitialized(path.to_path_buf()))?;
-    let origin_revision =
-        match layout {
-            Layout::Current => Some(origin_blocking(&transaction, path)?.ok_or_else(|| {
-                StoreError::MissingOrigin {
-                    path: path.to_path_buf(),
-                }
-            })?),
-            Layout::Empty | Layout::Originless => None,
-        };
-    let history = check_history_blocking(&transaction, path, plan.revision, origin_revision)?;
+    let genesis =
+        genesis_blocking(&transaction, path)?.ok_or_else(|| StoreError::MissingGenesis {
+            path: path.to_path_buf(),
+        })?;
+    let genesis_revision = genesis.revision;
+    let history = check_history_blocking(&transaction, path, plan.revision, genesis_revision)?;
+    replay_blocking(&transaction, path, genesis, &plan)?;
     Ok(IntegrityReport {
         path: path.to_path_buf(),
         schema_version,
@@ -146,8 +141,7 @@ fn verify_with_blocking(path: &Path, mode: ReadMode) -> Result<IntegrityReport, 
         workspace_name: plan.workspace.name,
         revision: plan.revision,
         operation_count: history.count,
-        origin_revision,
-        first_base_revision: history.first_base_revision,
+        genesis_revision,
     })
 }
 

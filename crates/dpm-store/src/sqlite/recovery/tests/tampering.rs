@@ -81,7 +81,10 @@ fn damaged_json_is_corruption_naming_the_file_and_record() {
         "{message}"
     );
     let snapshot = backup_of(dir.path(), "snapshot.sqlite", 1);
-    tamper(&snapshot, "UPDATE plan_state SET plan_json = 'not json'");
+    tamper(
+        &snapshot,
+        "UPDATE plan_state SET snapshot_json = 'not json'",
+    );
     for error in [
         verify_store_blocking(&snapshot).expect_err("damaged snapshot"),
         SqliteStore::open_existing_blocking(&snapshot)
@@ -92,7 +95,7 @@ fn damaged_json_is_corruption_naming_the_file_and_record() {
         assert!(error.is_corruption(), "{error}");
         let message = error.to_string();
         assert!(
-            message.contains("snapshot.sqlite") && message.contains("snapshot plan_json"),
+            message.contains("snapshot.sqlite") && message.contains("snapshot snapshot_json"),
             "{message}"
         );
     }
@@ -133,18 +136,18 @@ fn a_refused_initialization_leaves_an_existing_store_byte_for_byte_unchanged() {
     let dir = tempfile::tempdir().expect("directory");
     let live = dir.path().join("live.sqlite");
     drop(store_with_history(&live, 2));
-    let baseline = dir.path().join("baseline.sqlite");
-    std::fs::copy(backup_of(dir.path(), "source.sqlite", 2), &baseline).expect("copy");
-    tamper(
-        &baseline,
-        "DROP TABLE history_origin; VACUUM; PRAGMA user_version = 0",
-    );
-    for path in [&live, &baseline] {
+    let retired = dir.path().join("baseline.sqlite");
+    std::fs::copy(backup_of(dir.path(), "source.sqlite", 2), &retired).expect("copy");
+    tamper(&retired, "PRAGMA user_version = 2");
+    for path in [&live, &retired] {
         let before = std::fs::read(path).expect("bytes");
         let refused = SqliteStore::open_blocking(path)
             .and_then(|mut store| store.initialize_blocking(&fixture()));
         assert!(
-            matches!(refused, Err(StoreError::AlreadyInitialized(_))),
+            matches!(
+                refused,
+                Err(StoreError::AlreadyInitialized(_) | StoreError::RetiredSchemaVersion { .. })
+            ),
             "{path:?}: {refused:?}"
         );
         assert!(std::fs::read(path).expect("bytes") == before, "{path:?}");
@@ -237,15 +240,4 @@ fn a_trigger_planted_after_open_is_refused_inside_the_write_transaction() {
         rows(&live, "SELECT COUNT(*) FROM operations"),
         [[Value::Integer(2)]]
     );
-}
-
-#[test]
-fn a_missing_origin_record_fails_verification() {
-    let dir = tempfile::tempdir().expect("directory");
-    let backup = backup_of(dir.path(), "origin.sqlite", 1);
-    tamper(&backup, "DELETE FROM history_origin");
-    assert!(matches!(
-        verify_store_blocking(&backup),
-        Err(StoreError::MissingOrigin { .. })
-    ));
 }

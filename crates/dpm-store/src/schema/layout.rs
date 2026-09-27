@@ -3,7 +3,6 @@
 //! Every schema object is compared, not only tables: a trigger or view planted in a copied store
 //! would otherwise run inside DPM's own write transactions.
 
-use super::Layout;
 use crate::{StoreError, error::database_error};
 use rusqlite::Connection;
 use std::path::Path;
@@ -11,7 +10,7 @@ use std::path::Path;
 pub(crate) const PLAN_STATE: &str = "CREATE TABLE plan_state (
                  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
                  revision INTEGER NOT NULL,
-                 plan_json TEXT NOT NULL
+                 snapshot_json TEXT NOT NULL
              )";
 pub(crate) const OPERATIONS: &str = "CREATE TABLE operations (
                  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,9 +21,11 @@ pub(crate) const OPERATIONS: &str = "CREATE TABLE operations (
                  timestamp TEXT NOT NULL,
                  command_json TEXT NOT NULL
              )";
-pub(crate) const HISTORY_ORIGIN: &str = "CREATE TABLE history_origin (
+/// The plan the store was initialized with; replaying every operation from it yields the snapshot.
+pub(crate) const GENESIS: &str = "CREATE TABLE genesis (
                  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                 revision INTEGER NOT NULL
+                 revision INTEGER NOT NULL,
+                 plan_json TEXT NOT NULL
              )";
 /// SQLite creates this table itself for the `AUTOINCREMENT` column of `operations`.
 const SEQUENCE: &str = "CREATE TABLE sqlite_sequence(name,seq)";
@@ -58,22 +59,25 @@ fn normalize(sql: &str) -> String {
     sql.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// The schema objects a layout consists of, sorted like [`objects_blocking`] returns them.
-pub(crate) fn expected(layout: Layout) -> Vec<SchemaObject> {
+/// The schema objects of the current layout, sorted like [`objects_blocking`] returns them.
+pub(crate) fn expected() -> Vec<SchemaObject> {
     let table = |name: &str, sql| SchemaObject::new("table", name, name, Some(sql));
     let mut objects = vec![
         SchemaObject::new("index", "sqlite_autoindex_operations_1", "operations", None),
+        table("genesis", GENESIS),
         table("operations", OPERATIONS),
         table("plan_state", PLAN_STATE),
         table("sqlite_sequence", SEQUENCE),
     ];
-    match layout {
-        Layout::Empty => objects.clear(),
-        Layout::Originless => {}
-        Layout::Current => objects.push(table("history_origin", HISTORY_ORIGIN)),
-    }
     objects.sort();
     objects
+}
+
+/// Whether a table of this name exists, whatever its definition.
+pub(crate) fn has_table(objects: &[SchemaObject], name: &str) -> bool {
+    objects
+        .iter()
+        .any(|object| object.kind == "table" && object.name == name)
 }
 
 pub(crate) fn objects_blocking(

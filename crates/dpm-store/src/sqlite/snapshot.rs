@@ -48,22 +48,45 @@ pub(super) fn load_blocking(
     connection: &Connection,
     path: &Path,
 ) -> Result<Option<Plan>, StoreError> {
+    let query = "SELECT revision, snapshot_json FROM plan_state WHERE singleton = 1";
+    load_plan_blocking(connection, path, query, StoredRecord::Snapshot)
+}
+
+/// The plan the operation history replays from; `None` for an uninitialized store.
+pub(super) fn genesis_blocking(
+    connection: &Connection,
+    path: &Path,
+) -> Result<Option<Plan>, StoreError> {
+    let query = "SELECT revision, plan_json FROM genesis WHERE singleton = 1";
+    load_plan_blocking(connection, path, query, StoredRecord::Genesis)
+}
+
+fn load_plan_blocking(
+    connection: &Connection,
+    path: &Path,
+    query: &str,
+    record: StoredRecord,
+) -> Result<Option<Plan>, StoreError> {
     let mut statement = connection
-        .prepare("SELECT revision, plan_json FROM plan_state WHERE singleton = 1")
-        .map_err(database_error(path, "prepare snapshot query"))?;
+        .prepare(query)
+        .map_err(database_error(path, "prepare plan query"))?;
     let mut rows = statement
         .query([])
-        .map_err(database_error(path, "load snapshot"))?;
-    let Some(row) = rows.next().map_err(database_error(path, "load snapshot"))? else {
+        .map_err(database_error(path, "load plan"))?;
+    let Some(row) = rows.next().map_err(database_error(path, "load plan"))? else {
         return Ok(None);
     };
-    let record = StoredRecord::Snapshot;
     let stored_revision = revision_from_sql(column(row, 0, path, record, "revision")?);
-    let json: String = column(row, 1, path, record, "plan_json")?;
-    let plan: Plan = decode(&json, path, record, "plan_json")?;
+    let field = match record {
+        StoredRecord::Snapshot => "snapshot_json",
+        StoredRecord::Genesis | StoredRecord::Operation { .. } => "plan_json",
+    };
+    let json: String = column(row, 1, path, record, field)?;
+    let plan: Plan = decode(&json, path, record, field)?;
     if stored_revision != plan.revision {
         return Err(StoreError::CorruptSnapshot {
             path: path.to_path_buf(),
+            record,
             row: stored_revision,
             json: plan.revision,
         });
@@ -72,44 +95,26 @@ pub(super) fn load_blocking(
     Ok(Some(plan))
 }
 
-/// The revision the stored history starts from, as recorded when the store was initialized or
-/// upgraded; `None` when no origin has been recorded.
-pub(super) fn origin_blocking(
+/// Record the initial snapshot and the genesis plan the history replays from.
+pub(super) fn write_initial_blocking(
     connection: &Connection,
     path: &Path,
-) -> Result<Option<u64>, StoreError> {
-    let mut statement = connection
-        .prepare("SELECT revision FROM history_origin WHERE singleton = 1")
-        .map_err(database_error(path, "prepare history origin query"))?;
-    let mut rows = statement
-        .query([])
-        .map_err(database_error(path, "load history origin"))?;
-    match rows
-        .next()
-        .map_err(database_error(path, "load history origin"))?
-    {
-        Some(row) => Ok(Some(revision_from_sql(column(
-            row,
-            0,
-            path,
-            StoredRecord::Origin,
-            "revision",
-        )?))),
-        None => Ok(None),
-    }
-}
-
-pub(super) fn write_origin_blocking(
-    connection: &Connection,
-    path: &Path,
-    origin: u64,
+    plan: &Plan,
 ) -> Result<(), StoreError> {
+    let json = serde_json::to_string(plan)?;
+    let revision = revision_to_sql(plan.revision);
     connection
         .execute(
-            "INSERT INTO history_origin(singleton, revision) VALUES(1, ?1)",
-            [revision_to_sql(origin)],
+            "INSERT INTO plan_state(singleton, revision, snapshot_json) VALUES(1, ?1, ?2)",
+            params![revision, json],
         )
-        .map_err(database_error(path, "record history origin"))?;
+        .map_err(database_error(path, "initialize snapshot"))?;
+    connection
+        .execute(
+            "INSERT INTO genesis(singleton, revision, plan_json) VALUES(1, ?1, ?2)",
+            params![revision, json],
+        )
+        .map_err(database_error(path, "record genesis plan"))?;
     Ok(())
 }
 
@@ -128,7 +133,7 @@ pub(super) fn write_operation_blocking(
     ).map_err(database_error(path, "append operation"))?;
     connection
         .execute(
-            "UPDATE plan_state SET revision = ?1, plan_json = ?2 WHERE singleton = 1",
+            "UPDATE plan_state SET revision = ?1, snapshot_json = ?2 WHERE singleton = 1",
             params![revision_to_sql(plan.revision), serde_json::to_string(plan)?],
         )
         .map_err(database_error(path, "update snapshot"))?;

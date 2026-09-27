@@ -88,7 +88,7 @@ def smoke(binary, directory):
     with sqlite3.connect(database) as connection:
         count = connection.execute('SELECT COUNT(*) FROM operations').fetchone()[0]
         assert count == final['revision'] == 28
-        snapshot = json.loads(connection.execute('SELECT plan_json FROM plan_state').fetchone()[0])
+        snapshot = json.loads(connection.execute('SELECT snapshot_json FROM plan_state').fetchone()[0])
         assert snapshot['revision'] == count
         artifact = next(iter(snapshot['artifacts'].values()))
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()

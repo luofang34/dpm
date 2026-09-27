@@ -31,7 +31,7 @@ fn recovery_failures_carry_stable_codes() {
     );
     rusqlite::Connection::open(&live)
         .expect("raw connection")
-        .execute("UPDATE plan_state SET plan_json = '['", [])
+        .execute("UPDATE plan_state SET snapshot_json = '['", [])
         .expect("damage snapshot");
     let damaged = Application::open_blocking(&live)
         .and_then(|app| app.plan_blocking())

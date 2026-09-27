@@ -131,7 +131,7 @@ fn restore_round_trip_preserves_snapshot_history_and_version_exactly() {
     );
     assert_eq!(journal_mode(&restored), [[Value::Text("wal".into())]]);
     for sql in [
-        "SELECT revision, plan_json FROM plan_state",
+        "SELECT revision, snapshot_json FROM plan_state",
         "SELECT * FROM operations ORDER BY sequence",
         "PRAGMA user_version",
     ] {
@@ -268,11 +268,9 @@ fn verification_is_read_only() {
     let before = std::fs::read(&backup).expect("bytes");
     let report = verify_store_blocking(&backup).expect("verify");
     assert_eq!((report.revision, report.operation_count), (2, 2));
-    assert_eq!(
-        (report.origin_revision, report.first_base_revision),
-        (Some(0), Some(0))
-    );
+    assert_eq!(report.genesis_revision, 0);
     assert_eq!(std::fs::read(&backup).expect("bytes"), before);
 }
 
+mod replay_history;
 mod tampering;

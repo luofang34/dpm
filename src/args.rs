@@ -246,7 +246,8 @@ pub(crate) enum StoreCommand {
         #[arg(long)]
         to: PathBuf,
     },
-    /// Check pages, schema version, snapshot and history continuity without writing.
+    /// Check pages, schema version, snapshot and history, and replay the history from its genesis
+    /// plan, without writing.
     VerifyStore {
         /// Store or backup file; defaults to the selected workspace's store.
         path: Option<PathBuf>,

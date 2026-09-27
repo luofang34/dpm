@@ -100,7 +100,7 @@ def smoke(directory):
         assert run_cli(database, 'export') == plan
         with sqlite3.connect(database) as connection:
             assert connection.execute('SELECT COUNT(*) FROM operations').fetchone()[0] == expected['operations']
-            snapshot = json.loads(connection.execute('SELECT plan_json FROM plan_state').fetchone()[0])
+            snapshot = json.loads(connection.execute('SELECT snapshot_json FROM plan_state').fetchone()[0])
             assert snapshot == plan and snapshot['revision'] == 0
         assert SEED.read_bytes() == original
     finally:

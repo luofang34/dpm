@@ -13,7 +13,7 @@ const SIDE_FILE_SUFFIXES: [&str; 3] = ["-wal", "-shm", "-journal"];
 
 /// How a store is opened for reading without writing to it or next to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ReadMode {
+pub(in crate::sqlite) enum ReadMode {
     /// No side file exists, so the main file holds every committed page; SQLite is told the file
     /// cannot change, so it creates no `-shm` or `-wal` and takes no locks.
     Immutable,
@@ -25,13 +25,13 @@ pub(super) enum ReadMode {
 /// The observable state of a store file, compared around an immutable read to detect a writer
 /// that started meanwhile.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Fingerprint {
+pub(in crate::sqlite) struct Fingerprint {
     length: u64,
     modified: Option<SystemTime>,
     side_files: Vec<PathBuf>,
 }
 
-pub(super) fn side_file(path: &Path, suffix: &str) -> PathBuf {
+pub(in crate::sqlite) fn side_file(path: &Path, suffix: &str) -> PathBuf {
     let mut name = path.as_os_str().to_os_string();
     name.push(suffix);
     PathBuf::from(name)
@@ -48,7 +48,7 @@ fn existing_side_files_blocking(path: &Path) -> Result<Vec<PathBuf>, StoreError>
     Ok(found)
 }
 
-pub(super) fn fingerprint_blocking(path: &Path) -> Result<Fingerprint, StoreError> {
+pub(in crate::sqlite) fn fingerprint_blocking(path: &Path) -> Result<Fingerprint, StoreError> {
     let metadata = fs::metadata(path).map_err(io_error("inspect", path))?;
     Ok(Fingerprint {
         length: metadata.len(),
@@ -57,7 +57,7 @@ pub(super) fn fingerprint_blocking(path: &Path) -> Result<Fingerprint, StoreErro
     })
 }
 
-pub(super) fn read_mode_blocking(path: &Path) -> Result<ReadMode, StoreError> {
+pub(in crate::sqlite) fn read_mode_blocking(path: &Path) -> Result<ReadMode, StoreError> {
     if cfg!(unix) && existing_side_files_blocking(path)?.is_empty() {
         Ok(ReadMode::Immutable)
     } else {
@@ -65,7 +65,7 @@ pub(super) fn read_mode_blocking(path: &Path) -> Result<ReadMode, StoreError> {
     }
 }
 
-pub(super) fn open_read_only_blocking(
+pub(in crate::sqlite) fn open_read_only_blocking(
     path: &Path,
     mode: ReadMode,
 ) -> Result<Connection, StoreError> {
@@ -99,14 +99,14 @@ fn uri_path(path: &Path) -> String {
 }
 
 /// Resolve an existing store to the canonical absolute path reported back to the operator.
-pub(super) fn canonical_blocking(path: &Path) -> Result<PathBuf, StoreError> {
+pub(in crate::sqlite) fn canonical_blocking(path: &Path) -> Result<PathBuf, StoreError> {
     fs::canonicalize(path).map_err(io_error("resolve", path))
 }
 
 /// Resolve a target that does not exist yet through its canonical parent directory, refusing
 /// names SQLite reserves for side files: SQLite would read such a file as part of, or delete it
 /// together with, the database it belongs to.
-pub(super) fn target_path_blocking(to: &Path) -> Result<PathBuf, StoreError> {
+pub(in crate::sqlite) fn target_path_blocking(to: &Path) -> Result<PathBuf, StoreError> {
     let Some(name) = to.file_name() else {
         return Err(StoreError::InvalidTarget {
             path: to.to_path_buf(),
@@ -133,7 +133,7 @@ pub(super) fn target_path_blocking(to: &Path) -> Result<PathBuf, StoreError> {
 
 /// Create the target exclusively, after checking that no stale side file would be read as part of
 /// the new database.
-pub(super) fn create_target_blocking(to: &Path) -> Result<(), StoreError> {
+pub(in crate::sqlite) fn create_target_blocking(to: &Path) -> Result<(), StoreError> {
     if let Some(side) = existing_side_files_blocking(to)?.into_iter().next() {
         return Err(StoreError::TargetExists { path: side });
     }
@@ -151,7 +151,7 @@ pub(super) fn create_target_blocking(to: &Path) -> Result<(), StoreError> {
 
 /// Remove a target this command created after a failed copy; the copy failure is the actionable
 /// error, and a leftover file is reported as `TargetExists` on the next attempt instead.
-pub(super) fn discard_blocking(to: &Path) {
+pub(in crate::sqlite) fn discard_blocking(to: &Path) {
     for path in SIDE_FILE_SUFFIXES
         .iter()
         .map(|suffix| side_file(to, suffix))

@@ -175,7 +175,7 @@ fn corrupt_revision_and_lifecycle_are_rejected_on_load() {
     store
         .connection
         .execute(
-            "UPDATE plan_state SET revision = 0, plan_json = ?1",
+            "UPDATE plan_state SET revision = 0, snapshot_json = ?1",
             [serde_json::to_string(&plan).expect("json")],
         )
         .expect("corrupt state");

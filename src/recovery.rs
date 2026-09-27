@@ -37,18 +37,14 @@ fn present_blocking(label: &str, report: &IntegrityReport, json: bool) -> Result
     if json {
         return output::json_blocking(report);
     }
-    let baseline = if report.origin_revision.is_none() {
-        " (history origin not yet recorded; the next write upgrades the schema and records it)"
-    } else {
-        ""
-    };
     output::text_blocking(&format!(
-        "{label} {}\nworkspace {} ({})\nrevision {}, {} operations, schema version {}{baseline}\nintegrity ok",
+        "{label} {}\nworkspace {} ({})\nrevision {}, {} operations from genesis revision {}, schema version {}\nintegrity ok; replaying the history reproduces the snapshot",
         report.path.display(),
         report.workspace_name,
         report.workspace_id,
         report.revision,
         report.operation_count,
+        report.genesis_revision,
         report.schema_version,
     ))
 }

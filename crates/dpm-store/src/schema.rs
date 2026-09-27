@@ -2,13 +2,14 @@
 //!
 //! Policy: every accepted header value names one exact layout, compared object by object against
 //! `sqlite_master`, so a planted trigger, view or index is refused before any statement that could
-//! fire it. Version 2 is the `plan_state` + `operations` + `history_origin` layout. Headers 0 (the
-//! unversioned baseline) and 1 name the same layout without `history_origin`; such a store is read
-//! as is and upgraded by its next write transaction, which records the origin it derives from the
-//! history, so read-only commands never write. A newer version is refused before any write. A
-//! future layout change raises the version, adds an upgrade that runs inside the first write
-//! transaction, and must also change the layout in a way that binaries predating the version
-//! header fail on, because those binaries never read the header.
+//! fire it. Version 3 is the only layout this binary reads or writes: the `plan_state` snapshot,
+//! the `operations` log of entity-level plan deltas, and the `genesis` plan every operation
+//! replays from. Versions 1 and 2, and a header of 0 over DPM tables, name retired layouts whose
+//! logs record whole proposed plans and cannot be replayed; they are refused with guidance and
+//! never modified. A newer version is refused before any write. A future layout change raises the
+//! version and must also change the layout in a way that binaries predating the version header
+//! fail on, because those binaries never read the header: they read `plan_state.plan_json`, which
+//! this layout names `snapshot_json`.
 
 use crate::{StoreError, error::database_error};
 use rusqlite::Connection;
@@ -17,19 +18,17 @@ use std::path::Path;
 mod layout;
 
 /// Database layout version this binary reads and writes.
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
-const BASELINE_VERSION: i64 = 0;
-const ORIGINLESS_VERSION: i64 = 1;
+/// Header of a new SQLite file, and of stores written before the version header existed.
+const UNSTAMPED_VERSION: i64 = 0;
 
 /// Table layout found in a database whose version this binary accepts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Layout {
     /// No schema objects yet: a new file awaiting initialization.
     Empty,
-    /// Snapshot and operation tables written before history origins were recorded.
-    Originless,
-    /// The current layout, including the recorded history origin.
+    /// Snapshot, delta operation log and genesis plan.
     Current,
 }
 
@@ -42,14 +41,28 @@ pub(crate) fn stored_version_blocking(
         .map_err(database_error(path, "read schema version"))
 }
 
-/// Reject unknown versions and any layout other than the exact one the version names, using reads
-/// only.
+/// Reject retired, unknown and altered layouts using reads only.
 pub(crate) fn check_blocking(connection: &Connection, path: &Path) -> Result<Layout, StoreError> {
     let found = stored_version_blocking(connection, path)?;
-    let (expected, unstamped) = match found {
-        BASELINE_VERSION => (Layout::Originless, true),
-        ORIGINLESS_VERSION => (Layout::Originless, false),
-        SCHEMA_VERSION => (Layout::Current, false),
+    let retired = || StoreError::RetiredSchemaVersion {
+        path: path.to_path_buf(),
+        found,
+        current: SCHEMA_VERSION,
+    };
+    match found {
+        SCHEMA_VERSION => {}
+        UNSTAMPED_VERSION => {
+            let objects = layout::objects_blocking(connection, path)?;
+            if objects.is_empty() {
+                return Ok(Layout::Empty);
+            }
+            // DPM tables under an unstamped header were written before the version header.
+            if !layout::has_table(&objects, "plan_state") {
+                layout::compare(path, found, &objects, layout::expected())?;
+            }
+            return Err(retired());
+        }
+        1..SCHEMA_VERSION => return Err(retired()),
         _ => {
             return Err(StoreError::UnsupportedSchemaVersion {
                 path: path.to_path_buf(),
@@ -57,14 +70,10 @@ pub(crate) fn check_blocking(connection: &Connection, path: &Path) -> Result<Lay
                 supported: SCHEMA_VERSION,
             });
         }
-    };
-    let objects = layout::objects_blocking(connection, path)?;
-    // Only an unstamped file may be empty; a stamped header without tables was not written by DPM.
-    if objects.is_empty() && unstamped {
-        return Ok(Layout::Empty);
     }
-    layout::compare(path, found, &objects, layout::expected(expected))?;
-    Ok(expected)
+    let objects = layout::objects_blocking(connection, path)?;
+    layout::compare(path, found, &objects, layout::expected())?;
+    Ok(Layout::Current)
 }
 
 /// Create the current tables in an empty database and stamp its version, inside a caller-owned
@@ -75,20 +84,9 @@ pub(crate) fn create_blocking(connection: &Connection, path: &Path) -> Result<()
             "{}; {}; {}; PRAGMA user_version = {SCHEMA_VERSION};",
             layout::PLAN_STATE,
             layout::OPERATIONS,
-            layout::HISTORY_ORIGIN
+            layout::GENESIS
         ))
         .map_err(database_error(path, "initialize schema"))
-}
-
-/// Add the history origin table to an originless store and stamp the current version, inside a
-/// caller-owned write transaction so the upgrade commits or rolls back with that write.
-pub(crate) fn upgrade_blocking(connection: &Connection, path: &Path) -> Result<(), StoreError> {
-    connection
-        .execute_batch(&format!(
-            "{}; PRAGMA user_version = {SCHEMA_VERSION};",
-            layout::HISTORY_ORIGIN
-        ))
-        .map_err(database_error(path, "upgrade schema"))
 }
 
 #[cfg(test)]

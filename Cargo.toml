@@ -63,7 +63,9 @@ ratatui = "0.30"
 roxmltree = "0.21"
 rusqlite = { version = "0.37", features = ["bundled", "backup"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+# Store replay compares plans decoded from stored JSON text; correctly rounded float parsing keeps
+# them bit-exact with the plans that were written.
+serde_json = { version = "1.0", features = ["float_roundtrip"] }
 toml = "0.9"
 thiserror = "2.0"
 tracing = "0.1"

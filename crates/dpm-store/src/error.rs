@@ -54,10 +54,12 @@ pub enum StoreError {
     #[error("snapshot does not match operation {0}")]
     SnapshotMismatch(dpm_model::OperationId),
     /// Stored revision metadata disagrees with the serialized plan.
-    #[error("corrupt snapshot at {path}: row revision {row}, JSON revision {json}")]
+    #[error("corrupt {record} at {path}: row revision {row}, JSON revision {json}")]
     CorruptSnapshot {
-        /// Database containing the inconsistent snapshot.
+        /// Database containing the inconsistent plan.
         path: PathBuf,
+        /// Snapshot or genesis plan.
+        record: StoredRecord,
         /// Revision in the SQLite row.
         row: u64,
         /// Revision inside the plan JSON.
@@ -76,6 +78,21 @@ pub enum StoreError {
         found: i64,
         /// Newest version this binary understands.
         supported: i64,
+    },
+    /// The store was written in a retired layout whose operation log cannot be replayed.
+    #[error(
+        "store at {path} has schema version {found}, which this dpm no longer opens (it writes \
+         version {current}); nothing was written. Back it up and keep it as the archive of its \
+         history, run `dpm export` with the dpm release that wrote it, and import that export \
+         into a new store with `dpm import <file>`"
+    )]
+    RetiredSchemaVersion {
+        /// Database carrying the version.
+        path: PathBuf,
+        /// Version recorded in the store header; 0 for DPM tables without a header.
+        found: i64,
+        /// Version this binary writes.
+        current: i64,
     },
     /// The file is SQLite but its tables are not a DPM store layout.
     #[error("{path} is not a DPM store: {detail}")]
@@ -180,9 +197,9 @@ pub enum StoreError {
         /// Next sequence found.
         sequence: u64,
     },
-    /// The store records where its history starts, but no operation leads to the snapshot.
+    /// No operation leads from the genesis plan to the snapshot.
     #[error(
-        "history of {path} is empty, but the snapshot moved from origin revision {origin} to {snapshot}"
+        "history of {path} is empty, but the snapshot moved from genesis revision {origin} to {snapshot}"
     )]
     MissingHistory {
         /// Inspected database.
@@ -192,11 +209,35 @@ pub enum StoreError {
         /// Revision of the stored snapshot.
         snapshot: u64,
     },
-    /// A store in the current layout has a snapshot but no recorded history origin.
-    #[error("{path} has a snapshot but no recorded history origin")]
-    MissingOrigin {
+    /// A store has a snapshot but no genesis plan to replay its history from.
+    #[error("{path} has a snapshot but no genesis plan")]
+    MissingGenesis {
         /// Inspected database.
         path: PathBuf,
+    },
+    /// The engine refuses a recorded operation when the history is replayed from genesis.
+    #[error("replaying the history of {path} fails at sequence {sequence}: {source}")]
+    ReplayRefused {
+        /// Inspected database.
+        path: PathBuf,
+        /// Local append sequence of the refused operation.
+        sequence: u64,
+        /// Engine refusal.
+        #[source]
+        source: EngineError,
+    },
+    /// Replaying genesis and every operation does not reproduce the stored snapshot.
+    #[error(
+        "replaying the history of {path} to revision {revision} does not reproduce the snapshot; \
+         differing: {}", differing.join(", ")
+    )]
+    ReplayDiverged {
+        /// Inspected database.
+        path: PathBuf,
+        /// Revision of the stored snapshot.
+        revision: u64,
+        /// Top-level plan fields whose replayed value differs from the snapshot.
+        differing: Vec<String>,
     },
     /// Backup and restore targets must be a plain database file name in an existing directory.
     #[error("cannot write a store to {path}: {reason}")]
@@ -218,8 +259,8 @@ pub enum StoredRecord {
         /// Local append sequence.
         sequence: u64,
     },
-    /// The recorded revision the operation history starts from.
-    Origin,
+    /// The plan the operation history replays from.
+    Genesis,
 }
 
 impl std::fmt::Display for StoredRecord {
@@ -227,7 +268,7 @@ impl std::fmt::Display for StoredRecord {
         match self {
             Self::Snapshot => formatter.write_str("snapshot"),
             Self::Operation { sequence } => write!(formatter, "operation sequence {sequence}"),
-            Self::Origin => formatter.write_str("history origin"),
+            Self::Genesis => formatter.write_str("genesis plan"),
         }
     }
 }
@@ -244,7 +285,9 @@ impl StoreError {
             | Self::CorruptColumn { .. }
             | Self::SequenceGap { .. }
             | Self::MissingHistory { .. }
-            | Self::MissingOrigin { .. }
+            | Self::MissingGenesis { .. }
+            | Self::ReplayRefused { .. }
+            | Self::ReplayDiverged { .. }
             | Self::UnrecognizedSchema { .. } => true,
             Self::Database { source, .. } => matches!(
                 source.sqlite_error_code(),
