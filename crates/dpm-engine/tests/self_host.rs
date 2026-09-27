@@ -245,3 +245,33 @@ fn mvp_prerequisites_match_the_approved_scope_and_later_work_stays_gated() {
         assert!(!detail.ready);
     }
 }
+
+/// Seed text is copied into live stores, where gates get decided; a sentence that states a gate's
+/// current resolution would become false there, so text naming a decision must not assert its state.
+#[test]
+fn seed_text_naming_a_decision_stays_true_whether_or_not_it_is_decided() {
+    let plan = fixture();
+    let stateful = [
+        "unresolved",
+        "undecided",
+        "is open",
+        "remains open",
+        "still open",
+        "is decided",
+        "was decided",
+        "is resolved",
+        "has been decided",
+    ];
+    for work in plan.work_items.values() {
+        for text in [&work.title, &work.objective] {
+            let named = plan.decisions.values().any(|d| text.contains(&d.key.0));
+            let lower = text.to_lowercase();
+            let asserted: Vec<_> = stateful.iter().filter(|s| lower.contains(*s)).collect();
+            assert!(
+                !named || asserted.is_empty(),
+                "{}: {text:?} asserts {asserted:?}",
+                work.key
+            );
+        }
+    }
+}

@@ -21,7 +21,7 @@
       "parent": null,
       "kind": "WorkPackage",
       "title": "DPM prepared roadmap",
-      "objective": "Prepared contracts only; DEC-EXECUTE is unresolved and forbids starting work.",
+      "objective": "Deliver the prepared DPM roadmap through its task contracts; no task starts until DEC-EXECUTE records the user's explicit authorization.",
       "acceptance": [],
       "status": "Planned",
       "reported_progress_percent": 0,
