@@ -1,4 +1,4 @@
-//! File handling for recovery: target validation, SQLite side files and truly read-only opens.
+//! File handling for recovery: target validation, SQLite side files and read-only durable data.
 
 use crate::{StoreError, error::database_error};
 use rusqlite::{Connection, OpenFlags};
@@ -11,14 +11,14 @@ use std::{
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const SIDE_FILE_SUFFIXES: [&str; 3] = ["-wal", "-shm", "-journal"];
 
-/// How a store is opened for reading without writing to it or next to it.
+/// How persistent database and WAL contents are opened read-only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::sqlite) enum ReadMode {
     /// No side file exists, so the main file holds every committed page; SQLite is told the file
     /// cannot change, so it creates no `-shm` or `-wal` and takes no locks.
     Immutable,
     /// Side files exist, so committed pages may live in the WAL; SQLite reads through the side
-    /// files that are already there.
+    /// files. SQLite may create or refresh the transient shared-memory index.
     Shared,
 }
 

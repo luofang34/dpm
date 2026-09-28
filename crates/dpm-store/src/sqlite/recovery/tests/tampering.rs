@@ -88,9 +88,8 @@ fn damaged_json_is_corruption_naming_the_file_and_record() {
     for error in [
         verify_store_blocking(&snapshot).expect_err("damaged snapshot"),
         SqliteStore::open_existing_blocking(&snapshot)
-            .expect("open")
-            .load_blocking()
-            .expect_err("load"),
+            .err()
+            .expect("refused before read-write open"),
     ] {
         assert!(error.is_corruption(), "{error}");
         let message = error.to_string();

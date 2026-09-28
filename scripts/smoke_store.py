@@ -5,6 +5,7 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import threading
 from pathlib import Path
@@ -171,6 +172,36 @@ def retired(directory, backup):
         assert not list(directory.glob(f'retired-{version}.sqlite-*'))
 
 
+
+def unsupported_plan_wal(directory, backup):
+    """A crashed writer's committed WAL must survive rejected plan formats byte for byte."""
+    for table, column in [('plan_state', 'snapshot_json'), ('genesis', 'plan_json')]:
+        old = directory / f'format2-{table}.sqlite'
+        shutil.copyfile(backup, old)
+        writer = """
+import os, sqlite3, sys
+connection = sqlite3.connect(sys.argv[1])
+connection.execute('PRAGMA journal_mode=WAL')
+connection.execute('PRAGMA wal_autocheckpoint=0')
+connection.execute(sys.argv[2])
+connection.commit()
+os._exit(0)
+"""
+        sql = f"UPDATE {table} SET {column} = json_set({column}, '$.format_version', 2)"
+        subprocess.run([sys.executable, '-c', writer, str(old), sql], check=True, timeout=15)
+        paths = [Path(str(old) + suffix) for suffix in ('', '-wal', '-shm')]
+        before = {path: path.read_bytes() for path in paths[:2]}
+        assert paths[2].exists()
+        for arguments in [('status', '--no-simulation'), ('history',), ('export',),
+                          ('claim', 'TEST-B'), ('backup', '--to', directory / 'old-backup.sqlite')]:
+            failure = cli('--database', old, *arguments, error='corrupt_store')['error']['message']
+            assert 'unsupported plan format 2' in failure and 'Preserve the original database' in failure, failure
+            assert {path: path.read_bytes() for path in paths[:2]} == before, arguments
+            # SQLite may refresh the transient shared index even through a read-only connection.
+            assert paths[2].exists(), arguments
+        assert not (directory / 'old-backup.sqlite').exists()
+
+
 def golden(directory):
     """The checked-in store an earlier build wrote must still verify, replay included."""
     path = directory / 'golden.sqlite'
@@ -210,6 +241,7 @@ if __name__ == '__main__':
         backup = round_trip(directory, live)
         damage(directory, backup)
         versions(directory, backup)
+        unsupported_plan_wal(directory, backup)
         golden(directory)
         discovered(directory)
     print('PASS: newer and retired schema versions refused unchanged with guidance, consistent backups '

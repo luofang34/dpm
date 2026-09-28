@@ -61,8 +61,8 @@ impl SqliteStore {
         connection
             .busy_timeout(Duration::from_secs(5))
             .map_err(database_error(&path, "set busy timeout"))?;
-        // Opening writes nothing, so an unsupported or refused store is left byte-for-byte
-        // untouched; schema creation happens inside the initializing write transaction.
+        // Refused formats are checked before this read-write connection opens; schema creation
+        // happens inside the initializing write transaction.
         schema::check_blocking(&connection, &path)?;
         connection
             .execute_batch("PRAGMA foreign_keys = ON;")
@@ -186,7 +186,10 @@ fn check_existing_read_only_blocking(path: &Path) -> Result<(), StoreError> {
     }
     let mode = files::read_mode_blocking(path)?;
     let connection = files::open_read_only_blocking(path, mode)?;
-    schema::check_blocking(&connection, path)?;
+    if schema::check_blocking(&connection, path)? == Layout::Current {
+        snapshot::load_blocking(&connection, path)?;
+        snapshot::genesis_blocking(&connection, path)?;
+    }
     Ok(())
 }
 
