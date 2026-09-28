@@ -288,6 +288,8 @@ evidence, reviews and recorded events), and `schedule` (priority and three-point
 Identity, title and hierarchy stay at the work root. `order` is a lexicographic array of unsigned
 16-bit digits; it must have 1–128 digits and end in a nonzero digit. `SiblingOrder::between` inserts
 without changing neighbours; concurrent equal positions use the stable work ID to break ties.
+Serialized dependencies require explicit stable IDs; missing or null IDs are rejected. Editing a
+relation or lag retains its ID. Unknown asset fields are rejected instead of being discarded.
 The plan's `assets` registry and `contract.assets` describe repositories/folders/documents, not labor.
 CLI flags use `--asset` / `--asset-key`, and locator version 3 uses `asset`. API version 9 exposes
 these grouped values consistently in CLI and MCP. Execution commands and their arguments are unchanged.

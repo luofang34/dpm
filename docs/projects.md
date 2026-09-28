@@ -172,6 +172,8 @@ Workspace assets name repositories, folders, documents and tools, not labor or r
 A plan's `assets` map gives repositories, folders, document collections and other assets stable
 IDs. Tasks may name zero, one or several read/write requirements. Keys, labels and remotes do not
 replace asset identity. These requirements describe work scope, not filesystem permissions.
+Shared repository addresses reject embedded passwords, HTTP tokens and secret parameters; SSH
+login names remain usable. Credentials and local paths belong in device configuration.
 All readiness and ranking queries still consider the full workspace graph; `next --asset-key KEY`
 only narrows the returned list after that and reports eligible work outside it ([scoped next](mcp.md#scoped-next)).
 

@@ -912,6 +912,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "id",
         "predecessor",
         "successor",
         "kind",
@@ -919,8 +920,7 @@
       ],
       "properties": {
         "id": {
-          "$ref": "#/$defs/Id",
-          "description": "Stable edge identity; derived from predecessor, successor and kind when omitted."
+          "$ref": "#/$defs/Id"
         },
         "predecessor": {
           "$ref": "#/$defs/Id"

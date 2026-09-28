@@ -58,7 +58,7 @@ def with_excluded_package(directory):
     task = {**copy.deepcopy(quote), 'id': task_id, 'key': 'X-A1', 'title': 'Onboard supplier A',
             'parent': package_id, 'contract': {**quote['contract'], 'condition': {'decision': supplier_id(plan), 'option': 'A'}}}
     items[package_id], items[task_id] = package, task
-    plan['dependencies'].append({'predecessor': quote['id'], 'successor': task_id, 'kind': 'FinishStart',
+    plan['dependencies'].append({'id': str(uuid.UUID(int=0x0d << 96 | 0x53)), 'predecessor': quote['id'], 'successor': task_id, 'kind': 'FinishStart',
                                  'lag_hours': 0.0})
     path = Path(directory) / 'conditional-package.json'
     path.write_text(json.dumps(plan))

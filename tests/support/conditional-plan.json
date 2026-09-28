@@ -444,52 +444,68 @@
   "risks": {},
   "dependencies": [
     {
-      "predecessor": "0000000d-0000-4000-8000-000000000001",
-      "successor": "0000000d-0000-4000-8000-000000000003",
+      "id": "f9a6db48-ab7f-8fd8-9297-95bd88962634",
       "kind": "FinishStart",
-      "lag_hours": 0.0
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "0000000d-0000-4000-8000-000000000001",
+      "successor": "0000000d-0000-4000-8000-000000000003"
     },
     {
-      "predecessor": "0000000d-0000-4000-8000-000000000001",
-      "successor": "0000000d-0000-4000-8000-000000000007",
+      "id": "2f8e962b-3e2a-8d3c-b183-b9858ce6e3ea",
       "kind": "FinishStart",
-      "lag_hours": 0.0
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "0000000d-0000-4000-8000-000000000001",
+      "successor": "0000000d-0000-4000-8000-000000000007"
     },
     {
+      "id": "db251d51-dc57-8587-a44b-c41c5f29cafb",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
       "predecessor": "0000000d-0000-4000-8000-000000000003",
-      "successor": "0000000d-0000-4000-8000-000000000005",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
+      "successor": "0000000d-0000-4000-8000-000000000005"
     },
     {
+      "id": "b41976fc-5cfb-8d61-a2cf-606a92037852",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
       "predecessor": "0000000d-0000-4000-8000-000000000007",
-      "successor": "0000000d-0000-4000-8000-000000000008",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
+      "successor": "0000000d-0000-4000-8000-000000000008"
     },
     {
+      "id": "e2a54dbf-3f1b-8462-a803-bd86ee44e077",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
       "predecessor": "0000000d-0000-4000-8000-000000000005",
-      "successor": "0000000d-0000-4000-8000-000000000009",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
+      "successor": "0000000d-0000-4000-8000-000000000009"
     },
     {
+      "id": "13205ae2-08a2-8dd5-a934-a494c802e121",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
       "predecessor": "0000000d-0000-4000-8000-000000000008",
-      "successor": "0000000d-0000-4000-8000-000000000009",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
+      "successor": "0000000d-0000-4000-8000-000000000009"
     },
     {
+      "id": "3b84e05d-3fdd-8850-ad40-a950bf3d04d8",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
       "predecessor": "0000000d-0000-4000-8000-000000000009",
-      "successor": "0000000d-0000-4000-8000-000000000010",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
+      "successor": "0000000d-0000-4000-8000-000000000010"
     },
     {
-      "predecessor": "0000000d-0000-4000-8000-000000000003",
-      "successor": "0000000d-0000-4000-8000-000000000011",
+      "id": "1248164c-e68d-8a78-a49b-087d13de4c26",
       "kind": "FinishStart",
-      "lag_hours": 0.0
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "0000000d-0000-4000-8000-000000000003",
+      "successor": "0000000d-0000-4000-8000-000000000011"
     }
   ]
 }

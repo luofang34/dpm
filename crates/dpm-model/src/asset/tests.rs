@@ -62,7 +62,7 @@ fn asset_identity_survives_renames_and_contract_references_are_validated() {
 }
 
 #[test]
-fn remotes_with_embedded_passwords_cannot_enter_a_shared_plan() {
+fn credential_free_remotes_are_portable_without_losing_ssh_login_names() {
     let mut plan: Plan = serde_json::from_str(include_str!(
         "../../../../tests/support/execution-plan.json"
     ))
@@ -72,6 +72,17 @@ fn remotes_with_embedded_passwords_cannot_enter_a_shared_plan() {
         ("https://example.invalid/org/repo.git", true),
         ("git@example.invalid:org/repo.git", true),
         ("ssh://git@example.invalid/org/repo.git", true),
+        ("ssh://alice@example.invalid:22/org/repo.git", true),
+        ("alice@example.invalid:org/repo.git", true),
+        ("https://example.invalid/org/repo.git?branch=main", true),
+        ("https://EXAMPLE_TOKEN@example.invalid/org/repo.git", false),
+        (
+            "https://example.invalid/org/repo.git?access_token=EXAMPLE",
+            false,
+        ),
+        ("https://user%3AEXAMPLE@example.invalid/org/repo.git", false),
+        ("https://example.invalid/org/repo.git#token=EXAMPLE", false),
+        ("alice@example.invalid:org/repo.git?%74oken=EXAMPLE", false),
         ("https://user:token@example.invalid/org/repo.git", false),
         ("ssh://user:secret@example.invalid:22/repo.git", false),
     ] {
@@ -80,4 +91,12 @@ fn remotes_with_embedded_passwords_cannot_enter_a_shared_plan() {
         };
         assert_eq!(plan.validate().is_ok(), accepted, "{remote}");
     }
+}
+
+#[test]
+fn asset_variant_fields_are_never_silently_dropped() {
+    let unknown = serde_json::json!({"GitRepository": {
+        "remotes": [], "unrecognized_policy": "must-not-disappear"
+    }});
+    assert!(serde_json::from_value::<AssetKind>(unknown).is_err());
 }

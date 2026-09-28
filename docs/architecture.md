@@ -261,8 +261,8 @@ Independence differs by command because the acts differ:
 A holder is the current owner or any actor that owned the task before a handoff or gave back a
 claim on it (`WorkItem::held_by`). Evidence is attached to a task only by its current owner, because
 an evidence author is not an independent reviewer: whoever wrote the proof would be judging it.
-Planning sources (artifacts with `metadata.role = planning_source`, which arrive through reviewed
-plans as context) are not evidence and do not disqualify their author; `AttachArtifact` refuses that
+Planning sources (artifacts with `metadata.role = planning_source`, supplied in a workspace's
+initial plan as context) are not evidence and do not disqualify their author; `AttachArtifact` refuses that
 role so evidence cannot be relabelled as context.
 Verification and rejection refuse any author of evidence on the task, which also covers evidence
 imported with a snapshot. Only artifacts on the task itself count; evidence attached to a
@@ -291,8 +291,9 @@ unreached. Restoring an edge does not revoke an existing
 claim, start or submission, but it gates the successor's next governed transition and always its
 verification.
 
-Edges written without an `id` receive one derived deterministically from predecessor, successor and
-relation kind, so plans that predate edge identity load unchanged and every reload agrees. Such edges are `Hard`. Serialization always writes the identity and policy.
+Every serialized edge requires an explicit `id`. Constructors may derive an initial ID from the
+endpoints and relation, but edits retain the recorded ID; loading a plan never invents identity.
+An omitted policy means `Hard`; serialization writes both identity and policy.
 
 `links` hold typed non-gating relationships (`RelatesTo`, `Duplicates`, `DerivedFrom`,
 `Supersedes`) from a `source` to a `target` work item with an optional note. Both endpoints must
@@ -455,18 +456,13 @@ plan that must reproduce the snapshot). A divergence is reported, never repaired
 a backup, and copying a live WAL database file is unsafe;
 see [backup and restore](projects.md#backup-restore-and-verification).
 
-The store records its layout version in SQLite's `user_version` header and checks it, together with
-the exact set of schema objects that version names, on every open and again inside every write
-transaction: newer versions and altered layouts (including planted triggers, views or indexes) are
-refused untouched, and an older layout is upgraded inside its next write transaction. The current
-layout records the revision the history starts from, so verification also detects lost leading
-operations. Recovery uses `dpm backup` (SQLite online backup of one consistent snapshot, full
-
 SQLite is durable operational state, not a disposable cache of an exported plan. A workspace can
 span multiple repositories and non-code projects; Git roots affect discovery, not domain scope.
-Resources have stable IDs and explicit task requirements. Device-local workspace bindings select
-one store from multiple entry points; locators check its identity before use. Semantic plan editing,
-TOML plan interchange and sync remain task contracts available through `explain`.
+Workspace assets have stable IDs and explicit task requirements. Device-local workspace bindings
+select one store from multiple entry points; locators check its identity before use. Reviewed plan
+changes operate on this graph. A portfolio spanning independent workspaces needs explicit external
+references and an exchange protocol; matching repository names or revision numbers never merges
+workspaces. CLI TOML interchange and sync remain separate task contracts available through `explain`.
 
 ## Project-file interchange
 

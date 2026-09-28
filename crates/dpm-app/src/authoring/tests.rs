@@ -428,3 +428,13 @@ fn the_template_applies_to_an_empty_workspace_and_is_refused_elsewhere() {
     let fixture = plan(&fixture("execution"));
     assert!(plan_template(&fixture).is_err());
 }
+
+#[test]
+fn template_outline_order_is_independent_of_generated_identifiers() {
+    for _ in 0..16 {
+        let template = plan(&plan_template(&Plan::empty("Workspace")).expect("template"));
+        let order = |key| &template.find_work_by_key(key).expect("work").order;
+        assert!(order("TEMPLATE-WP") < order("TEMPLATE-DONE"));
+        assert!(order("TEMPLATE-DESIGN") < order("TEMPLATE-BUILD"));
+    }
+}

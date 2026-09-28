@@ -18,6 +18,7 @@ pub struct WorkspaceAsset {
 
 /// WorkspaceAsset category supporting both code and non-code work.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub enum AssetKind {
     /// A repository; remote URLs are attributes, not its identity.
     GitRepository {
@@ -73,7 +74,11 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), ValidationError> {
             AssetKind::GitRepository { remotes } if remotes.iter().any(|r| r.trim().is_empty()) => {
                 return Err(invalid("asset remote", id, "address cannot be empty"));
             }
-            AssetKind::GitRepository { remotes } if remotes.iter().any(|r| has_password(r)) => {
+            AssetKind::GitRepository { remotes }
+                if remotes
+                    .iter()
+                    .any(|r| crate::credentials::check_remote(r).is_err()) =>
+            {
                 return Err(invalid(
                     "asset remote",
                     id,
@@ -96,16 +101,6 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), ValidationError> {
         }
     }
     Ok(())
-}
-
-/// A `user:secret@` authority exports a credential; `ssh://git@host` and `git@host:path` do not.
-fn has_password(remote: &str) -> bool {
-    remote.split_once("://").is_some_and(|(_, rest)| {
-        let authority = rest.split('/').next().unwrap_or_default();
-        authority
-            .rsplit_once('@')
-            .is_some_and(|(userinfo, _)| userinfo.contains(':'))
-    })
 }
 
 #[cfg(test)]

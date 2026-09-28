@@ -7,8 +7,8 @@
 //! unless the detector flags its name or value, because real provider links carry tracking,
 //! view and permalink parameters that no allowlist can enumerate.
 
-use super::{check_text, decode};
 use crate::ExternalIdentity;
+use crate::credentials::{check_text, decode};
 use crate::tracking::canonical::canonical_instance_for;
 
 /// Validate a display URL for `identity`.

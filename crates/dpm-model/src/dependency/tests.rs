@@ -26,31 +26,25 @@ fn rejects(plan: &Plan, fragment: &str) {
 }
 
 #[test]
-fn edges_without_identity_load_with_a_stable_derived_identity_and_hard_policy() {
-    let source: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../tests/support/execution-plan.json"
-    ))
-    .expect("source");
-    assert!(source["dependencies"][0].get("id").is_none());
-    let first: Plan = serde_json::from_value(source.clone()).expect("legacy plan");
-    let second: Plan = serde_json::from_value(source).expect("legacy plan");
-    assert_eq!(first, second);
-    for edge in &first.dependencies {
-        assert_eq!(
-            edge.id,
-            Dependency::derived_id(edge.predecessor, edge.successor, edge.kind)
-        );
-        assert_eq!(edge.policy, DependencyPolicy::Hard);
-        assert!(edge.rationale.is_none() && edge.waiver.is_none());
-        let value = serde_json::to_value(edge).expect("serialize");
-        assert_eq!(value["id"], json!(edge.id));
-        assert_eq!(value["policy"], "Hard");
-        assert!(value.get("waiver").is_none() && value.get("rationale").is_none());
+fn persisted_edges_require_identity_and_keep_it_when_the_relation_changes() {
+    let plan = fixture();
+    let source = serde_json::to_value(&plan).expect("serialize");
+    for null in [false, true] {
+        let mut missing = source.clone();
+        let edge = missing["dependencies"][0].as_object_mut().expect("edge");
+        if null {
+            edge.insert("id".into(), serde_json::Value::Null);
+        } else {
+            edge.remove("id");
+        }
+        assert!(serde_json::from_value::<Plan>(missing).is_err());
     }
-    let round_trip: Plan =
-        serde_json::from_value(serde_json::to_value(&first).expect("serialize")).expect("load");
-    assert_eq!(round_trip, first);
-    first.validate().expect("legacy plan stays valid");
+    let mut edited = source;
+    edited["dependencies"][0]["kind"] = json!("StartStart");
+    let loaded: Plan = serde_json::from_value(edited).expect("explicit identity");
+    assert_eq!(loaded.dependencies[0].id, plan.dependencies[0].id);
+    assert_eq!(loaded.dependencies[0].kind, DependencyKind::StartStart);
+    loaded.validate().expect("edited relation");
 }
 
 #[test]

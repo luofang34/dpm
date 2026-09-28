@@ -91,7 +91,7 @@ pub struct DependencyWaiver {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Independently addressable temporal constraint between two work items.
-#[serde(from = "DependencyRecord")]
+#[serde(deny_unknown_fields)]
 pub struct Dependency {
     /// Stable edge identity; unique within the plan.
     pub id: DependencyId,
@@ -104,6 +104,7 @@ pub struct Dependency {
     /// Positive values add delay; negative values are lead time.
     pub lag_hours: f64,
     /// Whether the constraint may be waived.
+    #[serde(default)]
     pub policy: DependencyPolicy,
     /// Predecessor result that releases the successor's start; changed only by reviewed plan change.
     #[serde(default, skip_serializing_if = "StartBasis::is_verified")]
@@ -114,44 +115,6 @@ pub struct Dependency {
     /// Present while a soft constraint is set aside; changed only by waive/restore commands.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub waiver: Option<DependencyWaiver>,
-}
-
-/// Serialized form accepted on input; plans that predate edge identity omit `id` and `policy`.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DependencyRecord {
-    #[serde(default)]
-    id: Option<DependencyId>,
-    predecessor: WorkItemId,
-    successor: WorkItemId,
-    kind: DependencyKind,
-    lag_hours: f64,
-    #[serde(default)]
-    policy: DependencyPolicy,
-    #[serde(default)]
-    start_basis: StartBasis,
-    #[serde(default)]
-    rationale: Option<String>,
-    #[serde(default)]
-    waiver: Option<DependencyWaiver>,
-}
-
-impl From<DependencyRecord> for Dependency {
-    fn from(record: DependencyRecord) -> Self {
-        Self {
-            id: record.id.unwrap_or_else(|| {
-                Dependency::derived_id(record.predecessor, record.successor, record.kind)
-            }),
-            predecessor: record.predecessor,
-            successor: record.successor,
-            kind: record.kind,
-            lag_hours: record.lag_hours,
-            policy: record.policy,
-            start_basis: record.start_basis,
-            rationale: record.rationale,
-            waiver: record.waiver,
-        }
-    }
 }
 
 const FNV_OFFSET: u128 = 0x6c62_272e_07bb_0142_62b8_2175_6295_c58d;
@@ -168,10 +131,10 @@ fn avalanche(mut value: u64) -> u64 {
 }
 
 impl Dependency {
-    /// Deterministic identity for an edge serialized without one.
+    /// Deterministic identity for a newly constructed constraint.
     ///
-    /// Every load of the same stored plan, and every store replaying its operation log, must agree
-    /// on the identity, so it depends only on the ordered endpoints and relation. Validation allows
+    /// Constructors and interchange adapters must agree on a new edge's identity. Persisted edges
+    /// carry that identity explicitly and retain it when edited. Validation allows
     /// one relation of each kind per ordered pair; a hash collision would surface as a
     /// duplicate-identity validation error rather than merging two edges.
     #[must_use]

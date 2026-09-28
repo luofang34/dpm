@@ -365,46 +365,60 @@
   },
   "dependencies": [
     {
-      "predecessor": "00000007-0000-4000-8000-000000000001",
-      "successor": "00000007-0000-4000-8000-000000000002",
+      "id": "90aebd55-fb77-8b3e-817c-41fa865af4b0",
       "kind": "FinishStart",
-      "lag_hours": 0.0
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "00000007-0000-4000-8000-000000000001",
+      "successor": "00000007-0000-4000-8000-000000000002"
     },
     {
-      "predecessor": "00000007-0000-4000-8000-000000000001",
-      "successor": "00000007-0000-4000-8000-000000000004",
+      "id": "655a50ce-5cf1-8a67-9454-0b129d21dbac",
       "kind": "FinishStart",
-      "lag_hours": 0.0
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "00000007-0000-4000-8000-000000000001",
+      "successor": "00000007-0000-4000-8000-000000000004"
     },
     {
+      "id": "81d3b03f-13a9-8dbd-ade0-0540123c9b89",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
       "predecessor": "00000007-0000-4000-8000-000000000002",
-      "successor": "00000007-0000-4000-8000-000000000003",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
+      "successor": "00000007-0000-4000-8000-000000000003"
     },
     {
+      "id": "42df4c2b-00f2-89e2-b0af-87e64cd338c2",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
       "predecessor": "00000007-0000-4000-8000-000000000003",
-      "successor": "00000007-0000-4000-8000-000000000005",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
+      "successor": "00000007-0000-4000-8000-000000000005"
     },
     {
+      "id": "af819d77-5de7-8ffa-8189-d072c528639e",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
       "predecessor": "00000007-0000-4000-8000-000000000004",
-      "successor": "00000007-0000-4000-8000-000000000005",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
+      "successor": "00000007-0000-4000-8000-000000000005"
     },
     {
+      "id": "c7257497-8a0a-844f-8d06-946b8e472990",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
       "predecessor": "00000007-0000-4000-8000-000000000005",
-      "successor": "00000007-0000-4000-8000-000000000006",
-      "kind": "FinishStart",
-      "lag_hours": 0.0
+      "successor": "00000007-0000-4000-8000-000000000006"
     },
     {
-      "predecessor": "00000007-0000-4000-8000-000000000006",
-      "successor": "00000007-0000-4000-8000-000000000007",
+      "id": "e32b90ec-9e9a-89f9-b0e7-a7bdca8d6634",
       "kind": "FinishStart",
-      "lag_hours": 0.0
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "00000007-0000-4000-8000-000000000006",
+      "successor": "00000007-0000-4000-8000-000000000007"
     }
   ],
   "format_version": 3,

@@ -1,6 +1,7 @@
 //! Authoritative domain types and structural validation for execution plans.
 
 mod actor;
+mod credentials;
 mod events;
 pub use events::*;
 mod graph_index;

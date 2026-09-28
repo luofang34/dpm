@@ -53,6 +53,7 @@ def smoke(directory):
         stale = worker.call('propose_change', {'plan': changed}, error='revision_conflict')
         assert stale['message'] == run_cli(database, 'plan', 'diff', str(candidate), error='revision_conflict')['error']['message']
         reject_invalid(database, worker, reviewer, candidate, current)
+        reject_nonportable(database, worker, reviewer, candidate, current)
         history = worker.call('history', {})['data']
         assert history == run_cli(database, 'history')
         assert len(history['entries']) == 4 and history['revision'] == 4
@@ -85,7 +86,7 @@ def reject_invalid(database, worker, reviewer, candidate, current):
         elif error_case == 'cycle':
             edge = bad['dependencies'][0]
             reverse = {**edge, 'predecessor': edge['successor'], 'successor': edge['predecessor']}
-            del reverse['id']
+            reverse['id'] = str(uuid.uuid4())
             bad['dependencies'].append(reverse)
         elif error_case == 'duplicate_edge':
             bad['dependencies'].append({**bad['dependencies'][-1], 'kind': 'StartStart'})
@@ -102,6 +103,26 @@ def reject_invalid(database, worker, reviewer, candidate, current):
             assert remote['message'] == run_cli(database, 'plan', 'diff', str(candidate), error='invalid_command')['error']['message']
         remote = reviewer.call('apply_change', {'plan': bad, 'reason': 'Invalid proposal', 'base_revision': 4}, error='invalid_command')
         assert remote['message'] == run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'Invalid proposal', error='invalid_command')['error']['message']
+        assert run_cli(database, 'export') == current
+
+
+def reject_nonportable(database, worker, reviewer, candidate, current):
+    for case in ('missing_id', 'unknown_asset_field', 'credential_remote'):
+        bad = copy.deepcopy(current)
+        asset = next(iter(bad['assets'].values()))
+        if case == 'missing_id':
+            del bad['dependencies'][0]['id']
+        elif case == 'unknown_asset_field':
+            asset['kind']['GitRepository']['unrecognized_policy'] = True
+        else:
+            asset['kind']['GitRepository']['remotes'] = ['https://EXAMPLE_TOKEN@example.invalid/repo']
+        code = 'invalid_command' if case == 'credential_remote' else 'invalid_request'
+        candidate.write_text(json.dumps(bad))
+        worker.call('propose_change', {'plan': bad}, error=code)
+        run_cli(database, 'plan', 'diff', str(candidate), error=code)
+        reviewer.call('apply_change', {'plan': bad, 'reason': 'Invalid portable input',
+                                      'base_revision': 4}, error=code)
+        run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'Invalid portable input', error=code)
         assert run_cli(database, 'export') == current
 
 
