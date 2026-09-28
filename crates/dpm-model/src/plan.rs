@@ -1,7 +1,9 @@
+mod decode;
+
 use crate::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 /// Authoritative graph and revision; scheduling and completion views are derived.
 #[serde(deny_unknown_fields)]
 pub struct Plan {
