@@ -139,6 +139,37 @@ def check_rescaled_priorities(directory):
         worker.close()
 
 
+
+def check_protected_reorder(directory):
+    database = directory / 'order.sqlite'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    run_cli(database, 'claim', 'TEST-A')
+    before = run_cli(database, 'export')
+    xml = run_cli(database, 'plan', 'export-mspdi', '--project-key', 'TEST')['xml']
+    tasks = re.findall(r'<Task>.*?</Task>', xml, flags=re.S)
+    assert 'Contract A' in tasks[0] and 'Contract B' in tasks[1]
+    reordered = xml.replace(tasks[0], '__FIRST_TASK__').replace(tasks[1], tasks[0]).replace('__FIRST_TASK__', tasks[1])
+    path, candidate = directory / 'reorder.xml', directory / 'reorder.json'
+    path.write_text(reordered)
+    worker = Agent(database, 'agent:importer')
+    try:
+        local = run_cli(database, 'plan', 'import-mspdi', str(path), '--project-key', 'TEST', '--candidate', str(candidate))
+        remote = worker.call('import_mspdi', {'xml': reordered, 'project_key': 'TEST'})['data']
+        assert local == remote
+        changes = local['preview']['changes']
+        assert len(changes) == 1 and changes[0]['after']['key'] == 'TEST-B', changes
+        assert changes[0]['fields'] == ['order'], changes
+        assert run_cli(database, 'export') == before
+        run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'Move unstarted work before claimed sibling', '--actor', 'human:planner')
+        applied = run_cli(database, 'export')
+        for key, work in before['work_items'].items():
+            if work['key'] != 'TEST-B':
+                assert applied['work_items'][key] == work
+        assert worker.call('export_mspdi', {'project_key': 'TEST'})['data'] == run_cli(database, 'plan', 'export-mspdi', '--project-key', 'TEST')
+    finally:
+        worker.close()
+
+
 def smoke(directory):
     database = directory / 'interchange.sqlite'
     run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
@@ -153,6 +184,7 @@ def smoke(directory):
     finally:
         worker.close()
     check_rescaled_priorities(directory)
+    check_protected_reorder(directory)
 
 
 if __name__ == '__main__':

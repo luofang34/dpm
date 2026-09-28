@@ -1,11 +1,16 @@
-//! Preserve unaffected positions while adopting the source's sibling sequence.
+//! Preserve stable anchors while adopting the source's sibling sequence.
 
 use super::Outline;
 use crate::InterchangeError;
-use dpm_model::{Plan, SiblingOrder, WorkItemId};
-use std::collections::BTreeMap;
+use dpm_model::{OrderError, Plan, SiblingOrder, WorkItemId};
+use std::collections::{BTreeMap, BTreeSet};
+
+mod anchors;
+
+type Position = (SiblingOrder, WorkItemId);
 
 pub(super) fn assign(current: &Plan, outline: &mut Outline) -> Result<(), InterchangeError> {
+    let protected = dpm_engine::protected_work(current);
     let mut siblings: BTreeMap<Option<WorkItemId>, Vec<i64>> = BTreeMap::new();
     for report in &outline.reports {
         if let Some(work) = outline.work.get(&report.uid) {
@@ -13,40 +18,70 @@ pub(super) fn assign(current: &Plan, outline: &mut Outline) -> Result<(), Interc
         }
     }
     for uids in siblings.values() {
-        let mut previous: Option<(SiblingOrder, WorkItemId)> = None;
-        for (index, uid) in uids.iter().enumerate() {
-            let Some(work) = outline.work.get(uid) else {
-                continue;
-            };
-            let existing = current
-                .work_items
-                .get(&work.id)
-                .filter(|old| old.parent == work.parent);
-            let position = existing.map(|old| (old.order.clone(), old.id));
-            let order = if let Some((order, _)) =
-                position.filter(|p| previous.as_ref().is_none_or(|prev| prev < p))
-            {
-                order
-            } else {
-                let next = uids[index + 1..]
-                    .iter()
-                    .filter_map(|uid| outline.work.get(uid))
-                    .filter_map(|w| {
-                        current
-                            .work_items
-                            .get(&w.id)
-                            .filter(|old| old.parent == w.parent)
-                    })
-                    .map(|w| &w.order)
-                    .find(|order| previous.as_ref().is_none_or(|prev| &prev.0 < *order));
-                SiblingOrder::between(previous.as_ref().map(|p| &p.0), next)
-                    .map_err(|source| InterchangeError::OutlineOrder { uid: *uid, source })?
-            };
-            previous = Some((order.clone(), work.id));
-            if let Some(work) = outline.work.get_mut(uid) {
-                work.order = order;
+        let positions: Vec<_> = uids
+            .iter()
+            .map(|uid| {
+                let work = &outline.work[uid];
+                current
+                    .work_items
+                    .get(&work.id)
+                    .filter(|old| old.parent == work.parent)
+                    .map(|old| (old.order.clone(), old.id))
+            })
+            .collect();
+        let fixed = anchors::select(uids, &positions, &protected)?;
+        assign_positions(outline, uids, &positions, &fixed)?;
+    }
+    Ok(())
+}
+
+fn assign_positions(
+    outline: &mut Outline,
+    uids: &[i64],
+    positions: &[Option<Position>],
+    fixed: &BTreeSet<usize>,
+) -> Result<(), InterchangeError> {
+    let mut previous: Option<Position> = None;
+    let mut anchors = fixed.iter().copied().peekable();
+    for (index, uid) in uids.iter().enumerate() {
+        let work = &outline.work[uid];
+        let position = if anchors.peek() == Some(&index) {
+            anchors.next();
+            positions[index].clone()
+        } else {
+            None
+        };
+        let (order, id) = match position {
+            Some(position) => position,
+            None => {
+                let next = anchors.peek().and_then(|i| positions[*i].as_ref());
+                let order = between(previous.as_ref(), next, work.id)
+                    .map_err(|source| InterchangeError::OutlineOrder { uid: *uid, source })?;
+                (order, work.id)
             }
+        };
+        previous = Some((order.clone(), id));
+        if let Some(work) = outline.work.get_mut(uid) {
+            work.order = order;
         }
     }
     Ok(())
+}
+
+fn between(
+    left: Option<&Position>,
+    right: Option<&Position>,
+    id: WorkItemId,
+) -> Result<SiblingOrder, OrderError> {
+    if let Some((left, right)) = left.zip(right)
+        && left.0 == right.0
+    {
+        // Concurrent positions can coincide; never renumber protected neighbours to hide a conflict.
+        return if left.1 < id && id < right.1 {
+            Ok(left.0.clone())
+        } else {
+            Err(OrderError::InvalidBounds)
+        };
+    }
+    SiblingOrder::between(left.map(|p| &p.0), right.map(|p| &p.0))
 }

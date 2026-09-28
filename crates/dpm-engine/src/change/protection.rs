@@ -25,7 +25,7 @@ pub(super) fn validate(current: &Plan, proposed: &Plan) -> Result<(), EngineErro
         ));
     }
     super::policy::protect_waivers(current, proposed)?;
-    let locked = execution_basis(current);
+    let locked = protected_work(current);
     for work in current.work_items.values() {
         let next = proposed.work_items.get(&work.id);
         if locked.contains(&work.id) {
@@ -116,7 +116,10 @@ fn same_execution(a: &WorkItem, b: &WorkItem) -> bool {
     a.execution == b.execution
 }
 
-fn execution_basis(plan: &Plan) -> BTreeSet<WorkItemId> {
+/// Work whose authored contract and position are fixed by execution, including its ancestors
+/// and transitive prerequisites. Adapters may use these anchors without duplicating review policy.
+#[must_use]
+pub fn protected_work(plan: &Plan) -> BTreeSet<WorkItemId> {
     let mut locked: BTreeSet<_> = plan
         .work_items
         .values()
@@ -132,7 +135,7 @@ fn execution_basis(plan: &Plan) -> BTreeSet<WorkItemId> {
     loop {
         let mut next = locked.clone();
         for id in &locked {
-            next.extend(plan.work_items[id].parent);
+            next.extend(plan.work_items.get(id).and_then(|work| work.parent));
             next.extend(
                 plan.dependencies
                     .iter()

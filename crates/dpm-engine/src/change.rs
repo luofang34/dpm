@@ -15,6 +15,7 @@ pub(crate) use patch::authorize;
 pub use patch::{apply_plan_change, patch, plan_change};
 mod policy;
 mod protection;
+pub use protection::protected_work;
 mod replacement;
 pub use replacement::AffectedWork;
 
