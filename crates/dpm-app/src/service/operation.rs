@@ -37,9 +37,9 @@ impl Application {
         })
     }
 
-    /// Build a command from live state, unless the supplied identity is already recorded and the
-    /// request can no longer be rebuilt: a resend then answers `duplicate_operation` with the
-    /// recorded operation instead of an error about state its own first attempt changed.
+    /// Answer a failed command build with `duplicate_operation` and the recorded operation when
+    /// the supplied identity is already on the log, since the failure may only reflect state that
+    /// identity's first attempt changed; any other outcome passes through unchanged.
     pub(super) fn recorded_instead_blocking<T, E: From<AppError>>(
         &self,
         built: Result<T, E>,
