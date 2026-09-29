@@ -51,17 +51,24 @@ dpm verify-store            # the selected workspace's live store
 - `backup` copies one consistent snapshot of the live store with SQLite's online backup API while
   other processes keep writing. The file holds the snapshot, the genesis plan, the full operation
   history and the schema version in one self-contained file (no `-wal`), and is verified, replay
-  included, before the command succeeds.
-- `restore` verifies the backup, copies it to a path that must not exist yet, and verifies the
-  result. It never overwrites live state and never changes locators or device bindings: point a
-  locator's `database` at the restored file, or run `dpm workspace register --replace --database
-  NEW_PATH`, once you have checked the reported workspace identity and revision.
+  included, before the command succeeds. A backup is an archive: it keeps the source's
+  `lineage_id`, reports `archived: true`, and refuses every write with `archived_store`.
+- `restore` verifies the backup, copies it to a path that must not exist yet, gives the copy a new
+  `lineage_id` (the source keeps its own), and verifies the result. The restored store is writable
+  and continues the copied history under its new lineage, so clients that cached a revision of the
+  source with `--base-lineage` are refused rather than silently continuing a different history
+  (see [lineage](mcp.md#operation-identity-retries-and-lineage)). Operation identities recorded
+  before the backup are still answered as recorded. It never overwrites live state and never
+  changes locators or device bindings: point a locator's `database` at the restored file, or run
+  `dpm workspace register --replace --database NEW_PATH`, once you have checked the reported
+  workspace identity, lineage and revision.
 - `verify-store [PATH]` reads the store without writing to it or creating any file next to it, so it
   also works in a read-only directory. When no `-wal`, `-shm` or `-journal` file exists it opens the
   file as immutable; otherwise another process is using it or it holds committed pages in its WAL,
   and it reads through the side files that are already there.
 
-All three report canonical absolute paths. Any destination that already exists, including a
+All three report canonical absolute paths, the `lineage_id` and whether the file is `archived`.
+Copying the file by other means keeps its lineage, so such a copy is not a restore. Any destination that already exists, including a
 leftover `-wal`, `-shm` or `-journal` side file, fails with `target_exists`; a destination whose
 name itself ends in `-wal`, `-shm` or `-journal` fails with `invalid_request`, because SQLite would
 treat it as another database's side file and later delete it. Damaged files fail with
@@ -78,8 +85,9 @@ so they are CLI-only; MCP tools do not read or write arbitrary local paths.
   a missing one or an altered definition is `corrupt_store`. Statistics tables created by a manual
   `ANALYZE` are also refused. Every open checks the same layout, and every write re-checks it inside
   its transaction, so a planted trigger never runs inside a DPM write;
-- that the snapshot, the genesis plan and every operation decode, with the damaged file, record
-  (`snapshot`, `genesis plan` or `operation sequence N`) and column in the error;
+- that the snapshot, the genesis plan, the lineage and every operation decode, with the damaged
+  file, record (`snapshot`, `genesis plan`, `lineage` or `operation sequence N`) and column in the
+  error, and that every operation belongs to the genesis plan's workspace;
 - that the snapshot and the genesis plan validate and their revision columns match their JSON;
 - that local sequences have no gaps, every operation's resulting revision is its base revision + 1,
   consecutive operations chain, the first operation starts at the genesis revision (or, with no
@@ -100,8 +108,9 @@ tampering, not an adversary with write access to the file.
 The store records its layout version in SQLite's `user_version` header. Every open checks it, and
 the exact layout it names, before writing anything:
 
-- version 3 is the current layout: the snapshot, the operation log and the `genesis` plan the store
-  was initialized (or imported) with, written in the same transaction as the first snapshot;
+- version 4 is the current layout: the snapshot, the operation log (each operation with its
+  workspace and lineage, indexed by its identity), the `genesis` plan the store was initialized (or
+  imported) with, and the store's lineage, written in the same transaction as the first snapshot;
 - a newer version than this binary supports fails with `unsupported_schema_version` and leaves the
   file untouched; use the release that wrote it, and take a backup with that release before
   upgrading or downgrading;
@@ -112,6 +121,9 @@ the exact layout it names, before writing anything:
   up and keep it as the archive of its history, run `dpm export` with the release that wrote it,
   and `dpm import` that export into a new store. The new store starts its history at the exported
   revision, with the export as its genesis plan;
+- version 3 is retired the same way: it records no lineage, so neither its restored copies nor its
+  operations could be told apart from their source. Export it with the release that wrote it and
+  import the export;
 - an SQLite file with any other layout is refused rather than modified, and a refused `import` or
   `init` onto an existing store writes nothing.
 
@@ -119,8 +131,8 @@ A future layout change raises the version and either adds an upgrade that runs i
 write transaction or refuses the older version with instructions like the ones above.
 
 Compatibility policy: the version check protects only binaries that read the header. Binaries that
-know an older version refuse version 3 with `unsupported_schema_version`. Binaries from before
-versioning never read the header; they read the snapshot from `plan_state.plan_json`, which version 3
+know an older version refuse version 4 with `unsupported_schema_version`. Binaries from before
+versioning never read the header; they read the snapshot from `plan_state.plan_json`, which version 4
 names `snapshot_json`, so they fail on the first read instead of appending operations the current
 log could not replay. A future layout change whose data older binaries would misread must likewise
 change the layout in a way every older binary fails on loudly, rather than relying on the version

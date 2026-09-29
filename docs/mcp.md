@@ -11,15 +11,20 @@ omitting it can never make one caller its own reviewer.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
 Every success, CLI `--json` output and MCP `structuredContent` alike, is one envelope:
-`{"api_version": 11, "revision": N, "lineage_id": L, "data": ...}`. `revision` is the workspace revision the result
-observed, or the `resulting_revision` a mutation produced; it is `null` when the command reads no
-workspace (`validate`/`validate_plan`, `plan schema`/`plan_schema`, and the workspace bindings).
+`{"api_version": 11, "revision": N, "lineage_id": L, "data": ...}`. `revision` is the workspace
+revision the result observed, or the `resulting_revision` a mutation produced; it is `null` when the
+command reads no workspace (`validate`/`validate_plan`, `plan schema`/`plan_schema`, and the
+workspace bindings). `lineage_id` names the writable history that revision belongs to
+([lineage](#operation-identity-retries-and-lineage)); it is `null` whenever `revision` is, and for
+the read-only preview, which has no store.
 The CLI's `--json` output for a command equals its tool's `structuredContent`, and `data` is the same
 object; `export` and `plan template` print the bare document without `--json` so it can be redirected
 into a file. Every MCP mutation tool requires the observed `base_revision`, and a call without it
 is refused with `invalid_request`. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
-which the store still checks atomically. Presentation text is not the API contract.
+which the store still checks atomically. Every mutation also accepts an operation identity
+(`--operation-id` / `operation_id`) and the observed lineage (`--base-lineage` / `base_lineage`).
+Presentation text is not the API contract.
 
 This table lists every `dpm` command with its tool, or why it has none. Each tool also declares its
 command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a row differs from
@@ -299,9 +304,45 @@ record without history.
 ### History
 
 `history` returns entries in append order with a `next_after_sequence` cursor (default limit 100,
-capped at 1000). Sequence is local to the store, distinct from wrapping revision IDs. Snapshot export
-is not an operation backup; use the CLI's `backup`, `restore` and `verify-store`
-([recovery](projects.md#backup-restore-and-verification)).
+capped at 1000), the store's `lineage_id` and its `revision`. Sequence is local to the store,
+distinct from wrapping revision IDs. Each entry's `operation` is the recorded operation exactly as
+its mutation returned it. Snapshot export is not an operation backup; use the CLI's `backup`,
+`restore` and `verify-store` ([recovery](projects.md#backup-restore-and-verification)).
+
+### Operation identity, retries and lineage
+
+A mutation returns, and `history` records, one operation object: `id`, `base_revision`,
+`resulting_revision`, `actor`, `timestamp` and `command`, plus the `workspace_id` it changed and the
+`lineage_id` of the store that committed it.
+
+`id` is the operation's identity and its idempotency key. A client may supply it as a version 7 UUID
+(`--operation-id` / `operation_id`); any other UUID is `invalid_request`, and without one the
+application mints a version 7 identity. The identity is looked up before any precondition and again
+inside the write transaction:
+
+- Resending an identity with the same actor and command returns the recorded operation unchanged,
+  in the same envelope, even after later operations moved the revision or after the store was
+  restored from a backup that contains it. `base_revision` and `base_lineage` are preconditions, not
+  content: a retry may carry the revision it first observed. A resent plan change is diffed again
+  against the state the recorded change was applied to.
+- Any other actor or content under a recorded identity is `duplicate_operation`, and nothing is
+  written; `details.recorded` holds the operation recorded under that identity. Commands the adapter
+  completes from the live state resolve differently once the first attempt has committed — a handoff
+  names the owner it observed, and `attach_git_head` captures a new artifact — so their retries are
+  answered this way; `details.recorded` shows that the first attempt succeeded.
+- `store_busy` means another process held the store's write lock for longer than the store waits
+  (5 seconds). Nothing was written; retry later with the same identity, which makes the retry safe
+  whether or not an earlier attempt committed.
+
+A lineage identifies one writable history of a workspace. `init`, `import` and `demo` start one,
+`restore` starts a new one in the restored copy while the source keeps its own, and a backup is an
+archive of its source's lineage that is never written (`archived_store`); only a restore makes it
+writable again. Every envelope with a revision, `status` (`data.lineage_id`) and `history` report the
+lineage. A client that caches a revision caches its lineage too and passes both
+(`--base-revision N --base-lineage L`, or `base_revision` and `base_lineage`): a store continuing
+another lineage, such as a copy restored from an older backup that happens to be at the same
+revision, refuses the operation with `lineage_mismatch` and `details: {expected, actual}` instead of
+merging it into a different history. Reload and decide again.
 
 `plan apply` / `apply_change` take a full proposed plan, but the operation they return and record
 holds only what the review changed. Its command is

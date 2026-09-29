@@ -458,6 +458,19 @@ it exactly. The store keeps the genesis plan it was initialized or imported with
 is always the result of replaying every operation from it. Semantic merge, CRDT text collaboration
 and remote synchronization are future milestones.
 
+The operation identity is a version 7 UUID that clients may choose, and it is the idempotency key:
+the store answers a recorded identity inside the write transaction before any revision or lineage
+check, so `dpm-app` returns the recorded operation to a matching resend and refuses other content as
+a duplicate (see [the agent contract](mcp.md#operation-identity-retries-and-lineage)). Each
+recorded operation also carries the workspace it changed and the lineage of the store that
+committed it. A lineage is one writable history, minted when a store file is created for writing:
+by initialization or import, and by `restore`, whose copy gets a new lineage while the source keeps
+its own. A backup keeps its source's lineage but is an archive that refuses writes, so two writable
+stores never share a lineage and a restored copy is never mistaken for the history it was copied
+from. Revision preconditions can name the lineage they were observed in; a store continuing another
+lineage refuses the operation, since revisions of different lineages are not comparable and
+histories are never merged silently. Authenticated principal identities are a later milestone.
+
 A reviewed plan change is logged as a delta, not as the proposal. Adapters still submit a full
 proposed plan; `plan_change` validates it exactly as `propose_change` does and records the canonical
 entity-level difference: one entry per changed workspace, project, workspace asset, work item,
