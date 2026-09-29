@@ -274,3 +274,46 @@ fn chained_replacement_lists_work_that_sees_it_only_through_the_chain() {
         assert!(context.decisions.iter().any(|d| d.id == third.id), "{key}");
     }
 }
+
+fn gate_id(plan: &Plan) -> DecisionId {
+    plan.find_decision_by_key("TEST-GATE")
+        .expect("open gate")
+        .id
+}
+
+#[test]
+fn an_open_question_can_be_sharpened_and_gain_gates_but_never_loosen() {
+    let (mut plan, _) = fixture();
+    let gate = gate_id(&plan);
+    let mut refined = plan.clone();
+    {
+        let decision = refined.decisions.get_mut(&gate).expect("gate");
+        decision.question = "Which branch ships first, and what must it prove?".into();
+        decision.related_work.insert(work(&plan, "TEST-C"));
+        decision.blocks.insert(work(&plan, "TEST-E"));
+    }
+    apply(&mut plan, refined).expect("refining an open question is a reviewed change");
+    let decision = &plan.decisions[&gate];
+    assert!(decision.blocks.contains(&work(&plan, "TEST-E")));
+    assert_eq!(decision.status, DecisionStatus::Open);
+
+    let loosen = |edit: &dyn Fn(&mut Decision)| {
+        let mut proposal = plan.clone();
+        edit(proposal.decisions.get_mut(&gate).expect("gate"));
+        let mut target = plan.clone();
+        apply(&mut target, proposal).expect_err("loosening an open gate is refused");
+        assert_eq!(target, plan);
+    };
+    let task_b = work(&plan, "TEST-B");
+    loosen(&|d| {
+        d.blocks.remove(&task_b);
+    });
+    loosen(&|d| d.outcome = Some("B".into()));
+    loosen(&|d| d.status = DecisionStatus::Decided);
+    loosen(&|d| d.rationale = Some("settled".into()));
+    // TEST-A is claimed: a new gate on it would change the basis of that execution.
+    let claimed = work(&plan, "TEST-A");
+    loosen(&|d| {
+        d.blocks.insert(claimed);
+    });
+}

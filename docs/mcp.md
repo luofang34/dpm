@@ -74,8 +74,11 @@ and adds one new Decided decision whose `supersedes` names it, with a nonempty `
 `blocks`. The old outcome, rationale and sources stay intact. `explain` returns both records for
 every work item linked to either one, following `supersedes` forward, so work linked only to the old
 choice still sees its replacement.
-Open gates are resolved only by `decide`; superseding one, rewriting a prior decision, dangling or
-repeated `supersedes` links, and replacements that add gates are rejected with no state change.
+An Open decision may be refined in a reviewed change: its `question` and `related_work` may change
+and it may gain `blocks`, but not on work whose execution has begun; its existing gates, outcome,
+options and status stay as they are. Open gates are resolved only by `decide`; superseding one,
+loosening one, rewriting a Decided decision, dangling or repeated `supersedes` links, and
+replacements that add gates are rejected with no state change.
 `affected_work` in the preview lists every work item (key, kind, status) whose context contains either
 decision, including started work, so reviewers can reassess it; it never changes readiness.
 A replacement for a decision with `options` keeps the same option keys, and its outcome may select a

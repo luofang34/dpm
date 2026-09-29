@@ -24,7 +24,8 @@ pub struct AffectedWork {
     pub status: WorkStatus,
 }
 
-/// Existing decisions change only by superseding a Decided choice with a linked replacement.
+/// Existing decisions change only by superseding a Decided choice with a linked replacement, or by
+/// refining an Open question without loosening it.
 ///
 /// An Open gate is resolved only by `decide`; superseding it here would bypass that gate.
 pub(super) fn validate(
@@ -35,6 +36,15 @@ pub(super) fn validate(
     for decision in current.decisions.values() {
         match proposed.decisions.get(&decision.id) {
             Some(next) if next == decision => {}
+            Some(next) if refines_open(decision, next) => {
+                let added: BTreeSet<_> = next.blocks.difference(&decision.blocks).collect();
+                if added.iter().any(|id| locked.contains(id)) {
+                    return Err(invalid(
+                        &decision.key,
+                        "cannot add a gate to the basis of existing execution",
+                    ));
+                }
+            }
             Some(next) if supersedes_only(decision, next) => {
                 if !proposed
                     .decisions
@@ -66,6 +76,19 @@ pub(super) fn validate(
         }
     }
     Ok(())
+}
+
+/// A sharper question, more context or more gates on a still-Open decision; outcome, options and
+/// existing gates stay as they are, so nothing a reviewer or executor relies on is loosened.
+fn refines_open(before: &Decision, after: &Decision) -> bool {
+    before.status == DecisionStatus::Open
+        && after.blocks.is_superset(&before.blocks)
+        && Decision {
+            question: before.question.clone(),
+            related_work: before.related_work.clone(),
+            blocks: before.blocks.clone(),
+            ..after.clone()
+        } == *before
 }
 
 fn supersedes_only(before: &Decision, after: &Decision) -> bool {
