@@ -11,7 +11,7 @@ omitting it can never make one caller its own reviewer.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
 Every success, CLI `--json` output and MCP `structuredContent` alike, is one envelope:
-`{"api_version": 11, "revision": N, "lineage_id": L, "data": ...}`. `revision` is the workspace
+`{"api_version": 12, "revision": N, "lineage_id": L, "data": ...}`. `revision` is the workspace
 revision the result observed, or the `resulting_revision` a mutation produced; it is `null` when the
 command reads no workspace (`validate`/`validate_plan`, `plan schema`/`plan_schema`, and the
 workspace bindings). `lineage_id` names the writable history that revision belongs to
@@ -25,6 +25,13 @@ can enforce the same precondition with `--base-revision N`; without it the CLI u
 which the store still checks atomically. Every mutation also accepts an operation identity
 (`--operation-id` / `operation_id`) and the observed lineage (`--base-lineage` / `base_lineage`).
 Presentation text is not the API contract.
+
+Queries measure lag gates, the remaining hours of started work and `next` penalties from the
+current time, so two reads of one revision may differ by the time between them. The CLI's global
+`--clock RFC3339` and the `dpm-mcp --clock RFC3339` launch option evaluate queries at that instant
+instead, which makes CLI and tool results comparable exactly. The CLI refuses `--clock` on every
+command except queries (`invalid_request`), and in `dpm-mcp` mutation tools ignore it: an
+operation's timestamp is always the time it was committed.
 
 This table lists every `dpm` command with its tool, or why it has none. Each tool also declares its
 command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a row differs from
@@ -47,6 +54,7 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | plan apply FILE --reason TEXT | apply_change | Human/service applies an observed-revision proposal atomically |
 | plan import-mspdi FILE --project-key KEY | import_mspdi | [MSPDI](#microsoft-project-xml-interchange) candidate, preview and per-item report; no state change |
 | plan export-mspdi --project-key KEY | export_mspdi | One project's work as MSPDI with a report of omitted data |
+| revision | workspace_revision | Committed revision and lineage read without loading the plan; poll it before reloading other views |
 | history --after-sequence N --limit N | history | Chronological operation pages with actor, time, reason and command |
 | status | project_status | Counts and optional Monte Carlo forecast |
 | next --project-key KEY --asset-key KEY | next_work | Full-graph ranking, then [scope](#scoped-next) and limit; outside-scope work stays visible |
@@ -79,7 +87,7 @@ guard compares these values with live output.
 
 | Version | Value | Where it appears | What it versions |
 | --- | --- | --- | --- |
-| `api_version` | 11 | Every success envelope and error object of both adapters | The CLI `--json` and tool wire contract: envelope, arguments and result shapes |
+| `api_version` | 12 | Every success envelope and error object of both adapters | The CLI `--json` and tool wire contract: envelope, arguments and result shapes |
 | `result_version` | 1 | `data.result_version` of `next` / `next_work` | The ranking result's own shape, so a `next` consumer can pin it independently |
 | `format_version` | 3 | Portable plans: `export`, `import`, `validate`, proposals | The plan document; other versions are refused before any field is read |
 | `schema_version` | 4 | SQLite `user_version`; `verify-store` reports it | The local store layout; newer and retired stores are refused unchanged |
@@ -300,6 +308,13 @@ or provider names a different object, so a record carrying an observation cannot
 it — unlink it and link the other object. A removal in one reviewed change followed by a re-addition in a
 later one is indistinguishable from unlinking the last link and linking again, which starts a new
 record without history.
+
+### Revision
+
+`revision` / `workspace_revision` return `{"revision": N, "lineage_id": L}` in the usual envelope,
+read from the store's revision and lineage rows without loading or decoding the plan (for the
+preview, its plan's revision and a `null` lineage). Agents and consoles poll it and reload their
+views only when either value changes; a new `lineage_id` at any revision means another history.
 
 ### History
 

@@ -533,6 +533,37 @@ context resolves references into requirements, decisions, risks, evidence and re
 MCP execution tools add revision metadata around the same CLI JSON data. Device-registry tools
 return local configuration without a project revision.
 
+## Native and web clients
+
+`dpm-sdk` re-exports `dpm-app` as `dpm_sdk::app`, so a native or web client calls the same
+application layer as the CLI and MCP instead of reimplementing rules. Besides the JSON
+`query_blocking`, `Application` returns the engine's result types directly: `status_blocking`,
+`next_blocking`, `show_blocking`, `explain_blocking`, `export_blocking`,
+`propose_change_blocking` and `history_blocking`, each with the revision and lineage it observed.
+The JSON adapters serialize exactly these values.
+
+`revision_blocking` (CLI `revision`, tool `workspace_revision`) reads the committed revision and
+lineage without loading the plan, so a client polls it and reloads only when it changes. Within one
+process, `watch_commits` returns a channel receiving the revision and lineage of every operation
+that `Application` commits, after the commit; resends answered from the log and refused mutations
+send nothing. Commits by other processes are seen by polling.
+
+`Application` is `Send` but not `Sync`: it owns one SQLite connection. A client keeps it on one
+owner thread or actor that serializes requests, or shares it as `Arc<Mutex<Application>>`. There is
+no global instance; several applications, in one process or many, coordinate through the store's
+revision and lineage checks.
+
+Queries read "now" from a query clock, the system clock by default. A client that must reproduce a
+view pins it (`set_query_clock`, CLI `--clock`, `dpm-mcp --clock`); mutations never read it, so an
+operation's timestamp is always when it was committed.
+
+The `sqlite`, `registry` and `git` features of `dpm-app` and `dpm-sdk` are on by default, and CI
+checks the application layer without them for `aarch64-apple-ios` and `wasm32-unknown-unknown`.
+Without `sqlite` an application opens previews only: queries answer and mutations are refused as
+read-only. A request needing a left-out feature fails with the code `unsupported`, which the CLI
+and MCP, built with every feature, never return. On `wasm32-unknown-unknown` identities are drawn
+from the Web Crypto source (`uuid`'s `js` feature), so a browser build needs a JavaScript host.
+
 The Gantt page renders `deterministic_remaining` as a read-only hour-axis chart. Work packages
 roll up descendant ranges for display; a row that the `Timeline` marks not applicable shows its
 applicability state instead of a bar, read from the timeline rather than inferred from the schedule; milestones remain zero-duration points, and selecting a row

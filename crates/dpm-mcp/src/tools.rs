@@ -46,6 +46,10 @@ const NAMES: &[(&str, &str)] = &[
         "Read append-only semantic operations in chronological pages",
     ),
     (
+        "workspace_revision",
+        "Get the committed revision and lineage without loading the plan; poll it and reload other views when it changes",
+    ),
+    (
         "workspace_list",
         "List device-local workspace bindings with each store's status and any identity sharing its path",
     ),
@@ -129,7 +133,7 @@ const NAMES: &[(&str, &str)] = &[
 
 pub(crate) fn definitions() -> Vec<Value> {
     NAMES.iter().chain(ownership::NAMES.iter()).chain(validation::NAMES.iter()).map(|(name,description)| {
-        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
+        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_revision" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
         if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"start_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external"|"revalidate_basis") {
@@ -265,6 +269,7 @@ pub(crate) fn call_tool_blocking(
     }
     let query = match name {
         "export_plan" => Some(Query::Export),
+        "workspace_revision" => Some(Query::Revision),
         "plan_template" => Some(Query::PlanTemplate),
         "propose_change" => Some(Query::ProposeChange {
             plan: required(args.plan.clone(), "plan")?,

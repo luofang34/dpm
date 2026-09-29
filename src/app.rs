@@ -17,6 +17,7 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
         base_revision,
         base_lineage,
         operation_id,
+        clock,
         command,
     } = cli;
     let preconditions = Preconditions {
@@ -32,6 +33,7 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
     } else {
         Commands::Tui
     });
+    let query_clock = crate::clock::for_command(&command, clock)?;
     let root = project.as_deref().unwrap_or(&cwd);
     match command {
         Commands::Workspace { command } => {
@@ -68,7 +70,8 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
             crate::recovery::verify_blocking(&cwd, path, project, database, json)
         }
         command => {
-            let mut app = open_workspace_blocking(&cwd, project.as_deref(), database.as_deref())?;
+            let mut app = open_workspace_blocking(&cwd, project.as_deref(), database.as_deref())?
+                .with_query_clock(query_clock);
             run_open_blocking(&mut app, command, json, preconditions)
         }
     }
@@ -82,6 +85,7 @@ fn run_open_blocking(
 ) -> Result<(), CliError> {
     match command {
         Commands::Plan { command } => plan_command_blocking(app, command, json, preconditions),
+        Commands::Store(StoreCommand::Revision) => query_blocking(app, Query::Revision, json),
         Commands::Store(StoreCommand::History {
             after_sequence,
             limit,

@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::path::PathBuf;
 
 /// Application wire contract version, independent of terminal display text.
-pub const API_VERSION: u32 = 11;
+pub const API_VERSION: u32 = 12;
 
 mod request;
 pub use request::{CommandRequest, PlanChangeRequest, Query};

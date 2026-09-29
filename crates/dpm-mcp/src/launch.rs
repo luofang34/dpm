@@ -28,6 +28,10 @@ pub struct Launch {
     /// Principal recorded on every mutation: human:NAME, agent:NAME or service:NAME.
     #[arg(long, value_name = "KIND:NAME", value_parser = parse_actor)]
     pub actor: ActorId,
+    /// Evaluate every query at this RFC 3339 instant instead of the system clock, as the CLI's
+    /// `--clock` does; mutations still record the time they commit.
+    #[arg(long, value_name = "RFC3339")]
+    pub clock: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Parse `KIND:NAME`; the kind decides which independence rules apply to the principal.

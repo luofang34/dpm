@@ -12,6 +12,7 @@ pub(super) fn command(tool: &str) -> Option<&'static str> {
         "import_mspdi" => "plan import-mspdi",
         "export_mspdi" => "plan export-mspdi",
         "history" => "history",
+        "workspace_revision" => "revision",
         "project_status" => "status",
         "next_work" => "next",
         "get_work" => "show",

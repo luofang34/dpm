@@ -29,6 +29,11 @@ pub(crate) struct Cli {
     #[arg(long, global = true)]
     pub(crate) operation_id: Option<OperationId>,
 
+    /// Evaluate a query at this RFC 3339 instant instead of the system clock, so two reads of one
+    /// revision agree; mutations refuse it and record the time they commit.
+    #[arg(long, global = true, value_name = "RFC3339")]
+    pub(crate) clock: Option<chrono::DateTime<chrono::Utc>>,
+
     #[command(subcommand)]
     pub(crate) command: Option<Commands>,
 }
@@ -242,6 +247,8 @@ pub(crate) enum Commands {
 /// Operation log and store-file commands, flattened into the top-level command list.
 #[derive(Debug, Subcommand)]
 pub(crate) enum StoreCommand {
+    /// Print the committed revision and lineage without loading the plan; cheap enough to poll.
+    Revision,
     /// Read append-only semantic operations in chronological pages.
     History {
         #[arg(long, default_value_t = 0)]
