@@ -119,10 +119,12 @@ fn a_pinned_clock_makes_queries_reproducible_and_leaves_operation_times_real() {
     app.set_query_clock(QueryClock::Fixed(at + Duration::hours(1)));
     let later = explain(&app);
     let finish = |view: &Value| view["schedule"]["earliest_finish_hours"].as_f64();
-    assert_eq!(
-        finish(&first).zip(finish(&later)).map(|(a, b)| a - b),
-        Some(1.0),
-        "started work spends the hour"
+    // The hour is exact in hours; the subtraction of two projected finishes may differ in the last
+    // bit between platforms, so compare within rounding.
+    let spent = finish(&first).zip(finish(&later)).map(|(a, b)| a - b);
+    assert!(
+        spent.is_some_and(|hours| (hours - 1.0).abs() < 1e-9),
+        "started work spends the hour: {spent:?}"
     );
 
     let before = Utc::now();

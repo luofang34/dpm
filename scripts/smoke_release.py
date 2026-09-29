@@ -87,7 +87,10 @@ def exercise(root, manifest, directory):
     run('backup', '--to', str(backup), '--json')
     run('restore', '--from', str(backup), '--to', str(restored), '--json')
     assert json.loads(run('--database', str(restored), 'export')) == json.loads(run('export'))
-    assert json.loads(run('--database', str(restored), 'history', '--json')) == json.loads(run('history', '--json'))
+    # The restored copy continues the same operations under its own lineage.
+    copied, original = (json.loads(run(*database, 'history', '--json')) for database in (('--database', str(restored)), ()))
+    assert copied['data']['entries'] == original['data']['entries'], (copied, original)
+    assert copied['lineage_id'] != original['lineage_id'], (copied['lineage_id'], original['lineage_id'])
     return env
 
 
