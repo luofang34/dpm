@@ -11,9 +11,17 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+dpm-app = { path = "../dpm-app", version = "0.1.0", default-features = false }
 dpm-engine = { path = "../dpm-engine", version = "0.1.0" }
 dpm-model = { path = "../dpm-model", version = "0.1.0" }
 dpm-schedule = { path = "../dpm-schedule", version = "0.1.0" }
+
+[features]
+default = ["sqlite", "registry", "git"]
+# The features of the application layer a client target may leave out; see dpm-app.
+sqlite = ["dpm-app/sqlite"]
+registry = ["dpm-app/registry"]
+git = ["dpm-app/git"]
 
 [lints]
 workspace = true

@@ -6,26 +6,12 @@
 //! resend matching the recorded actor and content returns the recorded operation unchanged; any
 //! other content under that identity is refused, so one identity never names two changes.
 
-use super::{Application, Backing};
+use super::{Application, Backing, Intent, Preconditions, WorkspaceRevision};
 use crate::AppError;
 use chrono::Utc;
 use dpm_engine::{Command, Operation};
 use dpm_model::{ActorId, LineageId, OperationId, Plan};
 use dpm_store::{HistoryEntry, RecordedOperation, SqliteStore, StoreError};
-
-/// Client identity and preconditions shared by every mutation.
-#[derive(Debug, Clone, Copy)]
-pub(super) struct Preconditions {
-    pub(super) base_revision: u64,
-    pub(super) base_lineage: Option<LineageId>,
-    pub(super) operation_id: Option<OperationId>,
-}
-
-/// What the client asked to change, kept in the form a resend is compared in.
-pub(super) enum Intent {
-    Command(Command),
-    PlanChange { proposed: Box<Plan>, reason: String },
-}
 
 impl Application {
     pub(super) fn commit_blocking(
@@ -39,31 +25,26 @@ impl Application {
         let Backing::Database(store) = &mut self.backing else {
             return Err(AppError::ReadOnlyProject);
         };
-        if let Some(recorded) = store.recorded_operation_blocking(id)? {
-            return answer_resend(store, recorded, &actor, &intent);
+        let committed = commit_to_blocking(store, preconditions, &actor, &intent, id)?;
+        if let Committed::New(operation) = &committed {
+            self.watchers.notify(WorkspaceRevision {
+                revision: operation.operation.resulting_revision,
+                lineage_id: Some(operation.lineage_id),
+            });
         }
-        match attempt_blocking(store, preconditions, &actor, &intent, id) {
-            // A concurrent attempt with the same identity may commit between the lookup above and
-            // the checks here; its conflict or refusal must not hide that the change is recorded.
-            Err(error) if preconditions.operation_id.is_some() => {
-                match store.recorded_operation_blocking(id)? {
-                    Some(recorded) => answer_resend(store, recorded, &actor, &intent),
-                    None => Err(error),
-                }
-            }
-            outcome => outcome,
-        }
+        Ok(match committed {
+            Committed::New(operation) | Committed::Recorded(operation) => operation,
+        })
     }
 
     /// Build a command from live state, unless the supplied identity is already recorded and the
     /// request can no longer be rebuilt: a resend then answers `duplicate_operation` with the
     /// recorded operation instead of an error about state its own first attempt changed.
-    pub fn build_command_blocking<T, E: From<AppError>>(
+    pub(super) fn recorded_instead_blocking<T, E: From<AppError>>(
         &self,
+        built: Result<T, E>,
         operation_id: Option<OperationId>,
-        build: impl FnOnce(&Self) -> Result<T, E>,
     ) -> Result<T, E> {
-        let built = build(self);
         let (Err(_), Some(id), Backing::Database(store)) = (&built, operation_id, &self.backing)
         else {
             return built;
@@ -81,13 +62,44 @@ impl Application {
     }
 }
 
+/// Whether a mutation wrote a new operation or was answered with one already recorded.
+enum Committed {
+    New(RecordedOperation),
+    Recorded(RecordedOperation),
+}
+
+fn commit_to_blocking(
+    store: &mut SqliteStore,
+    preconditions: Preconditions,
+    actor: &ActorId,
+    intent: &Intent,
+    id: OperationId,
+) -> Result<Committed, AppError> {
+    if let Some(recorded) = store.recorded_operation_blocking(id)? {
+        return answer_resend(store, recorded, actor, intent).map(Committed::Recorded);
+    }
+    match attempt_blocking(store, preconditions, actor, intent, id) {
+        // A concurrent attempt with the same identity may commit between the lookup above and
+        // the checks here; its conflict or refusal must not hide that the change is recorded.
+        Err(error) if preconditions.operation_id.is_some() => {
+            match store.recorded_operation_blocking(id)? {
+                Some(recorded) => {
+                    answer_resend(store, recorded, actor, intent).map(Committed::Recorded)
+                }
+                None => Err(error),
+            }
+        }
+        outcome => outcome,
+    }
+}
+
 fn attempt_blocking(
     store: &mut SqliteStore,
     preconditions: Preconditions,
     actor: &ActorId,
     intent: &Intent,
     id: OperationId,
-) -> Result<RecordedOperation, AppError> {
+) -> Result<Committed, AppError> {
     check_lineage(store, preconditions.base_lineage)?;
     let mut plan = store.load_blocking()?.ok_or(AppError::NotInitialized)?;
     if preconditions.base_revision != plan.revision {
@@ -98,9 +110,9 @@ fn attempt_blocking(
     }
     let operation = apply(&mut plan, actor.clone(), intent, id)?;
     match store.persist_blocking(&plan, &operation, preconditions.base_lineage) {
-        Ok(entry) => Ok(entry.operation),
+        Ok(entry) => Ok(Committed::New(entry.operation)),
         Err(StoreError::DuplicateOperation { recorded }) => {
-            answer_resend(store, *recorded, actor, intent)
+            answer_resend(store, *recorded, actor, intent).map(Committed::Recorded)
         }
         Err(error) => Err(error.into()),
     }

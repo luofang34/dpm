@@ -20,12 +20,7 @@ pub fn initialize_project_blocking(root: &Path, plan: &Plan) -> Result<PathBuf, 
         let database = match project.source {
             ProjectSource::Database(database) => database,
             ProjectSource::Preview(_) => return Err(AppError::ReadOnlyProject),
-            ProjectSource::Registered => {
-                return Err(crate::RegistryError::NotBound {
-                    workspace: project.workspace,
-                }
-                .into());
-            }
+            ProjectSource::Registered => return Err(super::unbound(project.workspace)),
         };
         if exists_blocking(&database)? {
             return Err(ProjectError::AlreadyExists { path: directory }.into());

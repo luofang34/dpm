@@ -7,9 +7,11 @@ use std::{
 };
 
 mod error;
+#[cfg(feature = "sqlite")]
 mod initialization;
 pub use error::ProjectError;
 use error::io_error;
+#[cfg(feature = "sqlite")]
 pub use initialization::initialize_project_blocking;
 
 /// An explicitly configured source for a project.
@@ -105,36 +107,36 @@ impl ProjectLocation {
 
     /// Open through the application boundary without creating state on a read request.
     pub fn open_blocking(&self) -> Result<Application, AppError> {
-        let binding = if matches!(self.source, ProjectSource::Registered) {
-            Some(crate::WorkspaceRegistry::from_environment()?.resolve_blocking(self.workspace)?)
-        } else {
-            None
-        };
-        self.open_source_blocking(binding)
+        #[cfg(feature = "registry")]
+        if matches!(self.source, ProjectSource::Registered) {
+            return self
+                .open_with_registry_blocking(&crate::WorkspaceRegistry::from_environment()?);
+        }
+        self.open_source_blocking()
     }
 
     /// Open using explicitly supplied device bindings without changing process environment.
+    #[cfg(feature = "registry")]
     pub fn open_with_registry_blocking(
         &self,
         registry: &crate::WorkspaceRegistry,
     ) -> Result<Application, AppError> {
-        let binding = if matches!(self.source, ProjectSource::Registered) {
-            Some(registry.resolve_blocking(self.workspace)?)
-        } else {
-            None
-        };
-        self.open_source_blocking(binding)
+        if matches!(self.source, ProjectSource::Registered) {
+            let path = registry.resolve_blocking(self.workspace)?;
+            let app = crate::registry::open_bound_blocking(self.workspace, &path)?;
+            return self.attach_blocking(app);
+        }
+        self.open_source_blocking()
     }
 
-    fn open_source_blocking(&self, binding: Option<PathBuf>) -> Result<Application, AppError> {
+    /// Open a source named by the locator itself; a registered one needs the registry.
+    fn open_source_blocking(&self) -> Result<Application, AppError> {
         let app = match &self.source {
-            ProjectSource::Registered => {
-                let path = binding.ok_or(crate::RegistryError::NotBound {
-                    workspace: self.workspace,
-                })?;
-                crate::registry::open_bound_blocking(self.workspace, &path)
-            }
+            ProjectSource::Registered => Err(unbound(self.workspace)),
+            #[cfg(feature = "sqlite")]
             ProjectSource::Database(path) => Application::open_blocking(path),
+            #[cfg(not(feature = "sqlite"))]
+            ProjectSource::Database(_) => Err(AppError::Unsupported { feature: "sqlite" }),
             ProjectSource::Preview(path) => {
                 let text = fs::read_to_string(path).map_err(io_error("read preview plan", path))?;
                 let plan: Plan = serde_json::from_str(&text)?;
@@ -173,6 +175,17 @@ impl ProjectLocation {
     }
 }
 
+/// The refusal for a registered workspace no binding is available for.
+#[cfg_attr(not(feature = "registry"), allow(unused_variables))]
+fn unbound(workspace: WorkspaceId) -> AppError {
+    #[cfg(feature = "registry")]
+    return crate::RegistryError::NotBound { workspace }.into();
+    #[cfg(not(feature = "registry"))]
+    return AppError::Unsupported {
+        feature: "registry",
+    };
+}
+
 /// Resolve explicit adapter arguments or discover from the supplied current directory.
 /// Supplying both overrides is an error; an explicit database never consults project locators.
 pub fn open_workspace_blocking(
@@ -184,7 +197,10 @@ pub fn open_workspace_blocking(
         (Some(_), Some(_)) => Err(AppError::InvalidRequest(
             "project and database are mutually exclusive".into(),
         )),
+        #[cfg(feature = "sqlite")]
         (None, Some(path)) => Application::open_blocking(start.join(path)),
+        #[cfg(not(feature = "sqlite"))]
+        (None, Some(_)) => Err(AppError::Unsupported { feature: "sqlite" }),
         (Some(root), None) => ProjectLocation::at_blocking(start.join(root))?.open_blocking(),
         (None, None) => ProjectLocation::discover_blocking(start)?.open_blocking(),
     }

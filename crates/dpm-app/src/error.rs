@@ -6,6 +6,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum AppError {
     /// Local workspace binding failed.
+    #[cfg(feature = "registry")]
     #[error(transparent)]
     Registry(#[from] crate::RegistryError),
     /// Invalid or missing project locator.
@@ -35,9 +36,11 @@ pub enum AppError {
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     /// Git process could not be launched.
+    #[cfg(feature = "git")]
     #[error("run git: {0}")]
     GitIo(#[source] std::io::Error),
     /// Git command failed.
+    #[cfg(feature = "git")]
     #[error("git {args} failed: {message}")]
     Git {
         /// Read-only Git arguments.
@@ -46,8 +49,16 @@ pub enum AppError {
         message: String,
     },
     /// Git output was not valid UTF-8.
+    #[cfg(feature = "git")]
     #[error("git output is not UTF-8: {0}")]
     GitEncoding(#[from] std::string::FromUtf8Error),
+    /// This build leaves out the feature the request needs, such as a SQLite store on a client
+    /// target that only opens previews.
+    #[error("this build of DPM leaves out the {feature} feature")]
+    Unsupported {
+        /// Cargo feature of `dpm-app` the request needs.
+        feature: &'static str,
+    },
     /// Database exists but contains no initialized plan.
     #[error("workspace is not initialized")]
     NotInitialized,
@@ -106,11 +117,14 @@ impl AppError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::Project(error) => error.code(),
+            #[cfg(feature = "registry")]
             Self::Registry(error) => error.code(),
+            Self::Unsupported { .. } => "unsupported",
             Self::ReadOnlyProject => "read_only_project",
             Self::Conflict { .. }
             | Self::Engine(dpm_engine::EngineError::RevisionConflict { .. })
             | Self::Store(dpm_store::StoreError::RevisionConflict { .. }) => "revision_conflict",
+            #[cfg(feature = "git")]
             Self::GitIo(_) | Self::Git { .. } | Self::GitEncoding(_) => "git_error",
             Self::DuplicateOperation { .. }
             | Self::Store(dpm_store::StoreError::DuplicateOperation { .. }) => {

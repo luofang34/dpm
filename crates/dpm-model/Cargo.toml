@@ -13,6 +13,10 @@ serde.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
 
+# Browser clients mint identities from the Web Crypto source; wasm32 has no operating-system RNG.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+uuid = { workspace = true, features = ["js"] }
+
 [dev-dependencies]
 serde_json.workspace = true
 

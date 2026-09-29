@@ -4,7 +4,7 @@
 //! history, change no revision and never touch device bindings or project locators.
 
 use super::{Application, Backing};
-use crate::{AppError, ProjectLocation, ProjectSource, WorkspaceRegistry};
+use crate::{AppError, ProjectLocation, ProjectSource};
 use dpm_store::IntegrityReport;
 use std::path::{Path, PathBuf};
 
@@ -52,9 +52,15 @@ pub fn store_path_blocking(
     };
     match location.source {
         ProjectSource::Database(path) => Ok(path),
+        #[cfg(feature = "registry")]
         ProjectSource::Registered => {
-            Ok(WorkspaceRegistry::from_environment()?.resolve_blocking(location.workspace)?)
+            Ok(crate::WorkspaceRegistry::from_environment()?
+                .resolve_blocking(location.workspace)?)
         }
+        #[cfg(not(feature = "registry"))]
+        ProjectSource::Registered => Err(AppError::Unsupported {
+            feature: "registry",
+        }),
         ProjectSource::Preview(path) => Err(AppError::InvalidRequest(format!(
             "project reads the preview plan {}; it has no store to verify",
             path.display()

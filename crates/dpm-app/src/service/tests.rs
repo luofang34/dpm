@@ -1,5 +1,7 @@
 #![allow(clippy::expect_used)]
 use super::*;
+use dpm_model::ActorId;
+use std::collections::BTreeSet;
 
 #[test]
 fn revision_conflicts_and_independent_verification_are_atomic() {
