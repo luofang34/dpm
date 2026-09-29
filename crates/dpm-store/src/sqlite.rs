@@ -1,3 +1,4 @@
+use crate::StoreLineage;
 use crate::{
     StoreError,
     error::database_error,
@@ -14,11 +15,10 @@ use std::{
 mod history;
 mod integrity;
 mod lineage;
-pub use lineage::StoreLineage;
 mod recovery;
 use recovery::files;
 mod replay;
-pub use history::{HistoryEntry, HistoryPage, RecordedOperation};
+pub(crate) use crate::{HistoryEntry, RecordedOperation};
 pub use recovery::{IntegrityReport, restore_store_blocking, verify_store_blocking};
 mod snapshot;
 mod snapshot_cache;
@@ -97,6 +97,24 @@ impl SqliteStore {
             return Ok(None);
         }
         lineage::read_blocking(&self.connection, &self.path).map(Some)
+    }
+
+    /// The committed revision and its lineage, read in one transaction without the snapshot text,
+    /// so polling for changes costs two row reads; `None` for an uninitialized store.
+    pub fn revision_blocking(&self) -> Result<Option<crate::StoreRevision>, StoreError> {
+        if schema::check_blocking(&self.connection, &self.path)? == Layout::Empty {
+            return Ok(None);
+        }
+        let transaction = self
+            .connection
+            .unchecked_transaction()
+            .map_err(database_error(&self.path, "begin revision query"))?;
+        let revision = snapshot::revision_blocking(&transaction, &self.path)?;
+        let lineage = lineage::read_blocking(&transaction, &self.path)?;
+        transaction
+            .commit()
+            .map_err(database_error(&self.path, "finish revision query"))?;
+        Ok(revision.map(|revision| crate::StoreRevision { revision, lineage }))
     }
 
     /// The plan as it stood before the operation at local sequence `sequence`, replayed from the

@@ -1,51 +1,14 @@
 use super::{
-    SqliteStore, lineage, load_blocking,
-    snapshot::{column, decode, revision_from_sql},
+    SqliteStore, lineage,
+    snapshot::{column, decode, load_cached_blocking, revision_from_sql},
 };
-use crate::{StoreError, StoredRecord, error::database_error};
+use crate::{
+    HistoryEntry, HistoryPage, RecordedOperation, StoreError, StoredRecord, error::database_error,
+};
 use dpm_engine::Operation;
-use dpm_model::{LineageId, OperationId, WorkspaceId};
+use dpm_model::OperationId;
 use rusqlite::{Connection, OptionalExtension, params};
-use serde::{Deserialize, Serialize};
 use std::path::Path;
-
-/// A committed operation with the workspace and writable history it was recorded in; mutation
-/// results and history entries return the same object, so a resent operation is answered with
-/// exactly what the first attempt returned.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecordedOperation {
-    /// Identity, actor, timestamp, revision precondition and semantic command.
-    #[serde(flatten)]
-    pub operation: Operation,
-    /// Workspace the operation changed.
-    pub workspace_id: WorkspaceId,
-    /// Lineage of the store that committed it; a restored store keeps the lineages of the
-    /// operations it copied and records later ones under its own.
-    pub lineage_id: LineageId,
-}
-
-/// One immutable operation addressed by its local append order.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HistoryEntry {
-    /// Local database cursor, independent of wrapping domain revisions.
-    pub sequence: u64,
-    /// The recorded operation.
-    pub operation: RecordedOperation,
-}
-
-/// A bounded operation page read with a consistent authoritative revision.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HistoryPage {
-    /// Revision visible in the same SQLite transaction.
-    pub revision: u64,
-    /// Lineage the store continues, within which the revision is meaningful; absent only for a
-    /// page an adapter builds without a store.
-    pub lineage_id: Option<LineageId>,
-    /// Operations in ascending append order.
-    pub entries: Vec<HistoryEntry>,
-    /// Last returned sequence, suitable for the next request; unchanged for an empty page.
-    pub next_after_sequence: u64,
-}
 
 impl SqliteStore {
     /// Read at most 1000 operations after a local sequence cursor without modifying history.
@@ -58,7 +21,9 @@ impl SqliteStore {
             .connection
             .unchecked_transaction()
             .map_err(database_error(&self.path, "begin history query"))?;
-        let plan = load_blocking(&transaction, &self.path)?
+        // The page's revision comes from the snapshot in this transaction; the decode cache makes
+        // that a byte comparison while the snapshot is unchanged.
+        let plan = load_cached_blocking(&transaction, &self.path, &self.cache)?
             .ok_or_else(|| StoreError::NotInitialized(self.path.clone()))?;
         let lineage = lineage::read_blocking(&transaction, &self.path)?;
         let mut entries = Vec::new();

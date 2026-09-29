@@ -7,20 +7,10 @@
 //! that remembers the lineage next to a revision notices when a path now names another history.
 
 use super::snapshot::{column, decode};
-use crate::{LineageError, StoreError, StoredRecord, error::database_error};
+use crate::{LineageError, StoreError, StoreLineage, StoredRecord, error::database_error};
 use dpm_model::LineageId;
 use rusqlite::{Connection, params};
-use serde::{Deserialize, Serialize};
 use std::path::Path;
-
-/// The lineage row of one store file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StoreLineage {
-    /// Writable history this file continues.
-    pub lineage_id: LineageId,
-    /// A backup archive, refused for writing until restored into a new store.
-    pub archived: bool,
-}
 
 /// What a copied file becomes before it is closed.
 #[derive(Debug, Clone, Copy)]
@@ -93,27 +83,5 @@ pub(super) fn seal_blocking(
         Err(StoreError::Lineage(LineageError::Missing {
             path: path.to_path_buf(),
         }))
-    }
-}
-
-impl StoreLineage {
-    /// Refuse a write to an archive, or to a lineage other than the one the caller observed.
-    pub fn check_writable(
-        &self,
-        expected: Option<LineageId>,
-        path: &Path,
-    ) -> Result<(), LineageError> {
-        if self.archived {
-            return Err(LineageError::Archived {
-                path: path.to_path_buf(),
-            });
-        }
-        match expected {
-            Some(expected) if expected != self.lineage_id => Err(LineageError::Mismatch {
-                expected,
-                actual: self.lineage_id,
-            }),
-            _ => Ok(()),
-        }
     }
 }

@@ -44,6 +44,24 @@ pub(super) fn decode<T: serde::de::DeserializeOwned>(
     })
 }
 
+/// The snapshot's revision column alone; the JSON beside it is neither read nor decoded.
+pub(super) fn revision_blocking(
+    connection: &Connection,
+    path: &Path,
+) -> Result<Option<u64>, StoreError> {
+    let mut statement = connection
+        .prepare("SELECT revision FROM plan_state WHERE singleton = 1")
+        .map_err(database_error(path, "prepare revision query"))?;
+    let mut rows = statement
+        .query([])
+        .map_err(database_error(path, "read revision"))?;
+    let Some(row) = rows.next().map_err(database_error(path, "read revision"))? else {
+        return Ok(None);
+    };
+    let revision = column(row, 0, path, StoredRecord::Snapshot, "revision")?;
+    Ok(Some(revision_from_sql(revision)))
+}
+
 pub(super) fn load_blocking(
     connection: &Connection,
     path: &Path,

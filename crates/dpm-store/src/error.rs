@@ -7,6 +7,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum StoreError {
     /// SQLite failed while accessing the named database.
+    #[cfg(feature = "sqlite")]
     #[error("{action} in {path}: {source}")]
     Database {
         /// Database location or the in-memory label.
@@ -175,6 +176,7 @@ pub enum StoreError {
         source: serde_json::Error,
     },
     /// A stored column holds a value of the wrong type.
+    #[cfg(feature = "sqlite")]
     #[error("corrupt {record} {field} in {path}: {source}")]
     CorruptColumn {
         /// Database containing the record.
@@ -347,7 +349,6 @@ impl StoreError {
             | Self::SnapshotRevisionMismatch { .. }
             | Self::CorruptSnapshot { .. }
             | Self::CorruptJson { .. }
-            | Self::CorruptColumn { .. }
             | Self::SequenceGap { .. }
             | Self::MissingHistory { .. }
             | Self::MissingGenesis { .. }
@@ -356,6 +357,9 @@ impl StoreError {
             | Self::ReplayRefused { .. }
             | Self::ReplayDiverged { .. }
             | Self::UnrecognizedSchema { .. } => true,
+            #[cfg(feature = "sqlite")]
+            Self::CorruptColumn { .. } => true,
+            #[cfg(feature = "sqlite")]
             Self::Database { source, .. } => matches!(
                 source.sqlite_error_code(),
                 Some(rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase)
@@ -367,16 +371,18 @@ impl StoreError {
     /// Whether another connection held the database lock past the busy timeout; retrying later
     /// may succeed, and nothing was written.
     pub fn is_busy(&self) -> bool {
-        matches!(
-            self,
-            Self::Database { source, .. } if matches!(
+        #[cfg(feature = "sqlite")]
+        if let Self::Database { source, .. } = self {
+            return matches!(
                 source.sqlite_error_code(),
                 Some(rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked)
-            )
-        )
+            );
+        }
+        false
     }
 }
 
+#[cfg(feature = "sqlite")]
 pub(crate) fn database_error(
     path: &std::path::Path,
     action: &'static str,
