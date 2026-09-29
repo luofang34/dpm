@@ -1,7 +1,8 @@
 //! Provisional bases survive restart and concurrent writers through the public application API.
 #![allow(clippy::expect_used, clippy::panic)]
 
-use dpm_app::{AppError, Application, CommandRequest, Query};
+use chrono::{DateTime, Utc};
+use dpm_app::{AppError, Application, CommandRequest, Query, QueryClock};
 use dpm_engine::Command;
 use dpm_model::{ActorId, DependencyId, Plan, StartBasis, WorkItemId};
 use serde_json::Value;
@@ -48,22 +49,18 @@ fn ok(app: &mut Application, actor: &ActorId, command: Command) {
     run(app, actor, command).unwrap_or_else(|e| panic!("{label}: {e}"));
 }
 
-/// Every derived view an adapter can request for both tasks, at one revision.
-///
-/// Forecast hours are left out: started work contributes only what remains at the query's own
-/// clock reading, so two reads of one revision differ by the time between them.
-fn views(app: &Application) -> Value {
+/// Every derived view an adapter can request for both tasks, at one revision and one clock
+/// reading: started work contributes only what remains at that reading, so equal readings of one
+/// revision are equal views, forecasts included.
+fn views(app: &mut Application, at: DateTime<Utc>) -> Value {
+    app.set_query_clock(QueryClock::Fixed(at));
     let query = |query| app.query_blocking(query).expect("query").data;
-    let mut views = serde_json::json!({
+    let views = serde_json::json!({
         "a": query(Query::Explain { key: "TEST-A".into() }),
         "b": query(Query::Explain { key: "TEST-B".into() }),
         "status": query(Query::Status { probabilistic: false }),
         "revision": app.plan_blocking().expect("plan").revision,
     });
-    for key in ["a", "b"] {
-        views[key]["schedule"] = Value::Null;
-    }
-    views["status"]["expected_finish_hours"] = Value::Null;
     views
 }
 
@@ -90,8 +87,9 @@ fn submit(work: WorkItemId) -> Command {
     Command::Submit { work, note: None }
 }
 
-/// B starts on A's first attempt, which is then rejected; returns every view at that point.
-fn start_on_rejected_attempt(app: &mut Application, ids: Ids) -> Value {
+/// B starts on A's first attempt, which is then rejected; returns every view at that point and
+/// the clock reading they were taken at.
+fn start_on_rejected_attempt(app: &mut Application, ids: Ids) -> (Value, DateTime<Utc>) {
     let (a, b) = (ids.a, ids.b);
     let decide = Command::Decide {
         decision: app.decision_id_blocking("TEST-GATE").expect("gate"),
@@ -113,7 +111,8 @@ fn start_on_rejected_attempt(app: &mut Application, ids: Ids) -> Value {
         reason: "fails acceptance".into(),
     };
     ok(app, &ActorId::human("reviewer"), reject);
-    let rejected = views(app);
+    let at = Utc::now();
+    let rejected = views(app, at);
     let [gate] = flagged(&rejected).try_into().expect("B flagged");
     assert_eq!(
         (gate["attempt"].as_u64(), gate["current_attempt"].as_u64()),
@@ -133,7 +132,7 @@ fn start_on_rejected_attempt(app: &mut Application, ids: Ids) -> Value {
         ),
         (Some("TEST-B"), Some("invalidated"))
     );
-    rejected
+    (rejected, at)
 }
 
 #[test]
@@ -142,11 +141,11 @@ fn rejection_resubmission_and_revalidation_survive_restart_and_concurrent_writer
     let path = directory.path().join("state.sqlite");
     let (mut app, ids) = initialize(&path);
     let reviewer = ActorId::human("reviewer");
-    let rejected = start_on_rejected_attempt(&mut app, ids);
+    let (rejected, rejected_at) = start_on_rejected_attempt(&mut app, ids);
     drop(app);
     app = Application::open_blocking(&path).expect("reopen");
     assert_eq!(
-        views(&app),
+        views(&mut app, rejected_at),
         rejected,
         "every view is identical after restart"
     );
@@ -159,7 +158,8 @@ fn rejection_resubmission_and_revalidation_survive_restart_and_concurrent_writer
     ok(&mut app, &reviewer, verify);
     drop(app);
     app = Application::open_blocking(&path).expect("reopen");
-    let verified = views(&app);
+    let verified_at = Utc::now();
+    let verified = views(&mut app, verified_at);
     let [gate] = flagged(&verified)
         .try_into()
         .expect("still flagged after A2 verified");
@@ -184,7 +184,7 @@ fn rejection_resubmission_and_revalidation_survive_restart_and_concurrent_writer
     let by_agent = run(&mut app, &agent, revalidate(ids, 2)).expect_err("agent");
     assert_eq!(by_agent.code(), "invalid_command");
     assert_eq!(
-        views(&app),
+        views(&mut app, verified_at),
         verified,
         "refused revalidations change nothing"
     );
@@ -200,7 +200,8 @@ fn rejection_resubmission_and_revalidation_survive_restart_and_concurrent_writer
     let lost = other.execute_blocking(request);
     assert!(matches!(lost, Err(AppError::Conflict { .. })), "{lost:?}");
     drop((app, other));
-    let revalidated = views(&Application::open_blocking(&path).expect("reopen"));
+    let mut reopened = Application::open_blocking(&path).expect("reopen");
+    let revalidated = views(&mut reopened, Utc::now());
     assert!(flagged(&revalidated).is_empty());
     assert_eq!(revalidated["status"]["basis_invalidated"], 0);
     assert_eq!(revalidated["revision"].as_u64(), Some(before + 1));

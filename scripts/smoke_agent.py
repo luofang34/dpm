@@ -5,6 +5,7 @@ import os
 import subprocess
 import tempfile
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,12 +33,13 @@ MCP = release_binary('dpm-mcp', 'DPM_MCP_BIN')
 
 
 class Agent:
-    def __init__(self, database, actor, *, cwd=ROOT, project=None, env=None):
+    def __init__(self, database, actor, *, cwd=ROOT, project=None, env=None, clock=None):
         selection = ['--db', str(database)] if database is not None else []
         if project is not None:
             selection = ['--project', str(project)]
+        pinned = ['--clock', clock] if clock is not None else []
         self.process = subprocess.Popen(
-            [str(MCP), *selection, '--actor', actor],
+            [str(MCP), *selection, '--actor', actor, *pinned],
             cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True,
         )
@@ -83,7 +85,7 @@ REVIEW_COMMANDS = {'verify', 'reject', 'ratify', 'decide', 'waive-dependency', '
 
 def with_actor(args):
     rest = [str(a) for a in args]
-    while rest and rest[0] in {'--base-revision', '--base-lineage', '--operation-id', '--project', '--database', '--db'}:
+    while rest and rest[0] in {'--base-revision', '--base-lineage', '--operation-id', '--clock', '--project', '--database', '--db'}:
         rest = rest[2:]
     command = rest[:2] if rest[:1] == ['plan'] else rest[:1]
     if '--actor' in rest or not command:
@@ -118,6 +120,12 @@ def run_cli_envelope(database, *args, error=None):
     return value
 
 
+def pinned_clock():
+    """A query clock one minute from now: later than every operation recorded so far, and one
+    instant for every query given it, so CLI and tool views of started work compare exactly."""
+    return (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+
+
 def run_cli(database, *args, error=None):
     """The `--json` error object, or the success data inside its envelope."""
     value = run_cli_envelope(database, *args, error=error)
@@ -132,13 +140,14 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'validate_plan', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register'} == names
+        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'validate_plan', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register', 'workspace_revision'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),
             ('next_work', {'capabilities': ['unrelated']}, ('next', '--capability', 'unrelated')),
             ('get_work', {'key': 'TEST-A'}, ('show', 'TEST-A')),
             ('explain_work', {'key': 'TEST-B'}, ('explain', 'TEST-B')),
+            ('workspace_revision', {}, ('revision',)),
         ]
         for tool, arguments, command in pairs:
             # The whole result is shared: version, observed revision and data.
@@ -193,6 +202,12 @@ def smoke(database):
             remote = worker.call(tool, {'key': 'TEST-A', 'base_revision': 1, **arguments}, error='invalid_command')
             local = run_cli(database, *command, error='invalid_command')['error']
             assert remote['message'] == local['message'] and 'has not started' in local['message']
+        polled = worker.call('workspace_revision', {})
+        assert polled == run_cli_envelope(database, 'revision') and polled['revision'] == 1, polled
+        assert polled['data'] == {'revision': 1, 'lineage_id': polled['lineage_id']} and polled['lineage_id']
+        # A pinned clock is for queries; a mutation records the time it commits.
+        refused = run_cli(database, '--clock', pinned_clock(), 'start', 'TEST-A', error='invalid_request')['error']
+        assert '--clock' in refused['message'], refused
         reviewer.call('start_work', {'key': 'TEST-A', 'base_revision': 1}, error='invalid_command')
         started = worker.call('start_work', {'key': 'TEST-A', 'base_revision': 1})['data']
         assert started['command'] == {'Start': {'work': claim['command']['Claim']['work']}}
@@ -206,8 +221,13 @@ def smoke(database):
         assert shown == run_cli(database, 'show', 'TEST-A')
         assert shown['progress'] == {'percent_complete': 50.0, 'verified': False}
         assert shown['execution']['reported_progress_percent'] == 50 and shown['execution']['status'] == 'InProgress'
-        summary = worker.call('project_status', {})['data']
-        assert same_at_nearby_clocks(summary, run_cli(database, 'status')) and summary['progress']['percent_complete'] > 0
+        at = pinned_clock()
+        observer = Agent(database, 'agent:parity', clock=at)
+        try:
+            summary = observer.call('project_status', {})['data']
+        finally:
+            observer.close()
+        assert summary == run_cli(database, '--clock', at, 'status') and summary['progress']['percent_complete'] > 0
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
         worker.call('attach_git_head', {'key': 'TEST-A', 'asset': 'TEST-REPO', 'base_revision': 4})
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')
@@ -259,8 +279,13 @@ def review_smoke(directory):
         run_cli(database, 'submit', 'TEST-A', '--actor', 'agent:worker')
         review = reviewer.call('reject_work', {'key': 'TEST-A', 'reason': 'Missing acceptance evidence', 'base_revision': 4})
         assert review['data']['command']['Reject']['reason'] == 'Missing acceptance evidence'
-        detail = worker.call('explain_work', {'key': 'TEST-A'})['data']
-        assert same_at_nearby_clocks(detail, run_cli(database, 'explain', 'TEST-A'))
+        at = pinned_clock()
+        observer = Agent(database, 'agent:worker', clock=at)
+        try:
+            detail = observer.call('explain_work', {'key': 'TEST-A'})['data']
+        finally:
+            observer.close()
+        assert detail == run_cli(database, '--clock', at, 'explain', 'TEST-A')
         assert detail['work']['execution']['status'] == 'InProgress'
         assert detail['work']['execution']['last_rejection']['reason'] == 'Missing acceptance evidence'
         assert 'submitted_at' not in detail['work']['execution']['events'] and detail['work']['execution']['events']['started_at']
@@ -470,19 +495,6 @@ def timing_plan(kind, lag, legacy=False):
     return plan
 
 
-def same_at_nearby_clocks(left, right, key=''):
-    """Equal views taken at two clock readings: forecast hours measured from each reading while a
-    lag elapses or started work runs may differ by the time between the calls, as may a `next`
-    score through its float penalty, and nothing else may differ."""
-    if isinstance(left, dict) and isinstance(right, dict):
-        return left.keys() == right.keys() and all(same_at_nearby_clocks(left[k], right[k], k) for k in left)
-    if isinstance(left, list) and isinstance(right, list):
-        return len(left) == len(right) and all(same_at_nearby_clocks(a, b, key) for a, b in zip(left, right))
-    if (key.endswith('_hours') or key == 'score') and isinstance(left, (int, float)) and isinstance(right, (int, float)):
-        return abs(left - right) < 0.01
-    return left == right
-
-
 def timing_smoke(directory):
     """Elapsed-lag gates, start events and unknown legacy times read identically through CLI and MCP."""
     fixture = directory / 'lag.json'
@@ -497,9 +509,14 @@ def timing_smoke(directory):
         [gate] = awaiting['gates']['unmet']
         assert (gate['relation'], gate['requires'], gate['release']) == ('StartStart', 'start', {'state': 'awaiting_event'})
         started = run_cli(database, 'start', 'TEST-A', '--actor', 'agent:timing')
-        elapsing = worker.call('explain_work', {'key': 'TEST-B'})['data']
-        assert same_at_nearby_clocks(elapsing, run_cli(database, 'explain', 'TEST-B')) and not elapsing['ready']
-        # The forecast opens B with the gate: 24h after A's recorded start, not 24h after now.
+        at = pinned_clock()
+        observer = Agent(database, 'agent:timing', clock=at)
+        try:
+            elapsing = observer.call('explain_work', {'key': 'TEST-B'})['data']
+        finally:
+            observer.close()
+        assert elapsing == run_cli(database, '--clock', at, 'explain', 'TEST-B') and not elapsing['ready']
+        # The forecast opens B with the gate: 24h after A's recorded start, not 24h after the clock.
         assert 23.9 < elapsing['schedule']['earliest_start_hours'] < 24.0, elapsing['schedule']
         [gate] = elapsing['gates']['unmet']
         assert gate['release']['state'] == 'elapsing' and gate['release']['event_at'] == started['timestamp']

@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from smoke_agent import ROOT, Agent, run_cli, same_at_nearby_clocks
+from smoke_agent import ROOT, Agent, pinned_clock, run_cli
 
 
 def provisional_plan():
@@ -17,14 +17,19 @@ def provisional_plan():
     return plan
 
 
-def same_views(worker, database):
-    """Every query view is the same JSON through both adapters, up to the forecast hours started work
-    spends between the two reads; returns B's explanation."""
-    detail = worker.call('explain_work', {'key': 'TEST-B'})['data']
-    assert same_at_nearby_clocks(detail, run_cli(database, 'explain', 'TEST-B'))
-    assert same_at_nearby_clocks(worker.call('explain_work', {'key': 'TEST-A'})['data'], run_cli(database, 'explain', 'TEST-A'))
-    assert same_at_nearby_clocks(worker.call('project_status', {'probabilistic': False})['data'], run_cli(database, 'status', '--no-simulation'))
-    assert same_at_nearby_clocks(worker.call('next_work', {'probabilistic': False})['data'], run_cli(database, 'next', '--deterministic-only'))
+def same_views(database, at=None):
+    """Every query view is the same JSON through both adapters at one pinned clock reading (a new
+    one unless `at` repeats an earlier reading); returns B's explanation."""
+    at = at or pinned_clock()
+    observer = Agent(database, 'agent:builder', clock=at)
+    try:
+        detail = observer.call('explain_work', {'key': 'TEST-B'})['data']
+        assert detail == run_cli(database, '--clock', at, 'explain', 'TEST-B')
+        assert observer.call('explain_work', {'key': 'TEST-A'})['data'] == run_cli(database, '--clock', at, 'explain', 'TEST-A')
+        assert observer.call('project_status', {'probabilistic': False})['data'] == run_cli(database, '--clock', at, 'status', '--no-simulation')
+        assert observer.call('next_work', {'probabilistic': False})['data'] == run_cli(database, '--clock', at, 'next', '--deterministic-only')
+    finally:
+        observer.close()
     return detail
 
 
@@ -45,7 +50,7 @@ def provisional_smoke(directory):
     try:
         for revision, tool in enumerate(['claim_work', 'start_work', 'submit_work']):
             author.call(tool, {'key': 'TEST-A', 'base_revision': revision})
-        claimable = same_views(builder, database)
+        claimable = same_views(database)
         assert claimable['ready'] and [r['attempt'] for r in claimable['gates']['provisional']] == [1]
         reliance = 'provisional: TEST-A attempt #1 is only submitted'
         assert any(reliance in reason for reason in claimable['why_now'])
@@ -53,12 +58,13 @@ def provisional_smoke(directory):
         assert any(reliance in reason for reason in candidate['reasons'])
         builder.call('claim_work', {'key': 'TEST-B', 'base_revision': 3})
         run_cli(database, 'start', 'TEST-B', '--actor', 'agent:builder')
-        started = same_views(builder, database)
+        started = same_views(database)
         assert [(b['attempt'], b['source']['kind']) for b in started['work']['execution']['basis']] == [(1, 'start')]
         verify_gate = [g for g in started['transitions']['verify']['unmet'] if g['type'] == 'dependency']
         assert verify_gate[0]['start_basis'] == 'Provisional' and 'accepts_submission' not in verify_gate[0]
         reviewer.call('reject_work', {'key': 'TEST-A', 'reason': 'fails acceptance', 'base_revision': 5})
-        rejected = same_views(builder, database)
+        rejected_at = pinned_clock()
+        rejected = same_views(database, rejected_at)
         [gate] = flagged(rejected)
         assert (gate['attempt'], gate['current_attempt'], gate['state']['state']) == (1, None, 'invalidated')
         assert run_cli(database, 'status', '--no-simulation')['basis_invalidated'] == 1
@@ -78,17 +84,17 @@ def provisional_smoke(directory):
             else:
                 command = [*command, *extra]
             assert remote['message'] == run_cli(database, *command, error=code)['error']['message'], arguments
-        assert same_at_nearby_clocks(same_views(builder, database), rejected), 'refused revalidations change nothing'
+        assert same_views(database, rejected_at) == rejected, 'refused revalidations change nothing'
         author.call('submit_work', {'key': 'TEST-A', 'base_revision': 6})
         run_cli(database, 'verify', 'TEST-A', '--actor', 'human:reviewer')
-        verified = same_views(builder, database)
+        verified = same_views(database)
         [gate] = flagged(verified)
         assert (gate['attempt'], gate['current_attempt']) == (1, 2), 'a later verification never validates B'
         stale = reviewer.call('revalidate_basis', {'key': 'TEST-B', 'dependency': edge, 'attempt': 1, 'reason': 'ok', 'base_revision': 8}, error='invalid_command')
         assert 'current unrejected attempt is #2' in stale['message']
         done = reviewer.call('revalidate_basis', {'key': 'TEST-B', 'dependency': edge, 'attempt': 2, 'reason': 'B matches A2', 'base_revision': 8})['data']
         assert done['command'] == {'RevalidateBasis': {'work': started['work']['id'], 'dependency': edge, 'attempt': 2, 'reason': 'B matches A2'}}
-        revalidated = same_views(builder, database)
+        revalidated = same_views(database)
         assert flagged(revalidated) == [] and revalidated['transitions']['submit']['ready']
         [status] = revalidated['basis']['relies_on']
         assert (status['basis']['attempt'], status['state']['state']) == (2, 'verified')
