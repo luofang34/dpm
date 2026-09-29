@@ -1147,51 +1147,43 @@
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
       "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
       "kind": "Task",
-      "title": "Validate explicit plan and storage versions",
+      "title": "Give restored and forked stores their own lineage",
       "contract": {
-        "objective": "Keep one explicit pre-publication format and move bundled plans, locators and adapter contracts to it; unsupported versions fail without touching live state.",
+        "objective": "Make a restored or forked store distinguishable from the store it came from: it gets a new lineage id, every operation records workspace and lineage, and two writable copies can never present the same identity with different histories.",
         "acceptance": [
           {
-            "text": "Specify distinct plan, locator, API and database schema versions; reject unsupported versions clearly."
+            "text": "restore and any copy made for writing mint a new lineage id; the source keeps its own."
           },
           {
-            "text": "Move bundled snapshots and locators directly to the supported design; do not maintain legacy-format adapters before publication."
+            "text": "Operations and history entries carry the workspace and lineage ids."
           },
           {
-            "text": "Keep AGPL-3.0-only and prevent derived schedule/progress projections from becoming stored truth."
-          },
-          {
-            "text": "TOML/JSON round trips preserve lifecycle, ownership, contracts, evidence references and stable IDs with deterministic output; unsupported required fields fail explicitly."
-          },
-          {
-            "text": "Represent revision tokens without signed-integer truncation. A deliberate pre-publication format break must not silently replace an operational database or erase its history."
+            "text": "A store whose lineage differs from the one a client last saw is reported, never merged silently."
           }
         ],
         "instructions": {
           "steps": [
             {
-              "action": "Inspect supported plan/locator/API/storage versions and identify inconsistent bundled inputs.",
-              "expected_result": "One current contract is identified without promising legacy compatibility."
+              "action": "Define lineage identity next to the workspace id and when it changes (init, import, restore, fork).",
+              "expected_result": "A rule table covers every store-creating command."
             },
             {
-              "action": "Apply approved format changes to code, bundled plan data and adapters together; preserve stable entity IDs.",
-              "expected_result": "Current inputs open identically through CLI and MCP; unsupported formats fail before writes."
+              "action": "Store and expose lineage in the store, history and status, and mint it on restore.",
+              "expected_result": "Tests show a restored copy and its source report different lineages."
             },
             {
-              "action": "Test semantic round trips, unsupported versions and failures without replacing live databases.",
-              "expected_result": "Evidence covers authoritative values, restart and unchanged operational history on failure."
+              "action": "Detect lineage changes in clients that cache a revision (CLI base revision, TUI refresh).",
+              "expected_result": "A client pointed at a different lineage reports it instead of treating revisions as comparable."
             }
           ],
           "in_scope": [
-            "One current pre-publication domain format and explicit version rejection.",
-            "Portable interchange and explicit initialization/fork/restore/join identity rules."
+            "Lineage identity for stores and operations, restore/fork behaviour and reporting."
           ],
           "out_of_scope": [
-            "Change stable IDs, persist derived dates, replace live history or implement plan editing in this task."
+            "Merging diverged histories, replicas syncing over a network or authentication."
           ],
           "verification": [
-            "Round-trip supported authoritative values and stable IDs; reject unsupported versions without writes.",
-            "Run ./ci.sh; inspect failed opens/imports and revision boundaries against unchanged persisted state."
+            "Store tests for init, import, restore and fork; CLI/MCP parity; ./ci.sh passes."
           ]
         },
         "capabilities": [
@@ -1225,7 +1217,7 @@
         "block_reason": null
       },
       "schedule": {
-        "priority": "P2",
+        "priority": "P1",
         "estimate": {
           "optimistic_hours": 3,
           "likely_hours": 6,
@@ -1345,48 +1337,43 @@
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
       "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
       "kind": "Task",
-      "title": "Expose history, semantic diff and append-only revert",
+      "title": "Revert reviewed plan changes by appending their inverse",
       "contract": {
-        "objective": "Make operation/revision inspection and inverse changes understandable without destructive rollback.",
+        "objective": "History and semantic diffs exist; add an append-only revert that turns a recorded plan change back into a new reviewed change, refusing inverses that would violate the current graph or protected work.",
         "acceptance": [
           {
-            "text": "Inspect historical revisions and describe semantic changes with original actor/context."
+            "text": "A revert of a recorded plan change is proposed as a new delta and applied only through review."
           },
           {
-            "text": "Revert by appending a new validated operation; reject an inverse that violates the current graph."
+            "text": "An inverse that conflicts with later changes or protected execution is refused with the conflicting entities named."
           },
           {
-            "text": "Test stale-revision conflicts, failures and CLI/MCP consistency through restart."
-          },
-          {
-            "text": "Distinguish a portable snapshot from a recovery bundle containing a consistent checkpoint, operation suffix, lineage and pending local work."
+            "text": "History shows the revert as its own operation that references the reverted one."
           }
         ],
         "instructions": {
           "steps": [
             {
-              "action": "Define historical revision queries and semantic diff output with original actors and reasons.",
-              "expected_result": "A documented query contract distinguishes snapshots, operations and their derived diffs."
+              "action": "Derive the inverse delta of a logged ApplyChange against the current plan.",
+              "expected_result": "Inverse computation is tested on every fixture edit."
             },
             {
-              "action": "Implement inverse changes as new validated operations against current state.",
-              "expected_result": "Reverts preserve history and reject inverses that violate current invariants or revisions."
+              "action": "Expose revert as a proposal through CLI and MCP with the same review path as plan apply.",
+              "expected_result": "Parity smoke covers proposal, refusal and apply."
             },
             {
-              "action": "Add shared CLI/MCP access and restart/conflict tests with evidence-linked examples.",
-              "expected_result": "Users can inspect and explain changes and safe inverses through either adapter."
+              "action": "Document how revert differs from restore and run ./ci.sh.",
+              "expected_result": "Docs state that revert never rewrites history."
             }
           ],
           "in_scope": [
-            "History queries, semantic diffs and append-only revert through the shared engine."
+            "Append-only revert of plan changes through review."
           ],
           "out_of_scope": [
-            "Destructive rollback, rewriting operation records or bypassing validation to force an inverse."
+            "Reverting lifecycle events or evidence, or restoring earlier stores."
           ],
           "verification": [
-            "Test historical reads and inverse application after intervening valid/conflicting changes.",
-            "Assert operation count grows on revert and failed inverses leave storage unchanged; run ./ci.sh.",
-            "Recover a disposable workspace with accepted and pending operations; preserve unsent work and reject incomplete/redacted input as a full restore."
+            "Inverse and conflict tests; CLI/MCP parity; ./ci.sh passes."
           ]
         },
         "capabilities": [
@@ -1606,42 +1593,41 @@
       "kind": "Task",
       "title": "Refine Monte Carlo milestone risk reporting",
       "contract": {
-        "objective": "Expose useful milestone percentiles and interpretable task risk contributions using seeded simulations over explicit duration inputs.",
+        "objective": "Report schedule risk the way PERT and schedule risk analysis ask for it: percentiles for every milestone, the probability of finishing by a given hour, per-task variance and path spread, and each task's drag and criticality, all derived from seeded simulations.",
         "acceptance": [
           {
-            "text": "Test reproducible P50/P80/P95 ordering and milestone zero-duration treatment."
+            "text": "Every milestone reports P50/P80/P95 and P(finish <= H) for a requested H."
           },
           {
-            "text": "Distinguish priority, critical path, criticality and risk contribution in structured fields."
+            "text": "Tasks report variance, and the forecast reports the spread of its critical path."
           },
           {
-            "text": "Document distribution and correlation limitations; PERT estimates remain uncertainty inputs."
+            "text": "Each task reports drag and criticality, and next explains which of them it used."
           }
         ],
         "instructions": {
           "steps": [
             {
-              "action": "Specify sampled O/M/P distributions, seed behavior and milestone percentile/risk fields.",
-              "expected_result": "The model documents assumptions about correlation and the meaning of each risk contribution."
+              "action": "Extend the simulation summary with per-milestone finishes and a probability query.",
+              "expected_result": "Tests pin percentiles and probabilities for seeded fixtures."
             },
             {
-              "action": "Implement milestone P50/P80/P95 and interpretable task contribution outputs in pure simulation.",
-              "expected_result": "Outputs separate priority, deterministic critical path, sampled criticality and risk contribution."
+              "action": "Add variance, path spread and drag to deterministic projections.",
+              "expected_result": "Values match hand-computed examples for each relation kind."
             },
             {
-              "action": "Test reproducibility, percentile ordering and zero-duration milestones; document uncertainty limitations.",
-              "expected_result": "Repeated seeded runs agree and all results remain derived query data."
+              "action": "Expose the fields through status, explain and next with CLI/MCP parity.",
+              "expected_result": "Parity smoke and ./ci.sh pass."
             }
           ],
           "in_scope": [
-            "Monte Carlo milestone uncertainty and explainable task risk outputs."
+            "Derived risk measures from existing estimates and dependencies."
           ],
           "out_of_scope": [
-            "Treat PERT means as a risk forecast, invent event correlations or add resource leveling."
+            "Risk events that change durations, correlated sampling or resource-based buffers."
           ],
           "verification": [
-            "Compare fixed-seed runs and deterministic-duration controls; check P50 <= P80 <= P95.",
-            "Test zero-duration milestones and plan immutability; run schedule tests and ./ci.sh."
+            "Seeded tests, parity smoke and ./ci.sh."
           ]
         },
         "capabilities": [
@@ -2589,45 +2575,41 @@
       "kind": "Task",
       "title": "Specify native/Web projection contracts",
       "contract": {
-        "objective": "Design stable query/view-model contracts suitable for SwiftUI, Web and Compose; do not build all platform products in this task.",
+        "objective": "Design stable query/view-model contracts for SwiftUI, Web and Compose that ship engine-computed values (percentiles, criticality, scores) instead of recomputing them per platform, including matrix and cumulative-flow views; do not build the platform products in this task.",
         "acceptance": [
           {
-            "text": "Map Today/Work/Network/Detail to existing query/command semantics and identity boundaries."
+            "text": "View models carry engine-computed schedule and risk values; clients never recompute them."
           },
           {
-            "text": "Document platform-specific UI freedom and optional Rust FFI boundaries."
+            "text": "Contracts cover outline, Gantt, network, dependency matrix, cumulative flow and review queues."
           },
           {
-            "text": "Require separate implementation scope before selecting or building a production UI stack."
-          },
-          {
-            "text": "Work views expose contextual decisions with reasons/sources separately from blocking gates; pending collaboration state never appears as globally accepted ownership."
+            "text": "Each contract names the query and revision it derives from."
           }
         ],
         "instructions": {
           "steps": [
             {
-              "action": "Map Today/Work/Network/Detail user needs to current queries, commands and principal boundaries.",
-              "expected_result": "A platform-neutral field/interaction matrix identifies reusable data and unsupported requests."
+              "action": "Inventory the views and the engine values each needs.",
+              "expected_result": "A table maps views to queries."
             },
             {
-              "action": "Specify versioned view models and optional Rust FFI/HTTP boundaries with error and revision handling.",
-              "expected_result": "SwiftUI/Web/Compose clients can interpret the same contracts without owning business rules."
+              "action": "Define the view-model contracts with examples from the self-host plan.",
+              "expected_result": "Examples serialize and round-trip."
             },
             {
-              "action": "Review sample payloads and document native UI freedom and separate implementation decisions.",
-              "expected_result": "A reviewable API design exists without committing to or claiming a platform product."
+              "action": "Review the contracts against the facade from UI-20.",
+              "expected_result": "Gaps are recorded as follow-up work."
             }
           ],
           "in_scope": [
-            "Native/Web projection contract design and sample payload review."
+            "View-model contracts and examples."
           ],
           "out_of_scope": [
-            "Build multiple platform apps, select a production framework without scope approval or move authoritative state into UI."
+            "Building SwiftUI, Web or Compose applications."
           ],
           "verification": [
-            "Compare sample payloads to engine queries and command/revision errors.",
-            "Walk through selection, detail, blocked work and independent-review scenarios using the proposed fields."
+            "Contract round-trip tests and review evidence."
           ]
         },
         "capabilities": [
@@ -3783,41 +3765,44 @@
       "kind": "Task",
       "title": "Prepare the application facade for native clients",
       "contract": {
-        "objective": "Make the application layer usable from a native client without moving rules into it: one facade crate, thread-safe access, a stable result encoding and a revision-change notification so views refresh without polling.",
+        "objective": "Make the application layer usable from native and web clients without moving rules into it: a facade crate that includes the application layer, thread-safe access, typed results beside JSON, a cheap revision query and change notification, and storage, registry and Git features that a client target can leave out.",
         "acceptance": [
           {
-            "text": "The public facade re-exports the application layer used by CLI and MCP, not only engine types."
+            "text": "The public facade re-exports the application layer used by CLI and MCP."
           },
           {
-            "text": "Application access is safe from a background thread and documented for FFI callers."
+            "text": "A revision/lineage query answers without decoding the whole plan, and history reads use the cached snapshot."
           },
           {
-            "text": "A revision-change notification reaches a subscriber after every committed operation."
+            "text": "Query results are available as typed structs as well as JSON."
+          },
+          {
+            "text": "The application layer builds without SQLite, the device registry and the git CLI; CI checks aarch64-apple-ios and wasm32 builds of that configuration."
           }
         ],
         "instructions": {
           "steps": [
             {
-              "action": "Choose typed records or JSON across the FFI boundary with a prototype call from Swift.",
-              "expected_result": "The choice and its error mapping are recorded as a design note linked to this task."
+              "action": "Split store, registry and git behind features and define the storage seam the application uses.",
+              "expected_result": "cargo check passes for the host, aarch64-apple-ios and wasm32-unknown-unknown configurations."
             },
             {
-              "action": "Expose the facade, thread-safe access and the notification hook with tests.",
-              "expected_result": "Unit and integration tests cover concurrent reads and notification after commit."
+              "action": "Add the revision/lineage query, change notification and typed results with tests.",
+              "expected_result": "Tests cover notification after commit and concurrent readers."
             },
             {
-              "action": "Document the facade contract and run ./ci.sh.",
-              "expected_result": "Docs name the supported calls, threading rules and error codes."
+              "action": "Record a Swift prototype call and document the facade contract.",
+              "expected_result": "Docs name supported calls, threading rules and error codes."
             }
           ],
           "in_scope": [
-            "Rust facade, threading contract, result encoding and change notification."
+            "Rust facade, features, threading, result encoding, revision query and change notification."
           ],
           "out_of_scope": [
             "SwiftUI screens, CloudKit, accounts or any hosted service."
           ],
           "verification": [
-            "Facade integration tests and ./ci.sh pass; a Swift prototype call is recorded as evidence."
+            "Facade tests, cross-target cargo check in CI, ./ci.sh passes; Swift prototype evidence."
           ]
         },
         "capabilities": [
@@ -3848,7 +3833,7 @@
         "block_reason": null
       },
       "schedule": {
-        "priority": "P3",
+        "priority": "P1",
         "estimate": {
           "optimistic_hours": 4,
           "likely_hours": 8,
@@ -3857,6 +3842,424 @@
       },
       "order": [
         400
+      ]
+    },
+    "563a478a-977c-5e60-a328-a46321ad4fa7": {
+      "id": "563a478a-977c-5e60-a328-a46321ad4fa7",
+      "key": "CORE-60",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
+      "kind": "Task",
+      "title": "Accept client operation ids at every adapter",
+      "contract": {
+        "objective": "Let every mutation carry a caller-chosen time-ordered operation id that doubles as its idempotency key, so a retry of an acknowledged operation returns the original result instead of a conflict, and report a busy store with a retryable code.",
+        "acceptance": [
+          {
+            "text": "CLI and MCP mutations accept an optional UUIDv7 operation id; without one the application mints a v7 id."
+          },
+          {
+            "text": "Resending the same id with the same command returns the recorded operation; the same id with different content is refused as a duplicate."
+          },
+          {
+            "text": "A store that stays locked past its timeout returns a distinct retryable busy code."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Add the operation id to the command request and both adapters, and enable UUIDv7.",
+              "expected_result": "Requests with and without ids are covered by tests."
+            },
+            {
+              "action": "Look up recorded operations by id inside the write transaction and answer duplicates.",
+              "expected_result": "Retry, duplicate and conflict cases are tested, including after replay."
+            },
+            {
+              "action": "Map lock timeouts to a busy code and cover parity in smoke.",
+              "expected_result": "CLI and MCP report identical codes."
+            }
+          ],
+          "in_scope": [
+            "Operation id, idempotent retry, duplicate refusal and busy reporting."
+          ],
+          "out_of_scope": [
+            "Network sync, replica merging or authentication."
+          ],
+          "verification": [
+            "Store and adapter tests, parity smoke and ./ci.sh."
+          ]
+        },
+        "capabilities": [
+          "rust",
+          "storage"
+        ],
+        "requirement_ids": [
+          "087248db-f9e4-5c27-968d-c2b539178037",
+          "430279b8-809d-5dbf-9795-4b698c09aa6e",
+          "c79a01b2-9102-5dce-9b1b-f67d67972424"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "block_reason": null,
+        "owner": null,
+        "reported_progress_percent": 0,
+        "status": "Planned"
+      },
+      "schedule": {
+        "estimate": {
+          "optimistic_hours": 4.0,
+          "likely_hours": 8.0,
+          "pessimistic_hours": 16.0
+        },
+        "priority": "P1"
+      },
+      "order": [
+        700
+      ]
+    },
+    "b51b149f-4e26-55c4-9516-571d7817d14b": {
+      "id": "b51b149f-4e26-55c4-9516-571d7817d14b",
+      "key": "SCH-40",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "cc81da22-ff27-51ec-811f-7ffdcc4257b2",
+      "kind": "Task",
+      "title": "Make deterministic and simulated forecasts agree",
+      "contract": {
+        "objective": "Sample the same distribution whose mean the deterministic forecast uses, and stop counting the full estimate for work that has already been running, so expected finish, percentiles, float and next agree.",
+        "acceptance": [
+          {
+            "text": "Simulated durations follow a distribution whose mean equals the PERT expectation used by CPM."
+          },
+          {
+            "text": "Started work contributes only its remaining duration, conditioned on the time elapsed since its start event."
+          },
+          {
+            "text": "Docs state both rules, and forecasts never release work earlier than execution would."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Specify the sampling distribution and the remaining-duration rule, with worked examples.",
+              "expected_result": "The specification covers blocked time and work started before a lag elapsed."
+            },
+            {
+              "action": "Implement both in the schedule crate with seeded regression tests.",
+              "expected_result": "Tests show mean agreement and remaining-duration behaviour."
+            },
+            {
+              "action": "Review next ranking changes on the self-host plan and run ./ci.sh.",
+              "expected_result": "Ranking differences are explained by the new rules."
+            }
+          ],
+          "in_scope": [
+            "Sampling distribution and remaining duration of started work."
+          ],
+          "out_of_scope": [
+            "Progress-percentage scaling, calendars or correlated risks."
+          ],
+          "verification": [
+            "Seeded tests, documented rules and ./ci.sh."
+          ]
+        },
+        "capabilities": [
+          "rust",
+          "scheduling"
+        ],
+        "requirement_ids": [
+          "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "block_reason": null,
+        "owner": null,
+        "reported_progress_percent": 0,
+        "status": "Planned"
+      },
+      "schedule": {
+        "estimate": {
+          "optimistic_hours": 4.0,
+          "likely_hours": 8.0,
+          "pessimistic_hours": 14.0
+        },
+        "priority": "P1"
+      },
+      "order": [
+        500
+      ]
+    },
+    "1ff06074-d521-5696-a71f-0aa120dfee23": {
+      "id": "1ff06074-d521-5696-a71f-0aa120dfee23",
+      "key": "SCH-50",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "cc81da22-ff27-51ec-811f-7ffdcc4257b2",
+      "kind": "Task",
+      "title": "Calibrate estimates and report flow from history",
+      "contract": {
+        "objective": "Use recorded start, submit and verify events to show how estimates compare with actual elapsed time, and report cycle time, throughput, aging work in progress and claim-to-verify reliability.",
+        "acceptance": [
+          {
+            "text": "Calibration compares actual start-to-verify time with O/M/P per capability and per actor."
+          },
+          {
+            "text": "Flow metrics report cycle time, throughput, aging work in progress and claim-to-verify reliability."
+          },
+          {
+            "text": "next may note an actor already holding claims, as an explained advisory that never hides work."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Derive the metrics from execution events and the operation history.",
+              "expected_result": "Tests use synthetic histories."
+            },
+            {
+              "action": "Expose them through status and a dedicated query with CLI/MCP parity.",
+              "expected_result": "Parity smoke passes."
+            },
+            {
+              "action": "Document what the metrics can and cannot say.",
+              "expected_result": "Docs state sample-size caveats."
+            }
+          ],
+          "in_scope": [
+            "Derived calibration and flow metrics."
+          ],
+          "out_of_scope": [
+            "Timesheets, effort accounting or hard work-in-progress limits."
+          ],
+          "verification": [
+            "Synthetic-history tests, parity smoke and ./ci.sh."
+          ]
+        },
+        "capabilities": [
+          "rust",
+          "scheduling"
+        ],
+        "requirement_ids": [
+          "6138f172-2971-5cd1-8515-520f6b61be0a",
+          "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "block_reason": null,
+        "owner": null,
+        "reported_progress_percent": 0,
+        "status": "Planned"
+      },
+      "schedule": {
+        "estimate": {
+          "optimistic_hours": 4.0,
+          "likely_hours": 8.0,
+          "pessimistic_hours": 16.0
+        },
+        "priority": "P2"
+      },
+      "order": [
+        600
+      ]
+    },
+    "0d2369ea-b94f-5c78-94ef-82ff7d44a1ca": {
+      "id": "0d2369ea-b94f-5c78-94ef-82ff7d44a1ca",
+      "key": "QA-50",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "87eb53a0-5839-51bf-bdb2-47371bf50315",
+      "kind": "Task",
+      "title": "Keep the terminal view current with background changes",
+      "contract": {
+        "objective": "Show changes made by other processes without a manual reload, mark the view stale when it cannot refresh, and never move silently to an earlier revision or another lineage.",
+        "acceptance": [
+          {
+            "text": "A change committed by the CLI or an agent appears in the console within a few seconds without a key press."
+          },
+          {
+            "text": "A backward revision or a different lineage is reported instead of displayed as current."
+          },
+          {
+            "text": "Refresh keeps page, selection, Gantt viewport and detail scroll."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Poll a cheap revision query and reload on change.",
+              "expected_result": "A terminal smoke shows an external change arriving."
+            },
+            {
+              "action": "Detect backward revisions and lineage changes and show a stale notice.",
+              "expected_result": "Tests cover restore and swap."
+            },
+            {
+              "action": "Preserve detail scroll across refresh and run ./ci.sh.",
+              "expected_result": "Key-event tests cover scroll retention."
+            }
+          ],
+          "in_scope": [
+            "Automatic refresh, stale and backward-revision handling in the console."
+          ],
+          "out_of_scope": [
+            "Layout redesign, mouse editing or new pages."
+          ],
+          "verification": [
+            "Terminal smoke with an external writer; ./ci.sh passes."
+          ]
+        },
+        "capabilities": [
+          "rust",
+          "tui"
+        ],
+        "requirement_ids": [
+          "50625c7b-d065-5188-a522-bb9fb78eb203",
+          "bf2a0e85-cd71-5fff-87ad-f66a8591a269"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "block_reason": null,
+        "owner": null,
+        "reported_progress_percent": 0,
+        "status": "Planned"
+      },
+      "schedule": {
+        "estimate": {
+          "optimistic_hours": 3.0,
+          "likely_hours": 6.0,
+          "pessimistic_hours": 12.0
+        },
+        "priority": "P1"
+      },
+      "order": [
+        700
+      ]
+    },
+    "c7410550-4cac-57e5-a21a-61decb79ac34": {
+      "id": "c7410550-4cac-57e5-a21a-61decb79ac34",
+      "key": "QA-60",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "87eb53a0-5839-51bf-bdb2-47371bf50315",
+      "kind": "Task",
+      "title": "Close the gaps between CLI commands and agent tools",
+      "contract": {
+        "objective": "Give agents the same information and guarantees through the CLI and MCP: one response envelope with the revision, plan validation as a tool, compared mutation results, one naming table and one version table.",
+        "acceptance": [
+          {
+            "text": "CLI --json success output carries api_version and revision like MCP."
+          },
+          {
+            "text": "Plan validation is available as an agent tool, and who may bootstrap a workspace is stated and enforced."
+          },
+          {
+            "text": "Smoke compares the Operation returned by every mutation through both adapters."
+          },
+          {
+            "text": "One document lists every CLI command with its tool name and every version number with its meaning."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Align the CLI JSON envelope and add the validation tool.",
+              "expected_result": "Parity smoke covers both."
+            },
+            {
+              "action": "Compare mutation results in smoke_agent.py for every command.",
+              "expected_result": "Operation data matches."
+            },
+            {
+              "action": "Publish the naming and version tables in docs/mcp.md.",
+              "expected_result": "Docs match tools/list and --help."
+            }
+          ],
+          "in_scope": [
+            "Adapter envelopes, tool coverage, parity tests and naming/version documentation."
+          ],
+          "out_of_scope": [
+            "Remote transports or authentication."
+          ],
+          "verification": [
+            "Parity smoke, docs check and ./ci.sh."
+          ]
+        },
+        "capabilities": [
+          "agents",
+          "rust"
+        ],
+        "requirement_ids": [
+          "50625c7b-d065-5188-a522-bb9fb78eb203",
+          "6138f172-2971-5cd1-8515-520f6b61be0a"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "block_reason": null,
+        "owner": null,
+        "reported_progress_percent": 0,
+        "status": "Planned"
+      },
+      "schedule": {
+        "estimate": {
+          "optimistic_hours": 3.0,
+          "likely_hours": 6.0,
+          "pessimistic_hours": 12.0
+        },
+        "priority": "P1"
+      },
+      "order": [
+        800
       ]
     }
   },
@@ -4335,13 +4738,15 @@
         "0752410b-cd82-5af0-b289-e88a6138c82e",
         "2cf9a33a-0e8d-5f25-a626-b68116b6d608"
       ],
-      "blocks": []
+      "blocks": [
+        "0752410b-cd82-5af0-b289-e88a6138c82e"
+      ]
     },
     "b5a016e6-100a-50a8-836d-c4ba29630f9e": {
       "id": "b5a016e6-100a-50a8-836d-c4ba29630f9e",
       "key": "DEC-CALENDAR",
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
-      "question": "How do calendars, an explicit project start and time zone, percent lags and summary links enter scheduling while stored hours stay elapsed hours?",
+      "question": "How do calendars, an explicit project start and time zone, milestone deadlines and date constraints (enabling negative float and on-time probability), percent lags and summary links enter scheduling while stored hours stay elapsed hours, and which of them must be fixed before the plan format is published?",
       "status": "Open",
       "outcome": null,
       "related_work": [
@@ -4361,7 +4766,9 @@
         "973bf299-2998-54fa-a1dc-a58d2f66eff8",
         "dbf3bbfe-6850-5233-ab5e-c790d969bafa"
       ],
-      "blocks": []
+      "blocks": [
+        "973bf299-2998-54fa-a1dc-a58d2f66eff8"
+      ]
     },
     "88a4e6fd-59eb-53df-8447-525e72806a54": {
       "id": "88a4e6fd-59eb-53df-8447-525e72806a54",
@@ -4975,6 +5382,86 @@
       "id": "18956ecd-8e7b-59bf-a3c7-1494b1e7ad87",
       "predecessor": "dbf3bbfe-6850-5233-ab5e-c790d969bafa",
       "successor": "0a56edde-c1d2-51ba-8e5d-cb300b45a512",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "71ad3dc2-2a46-5091-b92a-0df61a7c165d",
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "563a478a-977c-5e60-a328-a46321ad4fa7",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "4750d198-e2b3-5657-ae9d-50566634ceb2",
+      "predecessor": "563a478a-977c-5e60-a328-a46321ad4fa7",
+      "successor": "f31377c3-739b-53b1-962c-bdcb9609af27",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "e9770f92-6cab-585c-a7cc-7d2289254795",
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "b51b149f-4e26-55c4-9516-571d7817d14b",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "d6af5d7a-72cf-57bd-b8f8-f1f6a9260ed5",
+      "predecessor": "b51b149f-4e26-55c4-9516-571d7817d14b",
+      "successor": "9ab51dd2-5003-5c85-8466-7f6b12355441",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "067ed91f-d3d6-52a5-97fa-022a2c7c9ade",
+      "predecessor": "b51b149f-4e26-55c4-9516-571d7817d14b",
+      "successor": "1ff06074-d521-5696-a71f-0aa120dfee23",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "dd9732bb-1ab5-5899-9a78-857ba3272157",
+      "predecessor": "1ff06074-d521-5696-a71f-0aa120dfee23",
+      "successor": "9ab51dd2-5003-5c85-8466-7f6b12355441",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "ca694b07-aa53-5646-8067-ba3accffaf43",
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "0d2369ea-b94f-5c78-94ef-82ff7d44a1ca",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "3a5ab185-4b48-5893-ace6-5c8281975baf",
+      "predecessor": "0d2369ea-b94f-5c78-94ef-82ff7d44a1ca",
+      "successor": "93fd3281-1b7c-5ef5-a379-39ffc39e9843",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "621204b9-de73-5a28-b333-88f8c8470390",
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "c7410550-4cac-57e5-a21a-61decb79ac34",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "a897cac1-1dc1-5027-9203-d94fc00493f8",
+      "predecessor": "c7410550-4cac-57e5-a21a-61decb79ac34",
+      "successor": "93fd3281-1b7c-5ef5-a379-39ffc39e9843",
       "kind": "FinishStart",
       "lag_hours": 0.0,
       "policy": "Hard"
