@@ -15,6 +15,10 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo clippy -p dpm-app -p dpm-sdk --no-default-features --locked --all-targets -- -D warnings
 cargo test -p dpm-app --no-default-features --locked
 for target in aarch64-apple-ios wasm32-unknown-unknown; do
+    if ! rustup target list --installed | grep -qx "$target"; then
+        printf '%s\n' "Install the client target first: rustup target add $target (rust-toolchain.toml lists it)" >&2
+        exit 1
+    fi
     cargo check -p dpm-app -p dpm-sdk --no-default-features --locked --target "$target"
 done
 cargo test --workspace --all-targets --all-features --locked

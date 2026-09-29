@@ -31,7 +31,9 @@ jobs:
           if [ "$TOOLCHAIN_KIND" = msrv ]; then
             toolchain=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["rust-version"])')
           fi
-          rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy
+          # The cross-target checks in ci.sh need the targets rust-toolchain.toml lists.
+          targets=$(python3 -c 'import tomllib; print(" ".join("--target " + t for t in tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"].get("targets", [])))')
+          rustup toolchain install "$toolchain" --profile minimal --component rustfmt --component clippy $targets
           echo "RUSTUP_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
         with:
