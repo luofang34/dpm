@@ -7,8 +7,9 @@ use crate::{
 use chrono::{DateTime, Utc};
 use dpm_app::QueryClock;
 
-/// The query clock a command runs with; a pinned reading is refused by anything but a query,
-/// because a mutation records the time it commits and file operations read no clock.
+/// The query clock a command runs with; a pinned reading is refused by anything but a workspace
+/// query, because a mutation records the time it commits, and plan validation and the schema read
+/// neither a workspace nor a clock.
 pub(crate) fn for_command(
     command: &Commands,
     clock: Option<DateTime<Utc>>,
@@ -33,11 +34,9 @@ fn is_query(command: &Commands) -> bool {
             | Commands::Show { .. }
             | Commands::Explain { .. }
             | Commands::Export
-            | Commands::Validate { .. }
             | Commands::Store(StoreCommand::History { .. } | StoreCommand::Revision)
             | Commands::Plan {
-                command: PlanCommand::Schema
-                    | PlanCommand::Template
+                command: PlanCommand::Template
                     | PlanCommand::Diff { .. }
                     | PlanCommand::ImportMspdi { .. }
                     | PlanCommand::ExportMspdi { .. },

@@ -1,4 +1,5 @@
 //! Provisional bases survive restart and concurrent writers through the public application API.
+#![cfg(feature = "sqlite")]
 #![allow(clippy::expect_used, clippy::panic)]
 
 use chrono::{DateTime, Utc};

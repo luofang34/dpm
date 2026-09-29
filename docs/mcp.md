@@ -30,8 +30,11 @@ Queries measure lag gates, the remaining hours of started work and `next` penalt
 current time, so two reads of one revision may differ by the time between them. The CLI's global
 `--clock RFC3339` and the `dpm-mcp --clock RFC3339` launch option evaluate queries at that instant
 instead, which makes CLI and tool results comparable exactly. The CLI refuses `--clock` on every
-command except queries (`invalid_request`), and in `dpm-mcp` mutation tools ignore it: an
-operation's timestamp is always the time it was committed.
+command except workspace queries (`invalid_request`, also for `validate` and `plan schema`, which
+read no clock), and in `dpm-mcp` mutation tools ignore it: an operation's timestamp is always the
+time it was committed. A pinned clock is for comparing and replaying reads, not for acting on them:
+readiness that `explain_work` reports at a pinned instant can differ from the gates a mutation
+checks at the time it commits, so agents that act run without `--clock`.
 
 This table lists every `dpm` command with its tool, or why it has none. Each tool also declares its
 command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a row differs from

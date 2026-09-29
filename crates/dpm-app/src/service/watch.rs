@@ -24,6 +24,8 @@ impl Application {
     /// Each committed command or plan change sends exactly one message after its transaction
     /// commits; refused mutations and resends answered with an already recorded operation send
     /// none. The receiver may be moved to another thread; dropping it stops the notifications.
+    /// Messages queue until received, so a subscriber drains the channel (a view needs only the
+    /// last revision it holds) or drops it.
     pub fn watch_commits(&mut self) -> Receiver<WorkspaceRevision> {
         let (sender, receiver) = channel();
         self.watchers.0.push(sender);

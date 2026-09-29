@@ -12,7 +12,8 @@ python3 scripts/check_licenses.py
 cargo deny --workspace --all-features --locked check licenses advisories
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 # Native and web clients build the application layer without SQLite, the registry and the git CLI.
-cargo clippy -p dpm-app -p dpm-sdk --no-default-features --locked -- -D warnings
+cargo clippy -p dpm-app -p dpm-sdk --no-default-features --locked --all-targets -- -D warnings
+cargo test -p dpm-app --no-default-features --locked
 for target in aarch64-apple-ios wasm32-unknown-unknown; do
     cargo check -p dpm-app -p dpm-sdk --no-default-features --locked --target "$target"
 done

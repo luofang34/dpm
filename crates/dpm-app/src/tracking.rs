@@ -80,6 +80,6 @@ fn recorded<'a>(plan: &'a Plan, identity: &ExternalIdentity) -> Option<&'a Exter
         .find(|r| r.identity.object_key() == identity.object_key())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 #[allow(clippy::expect_used, clippy::panic)]
 mod tests;

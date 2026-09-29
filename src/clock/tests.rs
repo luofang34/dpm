@@ -33,6 +33,8 @@ fn queries_take_a_pinned_clock_and_mutations_refuse_it() {
         &["dpm", "--clock", at, "import", "plan.json"],
         &["dpm", "--clock", at, "backup", "--to", "copy.sqlite"],
         &["dpm", "--clock", at, "tui"],
+        &["dpm", "--clock", at, "validate", "plan.json"],
+        &["dpm", "--clock", at, "plan", "schema"],
     ] {
         let error = clock_for(refused).expect_err("not a query");
         assert!(

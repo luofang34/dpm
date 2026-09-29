@@ -45,6 +45,6 @@ impl Application {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 #[allow(clippy::expect_used, clippy::panic)]
 mod tests;

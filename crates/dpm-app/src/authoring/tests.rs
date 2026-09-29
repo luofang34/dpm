@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(feature = "sqlite")]
 use crate::{Application, Query};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use dpm_engine::{Command, apply_command};
@@ -379,6 +380,7 @@ fn the_schema_rejects_misnamed_and_mistyped_authoring_fields() {
     );
 }
 
+#[cfg(feature = "sqlite")]
 #[test]
 fn the_template_applies_to_an_empty_workspace_and_is_refused_elsewhere() {
     let empty = Plan::empty("Authoring");
