@@ -21,8 +21,19 @@ is refused with `invalid_request`. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
 which the store still checks atomically. Presentation text is not the API contract.
 
+This table lists every `dpm` command with its tool, or why it has none; `smoke_adapters.py` fails
+when it differs from `dpm --help` or from `tools/list`.
+
 | CLI | MCP tool | Shared behavior |
 | --- | --- | --- |
+| init NAME | CLI-only: bootstrap | Human/service creates a project and an empty store; see bootstrapping below |
+| demo | CLI-only: bootstrap | Human/service loads the prepared self-host roadmap into a new store |
+| import FILE | CLI-only: bootstrap | Human/service initializes an absent store from a validated plan |
+| validate FILE | validate_plan | Decode and check every graph invariant without a workspace; `revision` is `null` |
+| tui | CLI-only: interactive terminal | Read-only operator console over the same queries |
+| backup --to PATH | CLI-only: store file administration | Operator copies the store file with its whole history |
+| restore --from PATH --to PATH | CLI-only: store file administration | Operator restores a backup into a new store file |
+| verify-store PATH | CLI-only: store file administration | Operator checks a store or backup file and replays its history |
 | export | export_plan | Authoritative snapshot for proposals |
 | plan schema | plan_schema | JSON Schema of the plan used by export and proposals; the CLI needs no workspace |
 | plan template | plan_template | Minimal valid proposal for a workspace without projects or work |
@@ -56,6 +67,16 @@ which the store still checks atomically. Presentation text is not the API contra
 | waive-dependency ID --reason TEXT | waive_dependency | Human/service stops enforcing a Soft edge; Hard edges need plan review |
 | restore-dependency ID --reason TEXT | restore_dependency | Human/service enforces a waived Soft edge again |
 | revalidate-basis KEY --dependency ID --attempt N --reason TEXT | revalidate_basis | Independent human/service re-bases started work after the attempt it relied on was rejected |
+
+Four version numbers are independent; each changes only with the shape it names, and the same smoke
+guard compares these values with live output.
+
+| Version | Value | Where it appears | What it versions |
+| --- | --- | --- | --- |
+| `api_version` | 10 | Every success envelope and error object of both adapters | The CLI `--json` and tool wire contract: envelope, arguments and result shapes |
+| `result_version` | 1 | `data.result_version` of `next` / `next_work` | The ranking result's own shape, so a `next` consumer can pin it independently |
+| `format_version` | 3 | Portable plans: `export`, `import`, `validate`, proposals | The plan document; other versions are refused before any field is read |
+| `schema_version` | 3 | SQLite `user_version`; `verify-store` reports it | The local store layout; newer and retired stores are refused unchanged |
 
 Bootstrapping is local administration by a human or service through the CLI: `init`, `demo` and
 `import` create a workspace, and no agent tool does. `dpm-mcp` opens only an existing store or
@@ -791,7 +812,9 @@ Specification:
 `python3 scripts/smoke_store.py` covers schema-version refusal, backups during writes, restore and verification.
 `python3 scripts/smoke_agent.py` verifies real-process CLI/MCP query equality and shared execution,
 progress reporting, revision conflict, evidence, blocker, decision and independent-verification behavior.
-It includes `scripts/smoke_conditional.py`, which covers conditional-work parity and choice changes.
+It includes `scripts/smoke_conditional.py`, which covers conditional-work parity and choice changes,
+and `scripts/smoke_adapters.py`, which checks `validate_plan`, the bootstrap policy, the recorded
+Operation of every mutation tool against its CLI command, and the command and version tables above.
 
 `ratify_contract` approves a complete Proposed task as a human/service; `reject_work` requires
 Submitted work, a different reviewer, and a nonempty `reason`. Rejection retains ownership and

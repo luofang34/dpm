@@ -234,12 +234,65 @@ def operation_smoke(directory):
     assert covered == mutations, ('mutation tools without operation parity', mutations - covered, covered - mutations)
 
 
+def table(text, header):
+    """Rows of the Markdown table whose header row starts with `header`, as lists of cells."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith(header))
+    rows = []
+    for line in lines[start + 2:]:
+        if not line.startswith('|'):
+            break
+        rows.append([cell.strip() for cell in line.strip('|').split('|')])
+    return rows
+
+
+def subcommands(*path):
+    """Subcommand names clap lists in `dpm [PATH] --help`, without its `help` pseudo-command."""
+    shown = subprocess.run([str(CLI), *path, '--help'], capture_output=True, text=True, check=True, timeout=15).stdout
+    listing = shown.split('Commands:\n', 1)[1].split('\n\n', 1)[0]
+    return {line.split()[0] for line in listing.splitlines() if line.strip()} - {'help'}
+
+
+def documentation_smoke(directory):
+    """docs/mcp.md names every CLI command, every tool and every version number as the binaries do."""
+    text = (ROOT / 'docs/mcp.md').read_text()
+    rows = table(text, '| CLI | MCP tool |')
+    documented = [' '.join(row[0].split()[:2]) if row[0].split()[0] in {'plan', 'workspace'} else row[0].split()[0] for row in rows]
+    nested = {'plan', 'workspace'}
+    commands = (subcommands() - nested) | {f'{group} {name}' for group in nested for name in subcommands(group)}
+    assert len(documented) == len(set(documented)), 'a command is listed twice'
+    assert set(documented) == commands, ('table differs from dpm --help', set(documented) ^ commands)
+    for row in rows:
+        assert row[1].startswith('CLI-only: ') or ' ' not in row[1], ('tool cell is a name or CLI-only: reason', row)
+    tools = [row[1] for row in rows if not row[1].startswith('CLI-only')]
+    database = directory / 'documentation.sqlite'
+    run_cli(database, 'import', str(FIXTURE))
+    agent = Agent(database, 'agent:documentation')
+    try:
+        listed = {t['name'] for t in agent.request('tools/list', {})['tools']}
+        live = {
+            'api_version': agent.call('project_status', {'probabilistic': False})['api_version'],
+            'result_version': agent.call('next_work', {'probabilistic': False})['data']['result_version'],
+            'format_version': agent.call('export_plan', {})['data']['format_version'],
+            'schema_version': run_cli(database, 'verify-store')['schema_version'],
+        }
+    finally:
+        agent.close()
+    assert len(tools) == len(set(tools)) and set(tools) == listed, ('table differs from tools/list', set(tools) ^ listed)
+    assert run_cli_envelope(database, 'status', '--no-simulation')['api_version'] == live['api_version']
+    versions = {row[0].strip('`'): int(row[1]) for row in table(text, '| Version | Value |')}
+    assert versions == live, ('version table differs from live output', versions, live)
+    assert f'"api_version": {live["api_version"]}' in text, 'the envelope example names another api_version'
+
+
 def smoke(directory):
     validation_smoke(directory)
     bootstrap_smoke(directory)
     operation_smoke(directory)
+    documentation_smoke(directory)
     print('PASS: CLI validate / validate_plan parity and refusals; agents cannot create or bootstrap a workspace')
     print('PASS: every mutation tool records the same Operation and envelope as its CLI command')
+    print('PASS: docs/mcp.md maps every CLI command and tool and states the live version numbers')
 
 
 if __name__ == '__main__':
