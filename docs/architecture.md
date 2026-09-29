@@ -50,15 +50,23 @@ be dependency endpoints. v0.1 uses elapsed hours; working calendars are a future
 must not change dependency semantics. Remaining forecasts measure from the
 adapter-supplied clock reading, give completed tasks zero duration and remove constraints into
 completed tasks or reached milestones, using the same completion and decision-gate projection as
-execution queries. A constraint from completed work, or a start-based (SS, SF) constraint from
+execution queries. A task that is not complete but has a recorded start event (in progress, blocked
+or submitted) contributes only its remaining duration: its estimate conditioned on the task still
+running after the hours elapsed since that start (see [Uncertain durations](#uncertain-durations)).
+Blocked intervals count as elapsed, because estimates are elapsed hours rather than effort. A start
+whose time was never recorded keeps the whole duration instead of assuming a head start. A task
+that has outlasted its pessimistic bound projects to finish at the clock reading, which is no
+earlier than execution can release its successors, since finish-based edges still wait for its
+verification. A constraint from completed work, or a start-based (SS, SF) constraint from
 work that has started, keeps only the lag the execution gate still reports as elapsing from that
 event, and keeps its whole lag when the event time was never recorded. The forecast therefore never
 releases a constraint before execution does, and waits exactly as long as execution for every
 released or elapsing lag it keeps; it errs late, never early, in two cases. A finish-to-start edge
 with a provisional start basis keeps its whole edge until the predecessor is verified, although the
 gate may already have let the successor start on the pending submission. A started predecessor
-projects at the clock reading unless its own outstanding constraints push it later, and a
-start-based lag from it is then measured from that later projection. They also drop waived soft constraints;
+projects at the clock reading unless its own outstanding constraints push it later, runs for its
+remaining duration from there, and a start-based lag from it is then measured from that later
+projection. They also drop waived soft constraints;
 the baseline projection keeps every constraint.
 
 ### Relations
@@ -412,8 +420,28 @@ A released task is no longer claimed, so its unstarted contract becomes reviewab
 ### Uncertain durations
 
 For uncertain work, DPM stores optimistic / most-likely / pessimistic durations. Simulation
-samples triangular distributions, recomputes the network, and reports completion percentiles and
-the fraction of runs in which each activity is critical.
+samples each task's beta-PERT distribution, recomputes the network, and reports completion
+percentiles and the fraction of runs in which each activity is critical. The deterministic and
+simulated forecasts share one duration model, so the CPM duration of every activity is the mean of
+its simulated duration:
+
+- **Whole duration.** Beta-PERT with the standard weight 4 on the most-likely value: shapes
+  `α = 1 + 4(M − O)/(P − O)` and `β = 1 + 4(P − M)/(P − O)` on `[O, P]`, whose mean is the PERT
+  expectation `(O + 4M + P) / 6` that CPM uses. Samples are `O + (P − O)·X/(X + Y)` with gamma
+  draws `X ~ Γ(α)`, `Y ~ Γ(β)` (Marsaglia–Tsang over Box–Muller normals, from the seeded
+  generator), so no dependency is needed. An estimate with `O = P` is exact.
+- **Remaining duration of started work.** With `e` hours elapsed since the recorded start, the
+  remaining duration is `D − e` conditioned on `D > e`. While `e ≤ O` nothing is ruled out and it
+  is the whole distribution shifted by `e` (CPM: `PERT − e`). For `O < e < P` the conditional density
+  is tabulated on a fine grid once per projection; simulation inverts that table with one uniform
+  draw and CPM uses the same table's mean. CPM therefore never uses `max(PERT − e, 0)`, which would
+  finish a task while its estimate still gives it a substantial chance of running on and so release
+  its successors earlier than the simulation expects. For `e ≥ P` the remainder is 0, as described
+  under [Scheduling model](#scheduling-model).
+
+Percentiles and criticality come from the same seed and sampling order, so a query is reproducible
+for the same plan and clock reading. Task durations are sampled independently; correlated overruns
+are not modeled.
 
 ## Persistence
 

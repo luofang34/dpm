@@ -4,6 +4,8 @@ mod cpm;
 mod error;
 mod network;
 mod projection;
+mod remaining_duration;
+mod sampling;
 mod simulation;
 
 pub use cpm::{

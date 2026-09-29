@@ -47,14 +47,22 @@ fn ok(app: &mut Application, actor: &ActorId, command: Command) {
 }
 
 /// Every derived view an adapter can request for both tasks, at one revision.
+///
+/// Forecast hours are left out: started work contributes only what remains at the query's own
+/// clock reading, so two reads of one revision differ by the time between them.
 fn views(app: &Application) -> Value {
     let query = |query| app.query_blocking(query).expect("query").data;
-    serde_json::json!({
+    let mut views = serde_json::json!({
         "a": query(Query::Explain { key: "TEST-A".into() }),
         "b": query(Query::Explain { key: "TEST-B".into() }),
         "status": query(Query::Status { probabilistic: false }),
         "revision": app.plan_blocking().expect("plan").revision,
-    })
+    });
+    for key in ["a", "b"] {
+        views[key]["schedule"] = Value::Null;
+    }
+    views["status"]["expected_finish_hours"] = Value::Null;
+    views
 }
 
 fn flagged(views: &Value) -> Vec<Value> {

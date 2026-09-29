@@ -229,18 +229,18 @@ fn unlinking_removes_only_the_link_and_never_the_graph() {
     assert_eq!(plan.revision, 4);
 }
 
-/// Derived views with the revision normalized, plus the plan without its references.
-fn projections(plan: &Plan) -> String {
+/// Derived views at one clock reading with the revision normalized, plus the plan without its
+/// references. The clock is fixed because started work's remaining forecast shrinks as it runs.
+fn projections(plan: &Plan, now: chrono::DateTime<chrono::Utc>) -> String {
     let mut current = plan.clone();
     current.revision = 0;
     let query = NextWorkQuery {
         capabilities: Default::default(),
         use_probabilistic_criticality: false,
     };
-    let next = next_work(&current, &query, chrono::Utc::now()).expect("next");
-    let status = status(&current, false, chrono::Utc::now()).expect("status");
-    let schedule =
-        dpm_schedule::deterministic_remaining(&current, chrono::Utc::now()).expect("schedule");
+    let next = next_work(&current, &query, now).expect("next");
+    let status = status(&current, false, now).expect("status");
+    let schedule = dpm_schedule::deterministic_remaining(&current, now).expect("schedule");
     current.external_references.clear();
     serde_json::to_string(&(next, status, schedule, current)).expect("json")
 }
@@ -249,7 +249,8 @@ fn projections(plan: &Plan) -> String {
 fn external_state_is_an_observation_and_never_verification_or_evidence() {
     let mut plan = fixture();
     let (a, b) = (id(&plan, "TEST-A"), id(&plan, "TEST-B"));
-    let baseline = projections(&plan);
+    let before = chrono::Utc::now();
+    let baseline = projections(&plan, before);
     let Command::LinkExternal(mut closed) = request(
         b,
         forgejo("git.alpha.example", ExternalObjectKind::Issue),
@@ -260,7 +261,7 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
     closed.observed = Some(ExternalState::Closed);
     run(&mut plan, "observer", Command::LinkExternal(closed)).expect("closed issue");
     assert_eq!(
-        projections(&plan),
+        projections(&plan, before),
         baseline,
         "next, status and schedule are unchanged"
     );
@@ -277,7 +278,8 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
         },
     )
     .expect("submit");
-    let submitted = projections(&plan);
+    let observed = chrono::Utc::now();
+    let submitted = projections(&plan, observed);
     let Command::LinkExternal(mut merged) = request(
         a,
         ExternalIdentity {
@@ -290,7 +292,7 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
     };
     merged.observed = Some(ExternalState::Merged);
     run(&mut plan, "worker", Command::LinkExternal(merged)).expect("merged pull request");
-    assert_eq!(projections(&plan), submitted);
+    assert_eq!(projections(&plan, observed), submitted);
     let task = &plan.work_items[&a];
     assert_eq!(
         task.execution.status,

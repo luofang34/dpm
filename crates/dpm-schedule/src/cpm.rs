@@ -1,4 +1,5 @@
 use crate::network::{EPSILON, Network, finite};
+use crate::remaining_duration::RemainingDuration;
 use crate::{ActivitySchedule, Schedule, ScheduleError};
 use dpm_model::{Dependency, Plan, Release, WorkItemId};
 use std::collections::{BTreeMap, BTreeSet};
@@ -17,10 +18,13 @@ pub fn deterministic(plan: &Plan) -> Result<Schedule, ScheduleError> {
 
 /// Project outstanding applicable work, treating verified tasks as zero remaining duration.
 ///
-/// Waived constraints no longer bound outstanding work; the baseline projection keeps them. Work
-/// that is not applicable (not selected, undecided, awaiting a choice, stranded or an empty join)
-/// is absent from the result, so the projection covers the same active graph as execution gates.
-/// `now` is the adapter's clock reading, used only to decide which milestones are reached.
+/// A task with a recorded start event contributes the mean of its remaining duration conditional
+/// on still running after the hours elapsed since that start, the same distribution the remaining
+/// simulation samples. Waived constraints no longer bound outstanding work; the baseline
+/// projection keeps them. Work that is not applicable (not selected, undecided, awaiting a
+/// choice, stranded or an empty join) is absent from the result, so the projection covers the
+/// same active graph as execution gates. `now` is the adapter's clock reading, used to decide
+/// which milestones are reached and how long started work has run.
 pub fn deterministic_remaining(
     plan: &Plan,
     now: chrono::DateTime<chrono::Utc>,
@@ -35,22 +39,12 @@ pub fn deterministic_remaining_at(
 ) -> Result<Schedule, ScheduleError> {
     plan.validate()?;
     let remaining = remaining_plan_at(plan, timeline);
-    let plan = &remaining.plan;
-    let durations = plan
-        .work_items
-        .iter()
-        .map(|(id, work)| {
-            (
-                *id,
-                if work.execution.status.satisfies_dependency() {
-                    0.0
-                } else {
-                    work.expected_duration_hours()
-                },
-            )
-        })
+    let durations = remaining
+        .durations()?
+        .into_iter()
+        .map(|(id, duration)| (id, duration.expected()))
         .collect();
-    let mut schedule = deterministic_with_durations(plan, &durations)?;
+    let mut schedule = deterministic_with_durations(&remaining.plan, &durations)?;
     schedule
         .activities
         .retain(|id, _| !remaining.excluded.contains(id));
@@ -66,6 +60,49 @@ pub(crate) struct Remaining {
     pub(crate) plan: Plan,
     /// Work that is not applicable and must not appear in any remaining projection.
     pub(crate) excluded: BTreeSet<WorkItemId>,
+    /// Hours from each outstanding task's recorded start event to the origin.
+    pub(crate) elapsed: BTreeMap<WorkItemId, f64>,
+}
+
+impl Remaining {
+    /// Remaining duration source of every activity, in work-item id order.
+    pub(crate) fn durations(&self) -> Result<Vec<(WorkItemId, RemainingDuration)>, ScheduleError> {
+        self.plan
+            .work_items
+            .iter()
+            .map(|(id, work)| {
+                let done = work.execution.status.satisfies_dependency();
+                let elapsed = self.elapsed.get(id).copied().unwrap_or(0.0);
+                Ok((*id, RemainingDuration::of(*id, work, done, elapsed)?))
+            })
+            .collect()
+    }
+}
+
+/// Hours between each outstanding applicable task's recorded start and the origin.
+///
+/// Blocked intervals count, since estimates are elapsed hours. A start whose time was never
+/// recorded is absent, so that task keeps its whole duration rather than an assumed head start.
+fn elapsed_since_start(
+    plan: &Plan,
+    timeline: &dpm_model::Timeline,
+    excluded: &BTreeSet<WorkItemId>,
+) -> BTreeMap<WorkItemId, f64> {
+    plan.work_items
+        .iter()
+        .filter(|(id, work)| {
+            work.is_executable()
+                && !excluded.contains(id)
+                && !work.execution.status.satisfies_dependency()
+        })
+        .filter_map(|(id, work)| match work.start_event()? {
+            dpm_model::EventTime::Recorded(at) => Some((
+                *id,
+                ((timeline.now() - at).num_milliseconds() as f64 / 3_600_000.0).max(0.0),
+            )),
+            dpm_model::EventTime::Unrecorded => None,
+        })
+        .collect()
 }
 
 /// Outstanding constraints measured from `now` as the projection origin.
@@ -76,7 +113,8 @@ pub(crate) struct Remaining {
 /// kept whole rather than assumed to have elapsed. The completed predecessor projects at the origin
 /// with zero duration, so the kept lag is measured from `now`. A start-based edge from work that has
 /// started is treated the same way from its start event; the started predecessor projects at the
-/// origin unless its own remaining constraints push it later, which only delays the forecast. Work the shared evaluator reports
+/// origin unless its own remaining constraints push it later, which only delays the forecast, and
+/// runs for its remaining duration from there. Work the shared evaluator reports
 /// as not applicable keeps no duration and no edge, so it cannot move applicable work.
 pub(crate) fn remaining_plan_at(plan: &Plan, timeline: &dpm_model::Timeline) -> Remaining {
     let mut remaining = plan.clone();
@@ -119,6 +157,7 @@ pub(crate) fn remaining_plan_at(plan: &Plan, timeline: &dpm_model::Timeline) -> 
         })
         .collect();
     Remaining {
+        elapsed: elapsed_since_start(plan, timeline, &excluded),
         plan: remaining,
         excluded,
     }

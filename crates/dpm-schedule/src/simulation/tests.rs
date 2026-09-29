@@ -1,6 +1,8 @@
 use super::*;
 use dpm_model::{ActorId, ThreePointEstimate, WorkStatus};
 
+mod agreement;
+
 fn fixture() -> Plan {
     serde_json::from_str(include_str!(
         "../../../../tests/support/execution-plan.json"
@@ -57,27 +59,6 @@ fn completed_plan_has_zero_remaining_duration_even_with_lag() {
     )
     .expect("remaining");
     assert_eq!(result.p95_finish_hours, 0.0);
-}
-
-#[test]
-fn extreme_finite_triangular_samples_stay_inside_estimate_bounds() {
-    let mut rng = XorShift64::new(0);
-    let estimate = ThreePointEstimate {
-        optimistic_hours: 0.0,
-        likely_hours: f64::MAX / 2.0,
-        pessimistic_hours: f64::MAX,
-    };
-    for _ in 0..1000 {
-        let sample = sample_triangular(
-            &mut rng,
-            estimate.optimistic_hours,
-            estimate.likely_hours,
-            estimate.pessimistic_hours,
-        );
-        assert!(sample.is_finite());
-        assert!((0.0..=f64::MAX).contains(&sample));
-    }
-    assert_eq!(sample_triangular(&mut rng, 4.0, 4.0, 4.0), 4.0);
 }
 
 /// `count` estimated tasks, each constrained by up to three of the fifty before it through FS,
@@ -142,30 +123,32 @@ fn layered(count: usize) -> Plan {
     plan
 }
 
-/// The simulation computed step by step through the public deterministic projection.
-fn reference(plan: &Plan, config: SimulationConfig, remaining_only: bool) -> SimulationSummary {
+/// Every activity's baseline duration source: its whole beta-PERT duration.
+fn baseline(plan: &Plan) -> Vec<(WorkItemId, RemainingDuration)> {
+    plan.work_items
+        .iter()
+        .map(|(id, work)| {
+            (
+                *id,
+                RemainingDuration::of(*id, work, false, 0.0).expect("valid"),
+            )
+        })
+        .collect()
+}
+
+/// Sampled project finishes and critical counts, one public deterministic projection per sample.
+fn sampled_projections(
+    plan: &Plan,
+    config: SimulationConfig,
+    sources: &[(WorkItemId, RemainingDuration)],
+) -> (Vec<f64>, BTreeMap<WorkItemId, usize>) {
     let mut rng = XorShift64::new(config.seed);
     let mut finishes = Vec::new();
     let mut counts: BTreeMap<_, usize> = plan.work_items.keys().map(|id| (*id, 0)).collect();
     for _ in 0..config.iterations {
-        let durations = plan
-            .work_items
+        let durations = sources
             .iter()
-            .map(|(id, work)| {
-                let done = remaining_only && work.execution.status.satisfies_dependency();
-                let hours = match work.schedule.estimate {
-                    _ if done => 0.0,
-                    Some(e) if work.is_executable() => sample_triangular(
-                        &mut rng,
-                        e.optimistic_hours,
-                        e.likely_hours,
-                        e.pessimistic_hours,
-                    ),
-                    _ if work.is_executable() => work.expected_duration_hours(),
-                    _ => 0.0,
-                };
-                (*id, hours)
-            })
+            .map(|(id, source)| (*id, source.sample(&mut rng)))
             .collect();
         let schedule = crate::deterministic_with_durations(plan, &durations).expect("cpm");
         finishes.push(schedule.project_finish_hours);
@@ -173,6 +156,16 @@ fn reference(plan: &Plan, config: SimulationConfig, remaining_only: bool) -> Sim
             *counts.entry(id).or_default() += 1;
         }
     }
+    (finishes, counts)
+}
+
+/// The simulation computed step by step through the public deterministic projection.
+fn reference(
+    plan: &Plan,
+    config: SimulationConfig,
+    sources: &[(WorkItemId, RemainingDuration)],
+) -> SimulationSummary {
+    let (mut finishes, counts) = sampled_projections(plan, config, sources);
     finishes.sort_by(f64::total_cmp);
     SimulationSummary {
         iterations: config.iterations,
@@ -194,7 +187,7 @@ fn simulation_equals_one_deterministic_projection_per_sample() {
             seed: 7,
         };
         let fast = simulate(&plan, config).expect("simulate");
-        let slow = reference(&plan, config, false);
+        let slow = reference(&plan, config, &baseline(&plan));
         assert_eq!(fast.p50_finish_hours, slow.p50_finish_hours);
         assert_eq!(fast.p80_finish_hours, slow.p80_finish_hours);
         assert_eq!(fast.p95_finish_hours, slow.p95_finish_hours);
@@ -237,6 +230,19 @@ fn remaining_simulation_equals_one_projection_of_the_remaining_graph_per_sample(
         work.execution.events.started_at = Some(at(n));
         work.execution.events.verified_at = Some(at(n + 1));
     }
+    // In flight: not yet started at the first clock reading, mid-estimate at the second and past
+    // the pessimistic bound at the third.
+    for (n, started) in [(20, 20), (21, 23)] {
+        let key = dpm_model::Key::new(format!("S-{n}"));
+        let work = plan
+            .work_items
+            .values_mut()
+            .find(|w| w.key == key)
+            .expect("layered task");
+        work.execution.status = WorkStatus::InProgress;
+        work.execution.owner = Some(ActorId::agent("owner"));
+        work.execution.events.started_at = Some(at(started));
+    }
     let config = SimulationConfig {
         iterations: 200,
         seed: 3,
@@ -245,7 +251,11 @@ fn remaining_simulation_equals_one_projection_of_the_remaining_graph_per_sample(
         let fast = simulate_remaining(&plan, config, now).expect("remaining");
         let remaining = crate::cpm::remaining_plan_at(&plan, &dpm_model::Timeline::at(&plan, now));
         assert!(remaining.excluded.is_empty());
-        let slow = reference(&remaining.plan, config, true);
+        let slow = reference(
+            &remaining.plan,
+            config,
+            &remaining.durations().expect("durations"),
+        );
         assert_eq!(fast.p50_finish_hours, slow.p50_finish_hours);
         assert_eq!(fast.p95_finish_hours, slow.p95_finish_hours);
         assert_eq!(fast.criticality, slow.criticality);

@@ -78,10 +78,11 @@ fn a_provisional_start_stays_a_conservative_forecast_until_verification() {
     .expect("submit A");
     let claim = gate_report(&plan, b, Transition::Claim, t(2)).expect("gates");
     assert!(claim.ready && !claim.provisional.is_empty());
-    let duration = plan.work_items[&a].expected_duration_hours();
+    // A (2/4/6 h) has run for its optimistic 2 h, which rules nothing out: 4 - 2 h remain.
+    let remaining = plan.work_items[&a].expected_duration_hours() - 2.0;
     assert_eq!(
         forecast_start(&plan, b, 2),
-        duration,
+        remaining,
         "only verification finishes A in the forecast"
     );
 }

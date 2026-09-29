@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from smoke_agent import ROOT, Agent, run_cli
+from smoke_agent import ROOT, Agent, run_cli, same_at_nearby_clocks
 
 
 def provisional_plan():
@@ -18,12 +18,13 @@ def provisional_plan():
 
 
 def same_views(worker, database):
-    """Every query view is the same JSON through both adapters; returns B's explanation."""
+    """Every query view is the same JSON through both adapters, up to the forecast hours started work
+    spends between the two reads; returns B's explanation."""
     detail = worker.call('explain_work', {'key': 'TEST-B'})['data']
-    assert detail == run_cli(database, 'explain', 'TEST-B')
-    assert worker.call('explain_work', {'key': 'TEST-A'})['data'] == run_cli(database, 'explain', 'TEST-A')
-    assert worker.call('project_status', {'probabilistic': False})['data'] == run_cli(database, 'status', '--no-simulation')
-    assert worker.call('next_work', {'probabilistic': False})['data'] == run_cli(database, 'next', '--deterministic-only')
+    assert same_at_nearby_clocks(detail, run_cli(database, 'explain', 'TEST-B'))
+    assert same_at_nearby_clocks(worker.call('explain_work', {'key': 'TEST-A'})['data'], run_cli(database, 'explain', 'TEST-A'))
+    assert same_at_nearby_clocks(worker.call('project_status', {'probabilistic': False})['data'], run_cli(database, 'status', '--no-simulation'))
+    assert same_at_nearby_clocks(worker.call('next_work', {'probabilistic': False})['data'], run_cli(database, 'next', '--deterministic-only'))
     return detail
 
 
@@ -77,7 +78,7 @@ def provisional_smoke(directory):
             else:
                 command = [*command, *extra]
             assert remote['message'] == run_cli(database, *command, error=code)['error']['message'], arguments
-        assert same_views(builder, database) == rejected, 'refused revalidations change nothing'
+        assert same_at_nearby_clocks(same_views(builder, database), rejected), 'refused revalidations change nothing'
         author.call('submit_work', {'key': 'TEST-A', 'base_revision': 6})
         run_cli(database, 'verify', 'TEST-A', '--actor', 'human:reviewer')
         verified = same_views(builder, database)

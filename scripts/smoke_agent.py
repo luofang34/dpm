@@ -206,7 +206,7 @@ def smoke(database):
         assert shown['progress'] == {'percent_complete': 50.0, 'verified': False}
         assert shown['execution']['reported_progress_percent'] == 50 and shown['execution']['status'] == 'InProgress'
         summary = worker.call('project_status', {})['data']
-        assert summary == run_cli(database, 'status') and summary['progress']['percent_complete'] > 0
+        assert same_at_nearby_clocks(summary, run_cli(database, 'status')) and summary['progress']['percent_complete'] > 0
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
         worker.call('attach_git_head', {'key': 'TEST-A', 'asset': 'TEST-REPO', 'base_revision': 4})
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')
@@ -259,7 +259,7 @@ def review_smoke(directory):
         review = reviewer.call('reject_work', {'key': 'TEST-A', 'reason': 'Missing acceptance evidence', 'base_revision': 4})
         assert review['data']['command']['Reject']['reason'] == 'Missing acceptance evidence'
         detail = worker.call('explain_work', {'key': 'TEST-A'})['data']
-        assert detail == run_cli(database, 'explain', 'TEST-A')
+        assert same_at_nearby_clocks(detail, run_cli(database, 'explain', 'TEST-A'))
         assert detail['work']['execution']['status'] == 'InProgress'
         assert detail['work']['execution']['last_rejection']['reason'] == 'Missing acceptance evidence'
         assert 'submitted_at' not in detail['work']['execution']['events'] and detail['work']['execution']['events']['started_at']
@@ -471,12 +471,13 @@ def timing_plan(kind, lag, legacy=False):
 
 def same_at_nearby_clocks(left, right, key=''):
     """Equal views taken at two clock readings: forecast hours measured from each reading while a
-    lag elapses may differ by the time between the calls, and nothing else may differ."""
+    lag elapses or started work runs may differ by the time between the calls, as may a `next`
+    score through its float penalty, and nothing else may differ."""
     if isinstance(left, dict) and isinstance(right, dict):
         return left.keys() == right.keys() and all(same_at_nearby_clocks(left[k], right[k], k) for k in left)
     if isinstance(left, list) and isinstance(right, list):
         return len(left) == len(right) and all(same_at_nearby_clocks(a, b, key) for a, b in zip(left, right))
-    if key.endswith('_hours') and isinstance(left, float) and isinstance(right, float):
+    if (key.endswith('_hours') or key == 'score') and isinstance(left, (int, float)) and isinstance(right, (int, float)):
         return abs(left - right) < 0.01
     return left == right
 

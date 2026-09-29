@@ -629,11 +629,22 @@ started on the pending submission while the forecast still waits for verificatio
 predecessor that still has outstanding constraints of its own is projected after them, which also
 only delays the forecast.
 
+Durations in these forecasts follow one model for CPM and Monte Carlo: the deterministic duration
+of every activity is the mean of its simulated one. A task's whole duration is beta-PERT, whose mean
+is the PERT expectation `(O + 4M + P) / 6`. A task with a recorded start event that is not yet
+Verified or Done (in progress, blocked or submitted) contributes only its remaining duration,
+conditioned on still running after the hours elapsed since that start; blocked time counts as
+elapsed, and a start with an unrecorded time keeps the whole duration. The remainder is never
+`max(expected − elapsed, 0)`: a task within its pessimistic bound always keeps a positive remainder,
+and one past it projects to finish at the clock reading, never before, while its successors' gates
+still wait for verification. Remaining forecasts of started work therefore shrink as the clock
+advances between two queries of the same revision.
+
 A task without an estimate enters the remaining CPM and Monte Carlo at 0 h; the forecast does not
 guess a duration, so it is optimistic by that task's real duration. `project_status.unestimated`
 names that work so the forecast can be judged: the keys, in key order, of every work item that is a
 task (milestones are zero-duration points and packages have no duration of their own), has no
-`estimate`, is not Verified or Done (a Submitted task keeps its full duration until verification)
+`estimate`, is not Verified or Done (a Submitted task stays listed until verification)
 and is `applicable` (work outside the active graph is in no headline forecast). The list is always
 present and empty when every such task is estimated. Each `open_choices.scenarios` entry carries
 its own `unestimated`, evaluated with that scenario's choices, so an unestimated task on an undecided

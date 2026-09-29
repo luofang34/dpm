@@ -396,9 +396,10 @@ fn a_started_predecessor_releases_start_based_lag_from_its_start_event() {
 
 #[test]
 fn finish_based_lag_from_submitted_but_unverified_work_is_kept_whole() {
+    // Two of A's four hours have elapsed; its remaining two still precede the whole 2h lag.
     for (kind, expected) in [
-        (DependencyKind::FinishStart, 4.0 + 2.0),
-        (DependencyKind::FinishFinish, 4.0 + 2.0 - 3.0),
+        (DependencyKind::FinishStart, 2.0 + 2.0),
+        (DependencyKind::FinishFinish, 2.0 + 2.0 - 3.0),
     ] {
         let (mut plan, a, b) = pair(4.0, 3.0);
         plan.dependencies.push(Dependency::new(a, b, kind, 2.0));
@@ -406,10 +407,51 @@ fn finish_based_lag_from_submitted_but_unverified_work_is_kept_whole() {
         start(work, Some(0));
         work.execution.status = WorkStatus::Submitted;
         work.execution.events.submitted_at = Some(at(1));
-        let schedule = deterministic_remaining(&plan, at(50)).expect("remaining");
+        let schedule = deterministic_remaining(&plan, at(2)).expect("remaining");
         assert_eq!(
             schedule.activities[&b].earliest_start_hours, expected,
             "{kind:?}: only verification finishes the predecessor"
         );
     }
+}
+
+#[test]
+fn started_work_contributes_only_its_remaining_duration() {
+    let (mut plan, a, b) = pair(4.0, 3.0);
+    plan.dependencies
+        .push(Dependency::new(a, b, DependencyKind::FinishStart, 0.0));
+    let finish = |plan: &Plan, now| {
+        deterministic_remaining(plan, now)
+            .expect("remaining")
+            .project_finish_hours
+    };
+    assert_eq!(
+        finish(&plan, at(3)),
+        7.0,
+        "unstarted work keeps its whole estimate"
+    );
+    start(plan.work_items.get_mut(&a).expect("task"), Some(0));
+    assert_eq!(
+        finish(&plan, at(3)),
+        1.0 + 3.0,
+        "three of four hours have elapsed"
+    );
+    let work = plan.work_items.get_mut(&a).expect("task");
+    work.execution.status = WorkStatus::Blocked;
+    work.execution.block_reason = Some("waiting on a reviewer".into());
+    assert_eq!(finish(&plan, at(3)), 4.0, "blocked hours are elapsed hours");
+    assert_eq!(
+        finish(&plan, at(90)),
+        3.0,
+        "an overrun projects at the origin, never before it"
+    );
+    start(plan.work_items.get_mut(&a).expect("task"), None);
+    let work = plan.work_items.get_mut(&a).expect("task");
+    work.execution.block_reason = None;
+    work.execution.events.start_unrecorded = true;
+    assert_eq!(
+        finish(&plan, at(90)),
+        7.0,
+        "an unrecorded start keeps the whole duration"
+    );
 }

@@ -1,5 +1,7 @@
 use crate::ScheduleError;
 use crate::network::{EPSILON, Network};
+use crate::remaining_duration::RemainingDuration;
+use crate::sampling::XorShift64;
 use dpm_model::{Plan, WorkItemId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -36,46 +38,6 @@ pub struct SimulationSummary {
     pub criticality: BTreeMap<WorkItemId, f64>,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct XorShift64(u64);
-
-impl XorShift64 {
-    fn new(seed: u64) -> Self {
-        Self(if seed == 0 {
-            0x9E37_79B9_7F4A_7C15
-        } else {
-            seed
-        })
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        let mut x = self.0;
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        self.0 = x;
-        x
-    }
-
-    fn unit_f64(&mut self) -> f64 {
-        // 53 random bits, in [0, 1).
-        ((self.next_u64() >> 11) as f64) * (1.0 / ((1_u64 << 53) as f64))
-    }
-}
-
-fn sample_triangular(rng: &mut XorShift64, a: f64, m: f64, b: f64) -> f64 {
-    if (b - a).abs() <= EPSILON {
-        return a;
-    }
-    let u = rng.unit_f64();
-    let mode_fraction = (m - a) / (b - a);
-    if u < mode_fraction {
-        a + (b - a) * (u * mode_fraction).sqrt()
-    } else {
-        b - (b - a) * ((1.0 - u) * (1.0 - mode_fraction)).sqrt()
-    }
-}
-
 fn percentile(sorted: &[f64], p: f64) -> f64 {
     if sorted.is_empty() {
         return 0.0;
@@ -91,14 +53,23 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
     }
 }
 
-/// Sample triangular task durations and project complete baseline schedules.
+/// Sample beta-PERT task durations and project complete baseline schedules.
+///
+/// Each task's samples have the PERT expectation that `deterministic` projects as their mean.
 pub fn simulate(plan: &Plan, config: SimulationConfig) -> Result<SimulationSummary, ScheduleError> {
-    simulate_inner(plan, config, false)
+    plan.validate()?;
+    let durations = plan
+        .work_items
+        .iter()
+        .map(|(id, work)| Ok((*id, RemainingDuration::of(*id, work, false, 0.0)?)))
+        .collect::<Result<Vec<_>, ScheduleError>>()?;
+    simulate_inner(plan, config, &durations)
 }
 
 /// Monte Carlo projection of remaining applicable work from the execution state at a clock reading.
 ///
-/// It samples the same active graph as `deterministic_remaining`; excluded work has no criticality.
+/// It samples the same active graph and the same remaining durations as `deterministic_remaining`,
+/// whose values are the means of these samples; excluded work has no criticality.
 pub fn simulate_remaining(
     plan: &Plan,
     config: SimulationConfig,
@@ -115,25 +86,20 @@ pub fn simulate_remaining_at(
 ) -> Result<SimulationSummary, ScheduleError> {
     plan.validate()?;
     let remaining = crate::cpm::remaining_plan_at(plan, timeline);
-    let mut summary = simulate_inner(&remaining.plan, config, true)?;
+    let durations = remaining.durations()?;
+    let mut summary = simulate_inner(&remaining.plan, config, &durations)?;
     summary
         .criticality
         .retain(|id, _| !remaining.excluded.contains(id));
     Ok(summary)
 }
 
-/// Duration source of one activity across all iterations.
-enum Activity {
-    Fixed(f64),
-    Sampled(dpm_model::ThreePointEstimate),
-}
-
+/// Sample every activity's duration source, in work-item id order, and project each sample.
 fn simulate_inner(
     plan: &Plan,
     config: SimulationConfig,
-    remaining_only: bool,
+    durations_by_id: &[(WorkItemId, RemainingDuration)],
 ) -> Result<SimulationSummary, ScheduleError> {
-    plan.validate()?;
     if config.iterations == 0 {
         return Err(ScheduleError::NoSimulationIterations);
     }
@@ -143,36 +109,16 @@ fn simulate_inner(
     let mut critical_counts = vec![0_usize; network.order().len()];
     let mut durations = vec![0.0; network.order().len()];
     // Sampling follows work-item id order, so a seed draws the same numbers for the same plan.
-    let mut sampled = Vec::with_capacity(plan.work_items.len());
-    for (id, work) in &plan.work_items {
+    let mut sampled = Vec::with_capacity(durations_by_id.len());
+    for (id, source) in durations_by_id {
         let at = network
             .position(id)
             .ok_or(ScheduleError::MissingWorkItem(*id))?;
-        let activity = if !work.is_executable()
-            || (remaining_only && work.execution.status.satisfies_dependency())
-        {
-            Activity::Fixed(0.0)
-        } else if let Some(estimate) = work.schedule.estimate {
-            estimate
-                .validate()
-                .map_err(|_| ScheduleError::InvalidDuration(*id))?;
-            Activity::Sampled(estimate)
-        } else {
-            Activity::Fixed(work.expected_duration_hours())
-        };
-        sampled.push((at, *id, activity));
+        sampled.push((at, *id, source));
     }
     for _ in 0..config.iterations {
-        for (at, id, activity) in &sampled {
-            durations[*at] = match activity {
-                Activity::Fixed(hours) => *hours,
-                Activity::Sampled(estimate) => sample_triangular(
-                    &mut rng,
-                    estimate.optimistic_hours,
-                    estimate.likely_hours,
-                    estimate.pessimistic_hours,
-                ),
-            };
+        for (at, id, source) in &sampled {
+            durations[*at] = source.sample(&mut rng);
             if !durations[*at].is_finite() || durations[*at] < 0.0 {
                 return Err(ScheduleError::InvalidDuration(*id));
             }
