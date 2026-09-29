@@ -141,7 +141,10 @@ impl AppError {
                 | dpm_store::StoreError::RetiredSchemaVersion { .. },
             ) => "unsupported_schema_version",
             Self::Store(dpm_store::StoreError::TargetExists { .. }) => "target_exists",
-            Self::Store(dpm_store::StoreError::InvalidTarget { .. }) => "invalid_request",
+            Self::Store(
+                dpm_store::StoreError::InvalidTarget { .. }
+                | dpm_store::StoreError::Lineage(LineageError::NotAnArchive { .. }),
+            ) => "invalid_request",
             Self::Store(error) if error.is_corruption() => "corrupt_store",
             Self::Store(_) => "storage_error",
             Self::Validation(_) => "invalid_plan",

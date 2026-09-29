@@ -235,9 +235,12 @@ def discovered(directory):
     report = cli('verify-store', cwd=root)
     assert report['path'] == str((root / '.dpm/state.sqlite').resolve()), report
     assert report['operation_count'] == 0
-    restored = cli('restore', '--from', '.dpm/state.sqlite', '--to', 'copy.sqlite', cwd=root)
+    # A live store is never a restore source: its copy would share the live lineage if interrupted.
+    cli('restore', '--from', '.dpm/state.sqlite', '--to', 'copy.sqlite', cwd=root, error='invalid_request')
+    cli('backup', '--to', 'archive.sqlite', cwd=root)
+    restored = cli('restore', '--from', 'archive.sqlite', '--to', 'copy.sqlite', cwd=root)
     assert restored['path'] == str((root / 'copy.sqlite').resolve()), restored
-    assert sorted(path.name for path in root.iterdir()) == ['.dpm', 'copy.sqlite']
+    assert sorted(path.name for path in root.iterdir()) == ['.dpm', 'archive.sqlite', 'copy.sqlite']
     state = root / '.dpm'
     state.chmod(0o555)
     try:

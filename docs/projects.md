@@ -53,7 +53,10 @@ dpm verify-store            # the selected workspace's live store
   history and the schema version in one self-contained file (no `-wal`), and is verified, replay
   included, before the command succeeds. A backup is an archive: it keeps the source's
   `lineage_id`, reports `archived: true`, and refuses every write with `archived_store`.
-- `restore` verifies the backup, copies it to a path that must not exist yet, gives the copy a new
+- `restore` accepts only a backup archive as its source (a live store is refused with
+  `invalid_request`: an interrupted copy of it would be a writable file sharing its lineage, while
+  an interrupted copy of an archive stays sealed). It verifies the backup, copies it to a path that
+  must not exist yet, gives the copy a new
   `lineage_id` (the source keeps its own), and verifies the result. The restored store is writable
   and continues the copied history under its new lineage, so clients that cached a revision of the
   source with `--base-lineage` are refused rather than silently continuing a different history

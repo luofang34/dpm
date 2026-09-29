@@ -279,6 +279,16 @@ pub enum LineageError {
         /// Inspected database.
         path: PathBuf,
     },
+    /// A restore forks a new writable lineage, so its source must be a sealed backup archive: an
+    /// interrupted copy of an archive stays sealed, while one of a live store would be a writable
+    /// file sharing that store's lineage.
+    #[error(
+        "{path} is a live store, not a backup archive; run `dpm backup` first and restore the backup"
+    )]
+    NotAnArchive {
+        /// Live store named as the restore source.
+        path: PathBuf,
+    },
     /// A backup archive is read and verified, never written.
     #[error(
         "{path} is a backup archive; restore it into a new store with `dpm restore` to continue \

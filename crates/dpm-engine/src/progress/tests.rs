@@ -32,10 +32,12 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
         DependencyKind::FinishStart,
         0.0,
     ));
-    let schedule =
-        dpm_schedule::deterministic_remaining(&plan, chrono::Utc::now()).expect("schedule");
     apply(&mut plan, Command::Claim { work });
     apply(&mut plan, Command::Start { work });
+    // One clock reading for both forecasts: started work's remaining duration depends on it, and
+    // only the progress report may differ between them.
+    let now = chrono::Utc::now();
+    let schedule = dpm_schedule::deterministic_remaining(&plan, now).expect("schedule");
     apply(
         &mut plan,
         Command::ReportProgress {
@@ -49,7 +51,7 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
         WorkStatus::InProgress
     );
     assert_eq!(
-        dpm_schedule::deterministic_remaining(&plan, chrono::Utc::now())
+        dpm_schedule::deterministic_remaining(&plan, now)
             .expect("schedule")
             .project_finish_hours,
         schedule.project_finish_hours

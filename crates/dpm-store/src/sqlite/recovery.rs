@@ -82,7 +82,9 @@ impl SqliteStore {
 pub fn restore_store_blocking(from: &Path, to: &Path) -> Result<IntegrityReport, StoreError> {
     let from = canonical_blocking(from)?;
     let to = target_path_blocking(to)?;
-    verify_store_blocking(&from)?;
+    if !verify_store_blocking(&from)?.archived {
+        return Err(crate::LineageError::NotAnArchive { path: from }.into());
+    }
     let mode = read_mode_blocking(&from)?;
     let before = fingerprint_blocking(&from)?;
     let source = open_read_only_blocking(&from, mode)?;

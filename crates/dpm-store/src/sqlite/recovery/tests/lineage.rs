@@ -85,3 +85,20 @@ fn a_store_without_its_lineage_row_is_corrupt() {
         Some(StoreError::Lineage(crate::LineageError::Missing { .. }))
     ));
 }
+
+#[test]
+fn a_live_store_is_never_a_restore_source() {
+    let dir = tempfile::tempdir().expect("directory");
+    let live = dir.path().join("live.sqlite");
+    let restored = dir.path().join("restored.sqlite");
+    drop(store_with_history(&live, 2));
+    let before = std::fs::read(&live).expect("bytes");
+    assert!(matches!(
+        restore_store_blocking(&live, &restored),
+        Err(StoreError::Lineage(
+            crate::LineageError::NotAnArchive { .. }
+        ))
+    ));
+    assert!(!restored.exists(), "no partial copy is left behind");
+    assert!(std::fs::read(&live).expect("bytes") == before);
+}

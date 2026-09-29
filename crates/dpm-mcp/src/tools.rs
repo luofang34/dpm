@@ -250,15 +250,8 @@ pub(crate) fn call_tool_blocking(
     if ownership::handles(name) {
         return ownership::call_blocking(app, actor, name, value, preconditions);
     }
-    if validation::handles(name) {
-        return validation::call(value);
-    }
-    // The schema describes the format, not this workspace, so like the CLI it reports no revision.
-    if name == "plan_schema" {
-        return Ok(serde_json::to_value(Envelope::new(
-            None,
-            dpm_app::plan_schema()?,
-        ))?);
+    if validation::handles(name) || name == "plan_schema" {
+        return validation::call(name, value);
     }
     if interchange::handles(name) {
         return Ok(serde_json::to_value(Envelope::from(
@@ -315,7 +308,9 @@ pub(crate) fn call_tool_blocking(
             reason: required(args.reason, "reason")?,
         })?
     } else {
-        let command = mutation_blocking(app, actor, name, args)?;
+        let command = app.build_command_blocking(preconditions.operation_id, |app| {
+            mutation_blocking(app, actor, name, args)
+        })?;
         app.execute_blocking(CommandRequest {
             actor: actor.clone(),
             base_revision,

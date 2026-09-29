@@ -8,7 +8,10 @@ import time
 import uuid
 from pathlib import Path
 
-from smoke_agent import ROOT, Agent, run_cli, run_cli_envelope
+import json
+import subprocess
+
+from smoke_agent import CLI, ROOT, Agent, run_cli, run_cli_envelope
 
 FIXTURE = ROOT / 'tests/support/execution-plan.json'
 ACTOR = 'agent:ops'
@@ -128,6 +131,42 @@ def busy(database, agent):
     assert retried['id'] == identity and retried['resulting_revision'] == 3, retried
 
 
+def rebuilt_and_raced(directory):
+    """A committed identity is never reported as failed: not when its request can no longer be
+    rebuilt from the live state, and not when parallel attempts race with it."""
+    database = directory / 'rebuilt.sqlite'
+    run_cli(database, 'import', str(FIXTURE))
+    agent = Agent(database, ACTOR)
+    try:
+        run_cli(database, 'claim', 'TEST-A', '--actor', ACTOR)
+        flags = ['--provider', 'Forgejo', '--instance', 'git.alpha.example', '--namespace', 'ops/dpm', '--id', '42']
+        identity = {'provider': 'Forgejo', 'instance': 'git.alpha.example', 'namespace': 'ops/dpm', 'kind': 'Issue',
+                    'external_id': '42'}
+        run_cli(database, 'link-external', 'TEST-A', *flags, '--actor', ACTOR)
+        operation = uuid7()
+        unlinked = run_cli(database, '--operation-id', operation, 'unlink-external', 'TEST-A', *flags, '--actor', ACTOR)
+        # The reference is gone, so the unlink cannot be rebuilt; the resend reports the record.
+        revision = unlinked['resulting_revision']
+        duplicate = same_refusal(agent, 'unlink_external', {'key': 'TEST-A', 'identity': identity,
+                                                            'base_revision': revision, 'operation_id': operation},
+                                 database, ('--operation-id', operation, 'unlink-external', 'TEST-A', *flags,
+                                            '--actor', ACTOR), 'duplicate_operation')
+        assert duplicate['details']['recorded'] == unlinked, duplicate
+    finally:
+        agent.close()
+    run_cli(database, 'start', 'TEST-A', '--actor', ACTOR)
+    for percent in range(10, 90, 10):
+        identity = uuid7()
+        command = [str(CLI), '--database', str(database), '--json', '--operation-id', identity,
+                   'progress', 'TEST-A', str(percent), '--actor', ACTOR]
+        racers = [subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                  for _ in range(6)]
+        answers = [json.loads(racer.communicate(timeout=30)[0]) for racer in racers]
+        codes = {answer.get('error', {}).get('code', 'ok') for answer in answers}
+        assert codes == {'ok'}, (percent, codes)
+        assert len({json.dumps(answer['data'], sort_keys=True) for answer in answers}) == 1, answers
+
+
 def operations_smoke(directory):
     database = directory / 'operations.sqlite'
     imported = run_cli_envelope(database, 'import', str(FIXTURE))
@@ -142,8 +181,9 @@ def operations_smoke(directory):
     finally:
         agent.close()
     restored_copy(directory, database, claim)
+    rebuilt_and_raced(directory)
     print('PASS: CLI/MCP operation ids: recorded resends, duplicate and invalid ids, lineage preconditions, '
-          'archives, restored lineages and retryable busy stores')
+          'archives, restored lineages, retryable busy stores, unrebuildable resends and same-identity races')
 
 
 if __name__ == '__main__':

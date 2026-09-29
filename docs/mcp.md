@@ -329,7 +329,10 @@ inside the write transaction:
   written; `details.recorded` holds the operation recorded under that identity. Commands the adapter
   completes from the live state resolve differently once the first attempt has committed — a handoff
   names the owner it observed, and `attach_git_head` captures a new artifact — so their retries are
-  answered this way; `details.recorded` shows that the first attempt succeeded.
+  answered this way; `details.recorded` shows that the first attempt succeeded. The same answer
+  replaces any error from rebuilding a request whose identity is already recorded (an unlinked
+  reference, a renamed key, a cleared owner), and any conflict or refusal an attempt meets while a
+  concurrent attempt with the same identity commits, so a committed change never looks failed.
 - `store_busy` means another process held the store's write lock for longer than the store waits
   (5 seconds). Nothing was written; retry later with the same identity, which makes the retry safe
   whether or not an earlier attempt committed.

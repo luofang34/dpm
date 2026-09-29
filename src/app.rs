@@ -183,7 +183,9 @@ fn mutate_blocking(
 ) -> Result<(), CliError> {
     app.ensure_writable()?;
     let plan = app.plan_blocking()?;
-    let (actor, command) = mutation_blocking(app, command)?;
+    let (actor, command) = app.build_command_blocking(preconditions.operation_id, |app| {
+        mutation_blocking(app, command)
+    })?;
     let operation = app.execute_blocking(CommandRequest {
         actor,
         base_revision: preconditions.base_revision.unwrap_or(plan.revision),

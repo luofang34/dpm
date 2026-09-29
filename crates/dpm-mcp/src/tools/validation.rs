@@ -1,4 +1,5 @@
-//! Plan validation, which reads no workspace, so it answers the same on a preview or a live store.
+//! Plan validation and the plan schema, which read no workspace, so they answer the same on a
+//! preview or a live store and report no revision, like their CLI commands.
 
 use super::required;
 use dpm_app::{AppError, Envelope};
@@ -30,7 +31,13 @@ struct ValidationArguments {
 }
 
 /// The plan stays an undecoded value until validation so decoding errors read as CLI validate's.
-pub(super) fn call(value: Value) -> Result<Value, AppError> {
+pub(super) fn call(name: &str, value: Value) -> Result<Value, AppError> {
+    if name == "plan_schema" {
+        return Ok(serde_json::to_value(Envelope::new(
+            None,
+            dpm_app::plan_schema()?,
+        ))?);
+    }
     let args: ValidationArguments = serde_json::from_value(value)?;
     let report = dpm_app::validate_plan(required(args.plan, "plan")?)?;
     Ok(serde_json::to_value(Envelope::new(None, report))?)

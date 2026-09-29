@@ -56,11 +56,15 @@ pub(super) fn call_blocking(
     app.ensure_writable()?;
     let key = super::required(args.key, "key")?;
     let reason = super::required(args.reason, "reason")?;
-    let command = if name == "handoff_work" {
-        app.handoff_command_blocking(&key, &super::required(args.to, "to")?, reason)?
+    let to = if name == "handoff_work" {
+        Some(super::required(args.to, "to")?)
     } else {
-        app.release_command_blocking(&key, reason)?
+        None
     };
+    let command = app.build_command_blocking(preconditions.operation_id, |app| match &to {
+        Some(to) => app.handoff_command_blocking(&key, to, reason),
+        None => app.release_command_blocking(&key, reason),
+    })?;
     let operation = app.execute_blocking(CommandRequest {
         actor: actor.clone(),
         base_revision,

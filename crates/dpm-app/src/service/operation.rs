@@ -42,22 +42,67 @@ impl Application {
         if let Some(recorded) = store.recorded_operation_blocking(id)? {
             return answer_resend(store, recorded, &actor, &intent);
         }
-        check_lineage(store, preconditions.base_lineage)?;
-        let mut plan = store.load_blocking()?.ok_or(AppError::NotInitialized)?;
-        if preconditions.base_revision != plan.revision {
-            return Err(AppError::Conflict {
-                expected: preconditions.base_revision,
-                actual: plan.revision,
-            });
-        }
-        let operation = apply(&mut plan, actor.clone(), &intent, id)?;
-        match store.persist_blocking(&plan, &operation, preconditions.base_lineage) {
-            Ok(entry) => Ok(entry.operation),
-            Err(StoreError::DuplicateOperation { recorded }) => {
-                answer_resend(store, *recorded, &actor, &intent)
+        match attempt_blocking(store, preconditions, &actor, &intent, id) {
+            // A concurrent attempt with the same identity may commit between the lookup above and
+            // the checks here; its conflict or refusal must not hide that the change is recorded.
+            Err(error) if preconditions.operation_id.is_some() => {
+                match store.recorded_operation_blocking(id)? {
+                    Some(recorded) => answer_resend(store, recorded, &actor, &intent),
+                    None => Err(error),
+                }
             }
-            Err(error) => Err(error.into()),
+            outcome => outcome,
         }
+    }
+
+    /// Build a command from live state, unless the supplied identity is already recorded and the
+    /// request can no longer be rebuilt: a resend then answers `duplicate_operation` with the
+    /// recorded operation instead of an error about state its own first attempt changed.
+    pub fn build_command_blocking<T, E: From<AppError>>(
+        &self,
+        operation_id: Option<OperationId>,
+        build: impl FnOnce(&Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let built = build(self);
+        let (Err(_), Some(id), Backing::Database(store)) = (&built, operation_id, &self.backing)
+        else {
+            return built;
+        };
+        match store
+            .recorded_operation_blocking(id)
+            .map_err(AppError::from)?
+        {
+            Some(recorded) => Err(AppError::DuplicateOperation {
+                recorded: Box::new(recorded.operation),
+            }
+            .into()),
+            None => built,
+        }
+    }
+}
+
+fn attempt_blocking(
+    store: &mut SqliteStore,
+    preconditions: Preconditions,
+    actor: &ActorId,
+    intent: &Intent,
+    id: OperationId,
+) -> Result<RecordedOperation, AppError> {
+    check_lineage(store, preconditions.base_lineage)?;
+    let mut plan = store.load_blocking()?.ok_or(AppError::NotInitialized)?;
+    if preconditions.base_revision != plan.revision {
+        return Err(AppError::Conflict {
+            expected: preconditions.base_revision,
+            actual: plan.revision,
+        });
+    }
+    let operation = apply(&mut plan, actor.clone(), intent, id)?;
+    match store.persist_blocking(&plan, &operation, preconditions.base_lineage) {
+        Ok(entry) => Ok(entry.operation),
+        Err(StoreError::DuplicateOperation { recorded }) => {
+            answer_resend(store, *recorded, actor, intent)
+        }
+        Err(error) => Err(error.into()),
     }
 }
 

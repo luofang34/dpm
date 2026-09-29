@@ -168,12 +168,19 @@ fn verification_creates_no_files_and_works_in_a_read_only_directory() {
     let sealed = dir.path().join("sealed");
     std::fs::create_dir(&sealed).expect("directory");
     let live = sealed.join("state.sqlite");
-    drop(store_with_history(&live, 2));
+    let archive = sealed.join("backup.sqlite");
+    let store = store_with_history(&live, 2);
+    store.backup_blocking(&archive).expect("backup");
+    drop(store);
     assert_eq!(journal_mode(&live), [[Value::Text("wal".into())]]);
-    assert_eq!(listing(&sealed), ["state.sqlite"]);
+    assert_eq!(listing(&sealed), ["backup.sqlite", "state.sqlite"]);
     let restored = dir.path().join("restored.sqlite");
-    restore_store_blocking(&live, &restored).expect("restore");
-    assert_eq!(listing(&sealed), ["state.sqlite"], "restore source");
+    restore_store_blocking(&archive, &restored).expect("restore");
+    assert_eq!(
+        listing(&sealed),
+        ["backup.sqlite", "state.sqlite"],
+        "restore source"
+    );
     assert_eq!(
         listing(dir.path()),
         ["restored.sqlite", "sealed"],
@@ -189,7 +196,7 @@ fn verification_creates_no_files_and_works_in_a_read_only_directory() {
             .operation_count,
         2
     );
-    assert_eq!(after, ["state.sqlite"]);
+    assert_eq!(after, ["backup.sqlite", "state.sqlite"]);
 }
 
 #[test]
