@@ -13,25 +13,30 @@ fn envelope_names_version_revision_and_data_and_keeps_an_absent_revision_explici
     let observed = serde_json::to_value(Envelope::new(Some(4), json!({"x": 1}))).expect("json");
     assert_eq!(
         observed,
-        json!({"api_version": API_VERSION, "revision": 4, "data": {"x": 1}})
+        json!({"api_version": API_VERSION, "revision": 4, "lineage_id": null, "data": {"x": 1}})
     );
     let local = serde_json::to_value(Envelope::new(None, json!([]))).expect("json");
     assert_eq!(
         local,
-        json!({"api_version": API_VERSION, "revision": null, "data": []})
+        json!({"api_version": API_VERSION, "revision": null, "lineage_id": null, "data": []})
     );
 }
 
 #[test]
 fn a_query_response_keeps_its_revision_in_the_envelope() {
+    let lineage = LineageId::new();
     let response = QueryResponse {
         api_version: API_VERSION,
         revision: 7,
+        lineage_id: Some(lineage),
         data: json!("view"),
     };
     assert_eq!(
         Envelope::from(response),
-        Envelope::new(Some(7), json!("view"))
+        Envelope {
+            lineage_id: Some(lineage),
+            ..Envelope::new(Some(7), json!("view"))
+        }
     );
 }
 

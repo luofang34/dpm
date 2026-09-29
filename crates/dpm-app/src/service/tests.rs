@@ -15,6 +15,8 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
     let request = CommandRequest {
         actor: actor.clone(),
         base_revision: 0,
+        base_lineage: None,
+        operation_id: None,
         command: Command::Claim { work },
     };
     app.execute_blocking(request.clone()).expect("claim");
@@ -25,6 +27,8 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
     let submit = CommandRequest {
         actor: actor.clone(),
         base_revision: 1,
+        base_lineage: None,
+        operation_id: None,
         command: Command::Submit {
             work,
             note: Some("acceptance passed".into()),
@@ -37,17 +41,23 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
     app.execute_blocking(CommandRequest {
         actor: actor.clone(),
         base_revision: 1,
+        base_lineage: None,
+        operation_id: None,
         command: Command::Start { work },
     })
     .expect("start");
     app.execute_blocking(CommandRequest {
         base_revision: 2,
+        base_lineage: None,
+        operation_id: None,
         ..submit
     })
     .expect("submit");
     let verify = CommandRequest {
         actor,
         base_revision: 3,
+        base_lineage: None,
+        operation_id: None,
         command: Command::Verify { work, note: None },
     };
     assert!(app.execute_blocking(verify.clone()).is_err());
@@ -60,7 +70,15 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
         .execution
         .events;
     drop(app);
-    let reopened = Application::open_blocking(&path).expect("reopen");
+    events_survive_restart(&path, work, recorded);
+}
+
+fn events_survive_restart(
+    path: &std::path::Path,
+    work: dpm_model::WorkItemId,
+    recorded: dpm_model::ExecutionEvents,
+) {
+    let reopened = Application::open_blocking(path).expect("reopen");
     let plan = reopened.plan_blocking().expect("plan");
     assert_eq!(plan.revision, 4);
     assert_eq!(
@@ -92,6 +110,8 @@ fn refused_transitions_carry_the_same_unmet_gates_as_explain() {
         .execute_blocking(CommandRequest {
             actor: ActorId::agent("worker"),
             base_revision: 0,
+            base_lineage: None,
+            operation_id: None,
             command: Command::Claim { work },
         })
         .expect_err("gated");

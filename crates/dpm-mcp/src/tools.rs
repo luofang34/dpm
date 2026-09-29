@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 mod cli;
 mod interchange;
 mod ownership;
+mod preconditions;
 mod validation;
 
 const NAMES: &[(&str, &str)] = &[
@@ -137,6 +138,7 @@ pub(crate) fn definitions() -> Vec<Value> {
         if !read && *name != "workspace_register" {
             properties.insert("base_revision".into(),json!({"type":"integer","minimum":0}));
             required.push("base_revision");
+            preconditions::schema(&mut properties);
         }
         match *name {
             "propose_change"|"apply_change" => {
@@ -241,22 +243,22 @@ pub(crate) fn call_tool_blocking(
     app: &mut Application,
     actor: &ActorId,
     name: &str,
-    value: Value,
+    mut value: Value,
 ) -> Result<Value, AppError> {
     validate_argument_names(name, &value)?;
+    let preconditions = preconditions::take(&mut value)?;
     if ownership::handles(name) {
-        return ownership::call_blocking(app, actor, name, value);
+        return ownership::call_blocking(app, actor, name, value, preconditions);
     }
     if validation::handles(name) {
         return validation::call(value);
     }
     // The schema describes the format, not this workspace, so like the CLI it reports no revision.
     if name == "plan_schema" {
-        return Ok(serde_json::to_value(Envelope {
-            api_version: dpm_app::API_VERSION,
-            revision: None,
-            data: dpm_app::plan_schema()?,
-        })?);
+        return Ok(serde_json::to_value(Envelope::new(
+            None,
+            dpm_app::plan_schema()?,
+        ))?);
     }
     if interchange::handles(name) {
         return Ok(serde_json::to_value(Envelope::from(
@@ -307,6 +309,8 @@ pub(crate) fn call_tool_blocking(
         app.apply_plan_change_blocking(PlanChangeRequest {
             actor: actor.clone(),
             base_revision,
+            base_lineage: preconditions.base_lineage,
+            operation_id: preconditions.operation_id,
             plan: required(args.plan, "plan")?,
             reason: required(args.reason, "reason")?,
         })?
@@ -315,6 +319,8 @@ pub(crate) fn call_tool_blocking(
         app.execute_blocking(CommandRequest {
             actor: actor.clone(),
             base_revision,
+            base_lineage: preconditions.base_lineage,
+            operation_id: preconditions.operation_id,
             command,
         })?
     };

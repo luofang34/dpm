@@ -38,7 +38,7 @@ def live_store(directory):
     live = directory / 'live.sqlite'
     cli('--database', live, 'import', ROOT / 'tests/support/execution-plan.json')
     cli('--database', live, 'claim', 'TEST-A')
-    assert pragma(live, 'user_version') == 3
+    assert pragma(live, 'user_version') == 4
     return live
 
 
@@ -63,7 +63,9 @@ def backups_during_writes(directory, live):
 def round_trip(directory, live):
     backup = directory / 'backup.sqlite'
     report = cli('--database', live, 'backup', '--to', backup)
-    assert report['schema_version'] == 3 and report['operation_count'] == 13, report
+    assert report['schema_version'] == 4 and report['operation_count'] == 13, report
+    source = cli('--database', live, 'status', '--no-simulation')['lineage_id']
+    assert report['lineage_id'] == source and report['archived'] is True, report
     assert report['genesis_revision'] == 0 and 'origin_revision' not in report, report
     assert pragma(backup, 'journal_mode') == 'delete'
     before = backup.read_bytes()
@@ -75,7 +77,15 @@ def round_trip(directory, live):
     restored = directory / 'restored/state.sqlite'
     restored.parent.mkdir()
     restored_report = cli('restore', '--from', backup, '--to', restored)
-    assert {**restored_report, 'path': None} == {**report, 'path': None}
+    # A restore starts a new writable lineage; the source and the archive keep theirs.
+    assert restored_report['lineage_id'] != source and restored_report['archived'] is False
+    ignored = {'path': None, 'lineage_id': None, 'archived': None}
+    assert {**restored_report, **ignored} == {**report, **ignored}
+    assert cli('--database', live, 'status', '--no-simulation')['lineage_id'] == source
+    assert cli('verify-store', backup)['lineage_id'] == source
+    before = backup.read_bytes()
+    cli('--database', backup, 'claim', 'TEST-B', error='archived_store')
+    assert backup.read_bytes() == before
     assert pragma(restored, 'journal_mode') == 'wal'
     assert cli('--database', restored, 'export') == exported
     assert history(restored) == history(live)
@@ -143,23 +153,27 @@ def versions(directory, backup):
     retired(directory, backup)
 
 
+# Versions 0 to 2 named the snapshot column `plan_json` and kept no genesis plan; version 2 recorded
+# only a history origin. Version 3 recorded no lineage.
+BEFORE_GENESIS = ('ALTER TABLE plan_state RENAME COLUMN snapshot_json TO plan_json; DROP TABLE genesis; '
+                  'DROP TABLE store_lineage; ALTER TABLE operations DROP COLUMN workspace_id; '
+                  'ALTER TABLE operations DROP COLUMN lineage_id;')
 RETIRED_LAYOUTS = {
-    # Version 2 recorded only a history origin; 0 (no header) and 1 recorded nothing.
-    2: 'CREATE TABLE history_origin (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), '
+    3: 'DROP TABLE store_lineage; ALTER TABLE operations DROP COLUMN workspace_id; '
+       'ALTER TABLE operations DROP COLUMN lineage_id;',
+    2: BEFORE_GENESIS + ' CREATE TABLE history_origin (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), '
        'revision INTEGER NOT NULL); INSERT INTO history_origin VALUES (1, 0);',
-    1: '',
-    0: '',
+    1: BEFORE_GENESIS,
+    0: BEFORE_GENESIS,
 }
 
 
 def retired(directory, backup):
-    for version, extra in RETIRED_LAYOUTS.items():
+    for version, layout in RETIRED_LAYOUTS.items():
         old = directory / f'retired-{version}.sqlite'
         shutil.copyfile(backup, old)
         with sqlite3.connect(old) as connection:
-            connection.executescript(
-                'ALTER TABLE plan_state RENAME COLUMN snapshot_json TO plan_json; DROP TABLE genesis; '
-                f'{extra} PRAGMA user_version = {version};')
+            connection.executescript(f'{layout} PRAGMA user_version = {version};')
         before = old.read_bytes()
         for arguments in [('status', '--no-simulation'), ('history',), ('export',), ('claim', 'TEST-B'),
                           ('backup', '--to', directory / 'x.sqlite'),
@@ -207,9 +221,9 @@ def golden(directory):
     """The checked-in store an earlier build wrote must still verify, replay included."""
     path = directory / 'golden.sqlite'
     with sqlite3.connect(path) as connection:
-        connection.executescript((ROOT / 'tests/support/golden-v3-store.sql').read_text())
+        connection.executescript((ROOT / 'tests/support/golden-v4-store.sql').read_text())
     report = cli('verify-store', path)
-    assert report['schema_version'] == 3 and report['operation_count'] >= 10, report
+    assert report['schema_version'] == 4 and report['operation_count'] >= 10, report
     entries = history(path)
     assert any('ApplyChange' in entry['operation']['command'] for entry in entries), entries
 

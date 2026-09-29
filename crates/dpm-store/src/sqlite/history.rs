@@ -1,20 +1,36 @@
 use super::{
-    SqliteStore, load_blocking,
+    SqliteStore, lineage, load_blocking,
     snapshot::{column, decode, revision_from_sql},
 };
 use crate::{StoreError, StoredRecord, error::database_error};
 use dpm_engine::Operation;
-use rusqlite::params;
+use dpm_model::{LineageId, OperationId, WorkspaceId};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+
+/// A committed operation with the workspace and writable history it was recorded in; mutation
+/// results and history entries return the same object, so a resent operation is answered with
+/// exactly what the first attempt returned.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecordedOperation {
+    /// Identity, actor, timestamp, revision precondition and semantic command.
+    #[serde(flatten)]
+    pub operation: Operation,
+    /// Workspace the operation changed.
+    pub workspace_id: WorkspaceId,
+    /// Lineage of the store that committed it; a restored store keeps the lineages of the
+    /// operations it copied and records later ones under its own.
+    pub lineage_id: LineageId,
+}
 
 /// One immutable operation addressed by its local append order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
     /// Local database cursor, independent of wrapping domain revisions.
     pub sequence: u64,
-    /// Actor, timestamp, revision precondition and semantic command.
-    pub operation: Operation,
+    /// The recorded operation.
+    pub operation: RecordedOperation,
 }
 
 /// A bounded operation page read with a consistent authoritative revision.
@@ -22,6 +38,9 @@ pub struct HistoryEntry {
 pub struct HistoryPage {
     /// Revision visible in the same SQLite transaction.
     pub revision: u64,
+    /// Lineage the store continues, within which the revision is meaningful; absent only for a
+    /// page an adapter builds without a store.
+    pub lineage_id: Option<LineageId>,
     /// Operations in ascending append order.
     pub entries: Vec<HistoryEntry>,
     /// Last returned sequence, suitable for the next request; unchanged for an empty page.
@@ -41,6 +60,7 @@ impl SqliteStore {
             .map_err(database_error(&self.path, "begin history query"))?;
         let plan = load_blocking(&transaction, &self.path)?
             .ok_or_else(|| StoreError::NotInitialized(self.path.clone()))?;
+        let lineage = lineage::read_blocking(&transaction, &self.path)?;
         let mut entries = Vec::new();
         if let Ok(cursor) = i64::try_from(after_sequence) {
             let mut statement = transaction
@@ -63,17 +83,43 @@ impl SqliteStore {
             .map_err(database_error(&self.path, "finish history query"))?;
         Ok(HistoryPage {
             revision: plan.revision,
+            lineage_id: Some(lineage.lineage_id),
             next_after_sequence: entries
                 .last()
                 .map_or(after_sequence, |entry| entry.sequence),
             entries,
         })
     }
+
+    /// The operation recorded under this identity, if any, whichever lineage recorded it.
+    pub fn recorded_operation_blocking(
+        &self,
+        id: OperationId,
+    ) -> Result<Option<HistoryEntry>, StoreError> {
+        recorded_blocking(&self.connection, &self.path, id)
+    }
+}
+
+/// Look an operation identity up through the unique index on `operation_id`.
+pub(super) fn recorded_blocking(
+    connection: &Connection,
+    path: &Path,
+    id: OperationId,
+) -> Result<Option<HistoryEntry>, StoreError> {
+    let mut statement = connection
+        .prepare(&format!("{OPERATION_COLUMNS} WHERE operation_id = ?1"))
+        .map_err(database_error(path, "prepare operation lookup"))?;
+    statement
+        .query_row(params![id.to_string()], |row| Ok(read_entry(row, path)))
+        .optional()
+        .map_err(database_error(path, "look up operation"))?
+        .transpose()
 }
 
 /// Selects the columns [`read_entry`] expects, in its order.
 pub(crate) const OPERATION_COLUMNS: &str = "SELECT sequence, operation_id, base_revision, \
-     resulting_revision, actor_json, timestamp, command_json FROM operations";
+     resulting_revision, actor_json, timestamp, command_json, workspace_id, lineage_id \
+     FROM operations";
 
 /// Decode one row selected with [`OPERATION_COLUMNS`], attributing damage to its sequence.
 pub(crate) fn read_entry(row: &rusqlite::Row<'_>, path: &Path) -> Result<HistoryEntry, StoreError> {
@@ -90,13 +136,17 @@ pub(crate) fn read_entry(row: &rusqlite::Row<'_>, path: &Path) -> Result<History
         |index, field| text(index, field).map(|value| serde_json::Value::String(value).to_string());
     Ok(HistoryEntry {
         sequence,
-        operation: Operation {
-            id: decode(&scalar(1, "operation_id")?, path, record, "operation_id")?,
-            base_revision: revision(2, "base_revision")?,
-            resulting_revision: revision(3, "resulting_revision")?,
-            actor: decode(&text(4, "actor_json")?, path, record, "actor_json")?,
-            timestamp: decode(&scalar(5, "timestamp")?, path, record, "timestamp")?,
-            command: decode(&text(6, "command_json")?, path, record, "command_json")?,
+        operation: RecordedOperation {
+            operation: Operation {
+                id: decode(&scalar(1, "operation_id")?, path, record, "operation_id")?,
+                base_revision: revision(2, "base_revision")?,
+                resulting_revision: revision(3, "resulting_revision")?,
+                actor: decode(&text(4, "actor_json")?, path, record, "actor_json")?,
+                timestamp: decode(&scalar(5, "timestamp")?, path, record, "timestamp")?,
+                command: decode(&text(6, "command_json")?, path, record, "command_json")?,
+            },
+            workspace_id: decode(&scalar(7, "workspace_id")?, path, record, "workspace_id")?,
+            lineage_id: decode(&scalar(8, "lineage_id")?, path, record, "lineage_id")?,
         },
     })
 }

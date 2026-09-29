@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate tests/support/golden-v3-store.sql, the checked-in store every build must still replay.
+"""Regenerate tests/support/golden-v4-store.sql, the checked-in store every build must still replay.
 
 Run this only when a deliberate format change makes the recorded history unreplayable, and say so in
 the commit message: the point of the fixture is that an engine or diff change which breaks logs
@@ -13,7 +13,7 @@ from pathlib import Path
 
 from smoke_agent import ROOT, run_cli
 
-OUTPUT = ROOT / 'tests/support/golden-v3-store.sql'
+OUTPUT = ROOT / 'tests/support/golden-v4-store.sql'
 
 
 def record(database, directory):
@@ -29,7 +29,9 @@ def record(database, directory):
     candidate = directory / 'candidate.json'
     candidate.write_text(json.dumps(plan))
     run_cli(database, 'plan', 'apply', candidate, '--reason', 'Clarify scope', '--actor', 'human:lead')
-    run_cli(database, 'ratify', 'TEST-G', '--actor', 'human:lead')
+    # A client-supplied version 7 identity is recorded exactly as the adapters mint one.
+    run_cli(database, '--operation-id', '01920000-0000-7000-8000-000000000001', 'ratify', 'TEST-G',
+            '--actor', 'human:lead')
     run_cli(database, 'decide', 'TEST-GATE', 'proceed', '--actor', 'human:lead')
     for arguments in [('claim', 'TEST-A'), ('start', 'TEST-A'), ('progress', 'TEST-A', '50'),
                       ('block', 'TEST-A', 'waiting for a fixture'), ('unblock', 'TEST-A'),

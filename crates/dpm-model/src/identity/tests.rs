@@ -35,3 +35,13 @@ fn order_is_total_and_consistent_with_equality() {
     }
     assert_eq!(sorted(&["T-07", "T-7", "T-8"]), ["T-07", "T-7", "T-8"]);
 }
+
+#[test]
+fn operation_and_lineage_identities_are_minted_time_ordered() {
+    let first = super::OperationId::new();
+    let second = super::OperationId::new();
+    assert!(first.is_time_ordered() && second.is_time_ordered());
+    assert!(first <= second, "v7 identities sort by creation");
+    assert_eq!(super::LineageId::new().0.get_version_num(), 7);
+    assert!(!super::OperationId(uuid::Uuid::new_v4()).is_time_ordered());
+}

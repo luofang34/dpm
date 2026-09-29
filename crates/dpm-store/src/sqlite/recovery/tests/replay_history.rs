@@ -79,7 +79,7 @@ impl Recorder {
 
     fn persist(&mut self, plan: &Plan, operation: &Operation, label: &str) {
         self.store
-            .persist_blocking(plan, operation)
+            .persist_blocking(plan, operation, None)
             .unwrap_or_else(|error| panic!("{label}: {error}"));
         let report = verify_store_blocking(&self.path)
             .unwrap_or_else(|error| panic!("replay after {label}: {error}"));

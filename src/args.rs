@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use dpm_model::{LineageId, OperationId};
 use std::path::PathBuf;
 #[derive(Debug, Parser)]
 #[command(name = "dpm", version, about = "Agent-first execution planning")]
@@ -19,8 +20,25 @@ pub(crate) struct Cli {
     #[arg(long, global = true)]
     pub(crate) base_revision: Option<u64>,
 
+    /// Reject mutations if the store continues another lineage than the one status or history
+    /// reported, such as a restored copy at the same revision.
+    #[arg(long, global = true)]
+    pub(crate) base_lineage: Option<LineageId>,
+
+    /// Version 7 UUID identifying this mutation; resending it returns the recorded operation.
+    #[arg(long, global = true)]
+    pub(crate) operation_id: Option<OperationId>,
+
     #[command(subcommand)]
     pub(crate) command: Option<Commands>,
+}
+
+/// Client identity and preconditions every mutation carries.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Preconditions {
+    pub(crate) base_revision: Option<u64>,
+    pub(crate) base_lineage: Option<LineageId>,
+    pub(crate) operation_id: Option<OperationId>,
 }
 
 #[derive(Debug, Subcommand)]

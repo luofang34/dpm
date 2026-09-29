@@ -1,6 +1,6 @@
 use crate::error::{CliError, io_error};
-use dpm_app::{Envelope, QueryResponse};
-use dpm_engine::{NextWorkResult, Operation};
+use dpm_app::{Envelope, QueryResponse, RecordedOperation};
+use dpm_engine::NextWorkResult;
 use serde::Serialize;
 use std::io::{self, Write};
 
@@ -42,7 +42,7 @@ pub(crate) fn response_blocking(response: QueryResponse, json: bool) -> Result<(
 }
 
 /// A mutation's recorded operation, enveloped at its resulting revision.
-pub(crate) fn operation_blocking(operation: Operation, json: bool) -> Result<(), CliError> {
+pub(crate) fn operation_blocking(operation: RecordedOperation, json: bool) -> Result<(), CliError> {
     if json {
         json_blocking(&Envelope::from(operation))
     } else {

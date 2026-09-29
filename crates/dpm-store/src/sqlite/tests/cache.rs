@@ -17,7 +17,7 @@ fn cached_reads_see_external_writes_and_do_not_trust_revision_alone() {
     let mut updated = original.clone();
     let operation = claim(&mut updated, "other");
     other
-        .persist_blocking(&updated, &operation)
+        .persist_blocking(&updated, &operation, None)
         .expect("commit");
     assert_eq!(
         first.load_blocking().expect("refresh"),

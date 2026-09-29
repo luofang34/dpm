@@ -1,8 +1,8 @@
 //! The success shape every adapter emits, and plan validation that needs no workspace.
 
 use crate::{API_VERSION, AppError, QueryResponse};
-use dpm_engine::Operation;
-use dpm_model::{Plan, Workspace};
+use dpm_model::{LineageId, Plan, Workspace};
+use dpm_store::RecordedOperation;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -16,6 +16,10 @@ pub struct Envelope<T> {
     /// Workspace revision the result observed or produced; `None` (JSON `null`) when the result
     /// reads no workspace, such as plan validation or device-local bindings.
     pub revision: Option<u64>,
+    /// Writable history the revision belongs to; `None` (JSON `null`) when the result reads no
+    /// store, such as a preview, plan validation or device-local bindings. A client that caches a
+    /// revision caches this lineage with it and passes both back as preconditions.
+    pub lineage_id: Option<LineageId>,
     /// Command-specific result.
     pub data: T,
 }
@@ -26,6 +30,7 @@ impl<T> Envelope<T> {
         Self {
             api_version: API_VERSION,
             revision,
+            lineage_id: None,
             data,
         }
     }
@@ -36,14 +41,20 @@ impl From<QueryResponse> for Envelope<Value> {
         Self {
             api_version: response.api_version,
             revision: Some(response.revision),
+            lineage_id: response.lineage_id,
             data: response.data,
         }
     }
 }
 
-impl From<Operation> for Envelope<Operation> {
-    fn from(operation: Operation) -> Self {
-        Self::new(Some(operation.resulting_revision), operation)
+impl From<RecordedOperation> for Envelope<RecordedOperation> {
+    fn from(operation: RecordedOperation) -> Self {
+        Self {
+            api_version: API_VERSION,
+            revision: Some(operation.operation.resulting_revision),
+            lineage_id: Some(operation.lineage_id),
+            data: operation,
+        }
     }
 }
 

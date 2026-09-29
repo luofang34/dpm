@@ -49,6 +49,8 @@ fn two_entry_points_observe_one_claim_without_copying_or_resetting_history() {
     app.execute_blocking(CommandRequest {
         actor: ActorId::agent("worker"),
         base_revision: 0,
+        base_lineage: None,
+        operation_id: None,
         command: Command::Claim { work },
     })
     .expect("claim");
@@ -69,6 +71,8 @@ fn two_entry_points_observe_one_claim_without_copying_or_resetting_history() {
             .execute_blocking(CommandRequest {
                 actor: ActorId::agent("other"),
                 base_revision: 0,
+                base_lineage: None,
+                operation_id: None,
                 command: Command::Claim { work }
             })
             .is_err()
@@ -163,6 +167,8 @@ fn moving_a_checkout_or_renaming_its_repository_keeps_every_identity() {
     app.apply_plan_change_blocking(crate::PlanChangeRequest {
         actor: ActorId::human("maintainer"),
         base_revision: 0,
+        base_lineage: None,
+        operation_id: None,
         plan: Box::new(renamed),
         reason: "repository renamed upstream".into(),
     })

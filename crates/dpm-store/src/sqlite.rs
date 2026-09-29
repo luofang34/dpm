@@ -4,7 +4,7 @@ use crate::{
     schema::{self, Layout},
 };
 use dpm_engine::{Operation, apply_command};
-use dpm_model::Plan;
+use dpm_model::{LineageId, Plan};
 use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 use std::{
     path::{Path, PathBuf},
@@ -13,14 +13,19 @@ use std::{
 
 mod history;
 mod integrity;
+mod lineage;
+pub use lineage::StoreLineage;
 mod recovery;
 use recovery::files;
 mod replay;
-pub use history::{HistoryEntry, HistoryPage};
+pub use history::{HistoryEntry, HistoryPage, RecordedOperation};
 pub use recovery::{IntegrityReport, restore_store_blocking, verify_store_blocking};
 mod snapshot;
 mod snapshot_cache;
 use snapshot::load_blocking;
+
+/// How long a write waits for another connection's lock before reporting the store busy.
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// A synchronous local database with validated snapshots and immutable operation history.
 pub struct SqliteStore {
@@ -59,7 +64,7 @@ impl SqliteStore {
 
     fn prepare_blocking(connection: Connection, path: PathBuf) -> Result<Self, StoreError> {
         connection
-            .busy_timeout(Duration::from_secs(5))
+            .busy_timeout(BUSY_TIMEOUT)
             .map_err(database_error(&path, "set busy timeout"))?;
         // Refused formats are checked before this read-write connection opens; schema creation
         // happens inside the initializing write transaction.
@@ -72,6 +77,45 @@ impl SqliteStore {
             path,
             cache: Default::default(),
         })
+    }
+
+    /// Database location, or the in-memory label.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Wait at most `timeout` for another connection's lock before failing as busy.
+    pub fn set_busy_timeout_blocking(&self, timeout: Duration) -> Result<(), StoreError> {
+        self.connection
+            .busy_timeout(timeout)
+            .map_err(database_error(&self.path, "set busy timeout"))
+    }
+
+    /// The lineage this file continues, if initialized.
+    pub fn lineage_blocking(&self) -> Result<Option<StoreLineage>, StoreError> {
+        if schema::check_blocking(&self.connection, &self.path)? == Layout::Empty {
+            return Ok(None);
+        }
+        lineage::read_blocking(&self.connection, &self.path).map(Some)
+    }
+
+    /// The plan as it stood before the operation at local sequence `sequence`, replayed from the
+    /// genesis plan; a resent plan change is compared against the state it was first applied to.
+    pub fn plan_before_blocking(&self, sequence: u64) -> Result<Plan, StoreError> {
+        let transaction = self
+            .connection
+            .unchecked_transaction()
+            .map_err(database_error(&self.path, "begin replay"))?;
+        let genesis = snapshot::genesis_blocking(&transaction, &self.path)?.ok_or_else(|| {
+            StoreError::MissingGenesis {
+                path: self.path.clone(),
+            }
+        })?;
+        let plan = replay::replay_before_blocking(&transaction, &self.path, genesis, sequence)?;
+        transaction
+            .commit()
+            .map_err(database_error(&self.path, "finish replay"))?;
+        Ok(plan)
     }
 
     /// Read and validate the authoritative snapshot, if initialized.
@@ -110,12 +154,18 @@ impl SqliteStore {
         Ok(())
     }
 
-    /// Atomically append one valid operation and the exact snapshot produced by that command.
+    /// Atomically append one valid operation and the exact snapshot produced by that command,
+    /// under this file's lineage.
+    ///
+    /// Inside the write transaction, an identity that is already recorded is answered with
+    /// [`StoreError::DuplicateOperation`] before any precondition, an archive is refused, and so
+    /// is a lineage other than `expected_lineage` or a revision other than the operation's base.
     pub fn persist_blocking(
         &mut self,
         plan: &Plan,
         operation: &Operation,
-    ) -> Result<(), StoreError> {
+        expected_lineage: Option<LineageId>,
+    ) -> Result<HistoryEntry, StoreError> {
         if operation.base_revision.wrapping_add(1) != operation.resulting_revision
             || plan.revision != operation.resulting_revision
         {
@@ -133,6 +183,14 @@ impl SqliteStore {
         if prepare_write_blocking(&transaction, &self.path)? == Layout::Empty {
             return Err(StoreError::NotInitialized(self.path.clone()));
         }
+        if let Some(recorded) = history::recorded_blocking(&transaction, &self.path, operation.id)?
+        {
+            return Err(StoreError::DuplicateOperation {
+                recorded: Box::new(recorded),
+            });
+        }
+        let found = lineage::read_blocking(&transaction, &self.path)?;
+        found.check_writable(expected_lineage, &self.path)?;
         let mut expected = snapshot::load_cached_blocking(&transaction, &self.path, &self.cache)?
             .ok_or_else(|| StoreError::NotInitialized(self.path.clone()))?;
         if expected.revision != operation.base_revision {
@@ -151,11 +209,24 @@ impl SqliteStore {
         if expected != *plan {
             return Err(StoreError::SnapshotMismatch(operation.id));
         }
-        snapshot::write_operation_blocking(&transaction, &self.path, plan, operation)?;
+        let sequence = snapshot::write_operation_blocking(
+            &transaction,
+            &self.path,
+            plan,
+            operation,
+            found.lineage_id,
+        )?;
         transaction
             .commit()
             .map_err(database_error(&self.path, "commit operation"))?;
-        Ok(())
+        Ok(HistoryEntry {
+            sequence,
+            operation: RecordedOperation {
+                operation: operation.clone(),
+                workspace_id: plan.workspace.id,
+                lineage_id: found.lineage_id,
+            },
+        })
     }
 
     /// Count committed semantic operations.
@@ -189,6 +260,7 @@ fn check_existing_read_only_blocking(path: &Path) -> Result<(), StoreError> {
     if schema::check_blocking(&connection, path)? == Layout::Current {
         snapshot::load_blocking(&connection, path)?;
         snapshot::genesis_blocking(&connection, path)?;
+        lineage::read_blocking(&connection, path)?;
     }
     Ok(())
 }

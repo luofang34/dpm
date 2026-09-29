@@ -90,6 +90,8 @@ fn portable_nested_workspace_keeps_cross_repository_execution_and_history() {
         app.execute_blocking(CommandRequest {
             actor,
             base_revision: app.plan_blocking().expect("revision").revision,
+            base_lineage: None,
+            operation_id: None,
             command,
         })
         .expect("transition");

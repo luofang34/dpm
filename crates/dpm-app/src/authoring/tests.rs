@@ -413,6 +413,8 @@ fn the_template_applies_to_an_empty_workspace_and_is_refused_elsewhere() {
     app.apply_plan_change_blocking(crate::PlanChangeRequest {
         actor: ActorId::human("reviewer"),
         base_revision: 0,
+        base_lineage: None,
+        operation_id: None,
         plan: Box::new(template),
         reason: "start from the template".into(),
     })

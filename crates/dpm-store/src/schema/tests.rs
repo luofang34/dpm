@@ -256,7 +256,7 @@ fn a_version_raised_by_another_process_after_open_is_never_downgraded() {
         .expect("newer binary");
     let operation = claim(&mut plan);
     assert!(matches!(
-        store.persist_blocking(&plan, &operation),
+        store.persist_blocking(&plan, &operation, None),
         Err(StoreError::UnsupportedSchemaVersion { found, .. }) if found == newer
     ));
     assert_eq!(version(&path), newer);
@@ -265,6 +265,43 @@ fn a_version_raised_by_another_process_after_open_is_never_downgraded() {
         .query_row("SELECT COUNT(*) FROM operations", [], |row| row.get(0))
         .expect("count");
     assert_eq!(count, 0);
+}
+
+#[test]
+fn version_3_stores_without_lineage_are_retired_unchanged() {
+    let dir = tempfile::tempdir().expect("directory");
+    let path = dir.path().join("v3.sqlite");
+    let mut store = SqliteStore::open_blocking(&path).expect("store");
+    let mut plan = fixture();
+    store.initialize_blocking(&plan).expect("initialize");
+    let operation = claim(&mut plan);
+    store
+        .persist_blocking(&plan, &operation, None)
+        .expect("persist");
+    drop(store);
+    Connection::open(&path)
+        .expect("raw connection")
+        .execute_batch(
+            "PRAGMA journal_mode = DELETE; DROP TABLE store_lineage; \
+             ALTER TABLE operations DROP COLUMN workspace_id; \
+             ALTER TABLE operations DROP COLUMN lineage_id; PRAGMA user_version = 3;",
+        )
+        .expect("version 3 layout");
+    let before = std::fs::read(&path).expect("bytes");
+    for refusal in [
+        SqliteStore::open_blocking(&path).err(),
+        SqliteStore::open_existing_blocking(&path).err(),
+        crate::verify_store_blocking(&path).err(),
+    ] {
+        assert!(
+            matches!(
+                refusal,
+                Some(StoreError::RetiredSchemaVersion { found: 3, .. })
+            ),
+            "{refusal:?}"
+        );
+    }
+    assert_eq!(std::fs::read(&path).expect("bytes"), before);
 }
 
 #[test]

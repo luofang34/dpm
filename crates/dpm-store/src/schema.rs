@@ -2,11 +2,12 @@
 //!
 //! Policy: every accepted header value names one exact layout, compared object by object against
 //! `sqlite_master`, so a planted trigger, view or index is refused before any statement that could
-//! fire it. Version 3 is the only layout this binary reads or writes: the `plan_state` snapshot,
-//! the `operations` log of entity-level plan deltas, and the `genesis` plan every operation
-//! replays from. Versions 1 and 2, and a header of 0 over DPM tables, name retired layouts whose
-//! logs record whole proposed plans and cannot be replayed; they are refused with guidance and
-//! never modified. A newer version is refused before any write. A future layout change raises the
+//! fire it. Version 4 is the only layout this binary reads or writes: the `plan_state` snapshot,
+//! the `operations` log of entity-level plan deltas carrying their workspace and lineage, the
+//! `genesis` plan every operation replays from, and the `store_lineage` of the file. Versions 1
+//! and 2, and a header of 0 over DPM tables, name retired layouts whose logs record whole proposed
+//! plans and cannot be replayed; version 3 records no lineage, so a copy of it could not be told
+//! apart from its source. They are refused with guidance and never modified. A newer version is refused before any write. A future layout change raises the
 //! version and must also change the layout in a way that binaries predating the version header
 //! fail on, because those binaries never read the header: they read `plan_state.plan_json`, which
 //! this layout names `snapshot_json`.
@@ -18,7 +19,7 @@ use std::path::Path;
 mod layout;
 
 /// Database layout version this binary reads and writes.
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 /// Header of a new SQLite file, and of stores written before the version header existed.
 const UNSTAMPED_VERSION: i64 = 0;
@@ -28,7 +29,7 @@ const UNSTAMPED_VERSION: i64 = 0;
 pub(crate) enum Layout {
     /// No schema objects yet: a new file awaiting initialization.
     Empty,
-    /// Snapshot, delta operation log and genesis plan.
+    /// Snapshot, delta operation log, genesis plan and lineage.
     Current,
 }
 
@@ -81,10 +82,11 @@ pub(crate) fn check_blocking(connection: &Connection, path: &Path) -> Result<Lay
 pub(crate) fn create_blocking(connection: &Connection, path: &Path) -> Result<(), StoreError> {
     connection
         .execute_batch(&format!(
-            "{}; {}; {}; PRAGMA user_version = {SCHEMA_VERSION};",
+            "{}; {}; {}; {}; PRAGMA user_version = {SCHEMA_VERSION};",
             layout::PLAN_STATE,
             layout::OPERATIONS,
-            layout::GENESIS
+            layout::GENESIS,
+            layout::LINEAGE
         ))
         .map_err(database_error(path, "initialize schema"))
 }

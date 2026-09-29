@@ -229,7 +229,7 @@ fn a_trigger_planted_after_open_is_refused_inside_the_write_transaction() {
     )
     .expect("command");
     let refused = store
-        .persist_blocking(&plan, &operation)
+        .persist_blocking(&plan, &operation, None)
         .expect_err("refused write");
     assert!(
         matches!(refused, StoreError::UnrecognizedSchema { .. }),

@@ -34,9 +34,11 @@ fn execute(app: &mut Application, base_revision: u64, command: Command) -> Resul
     app.execute_blocking(CommandRequest {
         actor: ActorId::agent("linker"),
         base_revision,
+        base_lineage: None,
+        operation_id: None,
         command,
     })
-    .map(|operation| operation.resulting_revision)
+    .map(|operation| operation.operation.resulting_revision)
 }
 
 #[test]

@@ -1,3 +1,4 @@
+use dpm_store::LineageError;
 use serde::Serialize;
 use thiserror::Error;
 
@@ -50,6 +51,15 @@ pub enum AppError {
     /// Database exists but contains no initialized plan.
     #[error("workspace is not initialized")]
     NotInitialized,
+    /// An operation identity is already recorded for a different actor or content.
+    #[error(
+        "operation {} is already recorded with different content; send a new operation id for a new change",
+        .recorded.operation.id
+    )]
+    DuplicateOperation {
+        /// The operation recorded under this identity.
+        recorded: Box<dpm_store::RecordedOperation>,
+    },
     /// Caller based a command on an outdated snapshot.
     #[error("revision conflict: expected {expected}, current {actual}")]
     Conflict {
@@ -102,6 +112,17 @@ impl AppError {
             | Self::Engine(dpm_engine::EngineError::RevisionConflict { .. })
             | Self::Store(dpm_store::StoreError::RevisionConflict { .. }) => "revision_conflict",
             Self::GitIo(_) | Self::Git { .. } | Self::GitEncoding(_) => "git_error",
+            Self::DuplicateOperation { .. }
+            | Self::Store(dpm_store::StoreError::DuplicateOperation { .. }) => {
+                "duplicate_operation"
+            }
+            Self::Store(dpm_store::StoreError::Lineage(LineageError::Mismatch { .. })) => {
+                "lineage_mismatch"
+            }
+            Self::Store(dpm_store::StoreError::Lineage(LineageError::Archived { .. })) => {
+                "archived_store"
+            }
+            Self::Store(error) if error.is_busy() => "store_busy",
             Self::NotInitialized => "not_initialized",
             Self::UnknownWork(_)
             | Self::UnknownDecision(_)
@@ -136,6 +157,13 @@ impl AppError {
             Self::Engine(dpm_engine::EngineError::OwnGateRelaxed { work, relaxed, .. }) => {
                 Some(serde_json::json!({"work": work, "relaxed": relaxed}))
             }
+            Self::DuplicateOperation { recorded } => {
+                Some(serde_json::json!({"recorded": recorded}))
+            }
+            Self::Store(dpm_store::StoreError::Lineage(LineageError::Mismatch {
+                expected,
+                actual,
+            })) => Some(serde_json::json!({"expected": expected, "actual": actual})),
             _ => None,
         }
     }

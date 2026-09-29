@@ -97,6 +97,8 @@ fn initialization_is_explicit_and_preserves_existing_state_and_history() {
     app.execute_blocking(CommandRequest {
         actor: ActorId::agent("tester"),
         base_revision: 0,
+        base_lineage: None,
+        operation_id: None,
         command: Command::Claim { work },
     })
     .expect("persist claim");
@@ -150,6 +152,8 @@ fn preview_reads_are_identical_and_all_mutations_are_rejected_without_files() {
         .execute_blocking(CommandRequest {
             actor: ActorId::agent("tester"),
             base_revision: 0,
+            base_lineage: None,
+            operation_id: None,
             command: Command::Claim { work },
         })
         .expect_err("preview must reject even eligible work");

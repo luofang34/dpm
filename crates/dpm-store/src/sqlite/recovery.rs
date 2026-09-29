@@ -3,10 +3,12 @@
 //! Copying the database file of a live WAL store can miss committed pages still in `-wal` or tear
 //! a page mid-write, and JSON export drops the operation history. Backups therefore use SQLite's
 //! online backup API, which copies every page of one read snapshot while writers continue.
+//! A backup is sealed as an archive of its source's lineage; a restore is sealed as a new lineage.
 
 use super::{
     SqliteStore,
     integrity::{check_history_blocking, integrity_check_blocking},
+    lineage::{self, Seal},
     load_blocking,
     replay::replay_blocking,
     snapshot::genesis_blocking,
@@ -16,7 +18,7 @@ use crate::{
     error::database_error,
     schema::{self, Layout},
 };
-use dpm_model::WorkspaceId;
+use dpm_model::{LineageId, WorkspaceId};
 use files::{
     ReadMode, canonical_blocking, create_target_blocking, discard_blocking, fingerprint_blocking,
     open_read_only_blocking, read_mode_blocking, target_path_blocking,
@@ -48,6 +50,10 @@ pub struct IntegrityReport {
     pub workspace_id: WorkspaceId,
     /// Workspace display name.
     pub workspace_name: String,
+    /// Writable history the file continues; a restore reports a new one.
+    pub lineage_id: LineageId,
+    /// Whether the file is a backup archive that only a restore makes writable again.
+    pub archived: bool,
     /// Snapshot revision, equal to the last operation's resulting revision.
     pub revision: u64,
     /// Number of committed operations in the history.
@@ -63,13 +69,14 @@ impl SqliteStore {
         let to = target_path_blocking(to)?;
         create_target_blocking(&to)?;
         // A backup is one self-contained file, so it carries no WAL side files.
-        let result = copy_blocking(&self.connection, &to, "delete")
+        let result = copy_blocking(&self.connection, &to, "delete", Seal::Archive)
             .and_then(|()| verify_store_blocking(&to));
         discard_on_error_blocking(&to, result)
     }
 }
 
-/// Verify a backup, copy it into a new store file in WAL mode and verify the result.
+/// Verify a backup, copy it into a new writable store file in WAL mode with a new lineage, and
+/// verify the result; the source keeps its own lineage.
 ///
 /// Live state is never overwritten: the target must not exist, and a failed restore removes it.
 pub fn restore_store_blocking(from: &Path, to: &Path) -> Result<IntegrityReport, StoreError> {
@@ -80,7 +87,7 @@ pub fn restore_store_blocking(from: &Path, to: &Path) -> Result<IntegrityReport,
     let before = fingerprint_blocking(&from)?;
     let source = open_read_only_blocking(&from, mode)?;
     create_target_blocking(&to)?;
-    let result = copy_blocking(&source, &to, "wal").and_then(|()| {
+    let result = copy_blocking(&source, &to, "wal", Seal::Fork(LineageId::new())).and_then(|()| {
         // An immutable read cannot see a writer that started meanwhile, so the copy is only
         // trusted if the source provably did not change.
         if mode == ReadMode::Immutable && fingerprint_blocking(&from)? != before {
@@ -132,20 +139,33 @@ fn verify_with_blocking(path: &Path, mode: ReadMode) -> Result<IntegrityReport, 
             path: path.to_path_buf(),
         })?;
     let genesis_revision = genesis.revision;
-    let history = check_history_blocking(&transaction, path, plan.revision, genesis_revision)?;
+    let store_lineage = lineage::read_blocking(&transaction, path)?;
+    let history = check_history_blocking(
+        &transaction,
+        path,
+        genesis.workspace.id,
+        (genesis_revision, plan.revision),
+    )?;
     replay_blocking(&transaction, path, genesis, &plan)?;
     Ok(IntegrityReport {
         path: path.to_path_buf(),
         schema_version,
         workspace_id: plan.workspace.id,
         workspace_name: plan.workspace.name,
+        lineage_id: store_lineage.lineage_id,
+        archived: store_lineage.archived,
         revision: plan.revision,
         operation_count: history.count,
         genesis_revision,
     })
 }
 
-fn copy_blocking(source: &Connection, to: &Path, journal_mode: &str) -> Result<(), StoreError> {
+fn copy_blocking(
+    source: &Connection,
+    to: &Path,
+    journal_mode: &str,
+    seal: Seal,
+) -> Result<(), StoreError> {
     let mut target = Connection::open(to).map_err(database_error(to, "open backup target"))?;
     target
         .busy_timeout(BUSY_TIMEOUT)
@@ -171,6 +191,8 @@ fn copy_blocking(source: &Connection, to: &Path, journal_mode: &str) -> Result<(
             }
         }
     }
+    // Sealed before the copy is verified or closed, so no unsealed copy is ever reported.
+    lineage::seal_blocking(&target, to, seal)?;
     let mode: String = target
         .query_row(
             &format!("PRAGMA journal_mode = {journal_mode}"),

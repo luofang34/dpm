@@ -83,7 +83,7 @@ REVIEW_COMMANDS = {'verify', 'reject', 'ratify', 'decide', 'waive-dependency', '
 
 def with_actor(args):
     rest = [str(a) for a in args]
-    while rest and rest[0] in {'--base-revision', '--project', '--database', '--db'}:
+    while rest and rest[0] in {'--base-revision', '--base-lineage', '--operation-id', '--project', '--database', '--db'}:
         rest = rest[2:]
     command = rest[:2] if rest[:1] == ['plan'] else rest[:1]
     if '--actor' in rest or not command:
@@ -95,13 +95,14 @@ def with_actor(args):
     return list(args)
 
 
-ENVELOPE = {'api_version', 'revision', 'data'}
+ENVELOPE = {'api_version', 'revision', 'lineage_id', 'data'}
 
 
 def unwrap(value):
     """The data of a `--json` success, after checking it carries the agent-tool envelope."""
     assert isinstance(value, dict) and set(value) == ENVELOPE, value
     assert isinstance(value['api_version'], int) and (value['revision'] is None or isinstance(value['revision'], int)), value
+    assert value['lineage_id'] is None or isinstance(value['lineage_id'], str), value
     return value['data']
 
 
@@ -549,6 +550,8 @@ if __name__ == '__main__':
         estimates_smoke(Path(directory))
         from smoke_adapters import smoke as adapters_smoke
         adapters_smoke(Path(directory))
+        from smoke_operations import operations_smoke
+        operations_smoke(Path(directory))
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')
     print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')
     print('PASS: CLI/MCP dependency identity, soft-edge waiver/restore, refusals and non-gating links')

@@ -89,7 +89,9 @@ fn load_plan_blocking(
     let stored_revision = revision_from_sql(column(row, 0, path, record, "revision")?);
     let field = match record {
         StoredRecord::Snapshot => "snapshot_json",
-        StoredRecord::Genesis | StoredRecord::Operation { .. } => "plan_json",
+        StoredRecord::Genesis | StoredRecord::Operation { .. } | StoredRecord::Lineage => {
+            "plan_json"
+        }
     };
     let json: String = column(row, 1, path, record, field)?;
     let plan: Plan = match cache {
@@ -111,7 +113,7 @@ fn load_plan_blocking(
     Ok(Some(plan))
 }
 
-/// Record the initial snapshot and the genesis plan the history replays from.
+/// Record the initial snapshot, the genesis plan the history replays from and a new lineage.
 pub(super) fn write_initial_blocking(
     connection: &Connection,
     path: &Path,
@@ -131,27 +133,40 @@ pub(super) fn write_initial_blocking(
             params![revision, json],
         )
         .map_err(database_error(path, "record genesis plan"))?;
-    Ok(())
+    super::lineage::write_initial_blocking(connection, path)
 }
 
+/// Append `operation` under the store's current lineage and return its local sequence.
 pub(super) fn write_operation_blocking(
     connection: &Connection,
     path: &Path,
     plan: &Plan,
     operation: &Operation,
-) -> Result<(), StoreError> {
-    connection.execute(
-        "INSERT INTO operations(operation_id, base_revision, resulting_revision, actor_json, timestamp, command_json)
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
-        params![operation.id.to_string(), revision_to_sql(operation.base_revision),
-            revision_to_sql(operation.resulting_revision), serde_json::to_string(&operation.actor)?,
-            operation.timestamp.to_rfc3339(), serde_json::to_string(&operation.command)?],
-    ).map_err(database_error(path, "append operation"))?;
+    lineage: dpm_model::LineageId,
+) -> Result<u64, StoreError> {
+    connection
+        .execute(
+            "INSERT INTO operations(operation_id, workspace_id, lineage_id, base_revision,
+             resulting_revision, actor_json, timestamp, command_json)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                operation.id.to_string(),
+                plan.workspace.id.to_string(),
+                lineage.to_string(),
+                revision_to_sql(operation.base_revision),
+                revision_to_sql(operation.resulting_revision),
+                serde_json::to_string(&operation.actor)?,
+                operation.timestamp.to_rfc3339(),
+                serde_json::to_string(&operation.command)?
+            ],
+        )
+        .map_err(database_error(path, "append operation"))?;
+    let sequence = revision_from_sql(connection.last_insert_rowid());
     connection
         .execute(
             "UPDATE plan_state SET revision = ?1, snapshot_json = ?2 WHERE singleton = 1",
             params![revision_to_sql(plan.revision), serde_json::to_string(plan)?],
         )
         .map_err(database_error(path, "update snapshot"))?;
-    Ok(())
+    Ok(sequence)
 }

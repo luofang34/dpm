@@ -99,7 +99,7 @@ fn validate_plan_reads_no_workspace_and_matches_the_shared_validation() {
     let expected = dpm_app::validate_plan(plan.clone()).expect("valid");
     assert_eq!(
         result["structuredContent"],
-        json!({"api_version": dpm_app::API_VERSION, "revision": null, "data": expected})
+        json!({"api_version": dpm_app::API_VERSION, "revision": null, "lineage_id": null, "data": expected})
     );
     let mut broken = plan;
     broken["format_version"] = json!(2);

@@ -4,7 +4,7 @@
 
 use super::*;
 
-const GOLDEN: &str = include_str!("../../../../../../tests/support/golden-v3-store.sql");
+const GOLDEN: &str = include_str!("../../../../../../tests/support/golden-v4-store.sql");
 
 #[test]
 fn the_checked_in_store_still_replays_to_its_snapshot() {
@@ -22,7 +22,7 @@ fn the_checked_in_store_still_replays_to_its_snapshot() {
     let kinds: Vec<_> = history
         .entries
         .iter()
-        .map(|entry| format!("{:?}", entry.operation.command))
+        .map(|entry| format!("{:?}", entry.operation.operation.command))
         .collect();
     assert!(
         kinds.iter().any(|kind| kind.starts_with("ApplyChange")),

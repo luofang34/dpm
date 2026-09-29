@@ -49,6 +49,7 @@ pub(super) fn call_blocking(
     actor: &ActorId,
     name: &str,
     value: Value,
+    preconditions: super::preconditions::Preconditions,
 ) -> Result<Value, AppError> {
     let args: OwnershipArguments = serde_json::from_value(value)?;
     let base_revision = super::required(args.base_revision, "base_revision")?;
@@ -63,6 +64,8 @@ pub(super) fn call_blocking(
     let operation = app.execute_blocking(CommandRequest {
         actor: actor.clone(),
         base_revision,
+        base_lineage: preconditions.base_lineage,
+        operation_id: preconditions.operation_id,
         command,
     })?;
     Ok(serde_json::to_value(dpm_app::Envelope::from(operation))?)

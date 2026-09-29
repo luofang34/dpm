@@ -11,7 +11,7 @@ omitting it can never make one caller its own reviewer.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
 Every success, CLI `--json` output and MCP `structuredContent` alike, is one envelope:
-`{"api_version": 10, "revision": N, "data": ...}`. `revision` is the workspace revision the result
+`{"api_version": 11, "revision": N, "lineage_id": L, "data": ...}`. `revision` is the workspace revision the result
 observed, or the `resulting_revision` a mutation produced; it is `null` when the command reads no
 workspace (`validate`/`validate_plan`, `plan schema`/`plan_schema`, and the workspace bindings).
 The CLI's `--json` output for a command equals its tool's `structuredContent`, and `data` is the same
@@ -74,10 +74,10 @@ guard compares these values with live output.
 
 | Version | Value | Where it appears | What it versions |
 | --- | --- | --- | --- |
-| `api_version` | 10 | Every success envelope and error object of both adapters | The CLI `--json` and tool wire contract: envelope, arguments and result shapes |
+| `api_version` | 11 | Every success envelope and error object of both adapters | The CLI `--json` and tool wire contract: envelope, arguments and result shapes |
 | `result_version` | 1 | `data.result_version` of `next` / `next_work` | The ranking result's own shape, so a `next` consumer can pin it independently |
 | `format_version` | 3 | Portable plans: `export`, `import`, `validate`, proposals | The plan document; other versions are refused before any field is read |
-| `schema_version` | 3 | SQLite `user_version`; `verify-store` reports it | The local store layout; newer and retired stores are refused unchanged |
+| `schema_version` | 4 | SQLite `user_version`; `verify-store` reports it | The local store layout; newer and retired stores are refused unchanged |
 
 Bootstrapping is local administration by a human or service through the CLI: `init`, `demo` and
 `import` create a workspace, and no agent tool does. `dpm-mcp` opens only an existing store or

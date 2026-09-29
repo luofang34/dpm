@@ -36,9 +36,11 @@ fn run(app: &mut Application, actor: &ActorId, command: Command) -> Result<u64, 
     app.execute_blocking(CommandRequest {
         actor: actor.clone(),
         base_revision,
+        base_lineage: None,
+        operation_id: None,
         command,
     })
-    .map(|operation| operation.resulting_revision)
+    .map(|operation| operation.operation.resulting_revision)
 }
 
 fn ok(app: &mut Application, actor: &ActorId, command: Command) {
@@ -171,6 +173,8 @@ fn rejection_resubmission_and_revalidation_survive_restart_and_concurrent_writer
     let stale = app.execute_blocking(CommandRequest {
         actor: reviewer.clone(),
         base_revision: before - 1,
+        base_lineage: None,
+        operation_id: None,
         command: revalidate(ids, 2),
     });
     assert!(matches!(stale, Err(AppError::Conflict { .. })), "{stale:?}");
@@ -188,6 +192,8 @@ fn rejection_resubmission_and_revalidation_survive_restart_and_concurrent_writer
     let request = CommandRequest {
         actor: ActorId::service("ci"),
         base_revision: before,
+        base_lineage: None,
+        operation_id: None,
         command: revalidate(ids, 2),
     };
     app.execute_blocking(request.clone()).expect("revalidate");

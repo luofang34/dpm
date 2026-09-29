@@ -35,13 +35,14 @@ pub(super) fn integrity_check_blocking(
     })
 }
 
-/// Check that every operation decodes, that local sequences have no gaps, and that revisions run
-/// from the genesis revision `origin` to `snapshot` one operation at a time.
+/// Check that every operation decodes and belongs to `workspace`, that local sequences have no
+/// gaps, and that revisions run from the genesis revision `origin` to `snapshot` one operation at
+/// a time.
 pub(super) fn check_history_blocking(
     connection: &Connection,
     path: &Path,
-    snapshot: u64,
-    origin: u64,
+    workspace: dpm_model::WorkspaceId,
+    (origin, snapshot): (u64, u64),
 ) -> Result<HistorySummary, StoreError> {
     let mut statement = connection
         .prepare(&format!("{OPERATION_COLUMNS} ORDER BY sequence"))
@@ -62,7 +63,15 @@ pub(super) fn check_history_blocking(
                 sequence: entry.sequence,
             });
         }
-        let operation = &entry.operation;
+        if entry.operation.workspace_id != workspace {
+            return Err(StoreError::ForeignOperation {
+                path: path.to_path_buf(),
+                sequence: entry.sequence,
+                found: entry.operation.workspace_id,
+                expected: workspace,
+            });
+        }
+        let operation = &entry.operation.operation;
         let breaks = |expected, found| StoreError::HistoryDiscontinuity {
             path: path.to_path_buf(),
             sequence: entry.sequence,

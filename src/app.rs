@@ -1,5 +1,5 @@
 use crate::{
-    args::{Cli, Commands, PlanCommand, StoreCommand, WorkspaceCommand},
+    args::{Cli, Commands, PlanCommand, Preconditions, StoreCommand, WorkspaceCommand},
     bootstrap::{initialize_blocking, read_candidate_blocking, read_plan_blocking},
     error::{CliError, io_error},
     output,
@@ -15,8 +15,15 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
         project,
         json,
         base_revision,
+        base_lineage,
+        operation_id,
         command,
     } = cli;
+    let preconditions = Preconditions {
+        base_revision,
+        base_lineage,
+        operation_id,
+    };
     let cwd = std::env::current_dir().map_err(io_error("read current directory", "."))?;
     let command = command.unwrap_or(if json {
         Commands::Status {
@@ -62,7 +69,7 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
         }
         command => {
             let mut app = open_workspace_blocking(&cwd, project.as_deref(), database.as_deref())?;
-            run_open_blocking(&mut app, command, json, base_revision)
+            run_open_blocking(&mut app, command, json, preconditions)
         }
     }
 }
@@ -71,10 +78,10 @@ fn run_open_blocking(
     app: &mut Application,
     command: Commands,
     json: bool,
-    base_revision: Option<u64>,
+    preconditions: Preconditions,
 ) -> Result<(), CliError> {
     match command {
-        Commands::Plan { command } => plan_command_blocking(app, command, json, base_revision),
+        Commands::Plan { command } => plan_command_blocking(app, command, json, preconditions),
         Commands::Store(StoreCommand::History {
             after_sequence,
             limit,
@@ -141,7 +148,7 @@ fn run_open_blocking(
             })?;
             Ok(())
         }
-        mutation => mutate_blocking(app, mutation, json, base_revision),
+        mutation => mutate_blocking(app, mutation, json, preconditions),
     }
 }
 
@@ -172,14 +179,16 @@ fn mutate_blocking(
     app: &mut Application,
     command: Commands,
     json: bool,
-    base_revision: Option<u64>,
+    preconditions: Preconditions,
 ) -> Result<(), CliError> {
     app.ensure_writable()?;
     let plan = app.plan_blocking()?;
     let (actor, command) = mutation_blocking(app, command)?;
     let operation = app.execute_blocking(CommandRequest {
         actor,
-        base_revision: base_revision.unwrap_or(plan.revision),
+        base_revision: preconditions.base_revision.unwrap_or(plan.revision),
+        base_lineage: preconditions.base_lineage,
+        operation_id: preconditions.operation_id,
         command,
     })?;
     output::operation_blocking(operation, json)
@@ -418,7 +427,7 @@ fn plan_command_blocking(
     app: &mut Application,
     command: PlanCommand,
     json: bool,
-    base_revision: Option<u64>,
+    preconditions: Preconditions,
 ) -> Result<(), CliError> {
     match command {
         PlanCommand::Template => query_blocking(app, Query::PlanTemplate, json),
@@ -439,7 +448,9 @@ fn plan_command_blocking(
             let plan = read_candidate_blocking(&file)?;
             let operation = app.apply_plan_change_blocking(PlanChangeRequest {
                 actor: actor(&who)?,
-                base_revision: base_revision.unwrap_or(plan.revision),
+                base_revision: preconditions.base_revision.unwrap_or(plan.revision),
+                base_lineage: preconditions.base_lineage,
+                operation_id: preconditions.operation_id,
                 plan: Box::new(plan),
                 reason,
             })?;

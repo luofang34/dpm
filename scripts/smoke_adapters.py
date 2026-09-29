@@ -81,8 +81,9 @@ class Twins:
     """Two stores imported from one plan, advanced in lockstep: the CLI drives one, the agent tools
     the other, and every mutation must record the same Operation in the same envelope."""
 
-    # Fields that differ between any two recordings of one command.
-    RECORDING = ('id', 'timestamp')
+    # Fields that differ between any two recordings of one command; each store starts its own
+    # lineage when it is imported.
+    RECORDING = ('id', 'timestamp', 'lineage_id')
 
     def __init__(self, directory, name, plan):
         fixture = directory / f'{name}.json'
@@ -128,6 +129,7 @@ class Twins:
         value = json.loads(json.dumps(envelope))
         for field in self.RECORDING:
             assert value['data'].pop(field), (tool, field, envelope)
+        assert value.pop('lineage_id') == envelope['data']['lineage_id'], envelope
         if tool == 'attach_git_head':
             # Git evidence is captured at call time under a fresh identity.
             artifact = value['data']['command']['AttachArtifact']['artifact']

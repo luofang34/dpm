@@ -20,7 +20,7 @@ pub use project::{
 
 pub use authoring::plan_schema;
 pub use dpm_interchange::ExistingMatch;
-pub use dpm_store::IntegrityReport;
+pub use dpm_store::{IntegrityReport, RecordedOperation};
 pub use envelope::{Envelope, PlanValidation, validate_decoded, validate_plan};
 pub use error::{AppError, ErrorResponse};
 pub use service::{

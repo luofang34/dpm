@@ -18,16 +18,37 @@ pub(super) fn replay_blocking(
     genesis: Plan,
     snapshot: &Plan,
 ) -> Result<(), StoreError> {
+    let plan = replay_before_blocking(connection, path, genesis, u64::MAX)?;
+    if plan == *snapshot {
+        return Ok(());
+    }
+    Err(StoreError::ReplayDiverged {
+        path: path.to_path_buf(),
+        revision: snapshot.revision,
+        differing: differing_fields(&plan, snapshot)?,
+    })
+}
+
+/// The plan as it stood before the operation at local sequence `before`, rebuilt from `genesis`.
+pub(super) fn replay_before_blocking(
+    connection: &Connection,
+    path: &Path,
+    genesis: Plan,
+    before: u64,
+) -> Result<Plan, StoreError> {
+    let bound = i64::try_from(before).unwrap_or(i64::MAX);
     let mut statement = connection
-        .prepare(&format!("{OPERATION_COLUMNS} ORDER BY sequence"))
+        .prepare(&format!(
+            "{OPERATION_COLUMNS} WHERE sequence < ?1 ORDER BY sequence"
+        ))
         .map_err(database_error(path, "prepare history replay"))?;
     let mut rows = statement
-        .query([])
+        .query([bound])
         .map_err(database_error(path, "query history"))?;
     let mut plan = genesis;
     while let Some(row) = rows.next().map_err(database_error(path, "read history"))? {
         let entry = read_entry(row, path)?;
-        let operation = entry.operation;
+        let operation = entry.operation.operation;
         apply_command(
             &mut plan,
             operation.actor,
@@ -41,14 +62,7 @@ pub(super) fn replay_blocking(
             source,
         })?;
     }
-    if plan == *snapshot {
-        return Ok(());
-    }
-    Err(StoreError::ReplayDiverged {
-        path: path.to_path_buf(),
-        revision: snapshot.revision,
-        differing: differing_fields(&plan, snapshot)?,
-    })
+    Ok(plan)
 }
 
 /// Top-level plan fields whose serialized values differ, so an operator knows where to look.

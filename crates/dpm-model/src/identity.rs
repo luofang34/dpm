@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 macro_rules! uuid_id {
     ($name:ident) => {
+        uuid_id!($name, new_v4);
+    };
+    ($name:ident, $mint:ident) => {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
         )]
@@ -13,7 +16,7 @@ macro_rules! uuid_id {
             #[must_use]
             /// Create a new identifier.
             pub fn new() -> Self {
-                Self(Uuid::new_v4())
+                Self(Uuid::$mint())
             }
         }
 
@@ -28,6 +31,14 @@ macro_rules! uuid_id {
                 self.0.fmt(f)
             }
         }
+
+        impl std::str::FromStr for $name {
+            type Err = uuid::Error;
+
+            fn from_str(text: &str) -> Result<Self, Self::Err> {
+                Uuid::parse_str(text).map(Self)
+            }
+        }
     };
 }
 
@@ -38,10 +49,20 @@ uuid_id!(RequirementId);
 uuid_id!(ArtifactId);
 uuid_id!(DecisionId);
 uuid_id!(RiskId);
-uuid_id!(OperationId);
+// Time-ordered identities sort by creation, so an operation log and its lineages index well.
+uuid_id!(OperationId, now_v7);
+uuid_id!(LineageId, now_v7);
 uuid_id!(AssetId);
 uuid_id!(ExternalReferenceId);
 uuid_id!(DependencyId);
+
+impl OperationId {
+    /// Whether this is a version 7 UUID, the only form a client may supply as an idempotency key.
+    #[must_use]
+    pub fn is_time_ordered(&self) -> bool {
+        self.0.get_version() == Some(uuid::Version::SortRand)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Human-readable identifier, unique within its entity category.

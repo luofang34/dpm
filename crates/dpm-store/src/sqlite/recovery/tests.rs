@@ -40,7 +40,9 @@ fn append(store: &mut SqliteStore, step: u64) {
         dpm_model::OperationId::new(),
     )
     .expect("command");
-    store.persist_blocking(&plan, &operation).expect("persist");
+    store
+        .persist_blocking(&plan, &operation, None)
+        .expect("persist");
 }
 
 fn store_with_history(path: &Path, operations: u64) -> SqliteStore {
@@ -273,5 +275,6 @@ fn verification_is_read_only() {
 }
 
 mod golden;
+mod lineage;
 mod replay_history;
 mod tampering;

@@ -46,6 +46,8 @@ fn apply(
     app.apply_plan_change_blocking(crate::PlanChangeRequest {
         actor,
         base_revision: base,
+        base_lineage: None,
+        operation_id: None,
         plan: Box::new(plan),
         reason: "Import the release schedule".into(),
     })
@@ -88,6 +90,8 @@ fn refusals_of_started_work_name_the_source_task_and_attempted_change() {
     app.execute_blocking(CommandRequest {
         actor: ActorId::agent("worker"),
         base_revision: 0,
+        base_lineage: None,
+        operation_id: None,
         command: Command::Claim { work },
     })
     .expect("claim");
@@ -140,6 +144,8 @@ fn waived_edge_export() -> (Application, String, u64, u64) {
     app.execute_blocking(CommandRequest {
         actor: ActorId::human("reviewer"),
         base_revision: 0,
+        base_lineage: None,
+        operation_id: None,
         command: Command::WaiveDependency {
             dependency,
             reason: "Contract B may start early".into(),

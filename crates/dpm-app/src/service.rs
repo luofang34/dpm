@@ -1,11 +1,10 @@
 use crate::AppError;
 use chrono::Utc;
 use dpm_engine::{
-    Command, NextWorkQuery, Operation, WorkScope, apply_command, explain_work, next_in_scope,
-    show_work, status,
+    Command, NextWorkQuery, WorkScope, explain_work, next_in_scope, show_work, status,
 };
-use dpm_model::{ActorId, DecisionId, DependencyId, Plan, WorkItemId};
-use dpm_store::SqliteStore;
+use dpm_model::{ActorId, DecisionId, DependencyId, LineageId, OperationId, Plan, WorkItemId};
+use dpm_store::{RecordedOperation, SqliteStore};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -14,7 +13,7 @@ use std::{
 };
 
 /// Application wire contract version, independent of terminal display text.
-pub const API_VERSION: u32 = 10;
+pub const API_VERSION: u32 = 11;
 
 /// Mutation precondition and engine command shared by CLI and agent tools.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +23,12 @@ pub struct CommandRequest {
     pub actor: ActorId,
     /// Last observed revision; storage rechecks it atomically.
     pub base_revision: u64,
+    /// Lineage the revision was observed in; another lineage is refused, never merged.
+    #[serde(default)]
+    pub base_lineage: Option<LineageId>,
+    /// Version 7 identity and idempotency key; minted when absent.
+    #[serde(default)]
+    pub operation_id: Option<OperationId>,
     /// Validated semantic mutation.
     pub command: Command,
 }
@@ -36,6 +41,12 @@ pub struct PlanChangeRequest {
     pub actor: ActorId,
     /// Last observed revision; storage rechecks it atomically.
     pub base_revision: u64,
+    /// Lineage the revision was observed in; another lineage is refused, never merged.
+    #[serde(default)]
+    pub base_lineage: Option<LineageId>,
+    /// Version 7 identity and idempotency key; minted when absent.
+    #[serde(default)]
+    pub operation_id: Option<OperationId>,
     /// Full proposed graph at the observed revision.
     pub plan: Box<Plan>,
     /// Human-readable purpose of the accepted scope change.
@@ -125,6 +136,8 @@ pub struct QueryResponse {
     pub api_version: u32,
     /// Revision used to compute this view.
     pub revision: u64,
+    /// Lineage the revision belongs to; absent for a read-only preview, which has no store.
+    pub lineage_id: Option<LineageId>,
     /// The same object emitted by the corresponding CLI --json command.
     pub data: Value,
 }
@@ -221,6 +234,13 @@ impl Application {
         }
         Ok(next)
     }
+    /// The writable history the selected store continues; `None` for a read-only preview.
+    pub fn lineage_blocking(&self) -> Result<Option<LineageId>, AppError> {
+        match &self.backing {
+            Backing::Database(store) => Ok(store.lineage_blocking()?.map(|l| l.lineage_id)),
+            Backing::Preview(_) => Ok(None),
+        }
+    }
     /// Resolve a work key to its stable UUID.
     pub fn work_id_blocking(&self, key: &str) -> Result<WorkItemId, AppError> {
         self.plan_blocking()?
@@ -252,21 +272,10 @@ impl Application {
             limit,
         } = query
         {
-            let page = match &self.backing {
-                Backing::Database(store) => store.history_blocking(after_sequence, limit)?,
-                Backing::Preview(plan) => dpm_store::HistoryPage {
-                    revision: plan.revision,
-                    entries: Vec::new(),
-                    next_after_sequence: after_sequence,
-                },
-            };
-            return Ok(QueryResponse {
-                api_version: API_VERSION,
-                revision: page.revision,
-                data: serde_json::to_value(page)?,
-            });
+            return self.history_blocking(after_sequence, limit);
         }
         let plan = self.plan_blocking()?;
+        let lineage_id = self.lineage_blocking()?;
         // One clock reading per response keeps every gate, completion and schedule in it consistent.
         let now = Utc::now();
         let data = match query {
@@ -285,7 +294,9 @@ impl Application {
                 crate::interchange::query(&plan, interchange)?
             }
             Query::Status { probabilistic } => {
-                serde_json::to_value(status(&plan, probabilistic, now)?)?
+                let mut data = serde_json::to_value(status(&plan, probabilistic, now)?)?;
+                data["lineage_id"] = serde_json::to_value(lineage_id)?;
+                data
             }
             Query::Next {
                 capabilities,
@@ -324,59 +335,72 @@ impl Application {
         Ok(QueryResponse {
             api_version: API_VERSION,
             revision: plan.revision,
+            lineage_id,
             data,
         })
     }
-    /// Apply and atomically persist one command. Any failure leaves the database unchanged.
-    pub fn execute_blocking(&mut self, request: CommandRequest) -> Result<Operation, AppError> {
+    /// Read one history page and its revision and lineage in the store's own transaction.
+    fn history_blocking(&self, after_sequence: u64, limit: u16) -> Result<QueryResponse, AppError> {
+        let page = match &self.backing {
+            Backing::Database(store) => store.history_blocking(after_sequence, limit)?,
+            Backing::Preview(plan) => dpm_store::HistoryPage {
+                revision: plan.revision,
+                lineage_id: None,
+                entries: Vec::new(),
+                next_after_sequence: after_sequence,
+            },
+        };
+        Ok(QueryResponse {
+            api_version: API_VERSION,
+            revision: page.revision,
+            lineage_id: page.lineage_id,
+            data: serde_json::to_value(page)?,
+        })
+    }
+    /// Apply and atomically persist one command. Any failure leaves the database unchanged; a
+    /// resent operation identity returns the operation it recorded.
+    pub fn execute_blocking(
+        &mut self,
+        request: CommandRequest,
+    ) -> Result<RecordedOperation, AppError> {
         let CommandRequest {
             actor,
             base_revision,
+            base_lineage,
+            operation_id,
             command,
         } = request;
-        self.commit_blocking(base_revision, |plan, at, id| {
-            apply_command(plan, actor, command, at, id)
-        })
+        let preconditions = operation::Preconditions {
+            base_revision,
+            base_lineage,
+            operation_id,
+        };
+        self.commit_blocking(preconditions, actor, operation::Intent::Command(command))
     }
     /// Apply a reviewed full proposal; the operation records only its entity-level difference.
     pub fn apply_plan_change_blocking(
         &mut self,
         request: PlanChangeRequest,
-    ) -> Result<Operation, AppError> {
+    ) -> Result<RecordedOperation, AppError> {
         let PlanChangeRequest {
             actor,
             base_revision,
+            base_lineage,
+            operation_id,
             plan: proposed,
             reason,
         } = request;
-        self.commit_blocking(base_revision, |plan, at, id| {
-            dpm_engine::apply_plan_change(plan, actor, &proposed, reason, at, id)
-        })
-    }
-    fn commit_blocking(
-        &mut self,
-        base_revision: u64,
-        apply: impl FnOnce(
-            &mut Plan,
-            chrono::DateTime<Utc>,
-            dpm_model::OperationId,
-        ) -> Result<Operation, dpm_engine::EngineError>,
-    ) -> Result<Operation, AppError> {
-        self.ensure_writable()?;
-        let mut plan = self.plan_blocking()?;
-        if base_revision != plan.revision {
-            return Err(AppError::Conflict {
-                expected: base_revision,
-                actual: plan.revision,
-            });
-        }
-        let operation = apply(&mut plan, Utc::now(), dpm_model::OperationId::new())?;
-        if let Backing::Database(store) = &mut self.backing {
-            store.persist_blocking(&plan, &operation)?;
-        }
-        Ok(operation)
+        let preconditions = operation::Preconditions {
+            base_revision,
+            base_lineage,
+            operation_id,
+        };
+        let intent = operation::Intent::PlanChange { proposed, reason };
+        self.commit_blocking(preconditions, actor, intent)
     }
 }
+
+mod operation;
 
 mod recovery;
 pub use recovery::{restore_store_blocking, store_path_blocking, verify_store_blocking};

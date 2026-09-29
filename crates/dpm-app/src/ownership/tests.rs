@@ -16,6 +16,8 @@ fn execute(app: &mut Application, actor: ActorId, command: Command) {
     app.execute_blocking(CommandRequest {
         actor,
         base_revision,
+        base_lineage: None,
+        operation_id: None,
         command,
     })
     .unwrap_or_else(|e| panic!("{label}: {e}"));

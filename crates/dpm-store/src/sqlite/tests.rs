@@ -30,7 +30,7 @@ fn operation_and_snapshot_commit_together_and_survive_reopen() {
     let mut plan = fixture();
     store.initialize_blocking(&plan).expect("initialize");
     let op = claim(&mut plan, "owner");
-    store.persist_blocking(&plan, &op).expect("persist");
+    store.persist_blocking(&plan, &op, None).expect("persist");
     drop(store);
     let reopened = SqliteStore::open_existing_blocking(&path).expect("reopen");
     assert_eq!(reopened.load_blocking().expect("load"), Some(plan));
@@ -43,7 +43,7 @@ fn initialization_cannot_overwrite_a_workspace_or_history() {
     let mut plan = fixture();
     store.initialize_blocking(&plan).expect("initialize");
     let op = claim(&mut plan, "owner");
-    store.persist_blocking(&plan, &op).expect("persist");
+    store.persist_blocking(&plan, &op, None).expect("persist");
     assert!(matches!(
         store.initialize_blocking(&Plan::empty("replacement")),
         Err(StoreError::AlreadyInitialized(_))
@@ -58,7 +58,7 @@ fn a_write_without_an_initial_snapshot_is_rejected() {
     let mut plan = fixture();
     let op = claim(&mut plan, "owner");
     assert!(matches!(
-        store.persist_blocking(&plan, &op),
+        store.persist_blocking(&plan, &op, None),
         Err(StoreError::NotInitialized(_))
     ));
     assert!(store.load_blocking().expect("load").is_none());
@@ -76,9 +76,9 @@ fn stale_writers_cannot_overwrite_committed_operations() {
     let mut b = second.load_blocking().expect("load").expect("plan");
     let op_a = claim(&mut a, "first");
     let op_b = claim(&mut b, "second");
-    first.persist_blocking(&a, &op_a).expect("persist");
+    first.persist_blocking(&a, &op_a, None).expect("persist");
     assert!(matches!(
-        second.persist_blocking(&b, &op_b),
+        second.persist_blocking(&b, &op_b, None),
         Err(StoreError::RevisionConflict { .. })
     ));
     assert_eq!(second.load_blocking().expect("load"), Some(a));
@@ -99,12 +99,14 @@ fn revision_wrap_survives_sqlite_and_rejects_skipped_revisions() {
     op.resulting_revision = 2;
     plan.revision = 2;
     assert!(matches!(
-        store.persist_blocking(&plan, &op),
+        store.persist_blocking(&plan, &op, None),
         Err(StoreError::InvalidOperationRevision { .. })
     ));
     op.resulting_revision = 0;
     plan.revision = 0;
-    store.persist_blocking(&plan, &op).expect("wrapped write");
+    store
+        .persist_blocking(&plan, &op, None)
+        .expect("wrapped write");
     assert_eq!(
         store.load_blocking().expect("load").expect("plan").revision,
         0
@@ -121,11 +123,11 @@ fn forged_snapshots_and_duplicate_operation_ids_are_atomic_failures() {
     let mut forged = plan.clone();
     forged.workspace.name = "forged".into();
     assert!(matches!(
-        store.persist_blocking(&forged, &op),
+        store.persist_blocking(&forged, &op, None),
         Err(StoreError::SnapshotMismatch(_))
     ));
     assert_eq!(store.load_blocking().expect("load"), Some(initial));
-    store.persist_blocking(&plan, &op).expect("persist");
+    store.persist_blocking(&plan, &op, None).expect("persist");
     let stored = plan.clone();
     let work = plan.find_work_by_key("TEST-A").expect("task").id;
     let mut second = apply_command(
@@ -137,9 +139,15 @@ fn forged_snapshots_and_duplicate_operation_ids_are_atomic_failures() {
     )
     .expect("start");
     second.id = op.id;
+    let Err(StoreError::DuplicateOperation { recorded }) =
+        store.persist_blocking(&plan, &second, None)
+    else {
+        panic!("a recorded identity is answered as a duplicate");
+    };
+    assert_eq!(recorded.sequence, 1);
     assert!(matches!(
-        store.persist_blocking(&plan, &second),
-        Err(StoreError::Database { .. })
+        recorded.operation.operation.command,
+        Command::Claim { .. }
     ));
     assert_eq!(store.load_blocking().expect("load"), Some(stored));
     assert_eq!(store.operation_count_blocking().expect("count"), 1);
@@ -153,7 +161,7 @@ fn snapshot_write_failure_rolls_back_the_operation_insert() {
     store.initialize_blocking(&plan).expect("initialize");
     store.connection.execute_batch("CREATE TEMP TRIGGER fail_snapshot BEFORE UPDATE ON plan_state BEGIN SELECT RAISE(ABORT, 'injected write failure'); END;").expect("trigger");
     let op = claim(&mut plan, "owner");
-    assert!(store.persist_blocking(&plan, &op).is_err());
+    assert!(store.persist_blocking(&plan, &op, None).is_err());
     assert_eq!(store.load_blocking().expect("load"), Some(initial));
     assert_eq!(store.operation_count_blocking().expect("count"), 0);
 }
@@ -189,3 +197,4 @@ fn corrupt_revision_and_lifecycle_are_rejected_on_load() {
 }
 
 mod cache;
+mod idempotency;

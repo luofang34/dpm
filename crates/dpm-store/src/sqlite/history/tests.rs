@@ -21,19 +21,21 @@ fn chronological_pages_preserve_operation_identity_across_revision_wrap() {
             dpm_model::OperationId::new(),
         )
         .expect("apply");
-        store.persist_blocking(&plan, &operation).expect("persist");
+        store
+            .persist_blocking(&plan, &operation, None)
+            .expect("persist");
         ids.push(operation.id);
     }
     let first = store.history_blocking(0, 1).expect("first page");
     assert_eq!(first.revision, 1);
     assert_eq!(first.entries.len(), 1);
-    assert_eq!(first.entries[0].operation.id, ids[0]);
-    assert_eq!(first.entries[0].operation.base_revision, u64::MAX);
-    assert_eq!(first.entries[0].operation.resulting_revision, 0);
+    assert_eq!(first.entries[0].operation.operation.id, ids[0]);
+    assert_eq!(first.entries[0].operation.operation.base_revision, u64::MAX);
+    assert_eq!(first.entries[0].operation.operation.resulting_revision, 0);
     let second = store
         .history_blocking(first.next_after_sequence, 1)
         .expect("second");
-    assert_eq!(second.entries[0].operation.id, ids[1]);
+    assert_eq!(second.entries[0].operation.operation.id, ids[1]);
     assert!(
         store
             .history_blocking(second.next_after_sequence, 10)

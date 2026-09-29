@@ -239,6 +239,27 @@ pub enum StoreError {
         /// Top-level plan fields whose replayed value differs from the snapshot.
         differing: Vec<String>,
     },
+    /// The store's lineage is missing, archived, or not the one the caller observed.
+    #[error(transparent)]
+    Lineage(#[from] LineageError),
+    /// An operation belongs to a different workspace than the store's genesis plan.
+    #[error("operation sequence {sequence} in {path} belongs to workspace {found}, not {expected}")]
+    ForeignOperation {
+        /// Inspected database.
+        path: PathBuf,
+        /// Local append sequence of the offending operation.
+        sequence: u64,
+        /// Workspace the operation records.
+        found: dpm_model::WorkspaceId,
+        /// Workspace of the genesis plan.
+        expected: dpm_model::WorkspaceId,
+    },
+    /// The operation identity is already recorded; the caller decides whether the resend matches.
+    #[error("operation {} is already recorded at sequence {}", .recorded.operation.operation.id, .recorded.sequence)]
+    DuplicateOperation {
+        /// The recorded operation with this identity.
+        recorded: Box<crate::HistoryEntry>,
+    },
     /// Backup and restore targets must be a plain database file name in an existing directory.
     #[error("cannot write a store to {path}: {reason}")]
     InvalidTarget {
@@ -246,6 +267,37 @@ pub enum StoreError {
         path: PathBuf,
         /// Why the destination is unusable.
         reason: &'static str,
+    },
+}
+
+/// Why a store's lineage does not permit a read or write.
+#[derive(Debug, Error)]
+pub enum LineageError {
+    /// A store has no lineage row, so its writable history cannot be identified.
+    #[error("{path} records no lineage")]
+    Missing {
+        /// Inspected database.
+        path: PathBuf,
+    },
+    /// A backup archive is read and verified, never written.
+    #[error(
+        "{path} is a backup archive; restore it into a new store with `dpm restore` to continue \
+         writing"
+    )]
+    Archived {
+        /// Archive the write targeted.
+        path: PathBuf,
+    },
+    /// The store continues a different writable history than the caller observed.
+    #[error(
+        "lineage conflict: store continues lineage {actual}, operation expected {expected}; \
+         reload before writing, histories are never merged"
+    )]
+    Mismatch {
+        /// Lineage the caller observed.
+        expected: dpm_model::LineageId,
+        /// Lineage of the store.
+        actual: dpm_model::LineageId,
     },
 }
 
@@ -261,6 +313,8 @@ pub enum StoredRecord {
     },
     /// The plan the operation history replays from.
     Genesis,
+    /// The lineage row of the file.
+    Lineage,
 }
 
 impl std::fmt::Display for StoredRecord {
@@ -269,6 +323,7 @@ impl std::fmt::Display for StoredRecord {
             Self::Snapshot => formatter.write_str("snapshot"),
             Self::Operation { sequence } => write!(formatter, "operation sequence {sequence}"),
             Self::Genesis => formatter.write_str("genesis plan"),
+            Self::Lineage => formatter.write_str("lineage"),
         }
     }
 }
@@ -286,6 +341,8 @@ impl StoreError {
             | Self::SequenceGap { .. }
             | Self::MissingHistory { .. }
             | Self::MissingGenesis { .. }
+            | Self::Lineage(LineageError::Missing { .. })
+            | Self::ForeignOperation { .. }
             | Self::ReplayRefused { .. }
             | Self::ReplayDiverged { .. }
             | Self::UnrecognizedSchema { .. } => true,
@@ -295,6 +352,18 @@ impl StoreError {
             ),
             _ => false,
         }
+    }
+
+    /// Whether another connection held the database lock past the busy timeout; retrying later
+    /// may succeed, and nothing was written.
+    pub fn is_busy(&self) -> bool {
+        matches!(
+            self,
+            Self::Database { source, .. } if matches!(
+                source.sqlite_error_code(),
+                Some(rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked)
+            )
+        )
     }
 }
 

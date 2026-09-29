@@ -12,9 +12,12 @@ pub(crate) const PLAN_STATE: &str = "CREATE TABLE plan_state (
                  revision INTEGER NOT NULL,
                  snapshot_json TEXT NOT NULL
              )";
+/// `operation_id` is the client's idempotency key; its unique index answers a resent operation.
 pub(crate) const OPERATIONS: &str = "CREATE TABLE operations (
                  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                  operation_id TEXT NOT NULL UNIQUE,
+                 workspace_id TEXT NOT NULL,
+                 lineage_id TEXT NOT NULL,
                  base_revision INTEGER NOT NULL,
                  resulting_revision INTEGER NOT NULL,
                  actor_json TEXT NOT NULL,
@@ -26,6 +29,13 @@ pub(crate) const GENESIS: &str = "CREATE TABLE genesis (
                  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
                  revision INTEGER NOT NULL,
                  plan_json TEXT NOT NULL
+             )";
+/// The writable history this file continues, minted when the file is created for writing; an
+/// archived file is a backup that only a restore turns back into a writable store.
+pub(crate) const LINEAGE: &str = "CREATE TABLE store_lineage (
+                 singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                 lineage_id TEXT NOT NULL,
+                 archived INTEGER NOT NULL CHECK (archived IN (0, 1))
              )";
 /// SQLite creates this table itself for the `AUTOINCREMENT` column of `operations`.
 const SEQUENCE: &str = "CREATE TABLE sqlite_sequence(name,seq)";
@@ -68,6 +78,7 @@ pub(crate) fn expected() -> Vec<SchemaObject> {
         table("operations", OPERATIONS),
         table("plan_state", PLAN_STATE),
         table("sqlite_sequence", SEQUENCE),
+        table("store_lineage", LINEAGE),
     ];
     objects.sort();
     objects
