@@ -2,6 +2,7 @@
 
 mod app;
 mod args;
+mod bootstrap;
 mod error;
 mod interchange;
 mod output;

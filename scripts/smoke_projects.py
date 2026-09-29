@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from smoke_agent import Agent, CLI, MCP, ROOT, with_actor
+from smoke_agent import Agent, CLI, MCP, ROOT, unwrap, with_actor
 
 
 def cli(cwd, *arguments, error=None):
@@ -18,6 +18,7 @@ def cli(cwd, *arguments, error=None):
         assert result.returncode != 0 and value['error']['code'] == error, (arguments, value, result.stderr)
     else:
         assert result.returncode == 0, (arguments, value, result.stderr)
+        value = unwrap(value)
     return value
 
 
@@ -126,6 +127,7 @@ def bindings(directory):
             assert result.returncode and value['error']['code'] == error, value
         else:
             assert result.returncode == 0, value
+            value = unwrap(value)
         return value
     unbound = directory / 'unbound-checkout'
     (unbound / '.dpm').mkdir(parents=True)
@@ -170,7 +172,7 @@ def stale_bindings(directory):
                                 capture_output=True, text=True, timeout=30)
         value = json.loads(result.stdout)
         assert (result.returncode != 0 and value['error']['code'] == error) if error else result.returncode == 0, (args, value)
-        return value
+        return value if error else unwrap(value)
     def mcp_start(project):
         return subprocess.run([str(MCP), '--project', str(project), '--actor', 'agent:stale'], cwd=directory, env=env,
                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)

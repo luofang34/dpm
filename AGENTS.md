@@ -122,6 +122,8 @@ If the plan itself is wrong, export it and use `plan diff` / `propose_change`; d
 dependencies in code. A human/service applies the reviewed candidate with a reason. New tasks are
 Proposed and require ratification. Execution and its prerequisite/context basis remain protected.
 Use `history` to inspect the operations; a plan export is not a backup of operation history.
+Agents never bootstrap a workspace: a human/service runs `init`, `demo` or `import`. An agent may
+draft a plan and check it with `validate` / `validate_plan`, then ask for it to be imported.
 
 ## Engineering rules
 
@@ -166,8 +168,9 @@ incompatible source code into this repository.
 ## CLI and agent-tool parity
 
 - Execution queries and mutations flow through `dpm-app`; CLI/MCP are adapters.
-- MCP structuredContent.data must equal the matching CLI JSON data. Add parity coverage to
-  `scripts/smoke_agent.py` whenever an execution command or query changes.
+- MCP structuredContent must equal the matching CLI `--json` envelope `{api_version, revision, data}`.
+  Add parity coverage to `scripts/smoke_agent.py` whenever an execution command or query changes, and
+  keep the command/tool table in `docs/mcp.md` complete; the smoke guard compares it with both binaries.
 - `explain` supplies resolved requirements, gates, risks, dependencies and evidence. Read this
   context before claiming the top-ranked eligible work; never infer priority from the Gantt picture.
 - Gantt is a read-only projection of remaining elapsed hours. Navigation must not mutate the plan.

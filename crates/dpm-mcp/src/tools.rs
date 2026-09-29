@@ -1,5 +1,5 @@
 use dpm_app::ExternalLinkInput;
-use dpm_app::{AppError, Application, CommandRequest, PlanChangeRequest, Query};
+use dpm_app::{AppError, Application, CommandRequest, Envelope, PlanChangeRequest, Query};
 use dpm_engine::Command;
 use dpm_model::{ActorId, Artifact, ExternalIdentity, ExternalLinkRole, ExternalState};
 use serde::Deserialize;
@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 mod interchange;
 mod ownership;
+mod validation;
 
 const NAMES: &[(&str, &str)] = &[
     (
@@ -125,8 +126,8 @@ const NAMES: &[(&str, &str)] = &[
 ];
 
 pub(crate) fn definitions() -> Vec<Value> {
-    NAMES.iter().chain(ownership::NAMES.iter()).map(|(name,description)| {
-        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
+    NAMES.iter().chain(ownership::NAMES.iter()).chain(validation::NAMES.iter()).map(|(name,description)| {
+        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
         if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"start_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external"|"revalidate_basis") {
@@ -143,6 +144,7 @@ pub(crate) fn definitions() -> Vec<Value> {
             },
             "import_mspdi" | "export_mspdi" => interchange::schema(name, &mut properties, &mut required),
             "release_work" | "handoff_work" => ownership::schema(name, &mut properties, &mut required),
+            "validate_plan" => validation::schema(&mut properties, &mut required),
             "history" => { properties.insert("after_sequence".into(),json!({"type":"integer","minimum":0,"default":0})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"maximum":1000,"default":100})); },
             "workspace_register" => { properties.insert("database".into(),json!({"type":"string"})); properties.insert("replace".into(),json!({"type":"boolean","default":false})); required.push("database"); },
             "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); },
@@ -244,10 +246,13 @@ pub(crate) fn call_tool_blocking(
     if ownership::handles(name) {
         return ownership::call_blocking(app, actor, name, value);
     }
+    if validation::handles(name) {
+        return validation::call(value);
+    }
     if interchange::handles(name) {
-        return Ok(serde_json::to_value(
+        return Ok(serde_json::to_value(Envelope::from(
             app.query_blocking(interchange::query(name, value)?)?,
-        )?);
+        ))?);
     }
     let history_limit = value.get("limit").cloned().unwrap_or(json!(100));
     let args: Arguments = serde_json::from_value(value)?;
@@ -284,7 +289,9 @@ pub(crate) fn call_tool_blocking(
         _ => None,
     };
     if let Some(query) = query {
-        return Ok(serde_json::to_value(app.query_blocking(query)?)?);
+        return Ok(serde_json::to_value(Envelope::from(
+            app.query_blocking(query)?,
+        ))?);
     }
     let base_revision = required(args.base_revision, "base_revision")?;
     let operation = if name == "apply_change" {
@@ -303,9 +310,7 @@ pub(crate) fn call_tool_blocking(
             command,
         })?
     };
-    Ok(
-        json!({"api_version":dpm_app::API_VERSION,"revision":operation.resulting_revision,"data":operation}),
-    )
+    Ok(serde_json::to_value(Envelope::from(operation))?)
 }
 
 fn mutation_blocking(
@@ -456,5 +461,5 @@ fn registry_tool_blocking(name: &str, args: Arguments) -> Result<Value, AppError
             registry.register_blocking(std::path::Path::new(&database), args.replace)?,
         )?
     };
-    Ok(json!({"api_version":dpm_app::API_VERSION,"local_config":true,"data":data}))
+    Ok(serde_json::to_value(Envelope::new(None, data))?)
 }

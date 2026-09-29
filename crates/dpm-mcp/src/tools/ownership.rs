@@ -65,7 +65,5 @@ pub(super) fn call_blocking(
         base_revision,
         command,
     })?;
-    Ok(
-        json!({"api_version":dpm_app::API_VERSION,"revision":operation.resulting_revision,"data":operation}),
-    )
+    Ok(serde_json::to_value(dpm_app::Envelope::from(operation))?)
 }

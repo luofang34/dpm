@@ -35,7 +35,7 @@ pub(crate) fn verify_blocking(
 
 fn present_blocking(label: &str, report: &IntegrityReport, json: bool) -> Result<(), CliError> {
     if json {
-        return output::json_blocking(report);
+        return output::success_blocking(Some(report.revision), report);
     }
     output::text_blocking(&format!(
         "{label} {}\nworkspace {} ({})\nrevision {}, {} operations from genesis revision {}, schema version {}\nintegrity ok; replaying the history reproduces the snapshot",

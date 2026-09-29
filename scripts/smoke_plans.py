@@ -229,7 +229,10 @@ def authoring(directory):
     unconfigured.mkdir()
     shown = subprocess.run([str(CLI), '--json', 'plan', 'schema'], cwd=unconfigured, capture_output=True, text=True, timeout=15)
     assert shown.returncode == 0, shown
-    schema = json.loads(shown.stdout)
+    shown = json.loads(shown.stdout)
+    # No workspace was read, so the envelope names no revision.
+    assert shown['revision'] is None, shown
+    schema = shown['data']
     database = directory / 'authoring.sqlite'
     template_file = directory / 'template.json'
     run_cli(database, 'init', 'Authored workspace')

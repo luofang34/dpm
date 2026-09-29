@@ -122,9 +122,10 @@ expected results, scope boundaries, acceptance criteria and verification checks.
 exposes the contract; `explain/explain_work` also resolves requirements, decisions, risks,
 dependencies and evidence. Internal mutation tests use a minimal synthetic graph.
 
-Add `--json` to queries and mutations for agent consumption. Mutation responses contain the
-persisted operation and revision. Operational errors return a JSON error object and a nonzero exit
-status. The CLI text format is not an API; agents
+Add `--json` to queries and mutations for agent consumption. Every success is the envelope the agent
+tools return, `{"api_version", "revision", "data"}`; a mutation's `data` is the persisted operation.
+Operational errors return a JSON error object and a nonzero exit status. Documents meant for files,
+such as `export` and `plan template`, print bare without `--json`. The CLI text format is not an API; agents
 should consume structured JSON or the [MCP adapter](docs/mcp.md) over the same application service.
 
 ## Local plans and execution rules

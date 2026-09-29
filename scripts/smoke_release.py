@@ -54,7 +54,7 @@ def exercise(root, manifest, directory):
     for binary in [cli, mcp]:
         assert run('--version', binary=binary).strip().endswith(manifest['version'])
     run('init', 'Release qualification', '--json')
-    plan = json.loads(run('plan', 'template', '--json'))
+    plan = json.loads(run('plan', 'template', '--json'))['data']
     candidate = directory / 'candidate.json'
     candidate.write_text(json.dumps(plan))
     run('plan', 'apply', str(candidate), '--reason', 'Synthetic package qualification',
@@ -80,9 +80,9 @@ def exercise(root, manifest, directory):
     assert [r['id'] for r in responses] == [1, 2, 3], responses
     names = {t['name'] for t in responses[1]['result']['tools']}
     assert {'next_work', 'claim_work', 'plan_schema', 'plan_template'} <= names
-    assert responses[2]['result']['structuredContent']['data'] == status
+    assert responses[2]['result']['structuredContent'] == status
     report = json.loads(run('verify-store', '--json'))
-    assert report['revision'] == 4, report
+    assert report['revision'] == report['data']['revision'] == 4, report
     backup, restored = directory / 'backup.sqlite', directory / 'restored.sqlite'
     run('backup', '--to', str(backup), '--json')
     run('restore', '--from', str(backup), '--to', str(restored), '--json')

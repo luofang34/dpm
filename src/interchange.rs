@@ -33,7 +33,7 @@ pub(crate) fn plan_command_blocking(
                 let text = serde_json::to_string_pretty(&response.data["candidate"])?;
                 fs::write(&path, text + "\n").map_err(io_error("write candidate plan", &path))?;
             }
-            present_blocking(&response.data, json)
+            output::response_blocking(response, json)
         }
         PlanCommand::ExportMspdi {
             project_key,
@@ -47,9 +47,11 @@ pub(crate) fn plan_command_blocking(
                 fs::write(path, xml).map_err(io_error("write MSPDI document", path))?;
             }
             match (json, path) {
-                (true, _) => output::json_blocking(&response.data),
                 (false, None) => output::raw_blocking(xml),
-                (false, Some(_)) => present_blocking(&response.data["report"], false),
+                (false, Some(_)) => {
+                    output::text_blocking(&serde_json::to_string_pretty(&response.data["report"])?)
+                }
+                (true, _) => output::response_blocking(response, true),
             }
         }
         _ => Err(CliError::Input("expected an MSPDI plan command".into())),
@@ -60,12 +62,4 @@ pub(crate) fn plan_command_blocking(
 pub(crate) fn existing_match(value: &str) -> Result<dpm_app::ExistingMatch, String> {
     serde_json::from_value(serde_json::Value::String(value.into()))
         .map_err(|_| format!("unknown rule {value:?}; expected title-path"))
-}
-
-fn present_blocking(data: &serde_json::Value, json: bool) -> Result<(), CliError> {
-    if json {
-        output::json_blocking(data)
-    } else {
-        output::text_blocking(&serde_json::to_string_pretty(data)?)
-    }
 }

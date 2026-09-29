@@ -52,7 +52,7 @@ def smoke(directory, count=5000, budget=5., baseline=None):
                 if baseline:
                     previous, _ = timed_cli(baseline, database, command)
                     assert previous == output, (shape, command, 'query output changed')
-                remote = worker.call(tool, arguments)['data']
+                remote = worker.call(tool, arguments)
                 assert remote == json.loads(output), (shape, tool, 'adapter divergence')
                 results.append(dict(shape=shape, tasks=count, query=command[0], seconds=elapsed))
             started = time.perf_counter()

@@ -95,14 +95,32 @@ def with_actor(args):
     return list(args)
 
 
-def run_cli(database, *args, error=None):
+ENVELOPE = {'api_version', 'revision', 'data'}
+
+
+def unwrap(value):
+    """The data of a `--json` success, after checking it carries the agent-tool envelope."""
+    assert isinstance(value, dict) and set(value) == ENVELOPE, value
+    assert isinstance(value['api_version'], int) and (value['revision'] is None or isinstance(value['revision'], int)), value
+    return value['data']
+
+
+def run_cli_envelope(database, *args, error=None):
+    """The complete `--json` output: an error object, or the envelope agent tools return."""
     result = subprocess.run([str(CLI), '--database', str(database), '--json', *with_actor(args)], cwd=ROOT, capture_output=True, text=True, timeout=15)
     value = json.loads(result.stdout)
     if error:
         assert result.returncode != 0 and value['error']['code'] == error, (args, value)
     else:
         assert result.returncode == 0, (args, value, result.stderr)
+        unwrap(value)
     return value
+
+
+def run_cli(database, *args, error=None):
+    """The `--json` error object, or the success data inside its envelope."""
+    value = run_cli_envelope(database, *args, error=error)
+    return value if error else value['data']
 
 
 def smoke(database):
@@ -113,7 +131,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register'} == names
+        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'validate_plan', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),
@@ -122,7 +140,8 @@ def smoke(database):
             ('explain_work', {'key': 'TEST-B'}, ('explain', 'TEST-B')),
         ]
         for tool, arguments, command in pairs:
-            assert worker.call(tool, arguments)['data'] == run_cli(database, *command)
+            # The whole result is shared: version, observed revision and data.
+            assert worker.call(tool, arguments) == run_cli_envelope(database, *command)
         missing_pairs = [
             ('get_work', {'key': 'missing'}, ('show', 'missing')),
             ('claim_work', {'key': 'missing', 'base_revision': 0}, ('claim', 'missing')),
@@ -527,6 +546,8 @@ if __name__ == '__main__':
         ownership_smoke(Path(directory))
         from smoke_estimates import estimates_smoke
         estimates_smoke(Path(directory))
+        from smoke_adapters import smoke as adapters_smoke
+        adapters_smoke(Path(directory))
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')
     print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')
     print('PASS: CLI/MCP dependency identity, soft-edge waiver/restore, refusals and non-gating links')

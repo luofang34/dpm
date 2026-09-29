@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from smoke_agent import CLI
+from smoke_agent import CLI, unwrap
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,7 +28,10 @@ def smoke(binary, directory):
         else:
             assert result.returncode == 0, (args, result.stderr)
         checks.append({'command': list(args), 'expected_rejection': bool(error)})
-        return json.loads(result.stdout) if structured else result.stdout
+        if not structured:
+            return result.stdout
+        value = json.loads(result.stdout)
+        return value if error else unwrap(value)
 
     def ready():
         return {item['work']['key'] for item in run('next', structured=True)['candidates']}

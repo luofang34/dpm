@@ -28,7 +28,7 @@ fn advertises_tools_and_preserves_revision_conflicts() {
     let list = server
         .handle_blocking(json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}))
         .expect("list");
-    assert_eq!(list["result"]["tools"].as_array().expect("tools").len(), 33);
+    assert_eq!(list["result"]["tools"].as_array().expect("tools").len(), 34);
     let request = json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"claim_work","arguments":{"key":"TEST-A","base_revision":0}}});
     assert_eq!(
         server.handle_blocking(request.clone()).expect("claim")["result"]["isError"],
@@ -79,4 +79,81 @@ fn rejects_arguments_not_in_the_advertised_tool_schema() {
         response["result"]["structuredContent"]["code"],
         "invalid_request"
     );
+}
+
+fn call(server: &mut McpServer, name: &str, arguments: Value) -> Value {
+    let request = json!({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":name,"arguments":arguments}});
+    server.handle_blocking(request).expect("response")["result"].clone()
+}
+
+#[test]
+fn validate_plan_reads_no_workspace_and_matches_the_shared_validation() {
+    let mut server = server();
+    initialize(&mut server);
+    let plan: Value = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("plan");
+    let result = call(&mut server, "validate_plan", json!({"plan": plan.clone()}));
+    assert_eq!(result["isError"], false);
+    let expected = dpm_app::validate_plan(plan.clone()).expect("valid");
+    assert_eq!(
+        result["structuredContent"],
+        json!({"api_version": dpm_app::API_VERSION, "revision": null, "data": expected})
+    );
+    let mut broken = plan;
+    broken["format_version"] = json!(2);
+    let refused = call(&mut server, "validate_plan", json!({"plan": broken}));
+    assert_eq!(refused["isError"], true);
+    assert_eq!(refused["structuredContent"]["code"], "invalid_request");
+}
+
+#[test]
+fn successes_share_the_cli_envelope() {
+    let mut server = server();
+    initialize(&mut server);
+    let status = call(
+        &mut server,
+        "project_status",
+        json!({"probabilistic": false}),
+    );
+    let content = &status["structuredContent"];
+    assert_eq!(content["api_version"], dpm_app::API_VERSION);
+    assert_eq!(content["revision"], 0);
+    assert!(content["data"].is_object());
+    let claimed = call(
+        &mut server,
+        "claim_work",
+        json!({"key":"TEST-A","base_revision":0}),
+    );
+    assert_eq!(claimed["structuredContent"]["revision"], 1);
+    assert_eq!(
+        claimed["structuredContent"]["data"]["resulting_revision"],
+        1
+    );
+}
+
+/// Creating or replacing a workspace is CLI administration by a human or service: every tool
+/// that writes either changes an existing workspace at an observed revision or binds an
+/// existing store, so no tool call can bootstrap one.
+#[test]
+fn no_tool_bootstraps_a_workspace() {
+    for tool in crate::tools::definitions() {
+        let name = tool["name"].as_str().expect("name");
+        let read_only = tool["annotations"]["readOnlyHint"] == true;
+        let required = tool["inputSchema"]["required"]
+            .as_array()
+            .expect("required");
+        assert!(
+            read_only || name == "workspace_register" || required.contains(&json!("base_revision")),
+            "{name} writes without an observed revision"
+        );
+        assert!(
+            !matches!(
+                name,
+                "init" | "import" | "demo" | "import_plan" | "init_workspace"
+            ),
+            "{name} would bootstrap a workspace"
+        );
+    }
 }

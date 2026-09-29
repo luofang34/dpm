@@ -1,5 +1,6 @@
 use crate::error::{CliError, io_error};
-use dpm_engine::NextWorkResult;
+use dpm_app::{Envelope, QueryResponse};
+use dpm_engine::{NextWorkResult, Operation};
 use serde::Serialize;
 use std::io::{self, Write};
 
@@ -10,14 +11,42 @@ pub(crate) fn json_blocking(value: &impl Serialize) -> Result<(), CliError> {
     Ok(())
 }
 
+/// Write a `--json` success in the envelope agent tools return; `revision` is `None` when the
+/// command reads no workspace.
+pub(crate) fn success_blocking(
+    revision: Option<u64>,
+    data: &impl Serialize,
+) -> Result<(), CliError> {
+    json_blocking(&Envelope::new(revision, data))
+}
+
 pub(crate) fn value_blocking(
     value: &(impl Serialize + std::fmt::Debug),
+    revision: Option<u64>,
     json: bool,
 ) -> Result<(), CliError> {
     if json {
-        json_blocking(value)
+        success_blocking(revision, value)
     } else {
         text_blocking(&format!("{value:#?}"))
+    }
+}
+
+/// Present a query result: the envelope for `--json`, the pretty data otherwise.
+pub(crate) fn response_blocking(response: QueryResponse, json: bool) -> Result<(), CliError> {
+    if json {
+        json_blocking(&Envelope::from(response))
+    } else {
+        text_blocking(&serde_json::to_string_pretty(&response.data)?)
+    }
+}
+
+/// A mutation's recorded operation, enveloped at its resulting revision.
+pub(crate) fn operation_blocking(operation: Operation, json: bool) -> Result<(), CliError> {
+    if json {
+        json_blocking(&Envelope::from(operation))
+    } else {
+        text_blocking(&format!("{operation:#?}"))
     }
 }
 

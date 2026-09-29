@@ -10,7 +10,7 @@ import tempfile
 import threading
 from pathlib import Path
 
-from smoke_agent import CLI, ROOT, with_actor
+from smoke_agent import CLI, ROOT, unwrap, with_actor
 
 
 def cli(*arguments, cwd=ROOT, error=None):
@@ -21,6 +21,7 @@ def cli(*arguments, cwd=ROOT, error=None):
         assert result.returncode != 0 and value['error']['code'] == error, (arguments, value, result.stderr)
     else:
         assert result.returncode == 0, (arguments, value, result.stderr)
+        value = unwrap(value)
     return value
 
 

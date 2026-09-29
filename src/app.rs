@@ -1,12 +1,10 @@
 use crate::{
     args::{Cli, Commands, PlanCommand, StoreCommand, WorkspaceCommand},
+    bootstrap::{initialize_blocking, read_candidate_blocking, read_plan_blocking},
     error::{CliError, io_error},
     output,
 };
-use dpm_app::{
-    Application, CommandRequest, PlanChangeRequest, Query, initialize_project_blocking,
-    open_workspace_blocking,
-};
+use dpm_app::{Application, CommandRequest, PlanChangeRequest, Query, open_workspace_blocking};
 use dpm_engine::{Command, NextWorkResult};
 use dpm_model::{ActorId, ActorKind, Plan};
 use std::{fs, path::Path};
@@ -47,11 +45,15 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
         // The format is readable before any workspace exists.
         Commands::Plan {
             command: PlanCommand::Schema,
-        } => output::json_blocking(&dpm_app::plan_schema()?),
-        Commands::Validate { file } => {
-            read_plan_blocking(&file)?;
-            output::value_blocking(&serde_json::json!({"valid": true, "file": file}), json)
+        } => {
+            let schema = dpm_app::plan_schema()?;
+            if json {
+                output::success_blocking(None, &schema)
+            } else {
+                output::json_blocking(&schema)
+            }
         }
+        Commands::Validate { file } => crate::bootstrap::validate_blocking(&file, json),
         Commands::Store(StoreCommand::Restore { from, to }) => {
             crate::recovery::restore_blocking(&from, &to, json)
         }
@@ -89,7 +91,7 @@ fn run_open_blocking(
                 probabilistic: !no_simulation,
             })?;
             if json {
-                return output::json_blocking(&response.data);
+                return output::response_blocking(response, true);
             }
             let unestimated: Vec<dpm_model::Key> =
                 serde_json::from_value(response.data["unestimated"].clone()).unwrap_or_default();
@@ -113,14 +115,22 @@ fn run_open_blocking(
                 asset_keys: asset_keys.into_iter().collect(),
             })?;
             if json {
-                return output::json_blocking(&response.data);
+                return output::response_blocking(response, true);
             }
             let result: NextWorkResult = serde_json::from_value(response.data)?;
             output::next_text_blocking(&result)
         }
         Commands::Show { key } => query_blocking(app, Query::Show { key }, json),
         Commands::Explain { key } => query_blocking(app, Query::Explain { key }, json),
-        Commands::Export => query_blocking(app, Query::Export, true),
+        // Without --json the bare plan is printed, ready to redirect into a file for import.
+        Commands::Export => {
+            let response = app.query_blocking(Query::Export)?;
+            if json {
+                output::response_blocking(response, true)
+            } else {
+                output::json_blocking(&response.data)
+            }
+        }
         Commands::Store(StoreCommand::Backup { to }) => {
             crate::recovery::backup_blocking(app, &to, json)
         }
@@ -133,35 +143,6 @@ fn run_open_blocking(
         }
         mutation => mutate_blocking(app, mutation, json, base_revision),
     }
-}
-
-fn initialize_blocking(
-    root: &Path,
-    database: Option<&Path>,
-    plan: Plan,
-    json: bool,
-) -> Result<(), CliError> {
-    let database = if let Some(path) = database {
-        Application::initialize_blocking(path, &plan)?;
-        path.to_path_buf()
-    } else {
-        initialize_project_blocking(root, &plan)?
-    };
-    output::value_blocking(
-        &serde_json::json!({"database": database, "revision": plan.revision, "workspace": plan.workspace.name}),
-        json,
-    )
-}
-
-fn read_plan_blocking(path: &Path) -> Result<Plan, CliError> {
-    let plan = read_candidate_blocking(path)?;
-    plan.validate()?;
-    Ok(plan)
-}
-
-fn read_candidate_blocking(path: &Path) -> Result<Plan, CliError> {
-    let text = fs::read_to_string(path).map_err(io_error("read plan", path))?;
-    Ok(serde_json::from_str(&text)?)
 }
 
 pub(crate) fn actor(value: &str) -> Result<ActorId, CliError> {
@@ -184,12 +165,7 @@ pub(crate) fn actor(value: &str) -> Result<ActorId, CliError> {
 }
 
 fn query_blocking(app: &Application, query: Query, json: bool) -> Result<(), CliError> {
-    let response = app.query_blocking(query)?;
-    if json {
-        output::json_blocking(&response.data)
-    } else {
-        output::text_blocking(&serde_json::to_string_pretty(&response.data)?)
-    }
+    output::response_blocking(app.query_blocking(query)?, json)
 }
 
 fn mutate_blocking(
@@ -206,7 +182,7 @@ fn mutate_blocking(
         base_revision: base_revision.unwrap_or(plan.revision),
         command,
     })?;
-    output::value_blocking(&operation, json)
+    output::operation_blocking(operation, json)
 }
 
 fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, Command), CliError> {
@@ -426,12 +402,13 @@ fn workspace_command_blocking(
             let database = database.ok_or_else(|| {
                 CliError::Input("workspace register requires --database PATH".into())
             })?;
-            output::value_blocking(&registry.register_blocking(database, replace)?, json)
+            output::value_blocking(&registry.register_blocking(database, replace)?, None, json)
         }
         WorkspaceCommand::List => output::value_blocking(
             &registry
                 .inspect_blocking()
                 .map_err(dpm_app::AppError::from)?,
+            None,
             json,
         ),
     }
@@ -466,7 +443,7 @@ fn plan_command_blocking(
                 plan: Box::new(plan),
                 reason,
             })?;
-            output::value_blocking(&operation, json)
+            output::operation_blocking(operation, json)
         }
         interchange @ (PlanCommand::ImportMspdi { .. } | PlanCommand::ExportMspdi { .. }) => {
             crate::interchange::plan_command_blocking(app, interchange, json)

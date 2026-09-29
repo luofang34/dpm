@@ -27,6 +27,9 @@ pub enum AppError {
     /// Persistence failed.
     #[error(transparent)]
     Store(#[from] dpm_store::StoreError),
+    /// A decoded plan breaks a graph invariant.
+    #[error(transparent)]
+    Validation(#[from] dpm_model::ValidationError),
     /// Structured request or response is invalid.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
@@ -120,6 +123,7 @@ impl AppError {
             Self::Store(dpm_store::StoreError::InvalidTarget { .. }) => "invalid_request",
             Self::Store(error) if error.is_corruption() => "corrupt_store",
             Self::Store(_) => "storage_error",
+            Self::Validation(_) => "invalid_plan",
             Self::Json(_) | Self::InvalidRequest(_) | Self::Actor(_) => "invalid_request",
         }
     }

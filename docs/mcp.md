@@ -10,8 +10,13 @@ Every CLI mutation likewise requires an explicit `--actor KIND:NAME`; there is n
 omitting it can never make one caller its own reviewer.
 
 Both adapters use `dpm-app` for queries, revision checks, engine commands and atomic persistence.
-The CLI's `--json` output equals the MCP result's `structuredContent.data`. Execution tools add `api_version:9`
-and the observed `revision`; every MCP mutation tool requires that `base_revision`, and a call without it
+Every success, CLI `--json` output and MCP `structuredContent` alike, is one envelope:
+`{"api_version": 10, "revision": N, "data": ...}`. `revision` is the workspace revision the result
+observed, or the `resulting_revision` a mutation produced; it is `null` when the command reads no
+workspace (`validate`/`validate_plan`, `plan schema` outside a project, and the workspace bindings).
+The CLI's `--json` output for a command equals its tool's `structuredContent`, and `data` is the same
+object; `export` and `plan template` print the bare document without `--json` so it can be redirected
+into a file. Every MCP mutation tool requires the observed `base_revision`, and a call without it
 is refused with `invalid_request`. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
 which the store still checks atomically. Presentation text is not the API contract.
@@ -52,7 +57,12 @@ which the store still checks atomically. Presentation text is not the API contra
 | restore-dependency ID --reason TEXT | restore_dependency | Human/service enforces a waived Soft edge again |
 | revalidate-basis KEY --dependency ID --attempt N --reason TEXT | revalidate_basis | Independent human/service re-bases started work after the attempt it relied on was rejected |
 
-Project initialization/import and opening the TUI are local CLI administration. `export_plan` supplies
+Bootstrapping is local administration by a human or service through the CLI: `init`, `demo` and
+`import` create a workspace, and no agent tool does. `dpm-mcp` opens only an existing store or
+project and never creates one, every tool that writes changes an existing workspace at an observed
+revision (or binds an existing store), and `apply_change` refuses agent actors. An agent that needs a
+new workspace drafts the plan, checks it with `validate_plan`, and asks a human or service to import
+it. Opening the TUI is local CLI use as well. `export_plan` supplies
 the full candidate shape for `propose_change` and `apply_change` (argument `plan`). Preserve its
 workspace identity and revision; plan apply defaults to the file's revision, never a silently refreshed
 one. Diff entries contain collection, stable ID, changed fields and full before/after values; null
@@ -283,7 +293,7 @@ one-field edit of a large plan records one entity, not the plan. Recorded artifa
 evidence changes only through `add_artifact` and `attach_git_head`. A recorded change applies only onto the state its
 `before` values describe; replaying it onto anything else is refused as a stale change. This shape is
 not additive: `api_version` 7 clients, whose `ApplyChange` held the whole proposed `plan`, must read
-`changes` under `api_version` 9.
+`changes` under `api_version` 9 or later.
 
 Portable plan format 3 groups each work item into `contract` (objective, acceptance, instructions,
 capabilities, requirements, asset needs and applicability), `execution` (lifecycle, ownership,
@@ -757,7 +767,7 @@ template is refused with `invalid_request`: applying it would delete them, so ed
 
 ```sh
 dpm init "Project name"
-dpm plan template --json > plan.json    # replace the TEMPLATE-* text and add work
+dpm plan template > plan.json    # replace the TEMPLATE-* text and add work
 dpm plan diff plan.json --json
 dpm plan apply plan.json --reason "Initial plan" --actor human:NAME
 dpm ratify TEMPLATE-DESIGN --actor human:NAME
@@ -793,7 +803,7 @@ the latest review in `last_rejection`. Both require `key` and `base_revision`.
 Registration accepts `database` and optional `replace`; neither tool takes a project revision.
 `workspace_list` reports each store's `store.status` and `shared_with`, and registration refuses a path
 bound to another identity with `workspace_path_bound` (see [project selection](projects.md)).
-Their results contain `local_config: true` and `data`, without a project operation or revision.
+Their results record no project operation, so their envelope `revision` is `null`.
 `attach_git_head` accepts an explicit `asset` key when the selected locator does not bind one.
 
 The saved OmniPlan and MPXJ regression files preserve DPM metadata. Files without the metadata
