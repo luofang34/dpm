@@ -13,11 +13,14 @@ PANICKING = {f'clippy::{lint}' for lint in (
 
 def waivers(masked):
     """Denied lints any allow or expect names, however spaced or wrapped in cfg_attr."""
-    compact = re.sub(r'\s+', '', masked)
+    compact = re.sub(r'\s+', '', masked).replace('r#', '')
     named = set()
     for waiver in re.finditer(r'\b(?:allow|expect)\(([^()]*)\)', compact):
         named |= set(waiver[1].split(','))
-    return PANICKING & named
+    # A macro substituting any part of the lint list could name anything, so it counts as one.
+    if re.search(r'\b(?:allow|expect)\([^\]]*\$', compact):
+        named.add('macro-built lint list')
+    return (PANICKING | {'macro-built lint list'}) & named
 
 
 for probe, expected in [
@@ -28,6 +31,9 @@ for probe, expected in [
     ('# [allow(clippy::indexing_slicing)]', True),
     ('#[ allow (\n    dead_code,\n    clippy::string_slice,\n)]', True),
     ('#![expect(unsafe_code)]', True),
+    ('#[allow(clippy::r#panic)]', True),
+    ('#[allow($lint)]', True),
+    ('#[allow(clippy::$($lint)*)]', True),
     ('#[allow(dead_code)]', False),
 ]:
     assert bool(waivers(probe)) == expected, f'waiver probe misread: {probe!r}'
