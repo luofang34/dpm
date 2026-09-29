@@ -79,7 +79,9 @@ def restored_copy(directory, database, identity_of_claim):
     """A restored copy continues under a new lineage and still answers identities it copied."""
     backup, restored = directory / 'ops-backup.sqlite', directory / 'ops-restored.sqlite'
     source = run_cli(database, 'backup', '--to', str(backup))
-    report = run_cli(database, 'restore', '--from', str(backup), '--to', str(restored))
+    restore = run_cli_envelope(database, 'restore', '--from', str(backup), '--to', str(restored))
+    report = restore['data']
+    assert restore['lineage_id'] == report['lineage_id'], restore
     assert source['archived'] and not report['archived'] and report['lineage_id'] != source['lineage_id']
     agent = Agent(restored, ACTOR)
     try:
@@ -128,10 +130,12 @@ def busy(database, agent):
 
 def operations_smoke(directory):
     database = directory / 'operations.sqlite'
-    run_cli(database, 'import', str(FIXTURE))
+    imported = run_cli_envelope(database, 'import', str(FIXTURE))
     agent = Agent(database, ACTOR)
     try:
         lineage = resend(database, agent)
+        # Import reports the lineage it started, for the client's first write at revision 0.
+        assert imported['lineage_id'] == imported['data']['lineage_id'] == lineage, imported
         claim = run_cli(database, 'history')['entries'][-1]['operation']['id']
         lineage_precondition(database, agent, lineage)
         busy(database, agent)

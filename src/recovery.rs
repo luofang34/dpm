@@ -35,13 +35,22 @@ pub(crate) fn verify_blocking(
 
 fn present_blocking(label: &str, report: &IntegrityReport, json: bool) -> Result<(), CliError> {
     if json {
-        return output::success_blocking(Some(report.revision), report);
+        return output::json_blocking(&dpm_app::Envelope {
+            lineage_id: Some(report.lineage_id),
+            ..dpm_app::Envelope::new(Some(report.revision), report)
+        });
     }
+    let role = if report.archived {
+        "archive of lineage"
+    } else {
+        "lineage"
+    };
     output::text_blocking(&format!(
-        "{label} {}\nworkspace {} ({})\nrevision {}, {} operations from genesis revision {}, schema version {}\nintegrity ok; replaying the history reproduces the snapshot",
+        "{label} {}\nworkspace {} ({}), {role} {}\nrevision {}, {} operations from genesis revision {}, schema version {}\nintegrity ok; replaying the history reproduces the snapshot",
         report.path.display(),
         report.workspace_name,
         report.workspace_id,
+        report.lineage_id,
         report.revision,
         report.operation_count,
         report.genesis_revision,

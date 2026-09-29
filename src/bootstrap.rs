@@ -7,7 +7,7 @@ use crate::{
     error::{CliError, io_error},
     output,
 };
-use dpm_app::{Application, initialize_project_blocking};
+use dpm_app::{Application, Envelope, initialize_project_blocking};
 use dpm_model::Plan;
 use std::{fs, path::Path};
 
@@ -17,17 +17,26 @@ pub(crate) fn initialize_blocking(
     plan: Plan,
     json: bool,
 ) -> Result<(), CliError> {
-    let database = if let Some(path) = database {
-        Application::initialize_blocking(path, &plan)?;
-        path.to_path_buf()
+    let (database, app) = if let Some(path) = database {
+        let app = Application::initialize_blocking(path, &plan)?;
+        (path.to_path_buf(), app)
     } else {
-        initialize_project_blocking(root, &plan)?
+        let path = initialize_project_blocking(root, &plan)?;
+        let app = Application::open_blocking(&path)?;
+        (path, app)
     };
-    output::value_blocking(
-        &serde_json::json!({"database": database, "revision": plan.revision, "workspace": plan.workspace.name}),
-        Some(plan.revision),
-        json,
-    )
+    // The new store's lineage is what a client caches next to revision 0 for its first write.
+    let lineage_id = app.lineage_blocking()?;
+    let data = serde_json::json!({"database": database, "revision": plan.revision,
+        "workspace": plan.workspace.name, "lineage_id": lineage_id});
+    if json {
+        output::json_blocking(&Envelope {
+            lineage_id,
+            ..Envelope::new(Some(plan.revision), data)
+        })
+    } else {
+        output::text_blocking(&format!("{data:#?}"))
+    }
 }
 
 /// Check a plan file with the validation the `validate_plan` agent tool runs.
