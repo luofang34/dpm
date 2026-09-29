@@ -1,8 +1,9 @@
 //! Seeded, dependency-free random draws for the Monte Carlo projection.
 //!
 //! Every draw comes from one `XorShift64` stream, so a seed reproduces the same samples for the
-//! same plan on every platform and no hidden state (such as a cached second normal) is needed to
-//! replay a simulation step by step.
+//! same plan, and no hidden state (such as a cached second normal) is needed to replay a simulation
+//! step by step. Transcendental functions come from `libm` rather than the platform math library,
+//! so the samples are bit-identical on every device; clippy's disallowed methods keep it that way.
 
 use crate::network::EPSILON;
 use dpm_model::ThreePointEstimate;
@@ -53,8 +54,8 @@ impl XorShift64 {
     /// Box–Muller standard normal; the second value of the pair is discarded so the generator
     /// state alone determines every later draw.
     fn standard_normal(&mut self) -> f64 {
-        let radius = (-2.0 * self.open_unit().ln()).sqrt();
-        radius * (std::f64::consts::TAU * self.unit_f64()).cos()
+        let radius = (-2.0 * libm::log(self.open_unit())).sqrt();
+        radius * libm::cos(std::f64::consts::TAU * self.unit_f64())
     }
 
     /// Marsaglia–Tsang gamma draw with unit scale for `shape >= 1`.
@@ -65,12 +66,15 @@ impl XorShift64 {
         let c = 1.0 / (9.0 * d).sqrt();
         for _ in 0..GAMMA_ATTEMPTS {
             let x = self.standard_normal();
-            let v = (1.0 + c * x).powi(3);
+            let base = 1.0 + c * x;
+            let v = base * base * base;
             if v <= 0.0 {
                 continue;
             }
             let u = self.open_unit();
-            if u < 1.0 - 0.0331 * x.powi(4) || u.ln() < 0.5 * x * x + d * (1.0 - v + v.ln()) {
+            let x2 = x * x;
+            if u < 1.0 - 0.0331 * x2 * x2 || libm::log(u) < 0.5 * x2 + d * (1.0 - v + libm::log(v))
+            {
                 return d * v;
             }
         }
@@ -129,7 +133,7 @@ impl BetaPert {
 
     /// Density at `fraction` of the range, up to a constant factor.
     pub(crate) fn relative_density(&self, fraction: f64) -> f64 {
-        fraction.powf(self.alpha - 1.0) * (1.0 - fraction).powf(self.beta - 1.0)
+        libm::pow(fraction, self.alpha - 1.0) * libm::pow(1.0 - fraction, self.beta - 1.0)
     }
 }
 

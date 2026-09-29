@@ -346,7 +346,7 @@ fn candidate(
     let critical_component = criticality.unwrap_or(if activity.critical { 1.0 } else { 0.0 });
     let capability_component = if capability_match { 15.0 } else { -100.0 };
     let priority_component = f64::from(work.schedule.priority.rank()) * 8.0;
-    let downstream_component = (downstream_count as f64 + 1.0).ln() * 6.0;
+    let downstream_component = libm::log(downstream_count as f64 + 1.0) * 6.0;
     let float_penalty = activity.total_float_hours.min(100.0) * 0.05;
     let score = critical_component * 100.0
         + capability_component

@@ -53,7 +53,7 @@ fn sampled_spread_matches_the_beta_pert_variance() {
         .collect();
     let mean = samples.iter().sum::<f64>() / samples.len() as f64;
     let variance =
-        samples.iter().map(|s| (s - mean).powi(2)).sum::<f64>() / (samples.len() - 1) as f64;
+        samples.iter().map(|s| (s - mean) * (s - mean)).sum::<f64>() / (samples.len() - 1) as f64;
     assert!((variance - 64.0 * 6.75 / 252.0).abs() < 0.05, "{variance}");
 }
 

@@ -476,6 +476,7 @@ dependencies = [
  "chrono",
  "dpm-model",
  "dpm-schedule",
+ "libm",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -525,6 +526,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dpm-model",
+ "libm",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

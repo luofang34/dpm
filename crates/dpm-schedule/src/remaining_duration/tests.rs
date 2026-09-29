@@ -40,7 +40,7 @@ fn sample_mean(duration: &RemainingDuration, count: usize) -> (f64, f64, f64) {
 /// `E[D - e | D > e]` for beta-PERT 1/2/9 h (shapes 1.5 and 4.5) by fine Simpson integration,
 /// independent of the tabulated cells.
 fn conditional_remaining_1_2_9(elapsed: f64) -> f64 {
-    let density = |x: f64| x.powf(0.5) * (1.0 - x).powf(3.5);
+    let density = |x: f64| libm::pow(x, 0.5) * libm::pow(1.0 - x, 3.5);
     let from = (elapsed - 1.0) / 8.0;
     let steps = 20_000;
     let h = (1.0 - from) / steps as f64;

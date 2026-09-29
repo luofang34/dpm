@@ -429,7 +429,7 @@ its simulated duration:
   `α = 1 + 4(M − O)/(P − O)` and `β = 1 + 4(P − M)/(P − O)` on `[O, P]`, whose mean is the PERT
   expectation `(O + 4M + P) / 6` that CPM uses. Samples are `O + (P − O)·X/(X + Y)` with gamma
   draws `X ~ Γ(α)`, `Y ~ Γ(β)` (Marsaglia–Tsang over Box–Muller normals, from the seeded
-  generator), so no dependency is needed. An estimate with `O = P` is exact.
+  generator). An estimate with `O = P` is exact.
 - **Remaining duration of started work.** With `e` hours elapsed since the recorded start, the
   remaining duration is `D − e` conditioned on `D > e`. While `e ≤ O` nothing is ruled out and it
   is the whole distribution shifted by `e` (CPM: `PERT − e`). For `O < e < P` the conditional density
@@ -437,11 +437,17 @@ its simulated duration:
   draw and CPM uses the same table's mean. CPM therefore never uses `max(PERT − e, 0)`, which would
   finish a task while its estimate still gives it a substantial chance of running on and so release
   its successors earlier than the simulation expects. For `e ≥ P` the remainder is 0, as described
-  under [Scheduling model](#scheduling-model).
+  under [Scheduling model](#scheduling-model). Elapsed time runs from the first recorded start, so
+  rework after a rejection counts toward `e` and a rejected task past `P` forecasts no remaining
+  time; that errs early for the task itself but never releases successors, which still wait for
+  verification.
 
-Percentiles and criticality come from the same seed and sampling order, so a query is reproducible
-for the same plan and clock reading. Task durations are sampled independently; correlated overruns
-are not modeled.
+The shared model makes each activity's means agree, not the project's: where paths merge, the
+simulated P50 is above CPM's expected finish because the latest of several random finishes has a
+higher mean than the latest of their means. Percentiles and criticality come from the same seed and
+sampling order, and transcendental functions come from the pure-Rust `libm` (clippy disallows the
+platform ones), so a query is bit-for-bit reproducible for the same plan and clock reading on every
+device. Task durations are sampled independently; correlated overruns are not modeled.
 
 ## Persistence
 

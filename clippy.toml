@@ -1,3 +1,27 @@
 msrv = "1.98.1"
 too-many-lines-threshold = 80
 disallowed-types = ["anyhow::Error"]
+disallowed-methods = [
+    { path = "f64::ln", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::log", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::log2", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::log10", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::exp", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::exp2", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::exp_m1", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::ln_1p", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::powf", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::powi", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::sin", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::cos", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::tan", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::asin", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::acos", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::atan", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::atan2", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::sinh", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::cosh", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::tanh", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::cbrt", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+    { path = "f64::hypot", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
+]

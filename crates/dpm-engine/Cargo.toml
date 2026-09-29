@@ -11,6 +11,7 @@ repository.workspace = true
 chrono.workspace = true
 dpm-model = { path = "../dpm-model", version = "0.1.0" }
 dpm-schedule = { path = "../dpm-schedule", version = "0.1.0" }
+libm.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
