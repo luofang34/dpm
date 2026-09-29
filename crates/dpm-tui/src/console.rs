@@ -1,15 +1,28 @@
-use crate::view::View;
+use crate::{
+    source::{FixedPlan, Snapshot, SnapshotSource},
+    view::View,
+};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    },
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use dpm_model::Plan;
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::{io, time::Duration};
+use std::{
+    io,
+    time::{Duration, Instant},
+};
 
 mod interrupts;
 use interrupts::Interrupts;
+mod watch;
+use watch::Watch;
+
+/// Longest wait for input before the loop redraws, checks signals and probes the source.
+const INPUT_WAIT: Duration = Duration::from_millis(200);
 
 /// Failure to prepare a projection or operate the terminal.
 #[derive(Debug, thiserror::Error)]
@@ -39,27 +52,34 @@ impl Drop for TerminalGuard {
 
 /// Open a read-only snapshot console until the operator quits.
 pub fn run_blocking(plan: &Plan) -> Result<(), TuiError> {
-    run_reloading_blocking(plan, false, || {
-        Ok::<_, std::convert::Infallible>(plan.clone())
-    })
+    run_fixed_blocking(plan, false)
 }
 
 /// Open a plan-file preview whose source also rejects operations through other adapters.
 pub fn run_preview_blocking(plan: &Plan) -> Result<(), TuiError> {
-    run_reloading_blocking(plan, true, || {
-        Ok::<_, std::convert::Infallible>(plan.clone())
-    })
+    run_fixed_blocking(plan, true)
 }
 
-/// Run a read-only console whose reload action obtains a fresh snapshot through its adapter.
-pub fn run_reloading_blocking<E: std::fmt::Display>(
-    plan: &Plan,
+fn run_fixed_blocking(plan: &Plan, preview: bool) -> Result<(), TuiError> {
+    let snapshot = Snapshot {
+        plan: plan.clone(),
+        lineage_id: None,
+    };
+    run_following_blocking(snapshot.clone(), preview, &mut FixedPlan(snapshot))
+}
+
+/// Run a read-only console on `initial` that follows `source`: forward changes on the displayed
+/// lineage appear without a key press; an older revision or another lineage is reported and
+/// displayed only after the operator reloads with `r`.
+pub fn run_following_blocking(
+    initial: Snapshot,
     preview: bool,
-    mut reload: impl FnMut() -> Result<Plan, E>,
+    source: &mut impl SnapshotSource,
 ) -> Result<(), TuiError> {
-    let mut view = View::new(plan, chrono::Utc::now())?;
+    let mut view = View::new(&initial.plan, chrono::Utc::now())?;
     view.preview = preview;
     view.set_colors(std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()));
+    let mut watch = Watch::new(initial.revision(), Instant::now());
     let interrupts = Interrupts::register()?;
     enable_raw_mode()?;
     let guard = TerminalGuard;
@@ -67,16 +87,17 @@ pub fn run_reloading_blocking<E: std::fmt::Display>(
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
     terminal.clear()?;
-    let result = event_loop_blocking(&mut terminal, &mut view, &mut reload, &interrupts);
+    let result = event_loop_blocking(&mut terminal, &mut view, &mut watch, source, &interrupts);
     drop(guard);
     drop(interrupts);
     result
 }
 
-fn event_loop_blocking<E: std::fmt::Display>(
+fn event_loop_blocking<S: SnapshotSource>(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     view: &mut View,
-    reload: &mut impl FnMut() -> Result<Plan, E>,
+    watch: &mut Watch,
+    source: &mut S,
     interrupts: &Interrupts,
 ) -> Result<(), TuiError> {
     loop {
@@ -84,38 +105,50 @@ fn event_loop_blocking<E: std::fmt::Display>(
         if interrupts.received() {
             return Ok(());
         }
+        watch.poll_blocking(view, source, Instant::now());
         terminal.draw(|frame| view.render(frame))?;
-        match event::poll(Duration::from_millis(200)) {
+        match event::poll(INPUT_WAIT) {
             Ok(true) => {}
             Ok(false) => continue,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(error.into()),
         }
-        match event::read()? {
-            Event::Key(key) if key.kind != KeyEventKind::Release => {
-                if key.code == crossterm::event::KeyCode::Char('c')
-                    && key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::CONTROL)
-                {
-                    return Ok(());
-                }
-                if key.code == crossterm::event::KeyCode::Char('r') {
-                    match reload() {
-                        Ok(plan) => {
-                            if let Err(error) = view.refresh(&plan, chrono::Utc::now()) {
-                                view.reload_failed(&error);
-                            }
-                        }
-                        Err(error) => view.reload_failed(&error),
-                    }
-                } else if view.handle_key(key.code) {
-                    return Ok(());
-                }
-            }
-            Event::Mouse(mouse) => view.handle_mouse(mouse),
-            Event::Resize(_, _) => view.clear_hover(),
-            _ => {}
+        if handle_event(view, watch, source, event::read()?) {
+            return Ok(());
         }
     }
 }
+
+/// Apply one terminal event; `true` ends the console.
+fn handle_event<S: SnapshotSource>(
+    view: &mut View,
+    watch: &mut Watch,
+    source: &mut S,
+    event: Event,
+) -> bool {
+    match event {
+        Event::Key(key) if key.kind != KeyEventKind::Release => {
+            if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                return true;
+            }
+            if key.code == KeyCode::Char('r') {
+                watch.accept_blocking(view, source);
+                return false;
+            }
+            view.handle_key(key.code)
+        }
+        Event::Mouse(mouse) => {
+            view.handle_mouse(mouse);
+            false
+        }
+        Event::Resize(_, _) => {
+            view.clear_hover();
+            false
+        }
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic)]
+mod tests;

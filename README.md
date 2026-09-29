@@ -148,9 +148,13 @@ export a candidate, inspect `dpm plan diff candidate.json`, then apply it with
 New tasks enter as Proposed; `ratify` approves complete contracts. Plan changes preserve execution,
 evidence and existing decisions. Read the append-only audit with `dpm history --json`. The console is a read-only snapshot: use `1`–`5` to
 switch views (`5` or `g` opens Gantt), arrows or `j`/`k` to select work, Enter for details, and `q` to
-quit. Press `r` to reload agent changes while retaining the selected work and Gantt viewport.
+quit. Changes committed by the CLI or agents appear within about a second without a key press,
+retaining the page, selected work, Gantt viewport and Detail scroll.
 Detail shows the full steps, scope, acceptance, review and linked context; scroll to read long contracts.
-A failed reload keeps the last valid view and displays its revision with the error.
+If the source goes back to an older revision or holds another lineage (for example after its locator
+is pointed at a restored copy), the header reads `STALE` and a notice names both histories; the last
+view stays until `r` loads the other one. A failed reload or change check keeps the last valid view
+and displays its revision with the error; `r` retries.
 
 Only planned tasks can be claimed. A claim reserves work; `start` begins it and records the start
 event, and progress reports and submission require it. Submitted work requires a different actor to

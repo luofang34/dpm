@@ -4,6 +4,7 @@ mod app;
 mod args;
 mod bootstrap;
 mod clock;
+mod console;
 mod error;
 mod interchange;
 mod output;

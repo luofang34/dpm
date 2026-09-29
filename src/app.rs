@@ -145,13 +145,7 @@ fn run_open_blocking(
         Commands::Store(StoreCommand::Backup { to }) => {
             crate::recovery::backup_blocking(app, &to, json)
         }
-        Commands::Tui => {
-            let plan = app.plan_blocking()?;
-            dpm_tui::run_reloading_blocking(&plan, app.is_read_only(), || {
-                app.refreshed_plan_blocking()
-            })?;
-            Ok(())
-        }
+        Commands::Tui => crate::console::run_blocking(app),
         mutation => mutate_blocking(app, mutation, json, preconditions),
     }
 }

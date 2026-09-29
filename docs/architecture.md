@@ -568,9 +568,16 @@ The Gantt page renders `deterministic_remaining` as a read-only hour-axis chart.
 roll up descendant ranges for display; a row that the `Timeline` marks not applicable shows its
 applicability state instead of a bar, read from the timeline rather than inferred from the schedule; milestones remain zero-duration points, and selecting a row
 opens the same work context used by other views. Nothing in navigation or rendering updates state.
-The console displays an explicit revision snapshot. `r` reloads through the application boundary,
-retaining selection and viewport. Validation or source-identity failures preserve the last valid view
-and display an error. Detail exposes the same execution contract and review context as `explain`.
+The console displays an explicit revision snapshot and follows its source through the application
+boundary. Every second, between input events, it reads `refreshed_revision_blocking`, which resolves
+the project locator again and reads the store's revision and lineage without decoding the plan, and
+reloads (`refreshed_snapshot_blocking`) only when the revision advanced on the displayed lineage. An
+older revision or another lineage is reported in text (`STALE` in the header, both lineages in the
+notice) while the last snapshot stays; `r` explicitly loads whatever the source holds. A reload keeps
+the page, selection, Gantt viewport and Detail scroll. Validation, source-identity and probe failures
+preserve the last valid view and display an error. With an explicit `--database` the open
+connection is the source, so a file replaced underneath it is not seen; repoint a locator instead.
+Detail exposes the same execution contract and review context as `explain`.
 
 ## Execution progress
 

@@ -114,20 +114,40 @@ impl View {
         next.page = self.page;
         next.preview = self.preview;
         next.gantt.restore_navigation(&self.gantt);
-        next.state.select(
-            selected
-                .and_then(|id| next.work.iter().position(|w| w.id == id))
-                .or_else(|| (!next.work.is_empty()).then_some(0)),
-        );
+        let kept = selected.and_then(|id| next.work.iter().position(|w| w.id == id));
+        next.state
+            .select(kept.or_else(|| (!next.work.is_empty()).then_some(0)));
+        *next.state.offset_mut() = self.state.offset();
+        // Text scroll belongs to the selected work's Detail, or to the page, and survives a
+        // refresh; rendering clamps it to the new text. Another selection starts at the top.
+        if kept.is_some() || selected.is_none() {
+            next.text_panel = std::mem::take(&mut self.text_panel);
+        }
         *self = next;
         Ok(())
     }
 
     pub(crate) fn reload_failed(&mut self, error: &impl std::fmt::Display) {
-        self.notice = Some(crate::notice::ReloadNotice {
-            error: error.to_string(),
-            revision: self.plan.revision,
-        });
+        self.notice = Some(crate::notice::ReloadNotice::failed(
+            &error.to_string(),
+            self.plan.revision,
+        ));
+    }
+
+    /// Stand or clear a notice about the source; the displayed snapshot stays unchanged.
+    pub(crate) fn set_notice(&mut self, notice: Option<crate::notice::ReloadNotice>) {
+        self.notice = notice;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn revision(&self) -> u64 {
+        self.plan.revision
+    }
+
+    #[cfg(test)]
+    pub(crate) fn selected_key(&self) -> Option<String> {
+        let index = self.state.selected()?;
+        self.work.get(index).map(|work| work.key.to_string())
     }
 
     #[cfg(test)]
@@ -208,10 +228,11 @@ impl View {
             Paragraph::new(format!(
                 "DPM · {} · {} revision {}  [1–5] Pages [↑↓/jk] Navigate [r] Reload [q] Quit",
                 self.page.title(),
-                if self.preview {
-                    "PREVIEW read-only"
-                } else {
-                    "snapshot"
+                match (self.preview, self.notice.as_ref().and_then(|n| n.label)) {
+                    (true, None) => "PREVIEW read-only".into(),
+                    (true, Some(label)) => format!("PREVIEW read-only {label}"),
+                    (false, None) => "snapshot".into(),
+                    (false, Some(label)) => format!("{label} snapshot"),
                 },
                 self.plan.revision,
             )),

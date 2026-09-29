@@ -280,10 +280,17 @@ fn explicit_refresh_reloads_preview_contracts_without_switching_identity_or_mode
     let app = open_workspace_blocking(temp.path(), None, None).expect("preview");
     expected.find_work_by_key_mut("TEST-A").expect("work").title = "Updated preview".into();
     fs::write(&path, serde_json::to_string(&expected).expect("json")).expect("plan");
-    assert_eq!(app.refreshed_plan_blocking().expect("refresh"), expected);
+    assert_eq!(
+        app.refreshed_snapshot_blocking().expect("refresh").data,
+        expected
+    );
+    expected.revision = 7;
+    fs::write(&path, serde_json::to_string(&expected).expect("json")).expect("plan");
+    let probed = app.refreshed_revision_blocking().expect("probe");
+    assert_eq!((probed.revision, probed.lineage_id), (7, None));
     expected.workspace.id = dpm_model::WorkspaceId::new();
     fs::write(&path, serde_json::to_string(&expected).expect("json")).expect("plan");
-    assert!(app.refreshed_plan_blocking().is_err());
+    assert!(app.refreshed_snapshot_blocking().is_err());
     assert!(app.is_read_only());
     assert!(!temp.path().join(".dpm/state.sqlite").exists());
 }

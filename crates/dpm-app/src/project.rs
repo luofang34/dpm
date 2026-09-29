@@ -115,6 +115,21 @@ impl ProjectLocation {
         self.open_source_blocking()
     }
 
+    /// The store file this locator selects, resolving a registered workspace through the device
+    /// bindings; `None` for a preview plan file. Nothing is opened or decoded.
+    pub fn store_path_blocking(&self) -> Result<Option<PathBuf>, AppError> {
+        match &self.source {
+            ProjectSource::Database(path) => Ok(Some(path.clone())),
+            #[cfg(feature = "registry")]
+            ProjectSource::Registered => Ok(Some(
+                crate::WorkspaceRegistry::from_environment()?.resolve_blocking(self.workspace)?,
+            )),
+            #[cfg(not(feature = "registry"))]
+            ProjectSource::Registered => Err(unbound(self.workspace)),
+            ProjectSource::Preview(_) => Ok(None),
+        }
+    }
+
     /// Open using explicitly supplied device bindings without changing process environment.
     #[cfg(feature = "registry")]
     pub fn open_with_registry_blocking(

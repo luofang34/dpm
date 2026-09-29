@@ -50,22 +50,15 @@ pub fn store_path_blocking(
         (Some(root), None) => ProjectLocation::at_blocking(start.join(root))?,
         (None, None) => ProjectLocation::discover_blocking(start)?,
     };
-    match location.source {
-        ProjectSource::Database(path) => Ok(path),
-        #[cfg(feature = "registry")]
-        ProjectSource::Registered => {
-            Ok(crate::WorkspaceRegistry::from_environment()?
-                .resolve_blocking(location.workspace)?)
-        }
-        #[cfg(not(feature = "registry"))]
-        ProjectSource::Registered => Err(AppError::Unsupported {
-            feature: "registry",
-        }),
-        ProjectSource::Preview(path) => Err(AppError::InvalidRequest(format!(
+    if let ProjectSource::Preview(path) = &location.source {
+        return Err(AppError::InvalidRequest(format!(
             "project reads the preview plan {}; it has no store to verify",
             path.display()
-        ))),
+        )));
     }
+    location
+        .store_path_blocking()?
+        .ok_or_else(|| AppError::InvalidRequest("project selects no store".into()))
 }
 
 #[cfg(test)]

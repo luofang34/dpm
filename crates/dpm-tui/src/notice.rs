@@ -1,40 +1,87 @@
-//! Reload failure notice. The retry instruction and the revision still on screen always get their
-//! own row; the error text, often a long path, is shortened in the middle to fit what remains.
+//! Notices about the source behind the displayed snapshot: a failed reload or change check, or a
+//! source that no longer continues the displayed history. The action row, with the revision still
+//! on screen, always gets its own row; the message, often a long path, is shortened in the middle
+//! to fit what remains. Notices are plain text, so they read the same without color.
 
+use crate::source::SourceRevision;
 use ratatui::{Frame, layout::Rect, style::Style, text::Line, widgets::Paragraph};
 use unicode_width::UnicodeWidthStr;
 
 /// Rows a notice occupies below the header title.
 pub(crate) const ROWS: u16 = 3;
 
-/// A failed reload, shown while the last valid snapshot stays displayed.
+/// Shown while the last valid snapshot stays displayed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ReloadNotice {
-    /// Why the reload failed.
-    pub(crate) error: String,
-    /// Revision of the snapshot still displayed.
-    pub(crate) revision: u64,
+    /// What happened; elided to fit.
+    message: String,
+    /// The revision still displayed and the operator's action; never elided.
+    action: String,
+    /// Word the header puts before "snapshot" while this notice stands.
+    pub(crate) label: Option<&'static str>,
 }
 
 impl ReloadNotice {
-    /// Draw the error rows and the fixed retry row into `area`.
+    /// A reload that failed; `revision` is the snapshot still displayed.
+    pub(crate) fn failed(error: &str, revision: u64) -> Self {
+        Self {
+            message: format!("Reload failed: {error}"),
+            action: format!("Showing revision {revision}; [r] retry."),
+            label: None,
+        }
+    }
+
+    /// A change check that failed, so the display may be behind its source.
+    pub(crate) fn unchecked(error: &str, revision: u64) -> Self {
+        Self {
+            message: format!("Cannot check for changes: {error}"),
+            action: format!("Showing revision {revision}, possibly out of date; [r] retry."),
+            label: Some("UNCHECKED"),
+        }
+    }
+
+    /// A source holding an older revision or another lineage than the one displayed.
+    pub(crate) fn diverged(shown: SourceRevision, found: SourceRevision) -> Self {
+        let message = if found.lineage_id == shown.lineage_id {
+            format!(
+                "Source went back to revision {} of the same history; not shown as current.",
+                found.revision
+            )
+        } else {
+            format!(
+                "Source now holds a different history: lineage {} at revision {} (displayed: lineage {}).",
+                lineage(found),
+                found.revision,
+                lineage(shown)
+            )
+        };
+        Self {
+            message,
+            action: format!(
+                "Showing revision {}; [r] load revision {} instead.",
+                shown.revision, found.revision
+            ),
+            label: Some("STALE"),
+        }
+    }
+
+    /// Draw the message rows and the fixed action row into `area`.
     pub(crate) fn render(&self, frame: &mut Frame<'_>, area: Rect) {
-        let error_rows = usize::from(area.height.saturating_sub(1));
-        let mut lines: Vec<Line<'_>> = fit(
-            &format!("Reload failed: {}", self.error),
-            usize::from(area.width),
-            error_rows,
-        )
-        .into_iter()
-        .map(Line::from)
-        .collect();
-        lines.resize(error_rows, Line::default());
-        lines.push(Line::from(format!(
-            "Showing revision {}; [r] retry.",
-            self.revision
-        )));
+        let message_rows = usize::from(area.height.saturating_sub(1));
+        let mut lines: Vec<Line<'_>> = fit(&self.message, usize::from(area.width), message_rows)
+            .into_iter()
+            .map(Line::from)
+            .collect();
+        lines.resize(message_rows, Line::default());
+        lines.push(Line::from(self.action.as_str()));
         frame.render_widget(Paragraph::new(lines), area);
     }
+}
+
+fn lineage(revision: SourceRevision) -> String {
+    revision
+        .lineage_id
+        .map_or_else(|| "none (preview)".into(), |id| id.to_string())
 }
 
 /// Lay `text` out in at most `rows` rows of `width` cells, eliding its middle when it is longer:
