@@ -62,13 +62,22 @@ pub(crate) fn finite(work: WorkItemId, value: f64) -> Result<f64, ScheduleError>
     Ok(value)
 }
 
-/// The value at a topological position. Positions come from the compiled network, so a miss means
-/// the durations were not built for this network; it is reported, never assumed away.
+/// The duration at a topological position; durations built for another network are reported as
+/// that activity's invalid duration.
 fn at(values: &[f64], position: usize, id: WorkItemId) -> Result<f64, ScheduleError> {
     values
         .get(position)
         .copied()
         .ok_or(ScheduleError::InvalidDuration(id))
+}
+
+/// A projected time at a topological position; times always come from this network, so a miss is
+/// an inconsistent projection.
+fn time_at(values: &[f64], position: usize) -> Result<f64, ScheduleError> {
+    values
+        .get(position)
+        .copied()
+        .ok_or(ScheduleError::UnknownPosition(position))
 }
 
 impl Network {
@@ -128,7 +137,7 @@ impl Network {
             for edge in edges {
                 let before = at(durations, edge.other, *id)?;
                 let weight = relation_weight(edge.kind, before, duration, edge.lag);
-                start = start.max(finite(*id, at(&earliest, edge.other, *id)? + weight)?);
+                start = start.max(finite(*id, time_at(&earliest, edge.other)? + weight)?);
             }
             earliest.push(start);
         }
@@ -140,11 +149,11 @@ impl Network {
         let mut latest: Vec<f64> = durations.iter().map(|d| finish - d).collect();
         for ((position, id), edges) in self.order.iter().enumerate().zip(&self.outgoing).rev() {
             let duration = at(durations, position, *id)?;
-            let mut bound = at(&latest, position, *id)?;
+            let mut bound = time_at(&latest, position)?;
             for edge in edges {
                 let after = at(durations, edge.other, *id)?;
                 let weight = relation_weight(edge.kind, duration, after, edge.lag);
-                bound = bound.min(finite(*id, at(&latest, edge.other, *id)? - weight)?);
+                bound = bound.min(finite(*id, time_at(&latest, edge.other)? - weight)?);
             }
             if let Some(slot) = latest.get_mut(position) {
                 *slot = bound;
@@ -169,12 +178,12 @@ impl Network {
             return Err(ScheduleError::UnknownPosition(position));
         };
         let duration = at(durations, position, *id)?;
-        let start = at(&times.earliest, position, *id)?;
+        let start = time_at(&times.earliest, position)?;
         let mut available = finite(*id, times.finish - start - duration)?;
         for edge in edges {
             let after = at(durations, edge.other, *id)?;
             let weight = relation_weight(edge.kind, duration, after, edge.lag);
-            let slack = finite(*id, at(&times.earliest, edge.other, *id)? - start - weight)?;
+            let slack = finite(*id, time_at(&times.earliest, edge.other)? - start - weight)?;
             available = available.min(slack);
         }
         Ok(available.max(0.0))
@@ -185,7 +194,7 @@ impl Network {
         let Some(id) = self.order.get(position) else {
             return Err(ScheduleError::UnknownPosition(position));
         };
-        let slack = at(&times.latest, position, *id)? - at(&times.earliest, position, *id)?;
+        let slack = time_at(&times.latest, position)? - time_at(&times.earliest, position)?;
         Ok(finite(*id, slack)?.max(0.0))
     }
 }

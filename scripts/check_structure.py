@@ -10,6 +10,28 @@ failures = []
 PANICKING = {f'clippy::{lint}' for lint in (
     'restriction', 'unwrap_used', 'expect_used', 'panic', 'unreachable', 'todo', 'unimplemented',
     'indexing_slicing', 'string_slice', 'exit')} | {'unsafe_code'}
+
+def waivers(masked):
+    """Denied lints any allow or expect names, however spaced or wrapped in cfg_attr."""
+    compact = re.sub(r'\s+', '', masked)
+    named = set()
+    for waiver in re.finditer(r'\b(?:allow|expect)\(([^()]*)\)', compact):
+        named |= set(waiver[1].split(','))
+    return PANICKING & named
+
+
+for probe, expected in [
+    ('#[allow(clippy::unwrap_used)]', True),
+    ('#[cfg_attr(all(), allow(clippy::unwrap_used))]', True),
+    ('#[cfg_attr(not(test), expect(clippy::panic))]', True),
+    ('#[allow(clippy :: panic)]', True),
+    ('# [allow(clippy::indexing_slicing)]', True),
+    ('#[ allow (\n    dead_code,\n    clippy::string_slice,\n)]', True),
+    ('#![expect(unsafe_code)]', True),
+    ('#[allow(dead_code)]', False),
+]:
+    assert bool(waivers(probe)) == expected, f'waiver probe misread: {probe!r}'
+
 files = sorted((ROOT / 'crates').rglob('*.rs')) + sorted((ROOT / 'src').rglob('*.rs'))
 for path in files:
     source = path.read_text()
@@ -37,10 +59,9 @@ for path in files:
     if re.search(r'\b(?:eprintln|println)!', masked):
         failures.append(f'{name}: use tracing for diagnostics')
     # Panicking code stays denied everywhere; tests are exempted by clippy.toml, not by attributes.
-    for waiver in re.finditer(r'#!?\[(?:allow|expect)\(([^)]*)\)\]', masked):
-        waived = PANICKING & {lint.strip() for lint in waiver[1].split(',')}
-        if waived:
-            failures.append(f'{name}: {", ".join(sorted(waived))} may not be allowed')
+    waived = waivers(masked)
+    if waived:
+        failures.append(f'{name}: {", ".join(sorted(waived))} may not be allowed')
 
 for manifest in [ROOT / 'Cargo.toml', *sorted((ROOT / 'crates').glob('*/Cargo.toml'))]:
     package = tomllib.loads(manifest.read_text())
