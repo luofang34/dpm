@@ -28,7 +28,12 @@ impl Application {
         }
         #[cfg(feature = "sqlite")]
         if let Some(path) = location.store_path_blocking()? {
-            return Application::open_blocking(path)?.revision_blocking();
+            let found =
+                dpm_store::store_revision_blocking(&path)?.ok_or(AppError::NotInitialized)?;
+            return Ok(WorkspaceRevision {
+                revision: found.revision,
+                lineage_id: Some(found.lineage.lineage_id),
+            });
         }
         location.open_blocking()?.revision_blocking()
     }

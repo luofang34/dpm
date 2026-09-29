@@ -22,12 +22,12 @@ pub(crate) struct ReloadNotice {
 }
 
 impl ReloadNotice {
-    /// A reload that failed; `revision` is the snapshot still displayed.
+    /// A reload that failed; `revision` is the snapshot still displayed, which is behind its source.
     pub(crate) fn failed(error: &str, revision: u64) -> Self {
         Self {
             message: format!("Reload failed: {error}"),
             action: format!("Showing revision {revision}; [r] retry."),
-            label: None,
+            label: Some("STALE"),
         }
     }
 

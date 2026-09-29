@@ -148,6 +148,8 @@ fn failures_are_shown_in_text_and_retried_only_when_the_source_moves() {
     assert_eq!((source.loads, view.revision()), (1, 0));
     let text = screen(&mut view, 120, 30);
     assert!(text.contains("Reload failed:") && text.contains("workspace identity changed"));
+    // The source has moved past the display, so the header says the snapshot is behind.
+    assert!(text.contains("STALE snapshot revision 0"), "{text}");
 
     source.commit(snapshot(&plan, 2, lineage));
     watch.poll_blocking(&mut view, &mut source, start + INTERVAL * 4);

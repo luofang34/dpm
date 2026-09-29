@@ -73,5 +73,10 @@ fn the_revision_query_reads_rows_without_decoding_the_snapshot() {
         .execute("UPDATE plan_state SET snapshot_json = '{}'", [])
         .expect("damage");
     assert_eq!(store.revision_blocking().expect("revision"), Some(next));
+    // A poller that never opened the store (a repointable locator) reads the same two rows.
+    assert_eq!(
+        crate::store_revision_blocking(&path).expect("path probe"),
+        Some(next)
+    );
     assert!(store.load_blocking().is_err());
 }

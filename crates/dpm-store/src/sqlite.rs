@@ -102,19 +102,7 @@ impl SqliteStore {
     /// The committed revision and its lineage, read in one transaction without the snapshot text,
     /// so polling for changes costs two row reads; `None` for an uninitialized store.
     pub fn revision_blocking(&self) -> Result<Option<crate::StoreRevision>, StoreError> {
-        if schema::check_blocking(&self.connection, &self.path)? == Layout::Empty {
-            return Ok(None);
-        }
-        let transaction = self
-            .connection
-            .unchecked_transaction()
-            .map_err(database_error(&self.path, "begin revision query"))?;
-        let revision = snapshot::revision_blocking(&transaction, &self.path)?;
-        let lineage = lineage::read_blocking(&transaction, &self.path)?;
-        transaction
-            .commit()
-            .map_err(database_error(&self.path, "finish revision query"))?;
-        Ok(revision.map(|revision| crate::StoreRevision { revision, lineage }))
+        read_revision_blocking(&self.connection, &self.path)
     }
 
     /// The plan as it stood before the operation at local sequence `sequence`, replayed from the
@@ -264,6 +252,33 @@ impl SqliteStore {
 ///
 /// Closing the last read-write connection to a WAL store checkpoints the log into the main file and
 /// deletes the side files, so a store this binary refuses must never be opened read-write at all.
+/// Revision and lineage of the store at `path` through a read-only connection, without decoding
+/// its snapshot, for a client polling a store it has not opened (a repointable project locator);
+/// `None` for an uninitialized store. Stores in another layout are refused as by an open.
+pub fn store_revision_blocking(path: &Path) -> Result<Option<crate::StoreRevision>, StoreError> {
+    let mode = files::read_mode_blocking(path)?;
+    let connection = files::open_read_only_blocking(path, mode)?;
+    read_revision_blocking(&connection, path)
+}
+
+fn read_revision_blocking(
+    connection: &Connection,
+    path: &Path,
+) -> Result<Option<crate::StoreRevision>, StoreError> {
+    if schema::check_blocking(connection, path)? == Layout::Empty {
+        return Ok(None);
+    }
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(database_error(path, "begin revision query"))?;
+    let revision = snapshot::revision_blocking(&transaction, path)?;
+    let lineage = lineage::read_blocking(&transaction, path)?;
+    transaction
+        .commit()
+        .map_err(database_error(path, "finish revision query"))?;
+    Ok(revision.map(|revision| crate::StoreRevision { revision, lineage }))
+}
+
 fn check_existing_read_only_blocking(path: &Path) -> Result<(), StoreError> {
     let exists = path.try_exists().map_err(|source| StoreError::Io {
         action: "inspect",

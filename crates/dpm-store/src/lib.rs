@@ -16,4 +16,7 @@ pub use record::{HistoryEntry, HistoryPage, RecordedOperation, StoreLineage, Sto
 #[cfg(feature = "sqlite")]
 pub use schema::SCHEMA_VERSION;
 #[cfg(feature = "sqlite")]
-pub use sqlite::{IntegrityReport, SqliteStore, restore_store_blocking, verify_store_blocking};
+pub use sqlite::{
+    IntegrityReport, SqliteStore, restore_store_blocking, store_revision_blocking,
+    verify_store_blocking,
+};
