@@ -196,8 +196,11 @@ pub(super) fn fold_kind(name: &str) -> String {
         .collect();
     if let Some(stem) = folded.strip_suffix("ies").filter(|stem| !stem.is_empty()) {
         format!("{stem}y")
-    } else if folded.len() > 1 && folded.ends_with('s') && !folded.ends_with("ss") {
-        folded[..folded.len() - 1].to_owned()
+    } else if let Some(stem) = folded
+        .strip_suffix('s')
+        .filter(|stem| !stem.is_empty() && !stem.ends_with('s'))
+    {
+        stem.to_owned()
     } else {
         folded
     }
@@ -264,5 +267,4 @@ impl ProviderRules {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

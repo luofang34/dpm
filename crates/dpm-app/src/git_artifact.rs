@@ -38,10 +38,9 @@ impl Application {
             .get(&work)
             .ok_or(dpm_engine::EngineError::MissingWorkItem(work))?;
         if !item.contract.assets.iter().any(|r| r.asset == selected)
-            || !matches!(
-                plan.assets[&selected].kind,
-                dpm_model::AssetKind::GitRepository { .. }
-            )
+            || !plan.assets.get(&selected).is_some_and(|asset| {
+                matches!(asset.kind, dpm_model::AssetKind::GitRepository { .. })
+            })
         {
             return Err(AppError::InvalidRequest(
                 "Git asset must belong to the task's requirements".into(),
@@ -54,7 +53,12 @@ impl Application {
         artifact
             .metadata
             .insert("asset_id".into(), selected.to_string());
-        artifact.uri = format!("git:asset:{selected}@{}", artifact.metadata["commit"]);
+        let commit = artifact
+            .metadata
+            .get("commit")
+            .cloned()
+            .ok_or_else(|| AppError::InvalidRequest("Git evidence names no commit".into()))?;
+        artifact.uri = format!("git:asset:{selected}@{commit}");
         Ok(artifact)
     }
 }
@@ -97,5 +101,4 @@ fn git_output_blocking<const N: usize>(root: &Path, args: [&str; N]) -> Result<S
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

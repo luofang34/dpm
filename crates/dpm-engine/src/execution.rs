@@ -251,5 +251,4 @@ mod tracking;
 mod waiver;
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

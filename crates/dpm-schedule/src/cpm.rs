@@ -196,7 +196,9 @@ pub fn deterministic_with_durations(
     let times = network.times(&dense)?;
     let mut activities = BTreeMap::new();
     let mut critical_activities = Vec::new();
-    for (at, id) in network.order().iter().enumerate() {
+    let spans = times.earliest.iter().zip(&times.latest).zip(&dense);
+    for ((at, id), ((earliest, latest), duration)) in network.order().iter().enumerate().zip(spans)
+    {
         let total_float = network.total_float(&times, at)?;
         let critical = total_float <= EPSILON;
         if critical {
@@ -205,10 +207,10 @@ pub fn deterministic_with_durations(
         activities.insert(
             *id,
             ActivitySchedule {
-                earliest_start_hours: times.earliest[at],
-                earliest_finish_hours: finite(*id, times.earliest[at] + dense[at])?,
-                latest_start_hours: times.latest[at],
-                latest_finish_hours: finite(*id, times.latest[at] + dense[at])?,
+                earliest_start_hours: *earliest,
+                earliest_finish_hours: finite(*id, earliest + duration)?,
+                latest_start_hours: *latest,
+                latest_finish_hours: finite(*id, latest + duration)?,
                 total_float_hours: total_float,
                 free_float_hours: network.free_float(&dense, &times, at)?.min(total_float),
                 critical,
@@ -223,5 +225,4 @@ pub fn deterministic_with_durations(
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

@@ -1,6 +1,6 @@
 //! MSPDI documents saved by OmniPlan 4.10.3, through the public import API and the reviewed
 //! plan-change path.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use chrono::{TimeZone, Utc};
 use dpm_engine::propose_change;

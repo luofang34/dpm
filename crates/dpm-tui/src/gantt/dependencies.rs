@@ -12,6 +12,13 @@ pub(crate) fn abbreviation(kind: DependencyKind) -> &'static str {
     }
 }
 
+/// The key of work in the plan, or its id where the plan has no such work.
+pub(crate) fn label(plan: &Plan, id: WorkItemId) -> String {
+    plan.work_items
+        .get(&id)
+        .map_or_else(|| id.to_string(), |work| work.key.to_string())
+}
+
 pub(crate) fn lines(plan: &Plan, selected: Option<WorkItemId>) -> Vec<String> {
     plan.dependencies
         .iter()
@@ -19,11 +26,11 @@ pub(crate) fn lines(plan: &Plan, selected: Option<WorkItemId>) -> Vec<String> {
         .map(|d| {
             format!(
                 "{} --{} ({:?}) {:+.1}h--> {}{}",
-                plan.work_items[&d.predecessor].key,
+                label(plan, d.predecessor),
                 abbreviation(d.kind),
                 d.kind,
                 d.lag_hours,
-                plan.work_items[&d.successor].key,
+                label(plan, d.successor),
                 tags(d)
             )
         })

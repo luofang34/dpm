@@ -62,6 +62,15 @@ pub(crate) fn finite(work: WorkItemId, value: f64) -> Result<f64, ScheduleError>
     Ok(value)
 }
 
+/// The value at a topological position. Positions come from the compiled network, so a miss means
+/// the durations were not built for this network; it is reported, never assumed away.
+fn at(values: &[f64], position: usize, id: WorkItemId) -> Result<f64, ScheduleError> {
+    values
+        .get(position)
+        .copied()
+        .ok_or(ScheduleError::InvalidDuration(id))
+}
+
 impl Network {
     /// Order the activities topologically and validate the plan once.
     pub(crate) fn compile(plan: &Plan) -> Result<Self, ScheduleError> {
@@ -71,18 +80,24 @@ impl Network {
         let mut incoming = vec![Vec::new(); order.len()];
         let mut outgoing = vec![Vec::new(); order.len()];
         for dep in &plan.dependencies {
-            let from = positions[&dep.predecessor];
-            let to = positions[&dep.successor];
-            outgoing[from].push(Edge {
-                other: to,
+            let position = |id: &WorkItemId| {
+                positions
+                    .get(id)
+                    .copied()
+                    .ok_or(ScheduleError::MissingWorkItem(*id))
+            };
+            let (from, to) = (position(&dep.predecessor)?, position(&dep.successor)?);
+            let edge = |other| Edge {
+                other,
                 kind: dep.kind,
                 lag: dep.lag_hours,
-            });
-            incoming[to].push(Edge {
-                other: from,
-                kind: dep.kind,
-                lag: dep.lag_hours,
-            });
+            };
+            if let Some(edges) = outgoing.get_mut(from) {
+                edges.push(edge(to));
+            }
+            if let Some(edges) = incoming.get_mut(to) {
+                edges.push(edge(from));
+            }
         }
         Ok(Self {
             order,
@@ -104,29 +119,36 @@ impl Network {
 
     /// Forward and backward pass with one duration per topological position.
     pub(crate) fn times(&self, durations: &[f64]) -> Result<Times, ScheduleError> {
-        let mut earliest = vec![0.0; self.order.len()];
-        for (at, id) in self.order.iter().enumerate() {
+        // Incoming edges come from earlier positions, so each start is pushed after every value it
+        // reads.
+        let mut earliest = Vec::with_capacity(self.order.len());
+        for ((position, id), edges) in self.order.iter().enumerate().zip(&self.incoming) {
+            let duration = at(durations, position, *id)?;
             let mut start: f64 = 0.0;
-            for edge in &self.incoming[at] {
-                let weight =
-                    relation_weight(edge.kind, durations[edge.other], durations[at], edge.lag);
-                start = start.max(finite(*id, earliest[edge.other] + weight)?);
+            for edge in edges {
+                let before = at(durations, edge.other, *id)?;
+                let weight = relation_weight(edge.kind, before, duration, edge.lag);
+                start = start.max(finite(*id, at(&earliest, edge.other, *id)? + weight)?);
             }
-            earliest[at] = start;
+            earliest.push(start);
         }
+        // A separate pass keeps overflow reports in the order of the forward pass.
         let mut finish: f64 = 0.0;
-        for (at, id) in self.order.iter().enumerate() {
-            finish = finish.max(finite(*id, earliest[at] + durations[at])?);
+        for ((id, start), duration) in self.order.iter().zip(&earliest).zip(durations) {
+            finish = finish.max(finite(*id, start + duration)?);
         }
         let mut latest: Vec<f64> = durations.iter().map(|d| finish - d).collect();
-        for (at, id) in self.order.iter().enumerate().rev() {
-            let mut bound = latest[at];
-            for edge in &self.outgoing[at] {
-                let weight =
-                    relation_weight(edge.kind, durations[at], durations[edge.other], edge.lag);
-                bound = bound.min(finite(*id, latest[edge.other] - weight)?);
+        for ((position, id), edges) in self.order.iter().enumerate().zip(&self.outgoing).rev() {
+            let duration = at(durations, position, *id)?;
+            let mut bound = at(&latest, position, *id)?;
+            for edge in edges {
+                let after = at(durations, edge.other, *id)?;
+                let weight = relation_weight(edge.kind, duration, after, edge.lag);
+                bound = bound.min(finite(*id, at(&latest, edge.other, *id)? - weight)?);
             }
-            latest[at] = bound;
+            if let Some(slot) = latest.get_mut(position) {
+                *slot = bound;
+            }
         }
         Ok(Times {
             earliest,
@@ -140,21 +162,31 @@ impl Network {
         &self,
         durations: &[f64],
         times: &Times,
-        at: usize,
+        position: usize,
     ) -> Result<f64, ScheduleError> {
-        let id = self.order[at];
-        let mut available = finite(id, times.finish - times.earliest[at] - durations[at])?;
-        for edge in &self.outgoing[at] {
-            let weight = relation_weight(edge.kind, durations[at], durations[edge.other], edge.lag);
-            let slack = finite(id, times.earliest[edge.other] - times.earliest[at] - weight)?;
+        let (Some(id), Some(edges)) = (self.order.get(position), self.outgoing.get(position))
+        else {
+            return Err(ScheduleError::UnknownPosition(position));
+        };
+        let duration = at(durations, position, *id)?;
+        let start = at(&times.earliest, position, *id)?;
+        let mut available = finite(*id, times.finish - start - duration)?;
+        for edge in edges {
+            let after = at(durations, edge.other, *id)?;
+            let weight = relation_weight(edge.kind, duration, after, edge.lag);
+            let slack = finite(*id, at(&times.earliest, edge.other, *id)? - start - weight)?;
             available = available.min(slack);
         }
         Ok(available.max(0.0))
     }
 
-    /// Total float, clamped at zero, of the activity at `at`.
-    pub(crate) fn total_float(&self, times: &Times, at: usize) -> Result<f64, ScheduleError> {
-        Ok(finite(self.order[at], times.latest[at] - times.earliest[at])?.max(0.0))
+    /// Total float, clamped at zero, of the activity at `position`.
+    pub(crate) fn total_float(&self, times: &Times, position: usize) -> Result<f64, ScheduleError> {
+        let Some(id) = self.order.get(position) else {
+            return Err(ScheduleError::UnknownPosition(position));
+        };
+        let slack = at(&times.latest, position, *id)? - at(&times.earliest, position, *id)?;
+        Ok(finite(*id, slack)?.max(0.0))
     }
 }
 

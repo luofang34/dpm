@@ -329,5 +329,4 @@ fn key(plan: &Plan, id: WorkItemId) -> Key {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

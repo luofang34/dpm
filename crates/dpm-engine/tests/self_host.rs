@@ -1,5 +1,5 @@
 //! Prepared self-host contracts are inspectable but are not executed by this suite.
-#![allow(clippy::expect_used)]
+#![cfg(test)]
 use dpm_engine::{NextWorkQuery, explain_work, next_work, status};
 use dpm_model::{DecisionStatus, Plan, WorkItemId, WorkKind, WorkStatus};
 use std::collections::{BTreeSet, VecDeque};

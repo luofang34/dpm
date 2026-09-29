@@ -53,5 +53,4 @@ pub fn parse_actor(value: &str) -> Result<ActorId, String> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

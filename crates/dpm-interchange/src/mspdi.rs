@@ -179,5 +179,4 @@ fn project_id(plan: &Plan, key: &str) -> Result<ProjectId, InterchangeError> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

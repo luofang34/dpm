@@ -78,9 +78,17 @@ unsafe_code = "forbid"
 missing_docs = "deny"
 
 [workspace.lints.clippy]
+# Code that can abort a process. Denied here and never allowed in source (check_structure.py), which
+# is forbid for hand-written code; forbid itself would reject the allow clap's derive emits.
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+indexing_slicing = "deny"
+string_slice = "deny"
+exit = "deny"
 let_underscore_must_use = "deny"
 let_underscore_future = "deny"
 await_holding_lock = "deny"

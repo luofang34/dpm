@@ -25,3 +25,7 @@ disallowed-methods = [
     { path = "f64::cbrt", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
     { path = "f64::hypot", reason = "platform math libraries differ in the last bit; use libm so forecasts match on every device" },
 ]
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true

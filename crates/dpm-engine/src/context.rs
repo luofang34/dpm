@@ -90,35 +90,45 @@ pub(crate) fn applicable_decisions(
     }
 }
 
-pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContext {
+pub(crate) fn execution_context(
+    plan: &Plan,
+    work: &WorkItem,
+) -> Result<ExecutionContext, crate::EngineError> {
     let lineage = lineage(plan, work);
     let ancestors: BTreeSet<_> = lineage.iter().map(|w| w.id).collect();
     let parents: Vec<_> = lineage.iter().skip(1).map(|w| (*w).clone()).collect();
     let decisions: Vec<_> = applicable_decisions(plan, &ancestors)
         .into_iter()
-        .map(|id| plan.decisions[&id].clone())
+        .filter_map(|id| plan.decisions.get(&id).cloned())
         .collect();
     let mut artifact_ids = work.execution.artifact_ids.clone();
     for decision in &decisions {
         artifact_ids.extend(&decision.artifact_ids);
     }
     for dependency in &plan.dependencies {
-        if dependency.successor == work.id {
-            artifact_ids.extend(
-                &plan.work_items[&dependency.predecessor]
-                    .execution
-                    .artifact_ids,
-            );
+        if dependency.successor == work.id
+            && let Some(predecessor) = plan.work_items.get(&dependency.predecessor)
+        {
+            artifact_ids.extend(&predecessor.execution.artifact_ids);
         }
     }
-    ExecutionContext {
+    let project = plan.projects.get(&work.project).cloned().ok_or_else(|| {
+        crate::EngineError::InvalidCommand {
+            entity: work.key.to_string(),
+            reason: format!(
+                "work names project {} the plan does not contain",
+                work.project
+            ),
+        }
+    })?;
+    Ok(ExecutionContext {
         assets: work
             .contract
             .assets
             .iter()
             .filter_map(|r| plan.assets.get(&r.asset).cloned())
             .collect(),
-        project: plan.projects[&work.project].clone(),
+        project,
         parents,
         requirements: work
             .contract
@@ -161,9 +171,8 @@ pub(crate) fn execution_context(plan: &Plan, work: &WorkItem) -> ExecutionContex
             .filter(|r| r.links.iter().any(|l| ancestors.contains(&l.work)))
             .cloned()
             .collect(),
-    }
+    })
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

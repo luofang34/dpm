@@ -7,6 +7,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 failures = []
+PANICKING = {f'clippy::{lint}' for lint in (
+    'restriction', 'unwrap_used', 'expect_used', 'panic', 'unreachable', 'todo', 'unimplemented',
+    'indexing_slicing', 'string_slice', 'exit')} | {'unsafe_code'}
 files = sorted((ROOT / 'crates').rglob('*.rs')) + sorted((ROOT / 'src').rglob('*.rs'))
 for path in files:
     source = path.read_text()
@@ -33,6 +36,11 @@ for path in files:
             failures.append(f'{name}: {declaration[2]} has {members} members, exceeds 30')
     if re.search(r'\b(?:eprintln|println)!', masked):
         failures.append(f'{name}: use tracing for diagnostics')
+    # Panicking code stays denied everywhere; tests are exempted by clippy.toml, not by attributes.
+    for waiver in re.finditer(r'#!?\[(?:allow|expect)\(([^)]*)\)\]', masked):
+        waived = PANICKING & {lint.strip() for lint in waiver[1].split(',')}
+        if waived:
+            failures.append(f'{name}: {", ".join(sorted(waived))} may not be allowed')
 
 for manifest in [ROOT / 'Cargo.toml', *sorted((ROOT / 'crates').glob('*/Cargo.toml'))]:
     package = tomllib.loads(manifest.read_text())

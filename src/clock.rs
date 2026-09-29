@@ -45,5 +45,4 @@ fn is_query(command: &Commands) -> bool {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

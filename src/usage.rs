@@ -45,5 +45,4 @@ pub(crate) fn report_blocking(error: &clap::Error, json: bool) -> ExitCode {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

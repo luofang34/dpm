@@ -190,5 +190,4 @@ fn same(left: &Command, right: &Command) -> Result<bool, AppError> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

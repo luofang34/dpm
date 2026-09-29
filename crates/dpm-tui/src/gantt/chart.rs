@@ -58,16 +58,20 @@ impl Gantt {
             self.render_help(frame, inner);
             return;
         }
-        let parts = Layout::vertical([
+        let [chart, inspection, legend] = Layout::vertical([
             Constraint::Min(2),
             Constraint::Length((inner.height / 3).clamp(5, 12)),
             Constraint::Length(3),
         ])
-        .split(inner);
-        let current = selected.unwrap_or(0).min(work.len() - 1);
-        let focus = self.hovered.unwrap_or(current).min(work.len() - 1);
-        self.render_chart(frame, parts[0], plan, work, current, focus);
-        self.render_inspection(frame, parts[1], plan, &work[focus]);
+        .areas(inner);
+        let last = work.len().saturating_sub(1);
+        let current = selected.unwrap_or(0).min(last);
+        let focus = self.hovered.unwrap_or(current).min(last);
+        let Some(focused) = work.get(focus) else {
+            return;
+        };
+        self.render_chart(frame, chart, plan, work, current, focused);
+        self.render_inspection(frame, inspection, plan, focused);
         let footer = vec![
             self.palette.legend(),
             Line::from(vec![
@@ -79,7 +83,7 @@ impl Gantt {
                 "↑↓ Select  ←→ Pan  +/- Zoom  f Fit  Tab Inspect  PgUp/PgDn Scroll  Enter Detail  ? Help",
             ),
         ];
-        frame.render_widget(Paragraph::new(footer), parts[2]);
+        frame.render_widget(Paragraph::new(footer), legend);
     }
 
     fn render_chart(
@@ -89,7 +93,7 @@ impl Gantt {
         plan: &Plan,
         work: &[WorkItem],
         current: usize,
-        focus: usize,
+        focused: &WorkItem,
     ) {
         let label_width = (usize::from(area.width) / 3).clamp(14, 40);
         let width = usize::from(area.width).saturating_sub(label_width + 9);
@@ -112,7 +116,7 @@ impl Gantt {
             " ".repeat(space)
         ))];
         for (index, item) in work.iter().enumerate().skip(self.first_row).take(count) {
-            let relation = dependencies::relation(plan, work[focus].id, item.id);
+            let relation = dependencies::relation(plan, focused.id, item.id);
             let marker = if self.hovered == Some(index) {
                 "~ "
             } else if index == current {
@@ -136,7 +140,7 @@ impl Gantt {
     ) -> Line<'static> {
         let bounds = self.bounds(plan, item);
         let critical = bounds.is_some_and(|b| b.2);
-        let progress = self.progress[&item.id];
+        let progress = self.progress.get(&item.id).copied().unwrap_or_default();
         let (symbol, bar_style) = self.palette.activity(item, progress.verified, critical);
         let selected = marker == "@ ";
         let emphasis = if selected {

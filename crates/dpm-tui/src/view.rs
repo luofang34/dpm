@@ -223,7 +223,8 @@ impl View {
         let block = Block::bordered();
         let inner = block.inner(area);
         frame.render_widget(block, area);
-        let rows = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(inner);
+        let [title, notice_area] =
+            Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).areas(inner);
         frame.render_widget(
             Paragraph::new(format!(
                 "DPM · {} · {} revision {}  [1–5] Pages [↑↓/jk] Navigate [r] Reload [q] Quit",
@@ -236,10 +237,10 @@ impl View {
                 },
                 self.plan.revision,
             )),
-            rows[0],
+            title,
         );
         if let Some(notice) = &self.notice {
-            notice.render(frame, rows[1]);
+            notice.render(frame, notice_area);
         }
     }
 
@@ -249,31 +250,27 @@ impl View {
         } else {
             3
         };
-        let areas =
-            Layout::vertical([Constraint::Length(header), Constraint::Min(1)]).split(frame.area());
-        self.render_header(frame, areas[0]);
+        let [top, body] =
+            Layout::vertical([Constraint::Length(header), Constraint::Min(1)]).areas(frame.area());
+        self.render_header(frame, top);
         if matches!(self.page, Page::Gantt) {
-            self.gantt.render(
-                frame,
-                areas[1],
-                &self.plan,
-                &self.work,
-                self.state.selected(),
-            );
+            self.gantt
+                .render(frame, body, &self.plan, &self.work, self.state.selected());
             return;
         }
         if matches!(self.page, Page::Work) {
             let items = self.work.iter().map(|w| {
+                let progress = self.progress.work.get(&w.id).copied().unwrap_or_default();
                 ListItem::new(format!(
                     "{}{}{}  {:?}  {:.0}%  {}{}",
                     "  ".repeat(depth(&self.plan, w)),
-                    crate::work_label::milestone_badge(w, self.progress.work[&w.id].verified),
+                    crate::work_label::milestone_badge(w, progress.verified),
                     w.key,
                     w.execution.status,
-                    self.progress.work[&w.id].percent_complete,
+                    progress.percent_complete,
                     w.title,
                     crate::open_choices::scope_tag(
-                        self.progress.work[&w.id].scope,
+                        progress.scope,
                         self.timeline.applicability(w.id)
                     )
                 ))
@@ -282,7 +279,7 @@ impl View {
                 .block(Block::bordered().title("Work · select then [4] Detail"))
                 .highlight_symbol("> ")
                 .highlight_style(Style::default().add_modifier(Modifier::BOLD));
-            frame.render_stateful_widget(list, areas[1], &mut self.state);
+            frame.render_stateful_widget(list, body, &mut self.state);
             return;
         }
         let text = match self.page {
@@ -293,7 +290,7 @@ impl View {
         };
         self.text_panel.render(
             frame,
-            areas[1],
+            body,
             text.into(),
             &format!("{} · PgUp/PgDn scroll", self.page.title()),
             false,
@@ -345,5 +342,4 @@ fn depth(plan: &Plan, work: &WorkItem) -> usize {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

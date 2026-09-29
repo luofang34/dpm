@@ -27,8 +27,8 @@ fn only_a_later_revision_of_the_displayed_lineage_is_followed() {
 }
 
 fn caption(text: &str) -> String {
-    let start = text.find("lines ").expect("scroll caption");
-    text[start..].chars().take_while(|c| *c != '/').collect()
+    let (_, caption) = text.split_once("lines ").expect("scroll caption");
+    format!("lines {}", caption.split('/').next().unwrap_or_default())
 }
 
 #[test]

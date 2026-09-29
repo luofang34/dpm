@@ -91,5 +91,4 @@ pub fn validate_decoded(plan: Plan) -> Result<PlanValidation, AppError> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

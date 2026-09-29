@@ -1,4 +1,3 @@
-#![allow(clippy::expect_used)]
 use super::*;
 use ratatui::{Terminal, backend::TestBackend};
 fn render(plan: &Plan, width: u16, height: u16) -> String {

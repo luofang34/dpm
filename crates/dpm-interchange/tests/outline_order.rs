@@ -1,5 +1,5 @@
 //! Explicit outline order survives exchange independently of task names and keys.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use dpm_interchange::{ImportOptions, export_mspdi, import_mspdi};
 use dpm_model::{Plan, SiblingOrder};

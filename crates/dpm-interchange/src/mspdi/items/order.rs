@@ -21,7 +21,7 @@ pub(super) fn assign(current: &Plan, outline: &mut Outline) -> Result<(), Interc
         let positions: Vec<_> = uids
             .iter()
             .map(|uid| {
-                let work = &outline.work[uid];
+                let work = outline.work.get(uid)?;
                 current
                     .work_items
                     .get(&work.id)
@@ -44,17 +44,23 @@ fn assign_positions(
     let mut previous: Option<Position> = None;
     let mut anchors = fixed.iter().copied().peekable();
     for (index, uid) in uids.iter().enumerate() {
-        let work = &outline.work[uid];
+        // Only mapped work has a place among its siblings.
+        let Some(work) = outline.work.get(uid) else {
+            continue;
+        };
         let position = if anchors.peek() == Some(&index) {
             anchors.next();
-            positions[index].clone()
+            positions.get(index).cloned().flatten()
         } else {
             None
         };
         let (order, id) = match position {
             Some(position) => position,
             None => {
-                let next = anchors.peek().and_then(|i| positions[*i].as_ref());
+                let next = anchors
+                    .peek()
+                    .and_then(|i| positions.get(*i))
+                    .and_then(Option::as_ref);
                 let order = between(previous.as_ref(), next, work.id)
                     .map_err(|source| InterchangeError::OutlineOrder { uid: *uid, source })?;
                 (order, work.id)

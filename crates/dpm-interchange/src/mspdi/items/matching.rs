@@ -129,5 +129,4 @@ fn local_paths(current: &Plan, project: ProjectId) -> BTreeMap<Path, Vec<WorkIte
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

@@ -104,5 +104,4 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), ValidationError> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

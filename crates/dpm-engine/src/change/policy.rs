@@ -29,5 +29,4 @@ pub(super) fn protect_waivers(current: &Plan, proposed: &Plan) -> Result<(), Eng
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

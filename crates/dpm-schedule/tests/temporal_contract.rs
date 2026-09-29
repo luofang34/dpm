@@ -1,5 +1,5 @@
 //! Temporal-constraint contract for the deterministic CPM projection, exercised via the public API.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 #[path = "temporal_contract/examples.rs"]
 mod examples;

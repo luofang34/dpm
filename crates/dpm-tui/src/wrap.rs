@@ -36,7 +36,7 @@ fn wrap_line(line: &Line<'_>, base: Style, width: usize) -> Vec<Line<'static>> {
     let mut index = 0;
     while index < cells.len() {
         let end = word_end(&cells, index);
-        let word = &cells[index..end];
+        let word = cells.get(index..end).unwrap_or_default();
         let word_width: usize = word.iter().map(|c| c.width).sum();
         if used + word_width > width && used > 0 {
             rows.push(Vec::new());
@@ -69,11 +69,12 @@ fn wrap_line(line: &Line<'_>, base: Style, width: usize) -> Vec<Line<'static>> {
 
 /// A word is a run of non-blank graphemes; each blank is its own break opportunity.
 fn word_end(cells: &[Cell<'_>], start: usize) -> usize {
-    if cells[start].blank {
+    if cells.get(start).is_some_and(|c| c.blank) {
         return start + 1;
     }
-    cells[start..]
+    cells
         .iter()
+        .skip(start)
         .position(|c| c.blank)
         .map_or(cells.len(), |offset| start + offset)
 }
@@ -95,5 +96,4 @@ fn spans(row: &[&Cell<'_>]) -> Vec<Span<'static>> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

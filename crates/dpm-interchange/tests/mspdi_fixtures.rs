@@ -1,6 +1,6 @@
 //! MSPDI documents written by an independent tool, through the public import/export API and the
 //! reviewed plan-change path.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use chrono::{TimeZone, Utc};
 use dpm_engine::{Command, apply_command, propose_change};

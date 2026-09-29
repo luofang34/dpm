@@ -169,6 +169,6 @@ fn find_work(plan: &Plan, key: &str) -> Result<dpm_model::WorkItemId, AppError> 
         .ok_or_else(|| AppError::UnknownWork(key.into()))
 }
 
-#[cfg(all(test, feature = "sqlite"))]
-#[allow(clippy::expect_used, clippy::panic)]
+#[cfg(test)]
+#[cfg(feature = "sqlite")]
 mod tests;

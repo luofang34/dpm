@@ -82,6 +82,12 @@ const KEYED_COLLECTIONS: [&str; 7] = [
 ///
 /// Artifacts, the revision and the format version are not compared: protection refuses a proposal
 /// that changes them, so they never appear in a reviewed change.
+/// A member of a serialized entity, or null where it is absent, as a new or removed entity reads.
+fn field<'a>(value: &'a Value, key: &str) -> &'a Value {
+    static ABSENT: Value = Value::Null;
+    value.get(key).unwrap_or(&ABSENT)
+}
+
 pub(crate) fn differences(
     current: &Plan,
     proposed: &Plan,
@@ -93,20 +99,19 @@ pub(crate) fn differences(
         &mut changes,
         "workspace",
         None,
-        &before["workspace"],
-        &after["workspace"],
+        field(&before, "workspace"),
+        field(&after, "workspace"),
     );
     for collection in KEYED_COLLECTIONS {
-        let ids: BTreeSet<_> = current_keys(&before[collection])
-            .chain(current_keys(&after[collection]))
-            .collect();
+        let (old, new) = (field(&before, collection), field(&after, collection));
+        let ids: BTreeSet<_> = current_keys(old).chain(current_keys(new)).collect();
         for id in ids {
             append(
                 &mut changes,
                 collection,
                 Some(id.clone()),
-                &before[collection][&id],
-                &after[collection][&id],
+                field(old, &id),
+                field(new, &id),
             );
         }
     }
@@ -192,5 +197,4 @@ pub(crate) fn invalid(entity: impl ToString, reason: &str) -> EngineError {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

@@ -80,6 +80,6 @@ fn preview_revision_blocking(path: &Path) -> Result<u64, AppError> {
     Ok(serde_json::from_str::<Head>(&text)?.revision)
 }
 
-#[cfg(all(test, feature = "sqlite"))]
-#[allow(clippy::expect_used, clippy::panic)]
+#[cfg(test)]
+#[cfg(feature = "sqlite")]
 mod tests;

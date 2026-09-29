@@ -30,7 +30,11 @@ pub(crate) fn plan_command_blocking(
                 keep_existing_priority,
             })?;
             if let Some(path) = candidate {
-                let text = serde_json::to_string_pretty(&response.data["candidate"])?;
+                let candidate = response
+                    .data
+                    .get("candidate")
+                    .ok_or_else(|| CliError::Input("import returned no candidate".into()))?;
+                let text = serde_json::to_string_pretty(candidate)?;
                 fs::write(&path, text + "\n").map_err(io_error("write candidate plan", &path))?;
             }
             output::response_blocking(response, json)
@@ -40,8 +44,10 @@ pub(crate) fn plan_command_blocking(
             output: path,
         } => {
             let response = app.query_blocking(Query::ExportMspdi { project_key })?;
-            let xml = response.data["xml"]
-                .as_str()
+            let xml = response
+                .data
+                .get("xml")
+                .and_then(serde_json::Value::as_str)
                 .ok_or_else(|| CliError::Input("export returned no document".into()))?;
             if let Some(path) = &path {
                 fs::write(path, xml).map_err(io_error("write MSPDI document", path))?;
@@ -49,7 +55,11 @@ pub(crate) fn plan_command_blocking(
             match (json, path) {
                 (false, None) => output::raw_blocking(xml),
                 (false, Some(_)) => {
-                    output::text_blocking(&serde_json::to_string_pretty(&response.data["report"])?)
+                    let report = response
+                        .data
+                        .get("report")
+                        .ok_or_else(|| CliError::Input("export returned no report".into()))?;
+                    output::text_blocking(&serde_json::to_string_pretty(report)?)
                 }
                 (true, _) => output::response_blocking(response, true),
             }

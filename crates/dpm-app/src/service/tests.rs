@@ -1,4 +1,3 @@
-#![allow(clippy::expect_used)]
 use super::*;
 use dpm_model::ActorId;
 use std::collections::BTreeSet;

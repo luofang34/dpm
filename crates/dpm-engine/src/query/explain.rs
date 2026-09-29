@@ -108,8 +108,12 @@ pub fn explain_work(
     Ok(WorkExplanation {
         gates,
         transitions,
-        progress: crate::progress::progress_with(plan, &timeline).work[&work],
-        context: crate::context::execution_context(plan, &item),
+        progress: crate::progress::progress_with(plan, &timeline)
+            .work
+            .get(&work)
+            .copied()
+            .ok_or(EngineError::MissingWorkItem(work))?,
+        context: crate::context::execution_context(plan, &item)?,
         work: item,
         ready,
         applicability: timeline.applicability(work).clone(),

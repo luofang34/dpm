@@ -104,8 +104,14 @@ fn run_open_blocking(
             if json {
                 return output::response_blocking(response, true);
             }
-            let unestimated: Vec<dpm_model::Key> =
-                serde_json::from_value(response.data["unestimated"].clone()).unwrap_or_default();
+            let unestimated: Vec<dpm_model::Key> = serde_json::from_value(
+                response
+                    .data
+                    .get("unestimated")
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+            .unwrap_or_default();
             if let Some(line) = output::unestimated_line(&unestimated) {
                 output::text_blocking(&line)?;
             }

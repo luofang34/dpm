@@ -1,5 +1,5 @@
 //! Releasing and handing off work that a reviewed replacement excluded while it was in flight.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use dpm_engine::{Command, EngineError, UnmetGate, apply_command, status};

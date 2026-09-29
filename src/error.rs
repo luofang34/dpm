@@ -67,5 +67,4 @@ impl CliError {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

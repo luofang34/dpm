@@ -1,5 +1,5 @@
 //! Work packages whose children a choice excluded, through the public command and query contract.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use dpm_engine::{Command, ProgressScope, apply_command, explain_work, progress, status};

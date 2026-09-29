@@ -31,17 +31,19 @@ fn contextual_decisions_supply_sources_without_gating_or_leaking_to_other_work()
     plan.validate().expect("valid associations");
 
     let before = plan.clone();
-    let context = execution_context(&plan, &plan.work_items[&task]);
+    let context = execution_context(&plan, &plan.work_items[&task]).expect("context");
     assert_eq!(context.decisions, vec![plan.decisions[&id].clone()]);
     assert!(context.artifacts.contains(&source));
     assert_eq!(context.decisions[0].status, DecisionStatus::Open);
     assert!(
         execution_context(&plan, &plan.work_items[&other])
+            .expect("context")
             .decisions
             .is_empty()
     );
     assert!(
         !execution_context(&plan, &plan.work_items[&other])
+            .expect("context")
             .artifacts
             .contains(&source)
     );
@@ -103,7 +105,10 @@ fn context_associations_apply_to_descendants_without_affecting_readiness() {
     let id = decision.id;
     plan.validate().expect("valid hierarchy");
     assert_eq!(
-        execution_context(&plan, &plan.work_items[&task]).decisions[0].id,
+        execution_context(&plan, &plan.work_items[&task])
+            .expect("context")
+            .decisions[0]
+            .id,
         id
     );
     assert!(is_ready(&plan, &plan.work_items[&task], chrono::Utc::now()));

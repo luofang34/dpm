@@ -23,7 +23,8 @@ pub(super) fn select(
         let right = positions.get(end).and_then(Option::as_ref);
         if left.zip(right).is_some_and(|(a, b)| a >= b) {
             return Err(InterchangeError::OutlineOrder {
-                uid: uids[end],
+                // `right` exists, so `end` indexes a task and its UID.
+                uid: uids.get(end).copied().unwrap_or_default(),
                 source: OrderError::InvalidBounds,
             });
         }
@@ -55,13 +56,12 @@ fn increasing(
             continue;
         };
         let slot = tails.partition_point(|(_, tail)| *tail < position);
-        if slot > 0 {
-            links.insert(index, tails[slot - 1].0);
+        if let Some((previous, _)) = slot.checked_sub(1).and_then(|i| tails.get(i)) {
+            links.insert(index, *previous);
         }
-        if slot == tails.len() {
-            tails.push((index, position));
-        } else {
-            tails[slot] = (index, position);
+        match tails.get_mut(slot) {
+            Some(tail) => *tail = (index, position),
+            None => tails.push((index, position)),
         }
     }
     let mut cursor = tails.last().map(|(index, _)| *index);

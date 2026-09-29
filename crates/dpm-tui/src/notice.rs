@@ -137,5 +137,4 @@ fn take_width<'a>(
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

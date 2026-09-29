@@ -6,8 +6,9 @@ use dpm_model::{
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Execution progress is distinct from independent acceptance of the result.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// Execution progress is distinct from independent acceptance of the result. The default is no
+/// reported progress and no acceptance.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ProgressSummary {
     /// Execution percentage; packages/workspace equally weight descendant leaf tasks.
     pub percent_complete: f64,

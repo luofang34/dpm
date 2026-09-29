@@ -62,5 +62,4 @@ pub fn store_path_blocking(
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

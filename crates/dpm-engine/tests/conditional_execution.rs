@@ -1,5 +1,5 @@
 //! Conditional work and branch joins through the public command and query contract.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use dpm_engine::{

@@ -325,5 +325,4 @@ fn prepare_write_blocking(connection: &Connection, path: &Path) -> Result<Layout
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

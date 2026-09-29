@@ -41,5 +41,4 @@ pub(super) fn validate(work: &WorkItem) -> Result<(), ValidationError> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

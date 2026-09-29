@@ -1,6 +1,6 @@
 //! The remaining forecast never releases a constraint before the execution gates do, through the
 //! public API.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use dpm_engine::{Command, Transition, apply_command, gate_report};

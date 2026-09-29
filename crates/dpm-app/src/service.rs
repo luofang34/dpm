@@ -221,5 +221,6 @@ mod recovery;
 #[cfg(feature = "sqlite")]
 pub use recovery::{restore_store_blocking, store_path_blocking, verify_store_blocking};
 
-#[cfg(all(test, feature = "sqlite"))]
+#[cfg(test)]
+#[cfg(feature = "sqlite")]
 mod tests;

@@ -241,5 +241,4 @@ fn section(lines: &mut Vec<String>, title: &str, values: impl IntoIterator<Item 
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

@@ -232,5 +232,4 @@ fn identity(parts: &[&[u8]]) -> WorkItemId {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

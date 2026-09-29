@@ -156,5 +156,4 @@ pub(crate) fn next_text_blocking(result: &NextWorkResult) -> Result<(), CliError
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

@@ -92,5 +92,4 @@ pub(crate) fn create_blocking(connection: &Connection, path: &Path) -> Result<()
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

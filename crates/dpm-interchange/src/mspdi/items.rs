@@ -312,5 +312,4 @@ fn skipped(task: &SourceTask, field: &str, reason: impl Into<String>) -> ItemRep
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

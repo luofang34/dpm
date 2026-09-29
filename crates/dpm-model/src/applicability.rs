@@ -121,7 +121,13 @@ pub(crate) fn derive_indexed(plan: &Plan, index: &crate::graph_index::GraphIndex
         // A selected task already verified has taken every transition; its prerequisites no longer
         // decide whether it can proceed, so a later choice change cannot strand it.
         let finished = work.is_executable() && work.execution.status.satisfies_dependency();
-        if work.kind == WorkKind::WorkPackage || finished || !derived.states[&id].is_applicable() {
+        if work.kind == WorkKind::WorkPackage
+            || finished
+            || !derived
+                .states
+                .get(&id)
+                .is_some_and(Applicability::is_applicable)
+        {
             continue;
         }
         let state = through_constraints(plan, index, work, &derived.states);
@@ -328,5 +334,4 @@ fn dependency_order(plan: &Plan) -> Vec<WorkItemId> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

@@ -1,5 +1,5 @@
 //! A reviewed replacement of a made choice, observed through the public command and query API.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use dpm_engine::{Command, Transition, apply_command, gate_report, progress, status};

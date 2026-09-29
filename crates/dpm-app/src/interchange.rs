@@ -72,5 +72,6 @@ fn refusal(plan: &Plan, result: &ImportResult, error: dpm_engine::EngineError) -
     }
 }
 
-#[cfg(all(test, feature = "sqlite"))]
+#[cfg(test)]
+#[cfg(feature = "sqlite")]
 mod tests;

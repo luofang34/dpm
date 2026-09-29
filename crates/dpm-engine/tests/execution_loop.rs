@@ -1,5 +1,5 @@
 //! Public execution contract across an agent and an independent reviewer.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use chrono::Utc;
 use dpm_engine::{Command, NextWorkQuery, apply_command, explain_work, is_ready, next_work};

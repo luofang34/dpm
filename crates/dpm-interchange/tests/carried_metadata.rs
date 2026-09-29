@@ -1,5 +1,5 @@
 //! External saves preserve identity and uncertainty without importing execution state.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 use dpm_interchange::{ImportOptions, export_mspdi, import_mspdi};
 use dpm_model::{Plan, WorkKind, WorkStatus};
 
@@ -52,7 +52,11 @@ fn external_duration_wins_and_wbs_deviation_is_reported() {
     let plan = fixture();
     let xml = export_mspdi(&plan, "TEST").expect("export").xml;
     let start = xml.find("<Duration>").expect("duration");
-    let end = start + xml[start..].find("</Duration>").expect("end") + 11;
+    let end = xml
+        .match_indices("</Duration>")
+        .map(|(at, tag)| at + tag.len())
+        .find(|end| *end > start)
+        .expect("end");
     let mut edited = xml.clone();
     edited.replace_range(
         start..end,
@@ -94,8 +98,15 @@ fn malformed_or_duplicated_metadata_is_refused_without_fallback_matching() {
         assert!(import_mspdi(&plan, &bad, &options()).is_err());
     }
     let start = xml.find("<Task>").expect("task");
-    let end = start + xml[start..].find("</Task>").expect("end") + 7;
-    let duplicate = xml[start..end].replace("<UID>1</UID>", "<UID>99</UID>");
+    let end = xml
+        .match_indices("</Task>")
+        .map(|(at, tag)| at + tag.len())
+        .find(|end| *end > start)
+        .expect("end");
+    let duplicate = xml
+        .get(start..end)
+        .expect("task element")
+        .replace("<UID>1</UID>", "<UID>99</UID>");
     assert!(
         import_mspdi(
             &plan,

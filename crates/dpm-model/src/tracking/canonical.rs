@@ -191,5 +191,4 @@ fn canonical_external_id(form: IdForm, external_id: &str) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

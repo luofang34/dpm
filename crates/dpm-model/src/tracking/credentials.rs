@@ -5,5 +5,4 @@ mod url;
 pub(super) use url::check_url;
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

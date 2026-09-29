@@ -183,5 +183,4 @@ pub(super) fn affected_work(current: &Plan, proposed: &Plan) -> Vec<AffectedWork
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

@@ -76,11 +76,15 @@ impl Gantt {
             *cell = symbol;
         }
         if kind != WorkKind::Milestone {
-            if start < self.viewport.start {
-                bar[0] = '<';
+            if start < self.viewport.start
+                && let Some(first) = bar.first_mut()
+            {
+                *first = '<';
             }
-            if end > self.viewport.end() {
-                bar[width - 1] = '>';
+            if end > self.viewport.end()
+                && let Some(last) = bar.last_mut()
+            {
+                *last = '>';
             }
         }
         bar.into_iter().collect()

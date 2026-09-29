@@ -34,5 +34,4 @@ pub fn unestimated(plan: &Plan, timeline: &Timeline) -> Vec<Key> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

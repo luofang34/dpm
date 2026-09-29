@@ -170,8 +170,12 @@ impl Truncated {
             .partition_point(|mass| *mass <= target)
             .saturating_sub(1)
             .min(CELLS - 1);
-        let low = self.cumulative[cell];
-        let mass = self.cumulative[cell + 1] - low;
+        // The table has one more boundary than cells and `cell` is clamped below the last one, so
+        // both boundaries exist; without them the cell counts as empty and its midpoint is drawn.
+        let (low, mass) = match self.cumulative.get(cell..cell.saturating_add(2)) {
+            Some(&[low, high]) => (low, high - low),
+            _ => (0.0, 0.0),
+        };
         let within = if mass > 0.0 {
             ((target - low) / mass).clamp(0.0, 1.0)
         } else {
@@ -182,5 +186,4 @@ impl Truncated {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

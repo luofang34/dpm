@@ -113,5 +113,4 @@ fn depth(plan: &Plan, work: &WorkItem) -> usize {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

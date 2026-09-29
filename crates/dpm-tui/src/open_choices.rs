@@ -104,5 +104,4 @@ pub(crate) fn summary_text(summary: &StatusSummary) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

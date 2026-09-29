@@ -150,5 +150,4 @@ fn handle_event<S: SnapshotSource>(
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

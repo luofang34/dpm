@@ -45,11 +45,14 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
     let rank = p.clamp(0.0, 1.0) * (sorted.len().saturating_sub(1) as f64);
     let low = rank.floor() as usize;
     let high = rank.ceil() as usize;
-    if low == high {
-        sorted[low]
-    } else {
-        let fraction = rank - low as f64;
-        sorted[low] * (1.0 - fraction) + sorted[high] * fraction
+    // Both ranks lie within the non-empty slice by construction.
+    match (sorted.get(low), sorted.get(high)) {
+        (Some(below), _) if low == high => *below,
+        (Some(below), Some(above)) => {
+            let fraction = rank - low as f64;
+            below * (1.0 - fraction) + above * fraction
+        }
+        _ => 0.0,
     }
 }
 
@@ -118,8 +121,11 @@ fn simulate_inner(
     }
     for _ in 0..config.iterations {
         for (at, id, source) in &sampled {
-            durations[*at] = source.sample(&mut rng);
-            if !durations[*at].is_finite() || durations[*at] < 0.0 {
+            let slot = durations
+                .get_mut(*at)
+                .ok_or(ScheduleError::UnknownPosition(*at))?;
+            *slot = source.sample(&mut rng);
+            if !slot.is_finite() || *slot < 0.0 {
                 return Err(ScheduleError::InvalidDuration(*id));
             }
         }
@@ -150,5 +156,4 @@ fn simulate_inner(
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

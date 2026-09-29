@@ -131,8 +131,11 @@ draft a plan and check it with `validate` / `validate_plan`, then ask for it to 
 - Before publication, move bundled data directly to the selected format; do not add legacy adapters.
   Reject unsupported versions without replacing live state. Published formats require an explicit migration policy.
 - Validate graph invariants at command/import boundaries.
-- Workspace lints forbid unsafe code and deny missing docs, unwrap/expect/panic, discarded Results,
-  discarded futures, and awaiting with a synchronous lock. Tests may allow expect/panic explicitly.
+- Workspace lints forbid unsafe code and deny missing docs, discarded Results, discarded futures,
+  awaiting with a synchronous lock, and every way code can abort: unwrap/expect/panic, unreachable,
+  todo/unimplemented, indexing and slicing, string slicing and process exit. No source file may
+  allow those lints (check_structure.py); tests are exempted through clippy.toml, and integration
+  test crates start with `#![cfg(test)]` so the exemption covers their helpers.
 - Use typed `thiserror` errors in libraries; retain error sources and useful entity/path context.
 - Use `tracing` for diagnostics, propagate failures, and do not call `process::exit()`.
 - Wrap monotonic counters with `wrapping_add(1)`.

@@ -221,5 +221,4 @@ pub fn next_in_scope(
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

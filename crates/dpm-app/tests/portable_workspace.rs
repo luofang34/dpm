@@ -1,6 +1,6 @@
 //! A portable execution graph coordinates repositories and non-code work across nested projects.
 #![cfg(feature = "sqlite")]
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use dpm_app::{Application, CommandRequest, Query};
 use dpm_engine::Command;

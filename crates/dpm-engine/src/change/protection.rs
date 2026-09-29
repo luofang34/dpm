@@ -159,7 +159,7 @@ fn protect_context(current: &Plan, proposed: &Plan, work: &WorkItem) -> Result<(
                 "cannot change the project basis of execution",
             ));
         }
-        project = current.projects[&id].parent;
+        project = current.projects.get(&id).and_then(|p| p.parent);
     }
     if work
         .contract

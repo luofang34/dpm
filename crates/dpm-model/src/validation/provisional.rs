@@ -52,12 +52,10 @@ fn attempts(work: &WorkItem) -> Result<(), ValidationError> {
             return fail("an attempt cannot be reviewed before it was submitted");
         }
     }
-    if work
-        .execution
-        .attempts
-        .windows(2)
-        .any(|pair| review_time(&pair[0]).is_some_and(|at| pair[1].submitted_at < at))
-    {
+    if work.execution.attempts.windows(2).any(|pair| {
+        matches!(pair, [earlier, later]
+                if review_time(earlier).is_some_and(|at| later.submitted_at < at))
+    }) {
         return fail("an attempt cannot be submitted before the previous one was rejected");
     }
     let consistent = match &last.outcome {

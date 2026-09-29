@@ -156,5 +156,4 @@ fn lag_delta(hours: f64) -> Option<TimeDelta> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

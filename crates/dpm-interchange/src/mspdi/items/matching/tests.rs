@@ -8,10 +8,9 @@ use dpm_model::Plan;
 fn without_guids(xml: &str) -> String {
     let mut out = String::new();
     let mut rest = xml;
-    while let Some(start) = rest.find("<GUID>") {
-        out.push_str(&rest[..start]);
-        let end = rest[start..].find("</GUID>").expect("closed") + start + "</GUID>".len();
-        rest = &rest[end..];
+    while let Some((before, after)) = rest.split_once("<GUID>") {
+        out.push_str(before);
+        rest = after.split_once("</GUID>").expect("closed").1;
     }
     out + rest
 }

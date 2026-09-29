@@ -425,13 +425,17 @@ fn dependency_command(app: &Application, name: &str, args: Arguments) -> Result<
 fn validate_argument_names(name: &str, value: &Value) -> Result<(), AppError> {
     let definition = definitions()
         .into_iter()
-        .find(|d| d["name"] == name)
+        .find(|d| d.get("name").and_then(Value::as_str) == Some(name))
         .ok_or_else(|| AppError::InvalidRequest(format!("unknown tool {name}")))?;
     let fields = value
         .as_object()
         .ok_or_else(|| AppError::InvalidRequest("arguments must be an object".into()))?;
     for key in fields.keys() {
-        if definition["inputSchema"]["properties"].get(key).is_none() {
+        if definition
+            .pointer("/inputSchema/properties")
+            .and_then(|properties| properties.get(key))
+            .is_none()
+        {
             return Err(AppError::InvalidRequest(format!(
                 "unexpected argument {key} for {name}"
             )));

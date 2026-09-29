@@ -1,5 +1,5 @@
 //! Every projection of conditional work reads the same active graph.
-#![allow(clippy::expect_used, clippy::panic)]
+#![cfg(test)]
 
 use chrono::{DateTime, TimeDelta, TimeZone, Utc};
 use dpm_engine::{

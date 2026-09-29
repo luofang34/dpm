@@ -117,5 +117,4 @@ pub(crate) fn read_entry(row: &rusqlite::Row<'_>, path: &Path) -> Result<History
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

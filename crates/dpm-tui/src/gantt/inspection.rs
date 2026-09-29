@@ -28,7 +28,7 @@ impl Gantt {
                 .style(Color::Reset)
                 .add_modifier(Modifier::BOLD),
         )];
-        let progress = self.progress[&work.id];
+        let progress = self.progress.get(&work.id).copied().unwrap_or_default();
         let state = if work.kind == WorkKind::Milestone {
             if progress.verified {
                 "Milestone reached".into()
@@ -106,13 +106,15 @@ impl Gantt {
             self.palette.style(color),
         ));
         for link in links {
-            let related = &plan.work_items[&if incoming {
+            let Some(related) = plan.work_items.get(&if incoming {
                 link.predecessor
             } else {
                 link.successor
-            }];
-            let from = &plan.work_items[&link.predecessor].key;
-            let to = &plan.work_items[&link.successor].key;
+            }) else {
+                continue;
+            };
+            let from = dependencies::label(plan, link.predecessor);
+            let to = dependencies::label(plan, link.successor);
             lines.push(Line::styled(
                 format!(
                     "  {from} --{}{:+.1}h→{to}{}",
@@ -191,5 +193,4 @@ impl Gantt {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests;

@@ -138,14 +138,23 @@ fn patch_edges(
         .or_insert_with(|| Value::Array(Vec::new()))
         .as_array_mut()
         .ok_or_else(|| invalid("dependencies", "dependencies serialize as an array"))?;
-    let position = edges.iter().position(|edge| edge["id"] == id);
-    let found = position.map_or(Value::Null, |index| edges[index].clone());
+    let position = edges
+        .iter()
+        .position(|edge| edge.get("id").and_then(Value::as_str) == Some(id));
+    let found = position
+        .and_then(|index| edges.get(index))
+        .cloned()
+        .unwrap_or(Value::Null);
     fresh(&found, change)?;
     match (position, change.after.is_null()) {
         (Some(index), true) => {
             edges.remove(index);
         }
-        (Some(index), false) => edges[index] = change.after.clone(),
+        (Some(index), false) => {
+            if let Some(slot) = edges.get_mut(index) {
+                *slot = change.after.clone();
+            }
+        }
         (None, false) => edges.push(change.after.clone()),
         (None, true) => {}
     }
@@ -196,5 +205,4 @@ fn describe(change: &EntityChange) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

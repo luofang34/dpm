@@ -102,5 +102,4 @@ fn read_format_version<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Res
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

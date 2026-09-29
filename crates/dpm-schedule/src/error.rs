@@ -18,6 +18,9 @@ pub enum ScheduleError {
     #[error("invalid duration for work item {0}")]
     /// An activity has a missing, negative, or non-finite duration.
     InvalidDuration(WorkItemId),
+    #[error("schedule position {0} is outside the compiled dependency network")]
+    /// A position read from a compiled network has no activity; the projection is inconsistent.
+    UnknownPosition(usize),
     #[error("simulation requires at least one iteration")]
     /// At least one Monte Carlo iteration is required.
     NoSimulationIterations,

@@ -1,4 +1,3 @@
-#![allow(clippy::expect_used, clippy::panic)]
 use crate::{AppError, Application, CommandRequest, Query};
 use dpm_engine::Command;
 use dpm_model::{ActorId, DependencyPolicy, Plan};
@@ -174,11 +173,11 @@ fn waived_edge_export() -> (Application, String, u64, u64) {
 
 /// Replace the first occurrence of `from` inside the task element with UID `uid`.
 fn edit_task(xml: &str, uid: u64, from: &str, to: &str) -> String {
-    let start = xml.find(&format!("<UID>{uid}</UID>")).expect("task");
-    let end = start + xml[start..].find("</Task>").expect("task end");
-    let task = xml[start..end].replacen(from, to, 1);
-    assert_ne!(task, xml[start..end], "{from} not in task UID {uid}");
-    format!("{}{task}{}", &xml[..start], &xml[end..])
+    let (head, rest) = xml.split_at(xml.find(&format!("<UID>{uid}</UID>")).expect("task"));
+    let (task, tail) = rest.split_at(rest.find("</Task>").expect("task end"));
+    let edited = task.replacen(from, to, 1);
+    assert_ne!(edited, task, "{from} not in task UID {uid}");
+    format!("{head}{edited}{tail}")
 }
 
 fn assert_names_the_link(error: &AppError, from: u64, to: u64, attempted: &[&str]) {
@@ -217,11 +216,10 @@ fn refusals_of_waived_edges_name_the_source_link_and_attempted_change() {
     let relag = edit_task(&xml, to, "<LinkLag>0</LinkLag>", "<LinkLag>1200</LinkLag>");
     let error = import(&app, &relag, "TEST").expect_err("waived edge is protected");
     assert_names_the_link(&error, from, to, &["change", "lag 0 h", "lag 2 h"]);
-    let start = xml.find(&format!("<UID>{to}</UID>")).expect("task");
-    let link = start + xml[start..].find("<PredecessorLink>").expect("link");
-    let end =
-        link + xml[link..].find("</PredecessorLink>").expect("end") + "</PredecessorLink>".len();
-    let dropped = format!("{}{}", &xml[..link], &xml[end..]);
+    let (head, rest) = xml.split_at(xml.find(&format!("<UID>{to}</UID>")).expect("task"));
+    let (before, link) = rest.split_once("<PredecessorLink>").expect("link");
+    let (_, after) = link.split_once("</PredecessorLink>").expect("end");
+    let dropped = format!("{head}{before}{after}");
     let error = import(&app, &dropped, "TEST").expect_err("waived edge is protected");
     assert_names_the_link(&error, from, to, &["remove", "FS TEST-A -> TEST-B"]);
     assert_eq!(state(&app), (1, 1));

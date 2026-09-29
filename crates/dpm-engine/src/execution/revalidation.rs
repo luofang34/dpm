@@ -86,5 +86,4 @@ fn refused(actor: &ActorId, action: &'static str) -> EngineError {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

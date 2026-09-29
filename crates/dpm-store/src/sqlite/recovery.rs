@@ -224,5 +224,4 @@ fn discard_on_error_blocking(
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::panic)]
 mod tests;

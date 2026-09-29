@@ -44,7 +44,10 @@ pub(super) fn work(work: &WorkItem) -> Result<(), ValidationError> {
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
-    if ordered.windows(2).any(|pair| pair[0] > pair[1]) {
+    if ordered
+        .windows(2)
+        .any(|pair| matches!(pair, [a, b] if a > b))
+    {
         return Err(invalid(
             "work events",
             work.id,
@@ -71,7 +74,7 @@ fn handoffs(work: &WorkItem) -> Result<(), ValidationError> {
         .execution
         .handoffs
         .windows(2)
-        .any(|pair| pair[0].at > pair[1].at)
+        .any(|pair| matches!(pair, [a, b] if a.at > b.at))
     {
         return Err(invalid(
             "work handoff",
@@ -102,7 +105,7 @@ fn releases(work: &WorkItem) -> Result<(), ValidationError> {
         .execution
         .releases
         .windows(2)
-        .any(|pair| pair[0].at > pair[1].at)
+        .any(|pair| matches!(pair, [a, b] if a.at > b.at))
     {
         return Err(invalid(
             "work release",
