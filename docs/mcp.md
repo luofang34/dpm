@@ -13,7 +13,7 @@ Both adapters use `dpm-app` for queries, revision checks, engine commands and at
 Every success, CLI `--json` output and MCP `structuredContent` alike, is one envelope:
 `{"api_version": 10, "revision": N, "data": ...}`. `revision` is the workspace revision the result
 observed, or the `resulting_revision` a mutation produced; it is `null` when the command reads no
-workspace (`validate`/`validate_plan`, `plan schema` outside a project, and the workspace bindings).
+workspace (`validate`/`validate_plan`, `plan schema`/`plan_schema`, and the workspace bindings).
 The CLI's `--json` output for a command equals its tool's `structuredContent`, and `data` is the same
 object; `export` and `plan template` print the bare document without `--json` so it can be redirected
 into a file. Every MCP mutation tool requires the observed `base_revision`, and a call without it
@@ -21,8 +21,9 @@ is refused with `invalid_request`. CLI callers
 can enforce the same precondition with `--base-revision N`; without it the CLI uses its loaded revision,
 which the store still checks atomically. Presentation text is not the API contract.
 
-This table lists every `dpm` command with its tool, or why it has none; `smoke_adapters.py` fails
-when it differs from `dpm --help` or from `tools/list`.
+This table lists every `dpm` command with its tool, or why it has none. Each tool also declares its
+command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a row differs from
+`dpm --help`, from `tools/list` or from that declared pairing.
 
 | CLI | MCP tool | Shared behavior |
 | --- | --- | --- |

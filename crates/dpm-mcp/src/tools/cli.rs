@@ -1,0 +1,42 @@
+//! The CLI command each tool answers for, published in `tools/list` so the pairing is stated once.
+
+/// CLI command (with its group for nested commands) that shares this tool's application call.
+pub(super) fn command(tool: &str) -> Option<&'static str> {
+    Some(match tool {
+        "validate_plan" => "validate",
+        "export_plan" => "export",
+        "plan_schema" => "plan schema",
+        "plan_template" => "plan template",
+        "propose_change" => "plan diff",
+        "apply_change" => "plan apply",
+        "import_mspdi" => "plan import-mspdi",
+        "export_mspdi" => "plan export-mspdi",
+        "history" => "history",
+        "project_status" => "status",
+        "next_work" => "next",
+        "get_work" => "show",
+        "explain_work" => "explain",
+        "ratify_contract" => "ratify",
+        "reject_work" => "reject",
+        "claim_work" => "claim",
+        "release_work" => "release",
+        "handoff_work" => "handoff",
+        "start_work" => "start",
+        "report_blocker" => "block",
+        "unblock_work" => "unblock",
+        "report_progress" => "progress",
+        "submit_work" => "submit",
+        "verify_work" => "verify",
+        "decide_gate" => "decide",
+        "add_artifact" => "artifact",
+        "attach_git_head" => "attach-git-head",
+        "link_external" => "link-external",
+        "unlink_external" => "unlink-external",
+        "workspace_list" => "workspace list",
+        "workspace_register" => "workspace register",
+        "waive_dependency" => "waive-dependency",
+        "restore_dependency" => "restore-dependency",
+        "revalidate_basis" => "revalidate-basis",
+        _ => return None,
+    })
+}

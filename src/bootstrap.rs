@@ -32,9 +32,12 @@ pub(crate) fn initialize_blocking(
 
 /// Check a plan file with the validation the `validate_plan` agent tool runs.
 pub(crate) fn validate_blocking(path: &Path, json: bool) -> Result<(), CliError> {
-    let text = fs::read_to_string(path).map_err(io_error("read plan", path))?;
-    let report = dpm_app::validate_plan(serde_json::from_str(&text)?)?;
-    output::value_blocking(&report, None, json)
+    let report = dpm_app::validate_decoded(read_candidate_blocking(path)?)?;
+    if json {
+        output::success_blocking(None, &report)
+    } else {
+        output::json_blocking(&report)
+    }
 }
 
 pub(crate) fn read_plan_blocking(path: &Path) -> Result<Plan, CliError> {

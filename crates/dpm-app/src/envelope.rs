@@ -60,12 +60,16 @@ pub struct PlanValidation {
     pub plan_revision: u64,
 }
 
-/// Decode and validate a portable plan exactly as `import` would, without changing any state.
-///
-/// Decoding from a JSON value rather than text keeps the diagnostic identical whether the plan
-/// arrives as a file or as a tool argument.
+/// Decode and validate a portable plan that arrives as a JSON value (a tool argument).
 pub fn validate_plan(value: Value) -> Result<PlanValidation, AppError> {
-    let plan: Plan = serde_json::from_value(value)?;
+    validate_decoded(serde_json::from_value(value)?)
+}
+
+/// Validate a decoded plan as `import` would, without changing any state.
+///
+/// Callers holding plan text decode it with the same reader `import` uses, so text-only faults such
+/// as a repeated field are refused here too.
+pub fn validate_decoded(plan: Plan) -> Result<PlanValidation, AppError> {
     plan.validate()?;
     Ok(PlanValidation {
         valid: true,

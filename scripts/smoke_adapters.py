@@ -31,6 +31,15 @@ def validation_smoke(directory):
             candidate.write_text(json.dumps(broken))
             remote = agent.call('validate_plan', {'plan': broken}, error=code)
             assert remote == run_cli(database, 'validate', str(candidate), error=code)['error'], name
+        # A repeated field exists only in text; validate reads the file as import does and refuses it.
+        repeated = directory / 'repeated-field.json'
+        repeated.write_text(FIXTURE.read_text().replace('{', '{"revision": 999, ', 1))
+        refused = run_cli(database, 'validate', str(repeated), error='invalid_request')['error']
+        assert 'duplicate field' in refused['message'], refused
+        assert run_cli(directory / 'repeated.sqlite', 'import', str(repeated), error='invalid_request')['error'] == refused
+        # The schema describes the format, not the workspace: neither adapter reports a revision.
+        schema = run_cli_envelope(database, 'plan', 'schema')
+        assert agent.call('plan_schema', {}) == schema and schema['revision'] is None, schema['revision']
         assert run_cli(database, 'history')['entries'] == []
     finally:
         agent.close()
@@ -269,7 +278,8 @@ def documentation_smoke(directory):
     run_cli(database, 'import', str(FIXTURE))
     agent = Agent(database, 'agent:documentation')
     try:
-        listed = {t['name'] for t in agent.request('tools/list', {})['tools']}
+        declared = {t['name']: t['_meta']['dpm/cli'] for t in agent.request('tools/list', {})['tools']}
+        listed = set(declared)
         live = {
             'api_version': agent.call('project_status', {'probabilistic': False})['api_version'],
             'result_version': agent.call('next_work', {'probabilistic': False})['data']['result_version'],
@@ -279,6 +289,9 @@ def documentation_smoke(directory):
     finally:
         agent.close()
     assert len(tools) == len(set(tools)) and set(tools) == listed, ('table differs from tools/list', set(tools) ^ listed)
+    paired = {row[1]: command for row, command in zip(rows, documented) if not row[1].startswith('CLI-only')}
+    assert paired == declared, ('table pairs differ from each tool\'s declared CLI command',
+                                {t: (paired.get(t), declared.get(t)) for t in listed if paired.get(t) != declared.get(t)})
     assert run_cli_envelope(database, 'status', '--no-simulation')['api_version'] == live['api_version']
     versions = {row[0].strip('`'): int(row[1]) for row in table(text, '| Version | Value |')}
     assert versions == live, ('version table differs from live output', versions, live)

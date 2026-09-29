@@ -6,6 +6,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
+mod cli;
 mod interchange;
 mod ownership;
 mod validation;
@@ -183,7 +184,7 @@ pub(crate) fn definitions() -> Vec<Value> {
             },
             _ => {},
         }
-        json!({"name":name,"description":description,"inputSchema":{"type":"object","properties":properties,"required":required,"additionalProperties":false},"annotations":{"readOnlyHint":read,"destructiveHint":!read,"openWorldHint":false}})
+        json!({"name":name,"description":description,"inputSchema":{"type":"object","properties":properties,"required":required,"additionalProperties":false},"annotations":{"readOnlyHint":read,"destructiveHint":!read,"openWorldHint":false},"_meta":{"dpm/cli":cli::command(name)}})
     }).collect()
 }
 
@@ -249,6 +250,14 @@ pub(crate) fn call_tool_blocking(
     if validation::handles(name) {
         return validation::call(value);
     }
+    // The schema describes the format, not this workspace, so like the CLI it reports no revision.
+    if name == "plan_schema" {
+        return Ok(serde_json::to_value(Envelope {
+            api_version: dpm_app::API_VERSION,
+            revision: None,
+            data: dpm_app::plan_schema()?,
+        })?);
+    }
     if interchange::handles(name) {
         return Ok(serde_json::to_value(Envelope::from(
             app.query_blocking(interchange::query(name, value)?)?,
@@ -261,7 +270,6 @@ pub(crate) fn call_tool_blocking(
     }
     let query = match name {
         "export_plan" => Some(Query::Export),
-        "plan_schema" => Some(Query::PlanSchema),
         "plan_template" => Some(Query::PlanTemplate),
         "propose_change" => Some(Query::ProposeChange {
             plan: required(args.plan.clone(), "plan")?,
