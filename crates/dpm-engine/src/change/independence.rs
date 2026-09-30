@@ -317,7 +317,8 @@ fn same_gate(a: &UnmetGate, b: &UnmetGate) -> bool {
             UnmetGate::BasisInvalidated { dependency: x, .. },
             UnmetGate::BasisInvalidated { dependency: y, .. },
         ) => x == y,
-        (UnmetGate::Decision { key: x }, UnmetGate::Decision { key: y }) => x == y,
+        (UnmetGate::Decision { key: x }, UnmetGate::Decision { key: y })
+        | (UnmetGate::Choice { key: x, .. }, UnmetGate::Choice { key: y, .. }) => x == y,
         _ => std::mem::discriminant(a) == std::mem::discriminant(b),
     }
 }

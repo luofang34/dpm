@@ -40,6 +40,20 @@ pub(super) fn work(work: &WorkItem) -> Result<(), ValidationError> {
             ),
         ));
     }
+    // A reservation time belongs only to a held, unstarted claim; the start supersedes it.
+    let reserved = work.execution.owner.is_some()
+        && work.start_event().is_none()
+        && matches!(
+            work.execution.status,
+            WorkStatus::Claimed | WorkStatus::Blocked
+        );
+    if events.claimed_at.is_some() && !reserved {
+        return Err(invalid(
+            "work events",
+            work.id,
+            "a claim time belongs only to owned work that has not started",
+        ));
+    }
     let ordered = [events.started_at, events.submitted_at, events.verified_at]
         .into_iter()
         .flatten()

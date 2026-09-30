@@ -43,6 +43,18 @@ pub enum AttemptOutcome {
     },
 }
 
+impl AttemptOutcome {
+    /// Whether the attempt still awaited review at `now`: a start recorded before a later review
+    /// relied on an unreviewed result, whatever the review has since decided.
+    #[must_use]
+    pub fn pending_at(&self, now: DateTime<Utc>) -> bool {
+        match self {
+            Self::Pending => true,
+            Self::Rejected { at, .. } | Self::Verified { at, .. } => *at > now,
+        }
+    }
+}
+
 /// Immutable reference to the predecessor attempt a successor's execution relies on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -207,7 +219,8 @@ pub struct StartRelease {
     pub release: Release,
     /// Predecessor attempt whose submission time a provisional release is measured from.
     pub attempt: Option<u32>,
-    /// Whether that attempt still awaits review, so a start on it relies on an unverified result.
+    /// Whether that attempt awaited review at the clock reading, so a start then relied on an
+    /// unverified result.
     pub provisional: bool,
 }
 
@@ -226,7 +239,8 @@ impl Timeline {
         // Only an edge still waiting on the predecessor's own event may use its attempt; a
         // not-selected branch stays governed by the choice, never by a submission.
         let current = (edge.start_basis == StartBasis::Provisional
-            && matches!(release, Release::AwaitingEvent | Release::Elapsing { .. }))
+            && matches!(release, Release::AwaitingEvent | Release::Elapsing { .. })
+            && !self.applicability(edge.predecessor).is_not_selected())
         .then(|| plan.work_items.get(&edge.predecessor))
         .flatten()
         .and_then(WorkItem::current_attempt);
@@ -239,7 +253,7 @@ impl Timeline {
                     |at, hours| plan.lag_end(edge, at, hours),
                 ),
                 attempt: Some(attempt.number),
-                provisional: attempt.outcome == AttemptOutcome::Pending,
+                provisional: attempt.outcome.pending_at(self.now()),
             },
             None => StartRelease {
                 release,

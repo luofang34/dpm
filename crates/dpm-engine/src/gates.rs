@@ -2,7 +2,7 @@ use crate::EngineError;
 use chrono::{DateTime, Utc};
 use dpm_model::{
     ActorId, BasisState, Dependency, DependencyId, DependencyKind, DependencyPolicy, Endpoint,
-    Plan, Release, StartBasis, StartRelease, Timeline, WorkItem, WorkItemId, WorkStatus,
+    EventTime, Plan, Release, StartBasis, StartRelease, Timeline, WorkItem, WorkItemId, WorkStatus,
 };
 use serde::{Deserialize, Serialize};
 
@@ -85,6 +85,14 @@ pub enum UnmetGate {
         /// Human-readable gate key.
         key: String,
     },
+    /// The choice that selects this conditional work, or a containing package, was made after the
+    /// evaluated time, so the work was not yet in the plan then.
+    Choice {
+        /// Human-readable key of the selecting decision.
+        key: String,
+        /// When its standing outcome was made.
+        chosen_at: DateTime<Utc>,
+    },
     /// The work is outside the active graph: not selected, undecided, awaiting an upstream choice,
     /// stranded behind excluded work, or an empty join.
     Applicability {
@@ -163,6 +171,7 @@ pub(crate) fn evaluate(
             applicability: applicability.clone(),
         });
     }
+    unmet.extend(choice_gates(plan, work, timeline));
     let mut provisional = Vec::new();
     for dep in timeline
         .incoming(plan, work.id)
@@ -218,6 +227,23 @@ pub(crate) fn evaluate(
         unmet,
         provisional,
     }
+}
+
+/// Selecting choices made after the evaluated time: a backfilled event cannot precede them.
+fn choice_gates(plan: &Plan, work: &WorkItem, timeline: &Timeline) -> Vec<UnmetGate> {
+    timeline
+        .selecting_choices(plan, work.id)
+        .into_iter()
+        .filter_map(|(decision, at)| match at {
+            EventTime::Recorded(chosen_at) if chosen_at > timeline.now() => {
+                Some(UnmetGate::Choice {
+                    key: decision.key.to_string(),
+                    chosen_at,
+                })
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 fn dependency_gate(
@@ -313,6 +339,9 @@ pub(crate) fn describe(gate: &UnmetGate) -> String {
             ..
         } => provisional::describe_invalidated(key, *attempt, state, *current_attempt),
         UnmetGate::Decision { key } => format!("work awaits decision: {key}"),
+        UnmetGate::Choice { key, chosen_at } => format!(
+            "work applies only through {key}, which selected it at {chosen_at}, after the evaluated time"
+        ),
         UnmetGate::Applicability { applicability } => {
             transition::describe_applicability(applicability)
         }

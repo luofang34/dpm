@@ -144,7 +144,8 @@ blocked work (unblock first), and started or submitted work (`has started`; use 
 `handoff_work` (`key`, `to` as `KIND:NAME`, nonempty `reason`, `base_revision`) moves claimed,
 started or blocked work to another owner. The configured actor must be a human or service; agents
 are refused. The command records the observed owner as `from`, and the work's `handoffs` list keeps
-`{from, to, actor, at, reason}` for every transfer. Status, events, attempts, basis, progress,
+`{from, to, actor, at, reason}` for every transfer. An unstarted claim's `events.claimed_at` moves
+to the handoff time; status, the other events, attempts, basis, progress,
 blocker and evidence are unchanged, so the new owner continues where the work stopped. Submitted
 work is refused (reject it first), as are unowned work, `to` equal to the owner and a malformed
 `to` (`invalid_request`). No actor that has held the work, now or before a handoff or release, may
@@ -588,7 +589,7 @@ Applicability is derived at query time and never stored. `explain_work.applicabi
 
 A refused transition reports `{type: "applicability", applicability}` in `unmet`. A dependency from
 not-selected work reports `release.state = "not_selected"` into an ordinary successor and
-`"skipped_branch"` (released at the choice time) into an active-branch join. A join is reached when
+`"skipped_branch"` (released at the choice time; before it, `awaiting_event`) into an active-branch join. A join is reached when
 at least one branch is verified (or `allow_empty` is set and every branch was skipped), every active
 branch is released, and its gates are resolved; its time includes the effective time of the choices
 that selected it or skipped its branches: the earliest `resolved_at` in the unbroken run of equal
@@ -633,10 +634,11 @@ The workflow below applies to an authorized execution workspace; tool availabili
    evidence and unresolved gates. Steps describe the procedure, not permission to execute it.
 3. Call claim_work using the observed revision. Refresh after a revision_conflict. A claim only
    reserves the task.
-4. Call start_work when execution begins. Its operation time is the start event that SS/SF
-   successors wait for; report_progress and submit_work are refused until the task has started.
-   When recording work after the fact, pass `at` with the time it actually began (likewise for
-   submit_work and verify_work); see [execution events](#execution-events-and-elapsed-lag).
+4. Call start_work when execution begins. It records the start event that SS/SF successors wait
+   for, at the operation's time unless `at` names when it actually began; report_progress and
+   submit_work are refused until the task has started. When recording work after the fact, pass
+   `at` (likewise for submit_work and verify_work), never earlier than the claim; see
+   [execution events](#execution-events-and-elapsed-lag).
 5. Perform the work and acceptance checks. Use report_progress for intermediate execution reports;
    use add_artifact or attach_git_head to record evidence while you own the task.
 6. Call submit_work with an evidence summary once `explain_work.transitions.submit.ready` holds.
@@ -670,9 +672,15 @@ becomes the event time, the time the transition's gates are evaluated at, the su
 captures. The command records it as `occurred_at` while the operation keeps its own commit
 `timestamp`, so `history` shows both; without `at` the operation is exactly as before, with no
 `occurred_at` key. `at` after the commit, or before the latest time the task already records
-(events, attempts and reviews, handoffs, releases, basis; a claim records no time), is refused with
+(events, attempts and reviews, handoffs, releases, basis, and the claim: an unstarted claim shows
+`work.events.claimed_at`, moved by a handoff and cleared by the start or a release), is refused with
 `invalid_command` and a message naming the task and both times; a malformed time is
-`invalid_request`. This additive argument leaves `api_version` unchanged. No other tool accepts an
+`invalid_request`. Conditional work is refused before the choice that selected it, with
+`{type: "choice", key, chosen_at}` in `details.unmet`, and a start dated before its provisional
+predecessor's attempt was reviewed records that attempt as its basis. Gates at `at` read the current
+plan structure (dependencies, waivers, conditions), not the structure at that time, and
+`report_blocker`, `unblock_work`, `report_progress` and evidence attachment carry no time, so a
+backfilled submission may precede a block or 100% report that `history` orders earlier. This additive argument leaves `api_version` unchanged. No other tool accepts an
 event time; plan changes cannot add or rewrite these fields (omit `resolved_at` from a replacement decision: `apply_change` records
 the operation's own time as its `resolved_at`), and a command whose
 time precedes the event it follows is refused unchanged. `report_blocker` on work that started

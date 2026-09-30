@@ -222,6 +222,27 @@ fn authored_extremes() -> Value {
     doc
 }
 
+/// A claim not yet started: the only state carrying `events.claimed_at`.
+fn claimed() -> Value {
+    let (mut plan, [a, ..]) = prepared();
+    let claim = json!({"Claim": {"work": a}});
+    let command: Command = serde_json::from_value(claim).expect("command shape");
+    apply_command(
+        &mut plan,
+        ActorId::agent("worker"),
+        command,
+        at(0),
+        dpm_model::OperationId::new(),
+    )
+    .expect("claim");
+    let document = serde_json::to_value(plan).expect("serialize");
+    assert_eq!(
+        document["work_items"][a.to_string()]["execution"]["events"],
+        json!({"claimed_at": at(0)})
+    );
+    document
+}
+
 /// Work started before start times were recorded, then blocked: the only writer of
 /// `events.start_unrecorded`.
 fn legacy_blocked() -> Value {
@@ -259,6 +280,7 @@ fn documents() -> Vec<(&'static str, Value)> {
         ("executed", executed()),
         ("authored extremes", authored_extremes()),
         ("legacy blocked", legacy_blocked()),
+        ("claimed", claimed()),
         ("empty", serde_json::to_value(&empty).expect("empty")),
         ("template", plan_template(&empty).expect("template")),
     ]

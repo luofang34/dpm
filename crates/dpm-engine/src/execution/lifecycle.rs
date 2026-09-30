@@ -72,6 +72,7 @@ pub(super) fn claim(
     let item = task_mut(plan, work)?;
     item.execution.owner = Some(actor.clone());
     item.execution.status = WorkStatus::Claimed;
+    item.execution.events.claimed_at = Some(at);
     Ok(())
 }
 
@@ -89,6 +90,8 @@ pub(super) fn start(
     let item = task_mut(plan, work)?;
     item.execution.status = WorkStatus::InProgress;
     item.execution.events.started_at = Some(at);
+    // The start time now orders the history, and it cannot precede the claim.
+    item.execution.events.claimed_at = None;
     // The start relies on exactly the attempts the shared evaluator released it on.
     item.execution.basis.extend(
         report

@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExecutionEvents {
+    /// When the current owner's unstarted reservation began: the claim, or the handoff that moved
+    /// it. The start clears it and a release returns the work unowned, so no event can be recorded
+    /// before the reservation it follows while the start time does not yet order the history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claimed_at: Option<DateTime<Utc>>,
     /// When the owner started executing the task, as distinct from reserving it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub started_at: Option<DateTime<Utc>>,

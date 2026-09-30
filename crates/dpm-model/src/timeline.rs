@@ -118,8 +118,8 @@ impl Timeline {
 
     /// Whether an edge's required predecessor event plus positive lag has elapsed.
     ///
-    /// A constraint from not-selected work is a skipped branch, released when the choice was made,
-    /// only into an active-branch join; into any other successor it never releases.
+    /// A constraint from not-selected work is a skipped branch, released once the choice has been
+    /// made, only into an active-branch join; into any other successor it never releases.
     #[must_use]
     pub fn edge(&self, plan: &Plan, edge: &Dependency) -> Release {
         if self.applicability(edge.predecessor).is_not_selected() {
@@ -128,6 +128,10 @@ impl Timeline {
                 .get(&edge.successor)
                 .map(|w| w.contract.join);
             return match (join, self.choice_at.get(&edge.predecessor)) {
+                // Before the choice was made, the branch was still open, not absent.
+                (Some(_), Some(EventTime::Recorded(at))) if *at > self.now => {
+                    Release::AwaitingEvent
+                }
                 (Some(join), Some(at)) if join.skips_unselected() => {
                     Release::SkippedBranch { at: *at }
                 }
@@ -154,6 +158,31 @@ impl Timeline {
             .filter_map(|id| plan.decisions.get(id))
             .map(|d| (d, Release::evaluate(gate_event(d), 0.0, self.now)))
             .collect()
+    }
+
+    /// Decisions whose standing outcomes select applicable work through its own or its containers'
+    /// conditions, each with the time that outcome has held; empty for work that is not applicable.
+    ///
+    /// Work cannot have taken a transition before the choice that put it in the plan was made.
+    #[must_use]
+    pub fn selecting_choices<'a>(
+        &self,
+        plan: &'a Plan,
+        work: WorkItemId,
+    ) -> Vec<(&'a Decision, EventTime)> {
+        if !self.applicability(work).is_applicable() {
+            return Vec::new();
+        }
+        let Some(scope) = ancestors(plan, work) else {
+            return Vec::new();
+        };
+        let choices: BTreeMap<_, _> = scope
+            .iter()
+            .filter_map(|id| plan.work_items.get(id)?.contract.condition.as_ref())
+            .filter_map(|condition| applicability::effective_decision(plan, condition.decision))
+            .filter_map(|d| applicability::standing_since(plan, d).map(|at| (d.id, (d, at))))
+            .collect();
+        choices.into_values().collect()
     }
 
     fn aggregate_completion(&self, plan: &Plan, work: &WorkItem) -> Option<EventTime> {

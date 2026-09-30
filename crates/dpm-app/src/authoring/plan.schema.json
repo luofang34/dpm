@@ -381,6 +381,10 @@
       "additionalProperties": false,
       "description": "Managed execution events.",
       "properties": {
+        "claimed_at": {
+          "$ref": "#/$defs/Time",
+          "description": "When the current owner's unstarted reservation began; the start clears it."
+        },
         "started_at": {
           "$ref": "#/$defs/Time"
         },

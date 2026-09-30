@@ -1,7 +1,8 @@
 //! Recovery paths for a claim that should not stay with its owner. Neither command is a gated
 //! transition: they change who executes the work, never how far it has progressed, so the shared
 //! gate evaluator is not consulted and every recorded fact (events, attempts, basis, progress,
-//! blocker, evidence) is carried over unchanged.
+//! blocker, evidence) is carried over unchanged. Only the unstarted reservation's time follows the
+//! owner: a release ends it and a handoff begins the new owner's.
 
 use super::{nonempty, owns, task_mut};
 use crate::EngineError;
@@ -37,6 +38,7 @@ pub(super) fn release(
     }
     item.execution.owner = None;
     item.execution.status = WorkStatus::Planned;
+    item.execution.events.claimed_at = None;
     item.execution.releases.push(ClaimRelease {
         actor: actor.clone(),
         at,
@@ -105,6 +107,10 @@ pub(super) fn handoff(
         reason: reason.into(),
     });
     item.execution.owner = Some(to.clone());
+    // The new owner's reservation begins at the handoff; started work is ordered by its start.
+    if item.execution.events.claimed_at.is_some() {
+        item.execution.events.claimed_at = Some(at);
+    }
     Ok(())
 }
 

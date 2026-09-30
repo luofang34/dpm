@@ -171,8 +171,26 @@ commit timestamp, so history holds both; the task's event, the gates evaluated f
 its submission attempt or review and any dependency basis it captures all use the occurrence
 time, so forecasts and calibration read honest times. An occurrence time after the commit
 (`OccurrenceInFuture`) or before the latest time already recorded for the task — its events,
-attempts and reviews, handoffs, releases or basis; a claim records none
-(`OccurrenceBeforePrevious`) — is refused with both times named. No other command accepts a
+attempts and reviews, handoffs, releases or basis, and its claim (`OccurrenceBeforePrevious`) —
+is refused with both times named. An unstarted claim records `events.claimed_at`, the claim's or
+the reserving handoff's time; the start clears it, as the start time then orders the history, and a
+release returns the work unowned without one. Because work is claimed before it starts, this floor
+also covers tasks that apply_change added or that were ratified later. A claim recorded before
+claim times existed has none; the choice gate below still holds such a start after its selection.
+Conditional work cannot record a transition before the choice that selected it: the gate evaluator
+reports `Choice {key, chosen_at}` while the selecting decision of the work or a containing package
+was made after the evaluated time, and a skipped branch into an active-branch join releases only
+once its excluding choice was made. A start dated before the predecessor attempt it relies on was
+reviewed records that attempt as its provisional basis, because the start then relied on an
+unreviewed result; a predecessor whose latest attempt was since rejected releases no backfilled
+start at all.
+
+Two limits apply to backfilled times. Gates evaluate the current plan structure, dependencies,
+waivers, conditions and decision chain at the occurrence time; a dependency added, waived or
+restored since then is judged as it stands now, not as it stood then. And block, unblock, progress
+reports and evidence attachment record no time, so a backfilled submission may land before a block
+or a 100% progress report the log shows earlier; the operation order in `history` remains the
+authority for those. No other command accepts a
 caller-chosen event time, plan changes cannot add or rewrite these facts, and validation requires
 `started <= submitted <= verified`, so a command stamped before the event it follows is refused
 with no state change. Progress reports and
@@ -428,8 +446,9 @@ evaluator, and both are semantic operations in the history with actor, time and 
 
 Decisions and reasons:
 
-- **Release is limited to unstarted claims.** A claim records no event, attempt or basis, and only a
-  start releases SS/SF successors, so undoing a reservation loses no fact and changes no successor's
+- **Release is limited to unstarted claims.** A claim records only its reservation time, which the
+  release ends, and no event, attempt or basis; only a start releases SS/SF successors, so undoing a
+  reservation loses no fact and changes no successor's
   gates; readiness is derived, so the task is simply claimable again. Started work (including
   blocked work that had started, and submitted work) is refused with `AlreadyStarted`: releasing it
   would orphan its start event, progress and basis. Owned blocked work that never started is

@@ -42,11 +42,13 @@ pub struct ExecutionRecord {
 impl ExecutionRecord {
     /// Latest time carried by any lifecycle, ownership, review or basis record of this execution.
     ///
-    /// A claim records no time of its own, so an unstarted first claim contributes nothing; a
-    /// backfilled event must still not precede anything the task's history already orders.
+    /// An unstarted claim contributes its reservation time; after the start, the start time, which
+    /// cannot precede the claim, orders the history instead. A backfilled event must not precede
+    /// anything the task's history already orders.
     #[must_use]
     pub fn latest_recorded_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
         let events = [
+            self.events.claimed_at,
             self.events.started_at,
             self.events.submitted_at,
             self.events.verified_at,
