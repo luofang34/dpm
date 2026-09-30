@@ -245,3 +245,40 @@ fn working_lags_count_the_successors_calendar() {
         "without calendars a working lag is elapsed"
     );
 }
+
+#[test]
+fn closures_up_to_five_years_are_valid() {
+    let mut plan = with_zone();
+    let mut definition = standard_definition();
+    definition.exceptions.push(CalendarException {
+        from: chrono::NaiveDate::from_ymd_opt(2026, 3, 2).expect("date"),
+        to: chrono::NaiveDate::from_ymd_opt(2030, 3, 2),
+        hours: Vec::new(),
+        name: Some("sabbatical".into()),
+    });
+    cal(&mut plan).definitions.insert("away".into(), definition);
+    plan.validate().expect("a four-year closure is valid");
+}
+
+#[test]
+fn closures_longer_than_five_years_are_rejected() {
+    let closure = |from: (i32, u32, u32), to: (i32, u32, u32)| CalendarException {
+        from: chrono::NaiveDate::from_ymd_opt(from.0, from.1, from.2).expect("date"),
+        to: chrono::NaiveDate::from_ymd_opt(to.0, to.1, to.2),
+        hours: Vec::new(),
+        name: Some("until further notice".into()),
+    };
+    let mut plan = with_zone();
+    let mut definition = standard_definition();
+    // Two closures a weekend apart form one six-year stretch.
+    definition
+        .exceptions
+        .push(closure((2026, 3, 2), (2029, 3, 2)));
+    definition
+        .exceptions
+        .push(closure((2029, 3, 5), (2032, 3, 5)));
+    cal(&mut plan)
+        .definitions
+        .insert("closed".into(), definition);
+    assert!(plan.validate().is_err());
+}

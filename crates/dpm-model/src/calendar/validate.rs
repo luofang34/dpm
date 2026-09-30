@@ -111,6 +111,7 @@ fn definition_valid(name: &str, definition: &CalendarDefinition) -> Result<(), V
         periods_valid(&exception.hours).map_err(|r| invalid("calendar exception", label, r))?;
     }
     ranges.sort();
+    closed_stretches(name, definition)?;
     if let Some(pair) = ranges
         .windows(2)
         .find(|w| matches!(w, [a, b] if b.0 <= a.1))
@@ -138,6 +139,41 @@ fn periods_valid(periods: &[WorkingPeriod]) -> Result<(), String> {
         .any(|w| matches!(w, [a, b] if b.start() < a.end()))
     {
         return Err("working periods must be in order and must not overlap".into());
+    }
+    Ok(())
+}
+
+/// Longest run of non-working exception dates a calendar may have. Work behind a longer closure,
+/// such as one "until further notice", could not be projected, and one such task would make
+/// every forecast of the workspace fail.
+const MAX_CLOSED_DAYS: i64 = 5 * 366;
+
+fn closed_stretches(name: &str, definition: &CalendarDefinition) -> Result<(), ValidationError> {
+    let mut closed: Vec<_> = definition
+        .exceptions
+        .iter()
+        .filter(|e| e.hours.is_empty())
+        .map(|e| (e.from, e.last()))
+        .collect();
+    closed.sort();
+    let mut run: Option<(chrono::NaiveDate, chrono::NaiveDate)> = None;
+    for (from, to) in closed {
+        run = match run {
+            // A closure resuming within a week continues the stretch: the days between may be
+            // weekend days without working time anyway.
+            Some((start, end)) if (from - end).num_days() <= 7 => Some((start, end.max(to))),
+            _ => Some((from, to)),
+        };
+        if let Some((start, end)) = run.filter(|(s, e)| (*e - *s).num_days() > MAX_CLOSED_DAYS) {
+            return Err(invalid(
+                "calendar exception",
+                format!("{name} {start}"),
+                format!(
+                    "the calendar is closed from {start} to {end}, longer than five years; end the \
+                     exception or move the work to another calendar"
+                ),
+            ));
+        }
     }
     Ok(())
 }

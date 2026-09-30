@@ -727,7 +727,7 @@ verification waiting for the human calendar. Finer control, all optional:
 
 | Field | Meaning |
 | --- | --- |
-| `calendars.definitions.NAME` | `week` (`mon`..`sun`: `[{"from": "08:00", "to": "12:00"}]`) and dated `exceptions` (`from`, optional `to`, `hours`, `name`); redefining `standard` replaces the built-in, `always` is reserved |
+| `calendars.definitions.NAME` | `week` (`mon`..`sun`: `[{"from": "08:00", "to": "12:00"}]`) and dated `exceptions` (`from`, optional `to`, `hours`, `name`; closures longer than five years are refused); redefining `standard` replaces the built-in, `always` is reserved |
 | `calendars.kinds` | calendar name for `human`, `agent`, `service` |
 | `calendars.actors` | `"kind:name": calendar`, the availability of a named owner; never capacity |
 | `calendars.default_executor`, `calendars.verifier` | actor kinds for unowned work and for review |

@@ -21,9 +21,10 @@ mod index;
 #[error("time lies outside the compiled calendar window")]
 pub struct BeyondCalendar;
 
-/// Longest window a calendar is compiled over: a century. Work that needs more calendar than
-/// this, such as a task behind an exception closing a calendar "until further notice", is out of
-/// range rather than an unbounded allocation.
+/// Longest window a calendar is compiled over: a century, of which schedule projections reach at
+/// least three quarters ahead of their clock reading. Work that needs more calendar than this is
+/// out of range rather than an unbounded allocation; validation refuses calendars closed for
+/// longer than five years, so only extreme durations or lags reach it.
 pub const MAX_WINDOW_HOURS: f64 = 24.0 * 366.0 * 100.0;
 
 const MILLIS_PER_HOUR: f64 = 3_600_000.0;
