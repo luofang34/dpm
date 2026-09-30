@@ -48,6 +48,11 @@ pub(super) fn between(
             estimate(before.schedule.estimate),
             estimate(after.schedule.estimate),
         ),
+        (
+            "calendar",
+            calendar(before.schedule.calendar.as_deref()),
+            calendar(after.schedule.calendar.as_deref()),
+        ),
     ];
     fields
         .into_iter()
@@ -58,6 +63,10 @@ pub(super) fn between(
             after,
         })
         .collect()
+}
+
+fn calendar(name: Option<&str>) -> String {
+    name.map_or_else(|| "(resolved by executor)".to_owned(), str::to_owned)
 }
 
 fn estimate(estimate: Option<ThreePointEstimate>) -> String {

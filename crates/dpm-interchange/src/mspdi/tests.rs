@@ -46,6 +46,7 @@ pub(crate) fn options() -> ImportOptions {
         key_prefix: Some("MSP".into()),
         match_existing_by: None,
         keep_existing_priority: false,
+        time_zone: None,
     }
 }
 
@@ -350,6 +351,7 @@ fn work_in_another_project_is_never_moved() {
             key_prefix: None,
             match_existing_by: None,
             keep_existing_priority: false,
+            time_zone: None,
         },
     )
     .expect("import")
@@ -384,6 +386,7 @@ fn malformed_documents_fail_with_context() {
         key_prefix: None,
         match_existing_by: None,
         keep_existing_priority: false,
+        time_zone: None,
     };
     let error = import_mspdi(&plan, &outline_document(""), &unknown).expect_err("project");
     assert_eq!(error.code(), "not_found");

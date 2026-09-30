@@ -583,7 +583,12 @@ workspaces. CLI TOML interchange and sync remain separate task contracts availab
 It sits beside the store, outside model/schedule/engine, and holds no state: an import builds a
 candidate plan and a per-item report, and the candidate enters through the same reviewed
 `propose_change` / `ApplyChange` path as any edited export. Imported tasks are Proposed; source
-progress never completes local work. See [the agent contract](mcp.md#microsoft-project-xml-interchange)
+progress never completes local work. MSPDI has no IANA time zone, so source calendars become
+workspace [calendars](#calendars) only when the import names one; the candidate then places each
+task on the calendar the source tool uses (`always` for elapsed durations) and counts working-time
+lags in working hours. Without a time zone, calendars are reported as not imported and every hour
+counts. Export writes the calendars exported work uses and working or elapsed time formats to
+match. See [the agent contract](mcp.md#microsoft-project-xml-interchange)
 for the mapping, unit conversions and loss reporting.
 
 ## Git

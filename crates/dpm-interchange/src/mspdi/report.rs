@@ -24,7 +24,8 @@ impl Finding {
 /// One local field that the candidate changes on existing work.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FieldChange {
-    /// DPM field: `title`, `objective`, `kind`, `parent`, `priority` or `estimate`.
+    /// DPM field: `title`, `order`, `objective`, `kind`, `parent`, `priority`, `estimate` or
+    /// `calendar`.
     pub field: String,
     /// Local value before the import.
     pub before: String,
@@ -39,7 +40,7 @@ pub struct DependencyChange {
     pub dependency: DependencyId,
     /// Local relation, as `KIND PREDECESSOR -> SUCCESSOR` with work keys.
     pub relation: String,
-    /// Dependency field; an import changes only `lag`.
+    /// Dependency field; an import changes only `lag` and `lag_basis`.
     pub field: String,
     /// Local value before the import.
     pub before: String,
@@ -168,6 +169,38 @@ pub struct RemovedDependency {
     pub lag_hours: f64,
 }
 
+/// What the candidate does with one source calendar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CalendarOutcome {
+    /// A new workspace calendar definition is proposed.
+    Created,
+    /// A workspace calendar of the same name changes to the source definition.
+    Updated,
+    /// A workspace calendar of the same name already has the source definition.
+    Unchanged,
+    /// The source calendar equals a built-in calendar (`standard` or `always`), which it maps to.
+    BuiltIn,
+    /// The calendar is not imported; `rejected` gives the reason.
+    Skipped,
+}
+
+/// Mapping report for one source `<Calendar>`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CalendarReport {
+    /// Source calendar UID, unique within the document only.
+    pub uid: i64,
+    /// Source calendar name.
+    pub name: String,
+    /// Workspace calendar name in the candidate; absent when skipped.
+    pub calendar: Option<String>,
+    /// Candidate action.
+    pub outcome: CalendarOutcome,
+    /// Source values carried with a documented loss.
+    pub approximated: Vec<Finding>,
+    /// Source data the candidate does not carry, such as recurring exceptions.
+    pub rejected: Vec<Finding>,
+}
+
 /// Full import report returned with the candidate and its reviewed preview.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ImportReport {
@@ -182,7 +215,12 @@ pub struct ImportReport {
     /// Local dependencies between imported work that the candidate removes because the source
     /// omits them.
     pub removed_dependencies: Vec<RemovedDependency>,
-    /// Document-level data the candidate does not carry, such as calendars and resources.
+    /// One entry per source calendar when calendars are imported with a time zone; empty and
+    /// omitted otherwise.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub calendars: Vec<CalendarReport>,
+    /// Document-level data the candidate does not carry, such as resources, and calendars when no
+    /// time zone is given.
     pub rejected: Vec<Finding>,
     /// Work in the target project that the source does not name; the candidate keeps it unchanged.
     pub retained: Vec<Key>,

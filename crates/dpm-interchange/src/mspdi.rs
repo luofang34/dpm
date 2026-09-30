@@ -1,9 +1,11 @@
 //! Microsoft Project XML (MSPDI) subset.
 //!
 //! Supported: tasks, summary tasks, milestones, outline hierarchy, names, notes, priority,
-//! durations and carried three-point estimates, and FS/SS/FF/SF predecessor links with hour-based lags.
-//! Everything else found in a document is reported per item and not imported.
+//! durations and carried three-point estimates, FS/SS/FF/SF predecessor links with hour-based lags,
+//! and, given a time zone, working calendars. Everything else found in a document is reported per
+//! item and not imported.
 
+mod calendars;
 mod conditional;
 mod encoding;
 mod export;
@@ -22,9 +24,9 @@ use serde::{Deserialize, Serialize};
 pub use export::{ExportResult, export_mspdi};
 pub use refusal::{LinkEndpoint, SourceChange, SourceLinkChange};
 pub use report::{
-    DependencyChange, DependencyExportReport, ExportReport, FieldChange, Finding, ImportReport,
-    ItemExportReport, ItemOutcome, ItemReport, LinkOutcome, LinkReport, RemovedDependency,
-    SourceSummary, WorkReference,
+    CalendarOutcome, CalendarReport, DependencyChange, DependencyExportReport, ExportReport,
+    FieldChange, Finding, ImportReport, ItemExportReport, ItemOutcome, ItemReport, LinkOutcome,
+    LinkReport, RemovedDependency, SourceSummary, WorkReference,
 };
 
 /// Stated in every import report so no reader mistakes the candidate for a dated schedule.
@@ -34,6 +36,15 @@ const IMPORT_SCOPE: &str = concat!(
     "calendars (including resource calendars), resources, assignments and date constraints are ",
     "reported as not imported; source start and finish dates are ignored because DPM derives ",
     "dates from the graph."
+);
+
+/// Import scope when the caller names the time zone, so calendars are imported too.
+const IMPORT_SCOPE_CALENDARS: &str = concat!(
+    "Imports plan structure (outline, kinds, names, notes, priority, durations, relations and ",
+    "lags) and working calendars in the given time zone, not calendar dates. Working-time ",
+    "durations and lags count working hours of the task's calendar; elapsed ones stay elapsed. ",
+    "Resource calendars, resources, assignments and date constraints are reported as not ",
+    "imported; source start and finish dates are ignored because DPM derives dates from the graph."
 );
 
 /// Where imported work goes and how new work is keyed.
@@ -55,6 +66,10 @@ pub struct ImportOptions {
     /// unedited round trip without a P0 raises every band.
     #[serde(default)]
     pub keep_existing_priority: bool,
+    /// IANA time zone in which the document's calendars are read; MSPDI carries none. Without it
+    /// calendars are not imported and working-time values are approximated as elapsed hours.
+    #[serde(default)]
+    pub time_zone: Option<String>,
 }
 
 /// Explicit rule for mapping GUID-less source tasks onto existing work, for files that went
@@ -104,16 +119,32 @@ pub fn import_mspdi(
         &prefix,
         options.match_existing_by,
     )?;
+    let calendars = options
+        .time_zone
+        .as_deref()
+        .map(|zone| calendars::import(current, &source, zone))
+        .transpose()?;
     let fields = items::FieldPolicy {
         keep_existing_priority: options.keep_existing_priority,
+        calendars: calendars.as_ref().map(|c| &c.imported),
     };
     let outline = items::map(current, &source, &resolver, (project, &prefix), fields)?;
     let mut candidate = current.clone();
     for mapped in outline.mapped() {
         candidate.work_items.insert(mapped.id, mapped.clone());
     }
-    let links = links::map(current, &source, &outline);
+    let links = links::map(current, &source, &outline, calendars.is_some());
     candidate.dependencies = links.dependencies;
+    let mut rejected = source.rejected;
+    let (scope, calendar_reports) = match calendars {
+        None => (IMPORT_SCOPE, Vec::new()),
+        Some(imported) => {
+            candidate.calendars = Some(imported.imported.calendars);
+            rejected.retain(|finding| finding.field != "calendars");
+            rejected.splice(0..0, imported.findings);
+            (IMPORT_SCOPE_CALENDARS, imported.reports)
+        }
+    };
     let mut retained: Vec<_> = current
         .work_items
         .values()
@@ -128,13 +159,14 @@ pub fn import_mspdi(
                 format: "mspdi".into(),
                 project_guid: source.guid.map(encoding::format_guid),
                 name: source.name.clone(),
-                scope: IMPORT_SCOPE.into(),
+                scope: scope.into(),
             },
             target_project: dpm_model::Key::new(options.project_key.clone()),
             items: outline.reports,
             links: links.reports,
             removed_dependencies: links.removed,
-            rejected: source.rejected,
+            calendars: calendar_reports,
+            rejected,
             retained,
         },
     })

@@ -46,7 +46,7 @@ pub(crate) fn task_findings(node: Node, metadata_field: Option<&str>) -> Vec<Fin
     if text(node, "CalendarUID").is_some_and(|v| v.trim() != "-1") {
         findings.push(Finding::new(
             "calendar",
-            "task calendar not imported; DPM schedules elapsed hours",
+            "task calendar not imported without a time zone; the task counts elapsed hours",
         ));
     }
     for field in [

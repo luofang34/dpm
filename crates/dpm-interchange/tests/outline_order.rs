@@ -14,6 +14,7 @@ fn options() -> ImportOptions {
         key_prefix: Some("NEW".into()),
         match_existing_by: None,
         keep_existing_priority: false,
+        time_zone: None,
     }
 }
 

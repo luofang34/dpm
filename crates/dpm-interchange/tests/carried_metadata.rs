@@ -12,6 +12,7 @@ fn options() -> ImportOptions {
         key_prefix: None,
         match_existing_by: None,
         keep_existing_priority: true,
+        time_zone: None,
     }
 }
 fn without_guids(xml: &str) -> String {

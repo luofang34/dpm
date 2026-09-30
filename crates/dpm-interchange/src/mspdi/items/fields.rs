@@ -19,7 +19,7 @@ pub(super) fn build(
     existing: Option<&WorkItem>,
     (id, key): (WorkItemId, Key),
     placement: &Placement,
-    policy: FieldPolicy,
+    policy: FieldPolicy<'_>,
 ) -> (WorkItem, ItemReport) {
     let mut report = ItemReport {
         uid: task.uid,
@@ -65,7 +65,11 @@ pub(super) fn build(
         }
         _ => map_priority(task, existing, &mut work, &mut report),
     }
-    map_duration(task, existing, &mut work, &mut report);
+    let on_calendars = policy.calendars.is_some();
+    map_duration(task, existing, &mut work, &mut report, on_calendars);
+    if let Some(imported) = policy.calendars {
+        super::calendar::map(task, existing, &mut work, &mut report, imported);
+    }
     (work, report)
 }
 
@@ -254,6 +258,7 @@ fn map_duration(
     existing: Option<&WorkItem>,
     work: &mut WorkItem,
     report: &mut ItemReport,
+    on_calendars: bool,
 ) {
     let seconds = match task.duration.as_deref().map(parse_duration) {
         None => None,
@@ -291,7 +296,7 @@ fn map_duration(
             }
         }
         WorkKind::Task => match seconds {
-            Some(seconds) => task_estimate(task, seconds, existing, work, report),
+            Some(seconds) => task_estimate(task, (seconds, on_calendars), existing, work, report),
             None if existing.is_some_and(|e| e.kind == WorkKind::Task) => {
                 report.kept.push("duration".into());
             }
@@ -300,9 +305,10 @@ fn map_duration(
     }
 }
 
+/// `on_calendars`: calendars are imported, so a working-time duration counts working hours.
 fn task_estimate(
     task: &SourceTask,
-    seconds: u64,
+    (seconds, on_calendars): (u64, bool),
     existing: Option<&WorkItem>,
     work: &mut WorkItem,
     report: &mut ItemReport,
@@ -336,6 +342,10 @@ fn task_estimate(
     let detail = match basis {
         Some(TimeBasis::Elapsed) => format!(
             "elapsed duration {} h becomes the single-point estimate O=M=P",
+            hours(seconds)
+        ),
+        _ if on_calendars => format!(
+            "working-time duration {} h becomes the single-point estimate O=M=P in working hours of the task's calendar",
             hours(seconds)
         ),
         _ => format!(

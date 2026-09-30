@@ -170,6 +170,47 @@ def check_protected_reorder(directory):
         worker.close()
 
 
+def check_calendars(directory):
+    """Calendars import only with a time zone, identically in both adapters, and survive a round trip."""
+    database = directory / 'calendars.sqlite'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    native = FIXTURES / 'omniplan-native.xml'
+    worker = Agent(database, 'agent:importer')
+    try:
+        before, count = run_cli(database, 'export'), operations(database)
+        arguments = {'xml': native.read_text(), 'project_key': 'TEST', 'key_prefix': 'OPR'}
+        local = run_cli(database, 'plan', 'import-mspdi', str(native), '--project-key', 'TEST', '--key-prefix', 'OPR',
+                        '--time-zone', 'Europe/Berlin')
+        assert local == worker.call('import_mspdi', {**arguments, 'time_zone': 'Europe/Berlin'})['data']
+        assert local['candidate']['calendars']['time_zone'] == 'Europe/Berlin'
+        assert [c['outcome'] for c in local['report']['calendars']] == ['BuiltIn', 'Skipped']
+        assert 'working calendars' in local['report']['source']['scope']
+        plain = worker.call('import_mspdi', arguments)['data']
+        assert 'calendars' not in plain['report'] and 'calendars' not in plain['candidate']
+        assert 'time zone' in plain['report']['rejected'][0]['detail']
+        bad = directory / 'zone.xml'
+        bad.write_text(native.read_text())
+        remote = worker.call('import_mspdi', {**arguments, 'time_zone': 'Mars/Base'}, error='invalid_request')
+        failed = run_cli(database, 'plan', 'import-mspdi', str(bad), '--project-key', 'TEST', '--key-prefix', 'OPR',
+                         '--time-zone', 'Mars/Base', error='invalid_request')
+        assert remote['message'] == failed['error']['message'] and 'Mars/Base' in remote['message']
+        assert run_cli(database, 'export') == before and operations(database) == count
+        candidate = directory / 'calendars.json'
+        run_cli(database, *import_args(RELEASE, '--time-zone', 'Europe/Berlin', '--candidate', str(candidate)))
+        run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'Import the release schedule on its calendar',
+                '--actor', 'human:reviewer')
+        exported = run_cli(database, 'plan', 'export-mspdi', '--project-key', 'TEST')
+        assert exported == worker.call('export_mspdi', {'project_key': 'TEST'})['data']
+        assert '<Calendars>' in exported['xml'] and '<Name>24 Hours</Name>' in exported['xml']
+        written = directory / 'calendars.xml'
+        written.write_text(exported['xml'])
+        for zone in (['--time-zone', 'Europe/Berlin'], []):
+            again = run_cli(database, 'plan', 'import-mspdi', str(written), '--project-key', 'TEST', *zone)
+            assert again['preview']['changes'] == [], (zone, again['preview'])
+    finally:
+        worker.close()
+
+
 def smoke(directory):
     database = directory / 'interchange.sqlite'
     run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
@@ -185,9 +226,10 @@ def smoke(directory):
         worker.close()
     check_rescaled_priorities(directory)
     check_protected_reorder(directory)
+    check_calendars(directory)
 
 
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory() as directory:
         smoke(Path(directory))
-    print('PASS: MSPDI import/export CLI/MCP parity, reports keep imported tasks Proposed, failed imports and refused applies change nothing, human apply, export re-imports without changes, carried metadata preserves renamed GUID-less work and O/M/P; files without metadata support explicit title-path matching, rescaled OmniPlan priorities stay local only with --keep-existing-priority')
+    print('PASS: MSPDI import/export CLI/MCP parity, reports keep imported tasks Proposed, failed imports and refused applies change nothing, human apply, export re-imports without changes, carried metadata preserves renamed GUID-less work and O/M/P; files without metadata support explicit title-path matching, rescaled OmniPlan priorities stay local only with --keep-existing-priority; calendars import only with a time zone and re-import without changes')

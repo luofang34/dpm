@@ -16,6 +16,10 @@ pub(crate) struct SourceProject {
     pub(crate) guid: Option<Uuid>,
     pub(crate) name: Option<String>,
     pub(crate) tasks: Vec<SourceTask>,
+    /// Project calendar UID from the header, when it names one.
+    pub(crate) calendar_uid: Option<i64>,
+    /// Every `<Calendar>` element, in document order.
+    pub(crate) calendars: Vec<super::calendars::SourceCalendar>,
     /// Document-level data outside the subset.
     pub(crate) rejected: Vec<Finding>,
 }
@@ -31,6 +35,8 @@ pub(crate) struct SourceTask {
     pub(crate) outline_level: u32,
     pub(crate) duration: Option<String>,
     pub(crate) duration_format: Option<u32>,
+    /// Task calendar UID; `None` when absent or `-1` (the project calendar).
+    pub(crate) calendar_uid: Option<i64>,
     /// `None` when the element is absent, so re-imports can keep the local kind.
     pub(crate) milestone: Option<bool>,
     pub(crate) summary: bool,
@@ -94,6 +100,8 @@ pub(crate) fn parse(xml: &str) -> Result<SourceProject, InterchangeError> {
             .or_else(|| text(root, "Title"))
             .map(str::to_owned),
         tasks,
+        calendar_uid: calendar_uid(root),
+        calendars: super::calendars::parse_all(root),
         rejected: document_findings(root, resources.len()),
     })
 }
@@ -106,7 +114,9 @@ fn document_findings(root: Node, resources: usize) -> Vec<Finding> {
     if calendars > 0 {
         findings.push(Finding::new(
             "calendars",
-            format!("{calendars} calendar(s) not imported; DPM schedules elapsed hours"),
+            format!(
+                "{calendars} calendar(s) not imported without a time zone; pass one (--time-zone / time_zone) to import them, otherwise durations and lags count elapsed hours"
+            ),
         ));
     }
     if resources > 0 {
@@ -197,6 +207,7 @@ fn parse_task(
         outline_level,
         duration: text(node, "Duration").map(str::to_owned),
         duration_format: format("DurationFormat")?,
+        calendar_uid: calendar_uid(node),
         milestone: text(node, "Milestone").map(|v| matches!(v.trim(), "1" | "true")),
         summary: flag(node, "Summary"),
         priority: integer("Priority")?,
@@ -231,6 +242,13 @@ fn parse_link(link: Node) -> Result<SourceLink, String> {
         link_lag: integer("LinkLag")?.unwrap_or(0),
         lag_format,
     })
+}
+
+/// A `CalendarUID` naming a calendar; `-1` names none.
+fn calendar_uid(node: Node) -> Option<i64> {
+    text(node, "CalendarUID")
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .filter(|uid| *uid >= 0)
 }
 
 fn exclusion(node: Node) -> Option<String> {

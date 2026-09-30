@@ -37,6 +37,7 @@ fn import(plan: &Plan, xml: &str) -> ImportResult {
         key_prefix: None,
         match_existing_by: None,
         keep_existing_priority: false,
+        time_zone: None,
     };
     import_mspdi(plan, xml, &options).expect("import")
 }
@@ -297,6 +298,7 @@ fn dpm_plans_export_and_reimport_unchanged() {
                 key_prefix: None,
                 match_existing_by: None,
                 keep_existing_priority: false,
+                time_zone: None,
             };
             let result = import_mspdi(&plan, &exported.xml, &options).expect("import");
             assert_eq!(result.candidate, plan, "{}", project.key);

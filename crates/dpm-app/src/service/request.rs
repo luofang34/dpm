@@ -83,6 +83,9 @@ pub enum Query {
         /// Existing work keeps its priority; the report names differing source values.
         #[serde(default)]
         keep_existing_priority: bool,
+        /// IANA time zone for the document's calendars; absent leaves calendars unimported.
+        #[serde(default)]
+        time_zone: Option<String>,
     },
     /// Write one project's work as the supported Microsoft Project XML subset.
     ExportMspdi {

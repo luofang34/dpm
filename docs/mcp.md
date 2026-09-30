@@ -404,8 +404,8 @@ is not verified. `dpm-interchange` parses
 and writes the subset without network access and never touches the store.
 
 `plan import-mspdi FILE --project-key KEY [--key-prefix P] [--match-existing-by title-path]
-[--keep-existing-priority] [--candidate OUT.json]` and `import_mspdi` (`xml`, `project_key`,
-optional `key_prefix`, `match_existing_by` and `keep_existing_priority`) return
+[--keep-existing-priority] [--time-zone IANA] [--candidate OUT.json]` and `import_mspdi` (`xml`,
+`project_key`, optional `key_prefix`, `match_existing_by`, `keep_existing_priority` and `time_zone`) return
 `{report, preview, candidate}`.
 `candidate` is a full plan at the observed revision, `preview` is its `propose_change` result, and
 `--candidate` also writes it to a file. Importing is a query: nothing is persisted until a human or
@@ -425,22 +425,48 @@ revision and operation history unchanged.
 | `Duration` `PTnHnMnS` | Restore carried O/M/P when its rounded expectation equals this duration; otherwise external duration wins as O=M=P, with an explicit report. Without metadata, single-point hours; zero means unestimated |
 | `WBS` | A value different from `OutlineNumber` is reported as unsupported; hierarchy follows levels and document order |
 | `PredecessorLink` `Type` 0/1/2/3 | FF/FS/SF/SS dependency |
-| `LinkLag` | `lag_hours = LinkLag / 600` (tenths of a minute) |
+| `LinkLag` | `lag_hours = LinkLag / 600` (tenths of a minute); with a time zone, a working-time `LagFormat` (or none) sets `lag_basis: Working` |
+| `Calendars` (with a time zone) | Base calendars and calendars the project or a task uses become [working calendars](#working-calendars); see below |
+| Project `CalendarUID` | `calendars.kinds.human` of a workspace without calendars |
+| Task `CalendarUID` | `schedule.calendar`, only where the workspace's rules would not already resolve that calendar |
 
 Interchange preserves plan structure, not calendar dates. Source start and finish dates are ignored
-because DPM derives dates from the graph; working-time durations and lags become continuous elapsed
-hours; calendars (including resource calendars), resources, assignments and date constraints are
-reported as not imported. `report.source.scope` states this boundary in every import report.
+because DPM derives dates from the graph. Resources, assignments and date constraints are reported
+as not imported. `report.source.scope` states this boundary in every import report.
 
-DPM schedules elapsed hours. Elapsed duration/lag formats (`em`, `eh`, `ed`, `ew`, `emo`) convert
-exactly. Working-time formats (`m`, `h`, `d`, `w`, `mo`) keep their hour value but lose the
-calendar: 1 working day (`LinkLag` 4800 on an 8-hour calendar) becomes 8 elapsed hours, not a
-calendar day. The report marks those values as approximations. `LinkLag` always counts tenths of a
-minute; `LagFormat` only selects the display unit and elapsed versus working time, so a lag without
-`LagFormat` (OmniPlan writes every lag that way) is Microsoft Project's default, working time, and
-is approximated like any other working-time lag. Percentage lags and unknown formats are rejected
-with the link rather than guessed. Durations
-with day, week or month designators are rejected. Cross-project links are rejected.
+MSPDI carries no IANA time zone, so calendars are imported only when the import names one
+(`--time-zone Europe/Berlin` / `time_zone`). Without it, calendars (including resource calendars)
+are reported as not imported, the document-level finding says that a time zone imports them, and
+every hour counts as elapsed: elapsed duration/lag formats (`em`, `eh`, `ed`, `ew`, `emo`) convert
+exactly, while working-time formats (`m`, `h`, `d`, `w`, `mo`) keep their hour value but lose the
+calendar, so 1 working day (`LinkLag` 4800 on an 8-hour calendar) becomes 8 elapsed hours and the
+report marks those values as approximations. `LinkLag` always counts tenths of a minute;
+`LagFormat` only selects the display unit and elapsed versus working time, so a lag without
+`LagFormat` (OmniPlan writes every lag that way) is Microsoft Project's default, working time.
+Percentage lags and unknown formats are rejected with the link rather than guessed. Durations with
+day, week or month designators are rejected. Cross-project links are rejected.
+
+With a time zone, the candidate schedules like the source tool. `WeekDays` (`DayType` 1 = Sunday
+to 7 = Saturday, `DayWorking`, `WorkingTimes` in `HH:MM:SS`; a `ToTime` of `00:00:00` ends at
+24:00) become the weekly pattern; a working day without working times has Microsoft Project's
+default hours, and seconds are dropped with a finding. A derived calendar (`BaseCalendarUID`)
+inherits the weekdays it does not list and the exceptions of its base on dates it does not define.
+Single date-range exceptions are read from `<Exceptions>` (`TimePeriod`, `DayWorking`,
+`WorkingTimes`, `Name`), or from legacy `DayType` 0 week days when the calendar has no
+`<Exceptions>`; recurring exceptions (`Occurrences` above 1), alternate `WorkWeeks` and an exception
+overlapping an earlier one are reported, not guessed. Calendars that only resources use are skipped
+with a finding, as is a calendar with no working time. A calendar named Standard with the hours of
+the workspace's `standard` maps to it, and one named 24 Hours that works every hour maps to
+`always`; every other calendar becomes a definition under its source name, made unique and never
+`always` or `standard`, and replaces a workspace calendar of the same name. The workspace must
+already use the given time zone, if it has calendars (`invalid_request` otherwise), and keeps its
+actor-kind calendars; a workspace without calendars gets Microsoft Project's defaults with the
+project calendar for people, which the reviewed change then applies to human work in every project. A task follows `always` when its `DurationFormat` is elapsed, else its
+own calendar, else the project calendar; its estimate counts working hours of that calendar and a
+working-time lag counts working hours of the successor's calendar, neither reported as approximated.
+`report.calendars` has one entry per source calendar with `uid`, `name`, the workspace `calendar`,
+`outcome` (`Created`, `Updated`, `Unchanged`, `BuiltIn`, `Skipped`) and `approximated` and
+`rejected` findings; it is omitted without a time zone.
 
 Work packages cannot be dependency endpoints. A summary finishes with its last child and starts
 with its first, so a summary predecessor of an FS or FF link and a summary successor of an FS or
@@ -462,7 +488,7 @@ source omits never count as preserved: `kept` names them, and existing work keep
 `report.links` has one entry per `PredecessorLink` with `outcome` (`Preserved`, `Changed`,
 `Approximated`, `Rejected`), notes, `changes` to existing local dependencies and the resulting
 dependency IDs. Rejected data includes constraints,
-deadlines, calendars, resources and assignments, baselines, custom fields other than DPM metadata and outline codes,
+deadlines, calendars without a time zone, resources and assignments, baselines, custom fields other than DPM metadata and outline codes,
 manual scheduling, recurrence, cost, timephased data, and percent complete or actuals. Source
 progress never submits, verifies or completes local work. Inactive, blank, external and subproject
 tasks are skipped with a reason; `report.rejected` covers document-level data and
@@ -519,8 +545,15 @@ a milestone flag flipped) fails the import with the same source context.
 `plan export-mspdi --project-key KEY [--output FILE]` and `export_mspdi` (`project_key`) return
 `{xml, report}`; without `--json` the CLI prints the document itself. Output is deterministic:
 siblings follow explicit `order`, breaking ties by stable work ID (the same order as the terminal outline), `UID`s number that order (they are local to the file), and `GUID`s are
-the stable project and work identities. Tasks carry the PERT expectation in elapsed hours, and
-links carry elapsed-hour lags. The report lists per-item omissions (acceptance, instructions,
+the stable project and work identities. Tasks carry the PERT expectation in hours. Without
+workspace calendars, durations and lags are written as elapsed hours. With them, the project
+`CalendarUID` is the human kind's calendar and `<Calendars>` holds a base calendar for it and for
+every other calendar an exported item resolves to (`standard` as Standard, `always` as a 24-hour,
+7-day calendar named 24 Hours, exceptions in the `<Exceptions>` form); an item on another calendar
+names it in its `CalendarUID`. Durations are written in working hours (`h`), or elapsed hours on
+`always`, and lags in working hours for `lag_basis: Working`, else elapsed hours. The time zone,
+actor-kind and named-actor calendars, `default_executor` and `verifier` are listed as omitted.
+The report lists per-item omissions (acceptance, instructions,
 lifecycle, owner, requirements, evidence, assets) and project-level data outside the subset.
 MSPDI has no conditional work: every task is written unconditionally, never dropped, and the item
 report names its `condition`, an active-branch `join`, and any current non-applicable state

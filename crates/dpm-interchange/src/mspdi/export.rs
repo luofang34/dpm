@@ -1,16 +1,21 @@
 //! Write one project's work as the supported MSPDI subset.
 //!
 //! Output depends only on the plan: tasks follow the outline with siblings in explicit order, UIDs
-//! number that order, and GUIDs are the stable work and project identities. Durations and lags
-//! are written in elapsed hours because DPM schedules elapsed hours.
+//! number that order, and GUIDs are the stable work and project identities. Without workspace
+//! calendars, durations and lags are written in elapsed hours. With them, the calendars in use are
+//! written too, and durations and lags on working time are written in working hours.
 
+mod reports;
+
+use super::calendars::export::CalendarExport;
 use super::encoding::{
     ELAPSED_HOURS_FORMAT, duration_seconds, format_duration, format_guid, lag_tenths,
     priority_value, relation_code,
 };
-use super::report::{DependencyExportReport, ExportReport, Finding, ItemExportReport};
+use super::report::ExportReport;
 use crate::InterchangeError;
-use dpm_model::{Plan, Project, WorkItem, WorkItemId, WorkKind, WorkStatus};
+use dpm_model::{Plan, Project, WorkItem, WorkItemId, WorkKind};
+use reports::{dependency_reports, item_report, project_omissions};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -42,18 +47,25 @@ pub fn export_mspdi(plan: &Plan, project_key: &str) -> Result<ExportResult, Inte
     let rows = outline(plan, project);
     let applicability = plan.applicability();
     let uids: BTreeMap<WorkItemId, u32> = rows.iter().map(|r| (r.work.id, r.uid)).collect();
+    let calendars = (plan.calendars.as_ref())
+        .map(|calendars| CalendarExport::new(calendars, rows.iter().map(|r| r.work)));
+    let unrepresentable = |reason| InterchangeError::Unrepresentable {
+        key: project.key.0.clone(),
+        reason,
+    };
     let mut xml = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
          <Project xmlns=\"http://schemas.microsoft.com/project\">\n    <SaveVersion>14</SaveVersion>\n",
     );
-    let title = escape(&project.title).map_err(|reason| InterchangeError::Unrepresentable {
-        key: project.key.0.clone(),
-        reason,
-    })?;
+    let title = escape(&project.title).map_err(unrepresentable)?;
     let project_guid = format_guid(project.id.0);
     push_line(&mut xml, 1, &format!("<Name>{title}</Name>"));
     push_line(&mut xml, 1, &format!("<GUID>{project_guid}</GUID>"));
     push_line(&mut xml, 1, &format!("<Title>{title}</Title>"));
+    if let Some(calendars) = &calendars {
+        let uid = calendars.project_uid();
+        push_line(&mut xml, 1, &format!("<CalendarUID>{uid}</CalendarUID>"));
+    }
     push_line(
         &mut xml,
         1,
@@ -63,10 +75,13 @@ pub fn export_mspdi(plan: &Plan, project_key: &str) -> Result<ExportResult, Inte
             super::metadata::ALIAS
         ),
     );
+    if let Some(calendars) = &calendars {
+        calendars.write(&mut xml).map_err(unrepresentable)?;
+    }
     push_line(&mut xml, 1, "<Tasks>");
     let mut items = Vec::new();
     for row in &rows {
-        write_task(&mut xml, plan, row, &uids).map_err(|reason| {
+        write_task(&mut xml, plan, row, (&uids, calendars.as_ref())).map_err(|reason| {
             InterchangeError::Unrepresentable {
                 key: row.work.key.0.clone(),
                 reason,
@@ -83,7 +98,10 @@ pub fn export_mspdi(plan: &Plan, project_key: &str) -> Result<ExportResult, Inte
             project_guid,
             items,
             dependencies: dependency_reports(plan, &applicability, &uids),
-            omitted: project_omissions(plan, project, &uids),
+            omitted: project_omissions(plan, project, &uids)
+                .into_iter()
+                .chain(calendars.iter().flat_map(CalendarExport::omissions))
+                .collect(),
         },
     })
 }
@@ -123,11 +141,17 @@ fn outline<'a>(plan: &'a Plan, project: &Project) -> Vec<Row<'a>> {
     rows
 }
 
+/// Task UIDs by work, and the calendar numbering when the workspace has calendars.
+type Numbering<'a, 'c> = (
+    &'a BTreeMap<WorkItemId, u32>,
+    Option<&'a CalendarExport<'c>>,
+);
+
 fn write_task(
     xml: &mut String,
     plan: &Plan,
     row: &Row,
-    uids: &BTreeMap<WorkItemId, u32>,
+    (uids, calendars): Numbering,
 ) -> Result<(), String> {
     let work = row.work;
     push_line(xml, 2, "<Task>");
@@ -145,22 +169,7 @@ fn write_task(
     ] {
         push_line(xml, 3, &format!("<{name}>{value}</{name}>"));
     }
-    if work.kind != WorkKind::WorkPackage {
-        let seconds = match work.kind {
-            WorkKind::Task => duration_seconds(work.schedule.estimate),
-            WorkKind::Milestone | WorkKind::WorkPackage => 0,
-        };
-        push_line(
-            xml,
-            3,
-            &format!("<Duration>{}</Duration>", format_duration(seconds)),
-        );
-        push_line(
-            xml,
-            3,
-            &format!("<DurationFormat>{ELAPSED_HOURS_FORMAT}</DurationFormat>"),
-        );
-    }
+    write_duration(xml, work, calendars);
     let flag = |set: bool| if set { 1 } else { 0 };
     push_line(
         xml,
@@ -178,6 +187,9 @@ fn write_task(
             flag(work.kind == WorkKind::WorkPackage)
         ),
     );
+    if let Some(uid) = calendars.and_then(|c| c.task_uid(work)) {
+        push_line(xml, 3, &format!("<CalendarUID>{uid}</CalendarUID>"));
+    }
     if !work.contract.objective.trim().is_empty() {
         push_line(
             xml,
@@ -194,18 +206,34 @@ fn write_task(
             super::metadata::FIELD_ID
         ),
     );
-    write_links(xml, plan, work.id, uids);
+    write_links(xml, plan, work.id, (uids, calendars));
     push_line(xml, 2, "</Task>");
     Ok(())
 }
 
+/// Duration of a task or milestone in working hours of its calendar, or in elapsed hours without
+/// calendars or on `always`.
+fn write_duration(xml: &mut String, work: &WorkItem, calendars: Option<&CalendarExport>) {
+    let seconds = match work.kind {
+        WorkKind::Task => duration_seconds(work.schedule.estimate),
+        WorkKind::Milestone => 0,
+        WorkKind::WorkPackage => return,
+    };
+    let format = calendars.map_or(ELAPSED_HOURS_FORMAT, |c| c.duration_format(work));
+    push_line(
+        xml,
+        3,
+        &format!("<Duration>{}</Duration>", format_duration(seconds)),
+    );
+    push_line(
+        xml,
+        3,
+        &format!("<DurationFormat>{format}</DurationFormat>"),
+    );
+}
+
 /// Links into one successor from exported predecessors, ordered by predecessor UID and type.
-fn write_links(
-    xml: &mut String,
-    plan: &Plan,
-    successor: WorkItemId,
-    uids: &BTreeMap<WorkItemId, u32>,
-) {
+fn write_links(xml: &mut String, plan: &Plan, successor: WorkItemId, (uids, calendars): Numbering) {
     let mut links: Vec<_> = plan
         .dependencies
         .iter()
@@ -220,7 +248,12 @@ fn write_links(
             ("Type", code.to_string()),
             ("CrossProject", "0".into()),
             ("LinkLag", lag_tenths(edge.lag_hours).to_string()),
-            ("LagFormat", ELAPSED_HOURS_FORMAT.to_string()),
+            (
+                "LagFormat",
+                calendars
+                    .map_or(ELAPSED_HOURS_FORMAT, |_| CalendarExport::lag_format(edge))
+                    .to_string(),
+            ),
         ] {
             push_line(xml, 4, &format!("<{name}>{value}</{name}>"));
         }
@@ -228,240 +261,7 @@ fn write_links(
     }
 }
 
-fn item_report(
-    plan: &Plan,
-    applicability: &BTreeMap<WorkItemId, dpm_model::Applicability>,
-    row: &Row,
-) -> ItemExportReport {
-    let work = row.work;
-    let mut preserved = vec![
-        "identity".to_string(),
-        "key".into(),
-        "dpm_metadata".into(),
-        "title".into(),
-        "kind".into(),
-        "outline".into(),
-        "priority".into(),
-    ];
-    let mut approximated = Vec::new();
-    if !work.contract.objective.trim().is_empty() {
-        preserved.push("objective".into());
-    }
-    if work.kind == WorkKind::Task {
-        let exact = work.schedule.estimate.is_none_or(|e| {
-            e.optimistic_hours == e.pessimistic_hours
-                && duration_seconds(Some(e)) as f64 == e.likely_hours * 3600.0
-        });
-        match work.schedule.estimate {
-            Some(e) if !exact => approximated.push(Finding::new(
-                "estimate",
-                format!(
-                    "three-point estimate {}/{}/{} h retained in DPM.Metadata.v1; display duration is its PERT expectation rounded to whole seconds",
-                    e.optimistic_hours, e.likely_hours, e.pessimistic_hours
-                ),
-            )),
-            _ => preserved.push("estimate".into()),
-        }
-    }
-    ItemExportReport {
-        key: work.key.clone(),
-        uid: row.uid,
-        guid: format_guid(work.id.0),
-        preserved,
-        approximated,
-        omitted: omissions(work)
-            .into_iter()
-            .chain(super::conditional::findings(plan, applicability, work))
-            .collect(),
-    }
-}
-
-fn omissions(work: &WorkItem) -> Vec<Finding> {
-    let mut omitted = Vec::new();
-    let mut note = |present: bool, field: &str, detail: String| {
-        if present {
-            omitted.push(Finding::new(field, detail));
-        }
-    };
-    let initial = if work.kind == WorkKind::Task {
-        WorkStatus::Proposed
-    } else {
-        WorkStatus::Planned
-    };
-    note(
-        work.execution.status != initial,
-        "status",
-        format!(
-            "lifecycle {:?} is not written; MSPDI progress fields stay empty",
-            work.execution.status
-        ),
-    );
-    note(
-        !work.contract.acceptance.is_empty(),
-        "acceptance",
-        format!("{} acceptance criteria", work.contract.acceptance.len()),
-    );
-    note(
-        work.contract.instructions.is_some(),
-        "instructions",
-        "execution instructions".into(),
-    );
-    note(
-        work.execution.owner.is_some(),
-        "owner",
-        "claim owner".into(),
-    );
-    note(
-        work.execution.reported_progress_percent != 0,
-        "reported_progress_percent",
-        format!("{}% owner report", work.execution.reported_progress_percent),
-    );
-    note(
-        !work.contract.capabilities.is_empty(),
-        "capabilities",
-        "required capabilities".into(),
-    );
-    note(
-        !work.contract.requirement_ids.is_empty(),
-        "requirement_ids",
-        "requirement links".into(),
-    );
-    note(
-        !work.execution.artifact_ids.is_empty(),
-        "artifact_ids",
-        "attached evidence".into(),
-    );
-    note(
-        !work.contract.assets.is_empty(),
-        "assets",
-        "workspace asset requirements".into(),
-    );
-    note(
-        work.execution.last_rejection.is_some(),
-        "last_rejection",
-        "latest review rejection".into(),
-    );
-    note(
-        work.execution.block_reason.is_some(),
-        "block_reason",
-        "blocker".into(),
-    );
-    omitted
-}
-
-fn dependency_reports(
-    plan: &Plan,
-    applicability: &BTreeMap<WorkItemId, dpm_model::Applicability>,
-    uids: &BTreeMap<WorkItemId, u32>,
-) -> Vec<DependencyExportReport> {
-    let mut reports: Vec<_> = plan
-        .dependencies
-        .iter()
-        .filter(|d| uids.contains_key(&d.predecessor) || uids.contains_key(&d.successor))
-        .map(|edge| {
-            let written =
-                uids.contains_key(&edge.predecessor) && uids.contains_key(&edge.successor);
-            let mut notes = Vec::new();
-            if !written {
-                notes.push("an endpoint belongs to another project; not written".into());
-            }
-            if edge.policy == dpm_model::DependencyPolicy::Soft {
-                notes.push("Soft policy is not represented; MSPDI links always apply".into());
-            }
-            if edge.start_basis == dpm_model::StartBasis::Provisional {
-                notes.push(
-                    "provisional start basis is not represented; MSPDI links wait for the finish"
-                        .into(),
-                );
-            }
-            if edge.rationale.is_some() {
-                notes.push("rationale is not represented".into());
-            }
-            if edge.waiver.is_some() {
-                notes.push("waiver is not represented; the link is written as enforced".into());
-            }
-            notes.extend(super::conditional::edge_note(applicability, edge));
-            if (edge.lag_hours * 600.0).fract() != 0.0 {
-                notes.push("lag rounded to a tenth of a minute".into());
-            }
-            DependencyExportReport {
-                id: edge.id,
-                written,
-                notes,
-            }
-        })
-        .collect();
-    reports.sort_by_key(|r| r.id);
-    reports
-}
-
-fn project_omissions(
-    plan: &Plan,
-    project: &Project,
-    uids: &BTreeMap<WorkItemId, u32>,
-) -> Vec<Finding> {
-    let mut omitted = Vec::new();
-    let mut count = |field: &str, found: usize, what: &str| {
-        if found > 0 {
-            omitted.push(Finding::new(
-                field,
-                format!("{found} {what} not represented in MSPDI"),
-            ));
-        }
-    };
-    let in_project = |id| id == project.id;
-    count(
-        "requirements",
-        plan.requirements
-            .values()
-            .filter(|r| in_project(r.project))
-            .count(),
-        "project requirement(s)",
-    );
-    count(
-        "decisions",
-        plan.decisions
-            .values()
-            .filter(|d| in_project(d.project))
-            .count(),
-        "project decision(s)",
-    );
-    count(
-        "risks",
-        plan.risks
-            .values()
-            .filter(|r| in_project(r.project))
-            .count(),
-        "project risk(s)",
-    );
-    count(
-        "links",
-        plan.links
-            .iter()
-            .filter(|l| uids.contains_key(&l.source) || uids.contains_key(&l.target))
-            .count(),
-        "work link(s)",
-    );
-    count(
-        "external_references",
-        plan.external_references
-            .values()
-            .filter(|r| r.links.iter().any(|l| uids.contains_key(&l.work)))
-            .count(),
-        "external reference(s)",
-    );
-    count(
-        "child_projects",
-        plan.projects
-            .values()
-            .filter(|p| p.parent == Some(project.id))
-            .count(),
-        "child project(s), exported separately,",
-    );
-    omitted
-}
-
-fn push_line(xml: &mut String, depth: usize, line: &str) {
+pub(super) fn push_line(xml: &mut String, depth: usize, line: &str) {
     xml.push_str(&" ".repeat(depth * 4));
     xml.push_str(line);
     xml.push('\n');
@@ -469,7 +269,7 @@ fn push_line(xml: &mut String, depth: usize, line: &str) {
 
 /// Escape text for element content; a carriage return is written as a reference so parsers do
 /// not normalize it away. Characters XML 1.0 cannot carry are rejected.
-fn escape(text: &str) -> Result<String, String> {
+pub(super) fn escape(text: &str) -> Result<String, String> {
     let mut escaped = String::with_capacity(text.len());
     for character in text.chars() {
         match character {

@@ -21,6 +21,7 @@ fn options(matching: Option<ExistingMatch>) -> ImportOptions {
         key_prefix: Some("OP".into()),
         match_existing_by: matching,
         keep_existing_priority: false,
+        time_zone: None,
     }
 }
 

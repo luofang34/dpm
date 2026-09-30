@@ -11,10 +11,18 @@ use super::encoding::{TimeBasis, lag_hours, lag_tenths, relation_from_code, time
 use super::items::Outline;
 use super::report::{DependencyChange, LinkOutcome, LinkReport, RemovedDependency};
 use super::source::{SourceLink, SourceProject, SourceTask};
-use dpm_model::{Dependency, DependencyKind, Plan, WorkItemId, WorkKind};
+use dpm_model::{Dependency, DependencyKind, LagBasis, Plan, WorkItemId, WorkKind};
 use std::collections::{BTreeMap, BTreeSet};
 
 type Edge = (WorkItemId, WorkItemId, DependencyKind);
+
+/// Source lag of one relation: tenths of a minute, and its basis when calendars are imported and
+/// the lag is nonzero (a zero lag has no basis to carry, so local edges keep theirs).
+#[derive(Debug, Clone, Copy)]
+struct EdgeLag {
+    tenths: i64,
+    basis: Option<LagBasis>,
+}
 
 /// Candidate dependency list, one report per source link, and the local edges the source drops.
 pub(crate) struct MappedLinks {
@@ -23,8 +31,14 @@ pub(crate) struct MappedLinks {
     pub(crate) removed: Vec<RemovedDependency>,
 }
 
-pub(crate) fn map(current: &Plan, source: &SourceProject, outline: &Outline) -> MappedLinks {
-    let mut edges: BTreeMap<Edge, i64> = BTreeMap::new();
+/// `on_calendars`: calendars are imported, so working-time lags count working hours.
+pub(crate) fn map(
+    current: &Plan,
+    source: &SourceProject,
+    outline: &Outline,
+    on_calendars: bool,
+) -> MappedLinks {
+    let mut edges: BTreeMap<Edge, EdgeLag> = BTreeMap::new();
     let mut sources: BTreeMap<Edge, usize> = BTreeMap::new();
     let mut reports = Vec::new();
     let mut produced: Vec<Vec<Edge>> = Vec::new();
@@ -43,7 +57,7 @@ pub(crate) fn map(current: &Plan, source: &SourceProject, outline: &Outline) -> 
                 changes: Vec::new(),
                 dependencies: Vec::new(),
             };
-            let mapped = match anchors(outline, task, link, &mut report) {
+            let mapped = match anchors(outline, task, link, &mut report, on_calendars) {
                 Ok(mapped) => mapped,
                 Err(reason) => {
                     report.outcome = LinkOutcome::Rejected;
@@ -51,9 +65,15 @@ pub(crate) fn map(current: &Plan, source: &SourceProject, outline: &Outline) -> 
                     Vec::new()
                 }
             };
+            let lag = EdgeLag {
+                tenths: link.link_lag,
+                basis: basis(link, on_calendars),
+            };
             for edge in &mapped {
-                let lag = edges.entry(*edge).or_insert(link.link_lag);
-                *lag = (*lag).max(link.link_lag);
+                let carried = edges.entry(*edge).or_insert(lag);
+                if lag.tenths > carried.tenths {
+                    *carried = lag;
+                }
                 *sources.entry(*edge).or_default() += 1;
             }
             produced.push(mapped);
@@ -118,11 +138,26 @@ fn describe(
             "{edge} repeats another link on the same relation; one dependency carries both"
         ));
     }
-    // Merge matches local edges by endpoints and kind and keeps every other field, so the lag is
-    // the only field an import can change on an existing dependency.
-    if let Some(local) = current.find_dependency(dependency.id)
-        && local.lag_hours != dependency.lag_hours
-    {
+    // Merge matches local edges by endpoints and kind and keeps every other field, so the lag and
+    // its basis are the only fields an import can change on an existing dependency.
+    let local = current.find_dependency(dependency.id);
+    if let Some(local) = local.filter(|l| l.lag_basis != dependency.lag_basis) {
+        report.notes.push(format!(
+            "{edge} changes the local lag basis {:?} to {:?}",
+            local.lag_basis, dependency.lag_basis
+        ));
+        report.changes.push(DependencyChange {
+            dependency: dependency.id,
+            relation: edge.clone(),
+            field: "lag_basis".into(),
+            before: format!("{:?}", local.lag_basis),
+            after: format!("{:?}", dependency.lag_basis),
+        });
+        if report.outcome == LinkOutcome::Preserved {
+            report.outcome = LinkOutcome::Changed;
+        }
+    }
+    if let Some(local) = local.filter(|l| l.lag_hours != dependency.lag_hours) {
         report.notes.push(format!(
             "{edge} changes the local lag {} h to {} h",
             local.lag_hours, dependency.lag_hours
@@ -146,6 +181,7 @@ fn anchors(
     task: &SourceTask,
     link: &SourceLink,
     report: &mut LinkReport,
+    on_calendars: bool,
 ) -> Result<Vec<Edge>, String> {
     let kind = match link.type_code {
         None => return Err("link has no relation type".into()),
@@ -189,7 +225,7 @@ fn anchors(
             "link joins a task with itself or a summary task with its own descendant".into(),
         );
     }
-    check_lag(link, report)?;
+    check_lag(link, report, on_calendars)?;
     let expanded = from.len() > 1
         || to.len() > 1
         || predecessor.kind == WorkKind::WorkPackage
@@ -207,19 +243,42 @@ fn anchors(
         .collect())
 }
 
-fn check_lag(link: &SourceLink, report: &mut LinkReport) -> Result<(), String> {
+/// `LinkLag` always counts tenths of a minute; `LagFormat` only selects the display unit and
+/// elapsed versus working time, so an absent format is Microsoft Project's default, working time.
+/// OmniPlan writes every lag that way.
+fn time_basis_of(link: &SourceLink) -> Option<TimeBasis> {
+    link.lag_format.map_or(Some(TimeBasis::Working), time_basis)
+}
+
+/// Basis a nonzero lag carries when calendars are imported.
+fn basis(link: &SourceLink, on_calendars: bool) -> Option<LagBasis> {
+    if !on_calendars || link.link_lag == 0 {
+        return None;
+    }
+    match time_basis_of(link)? {
+        TimeBasis::Working => Some(LagBasis::Working),
+        TimeBasis::Elapsed => Some(LagBasis::Elapsed),
+    }
+}
+
+fn check_lag(link: &SourceLink, report: &mut LinkReport, on_calendars: bool) -> Result<(), String> {
     if link.link_lag == 0 {
         return Ok(());
     }
-    // `LinkLag` always counts tenths of a minute; `LagFormat` only selects the display unit and
-    // elapsed versus working time, so an absent format is Microsoft Project's default, working
-    // time. OmniPlan writes every lag that way.
-    let (basis, origin) = match link.lag_format {
-        None => (Some(TimeBasis::Working), "no LagFormat, so "),
-        Some(format) => (time_basis(format), ""),
+    let origin = if link.lag_format.is_none() {
+        "no LagFormat, so "
+    } else {
+        ""
     };
-    match basis {
+    match time_basis_of(link) {
         Some(TimeBasis::Elapsed) => Ok(()),
+        Some(TimeBasis::Working) if on_calendars => {
+            report.notes.push(format!(
+                "{origin}working-time lag {} h counts working hours of the successor's calendar",
+                lag_hours(link.link_lag)
+            ));
+            Ok(())
+        }
         Some(TimeBasis::Working) => {
             report.outcome = LinkOutcome::Approximated;
             report.notes.push(format!(
@@ -264,7 +323,7 @@ fn endpoint(
 fn merge(
     current: &Plan,
     owned: &BTreeSet<WorkItemId>,
-    mut edges: BTreeMap<Edge, i64>,
+    mut edges: BTreeMap<Edge, EdgeLag>,
 ) -> (Vec<Dependency>, Vec<RemovedDependency>) {
     let mut merged = Vec::new();
     let mut removed = Vec::new();
@@ -273,10 +332,13 @@ fn merge(
             merged.push(edge.clone());
             continue;
         }
-        if let Some(tenths) = edges.remove(&(edge.predecessor, edge.successor, edge.kind)) {
+        if let Some(lag) = edges.remove(&(edge.predecessor, edge.successor, edge.kind)) {
             let mut kept = edge.clone();
-            if lag_tenths(edge.lag_hours) != tenths {
-                kept.lag_hours = lag_hours(tenths);
+            if lag_tenths(edge.lag_hours) != lag.tenths {
+                kept.lag_hours = lag_hours(lag.tenths);
+            }
+            if let Some(basis) = lag.basis {
+                kept.lag_basis = basis;
             }
             merged.push(kept);
         } else {
@@ -294,11 +356,11 @@ fn merge(
             }
         }
     }
-    merged.extend(
-        edges
-            .into_iter()
-            .map(|((p, s, k), tenths)| Dependency::new(p, s, k, lag_hours(tenths))),
-    );
+    merged.extend(edges.into_iter().map(|((p, s, k), lag)| {
+        let mut added = Dependency::new(p, s, k, lag_hours(lag.tenths));
+        added.lag_basis = lag.basis.unwrap_or_default();
+        added
+    }));
     (merged, removed)
 }
 

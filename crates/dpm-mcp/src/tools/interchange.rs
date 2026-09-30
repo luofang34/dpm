@@ -13,6 +13,7 @@ struct MspdiArguments {
     match_existing_by: Option<dpm_app::ExistingMatch>,
     #[serde(default)]
     keep_existing_priority: bool,
+    time_zone: Option<String>,
 }
 
 pub(super) fn handles(name: &str) -> bool {
@@ -43,6 +44,10 @@ pub(super) fn schema(name: &str, properties: &mut Map<String, Value>, needed: &m
             "keep_existing_priority".into(),
             json!({"type":"boolean","description":"Keep the priority of existing work and report differing source values; for tools such as OmniPlan that rescale priorities by the highest one in the document. Default false"}),
         );
+        properties.insert(
+            "time_zone".into(),
+            json!({"type":"string","minLength":1,"description":"IANA time zone in which to read the document's calendars, such as Europe/Berlin; MSPDI carries none. Absent: calendars are not imported and working-time durations and lags are approximated as elapsed hours"}),
+        );
         needed.push("xml");
     }
 }
@@ -57,6 +62,7 @@ pub(super) fn query(name: &str, value: Value) -> Result<Query, AppError> {
             key_prefix: args.key_prefix,
             match_existing_by: args.match_existing_by,
             keep_existing_priority: args.keep_existing_priority,
+            time_zone: args.time_zone,
         }
     } else {
         Query::ExportMspdi { project_key }

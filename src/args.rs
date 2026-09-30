@@ -389,6 +389,10 @@ pub(crate) enum PlanCommand {
         /// as OmniPlan that rescale priorities by the highest one in the document.
         #[arg(long)]
         keep_existing_priority: bool,
+        /// IANA time zone in which to read the document's calendars (MSPDI carries none), such as
+        /// Europe/Berlin; without it calendars are not imported and working time counts as elapsed.
+        #[arg(long, value_name = "IANA")]
+        time_zone: Option<String>,
         /// Also write the candidate plan here for review and `plan apply`.
         #[arg(long)]
         candidate: Option<PathBuf>,

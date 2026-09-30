@@ -38,6 +38,7 @@ fn options(project: &str, prefix: &str, matching: Option<ExistingMatch>) -> Impo
         key_prefix: Some(prefix.into()),
         match_existing_by: matching,
         keep_existing_priority: false,
+        time_zone: None,
     }
 }
 
@@ -162,7 +163,7 @@ fn native_file_reports_links_constraint_resource_and_calendars() {
     assert_eq!(
         document,
         [
-            "2 calendar(s) not imported; DPM schedules elapsed hours",
+            "2 calendar(s) not imported without a time zone; pass one (--time-zone / time_zone) to import them, otherwise durations and lags count elapsed hours",
             "1 resource(s) not imported; DPM workspace assets are repositories and tools",
         ]
     );
@@ -339,6 +340,7 @@ fn omniplan_rescales_priorities_by_the_highest_one_so_existing_priority_can_be_k
         OMNIPLAN_NO_P0,
         &ImportOptions {
             keep_existing_priority: true,
+            time_zone: None,
             ..matching
         },
     );

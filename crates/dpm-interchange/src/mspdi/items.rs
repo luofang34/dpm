@@ -1,5 +1,6 @@
 //! Map source tasks onto candidate work items, keeping each item's report beside it.
 
+mod calendar;
 mod changes;
 mod fields;
 mod identity;
@@ -69,9 +70,11 @@ enum Parent {
 
 /// Which source fields the import may apply to existing work.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct FieldPolicy {
+pub(crate) struct FieldPolicy<'a> {
     /// Existing work keeps its priority; the report names the source value it did not apply.
     pub(crate) keep_existing_priority: bool,
+    /// Imported calendars; without them durations count elapsed hours and task calendars stay local.
+    pub(crate) calendars: Option<&'a super::calendars::Imported>,
 }
 
 pub(crate) fn map(
@@ -79,7 +82,7 @@ pub(crate) fn map(
     source: &SourceProject,
     resolver: &Resolver,
     (project, prefix): (ProjectId, &str),
-    fields: FieldPolicy,
+    fields: FieldPolicy<'_>,
 ) -> Result<Outline, InterchangeError> {
     let mut outline = Outline::default();
     let mut identities: BTreeMap<WorkItemId, i64> = BTreeMap::new();
@@ -159,7 +162,7 @@ pub(crate) fn map(
     }
     keep_outer_parents(current, &mut outline);
     order::assign(current, &mut outline)?;
-    finish_reports(current, &mut outline);
+    finish_reports(current, &mut outline, fields.calendars.is_some());
     Ok(outline)
 }
 
@@ -263,7 +266,9 @@ fn keep_outer_parents(current: &Plan, outline: &mut Outline) {
     }
 }
 
-fn finish_reports(current: &Plan, outline: &mut Outline) {
+/// `calendars_imported`: the finding that a task calendar was not imported no longer applies,
+/// whether or not the task itself is imported.
+fn finish_reports(current: &Plan, outline: &mut Outline, calendars_imported: bool) {
     let keys: BTreeMap<WorkItemId, &Key> = current
         .work_items
         .values()
@@ -271,6 +276,11 @@ fn finish_reports(current: &Plan, outline: &mut Outline) {
         .map(|w| (w.id, &w.key))
         .collect();
     for report in &mut outline.reports {
+        if calendars_imported {
+            report
+                .rejected
+                .retain(|finding| finding.field != "calendar");
+        }
         let Some(work) = outline.work.get(&report.uid) else {
             continue;
         };

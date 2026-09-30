@@ -140,6 +140,22 @@ pub enum InterchangeError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync + 'static>,
     },
+    /// The time zone given for the document's calendars is not an IANA time zone name.
+    #[error("time zone {time_zone:?} is not an IANA time zone name such as Europe/Berlin")]
+    InvalidTimeZone {
+        /// Requested time zone.
+        time_zone: String,
+    },
+    /// The workspace already reads its calendars in another time zone.
+    #[error(
+        "the workspace calendars use time zone {workspace}, not {requested}; import the document's calendars in {workspace}"
+    )]
+    TimeZoneMismatch {
+        /// Time zone of the workspace calendars.
+        workspace: String,
+        /// Time zone given for the document.
+        requested: String,
+    },
     /// A value cannot be written as MSPDI.
     #[error("work {key} cannot be exported as MSPDI: {reason}")]
     Unrepresentable {
@@ -170,7 +186,9 @@ impl InterchangeError {
             | Self::MalformedTask { .. }
             | Self::DuplicateUid { .. }
             | Self::DuplicateIdentity { .. }
-            | Self::SourceScopeRequired { .. } => "invalid_request",
+            | Self::SourceScopeRequired { .. }
+            | Self::InvalidTimeZone { .. }
+            | Self::TimeZoneMismatch { .. } => "invalid_request",
         }
     }
 }
