@@ -891,14 +891,14 @@ keeps committing through ten such reads is reported as `revision_conflict` sayin
 
 | Field | Meaning |
 | --- | --- |
-| rules | `min_samples` (5), `bulk_window_seconds` (180), `min_actual_seconds` (60), `min_applied_ratio` (0.005) and `max_applied_ratio` (50), `review_floor_seconds` (10) and `actual_hours`: `working` with calendars, else `elapsed` |
+| rules | `min_samples` (5), `bulk_window_seconds` (180), `min_actual_seconds` (60), `min_applied_ratio` (0.05, people and services), `min_agent_applied_ratio` (0.005) and `max_applied_ratio` (50), `review_floor_seconds` (10) and `actual_hours`: `working` with calendars, else `elapsed` |
 | history | `operations` read and the first one's commit time |
 | estimates.samples[] | Each measured verified task: `key`, `executor` (kind of the actor who submitted the verified attempt), `capabilities`, `estimated_hours` (PERT expected), `actual_hours` (start to that submission on the task's calendar, less the review waits of its rejected attempts), `ratio` |
 | estimates.by_executor[] / by_capability[] | Per executor kind, and per kind and required capability: `samples`, `median`, `p25`, `p75` (null without samples), `sufficient`, and `excluded[]` `{reason, count}` of that kind's verified tasks left out; a kind whose work was all excluded still has a group |
 | estimates.excluded[] / reviews.excluded[] / decisions.excluded[] | `{reason, count, keys}` for everything not measured; for reviews `count` counts reviews and `keys` names each task once |
 | reviews.by_kind[] | Elapsed hours from each submission attempt to its rejection or verification, per reviewer kind: `count`, `median_hours`, `p80_hours`, `sufficient` |
 | decisions.by_kind[] | Elapsed hours from the reviewed change that added a decision to its resolution, per deciding actor kind |
-| flow.cycle_time / lead_time | Start, or first claim, to verification of verified tasks: `count`, `median_hours`, `p85_hours`, and `excluded[]` `{reason, count, keys}` |
+| flow.cycle_time / lead_time | Start, or first claim, to verification of verified tasks: `count`, `median_hours`, `p85_hours`, and `excluded[]` `{reason, count, keys}`; they include review time, so work with no measurable execution still counts |
 | flow.throughput | Verified in the last 7 and 28 days, and per ISO week (UTC) for the last 8 weeks |
 | flow.aging[] | Claimed, started, blocked and submitted work: `key`, `status`, `owner`, `hours_since_claim` (the current holder's claim or handoff), `hours_since_start`; oldest first |
 | flow.reliability | Claim episodes (each claim, and each handoff for its recipient) ended `verified` (and `verified_after_rejection`), `released`, `handed_off` or still `open`, with `verified_fraction` = verified / (verified + released); `total` and `by_holder` kind |
@@ -943,8 +943,9 @@ every task still awaiting verification waits the median review time of the verif
 (`calendars.verifier`, else Human) in elapsed hours after its work before the verifier's calendar
 applies; a submitted task waits it again from the clock reading, so the forecast errs late. A factor
 or delay applies only when its group is `sufficient`, and a factor only when its median lies within
-`min_applied_ratio`..`max_applied_ratio`: a median outside that band points at the records rather
-than the estimates, so it is reported in `measured` with the reason and not applied. Otherwise the
+`min_applied_ratio`..`max_applied_ratio` (`min_agent_applied_ratio` for agents, whose work
+routinely measures 0.01-0.1 of human-scale estimates): a median outside that band points at the
+records rather than the estimates, so it is reported in `measured` with the reason and not applied. Otherwise the
 factor is 1 and the delay 0 h. The result gains `calibration`: `min_samples`, `factors[]`
 (`executor`, `tasks`, `samples`, `measured`, `factor`, `applied`, `reason`), `review_delay`
 (`verifier`, `samples`, `measured_hours`, `hours`, `applied`, `reason`) and `capped` (scaled

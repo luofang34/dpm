@@ -1,6 +1,6 @@
 //! A forecast that applies measured factors to a copy of the plan, on request only.
 
-use super::{CalibrationReport, MAX_APPLIED_RATIO, MIN_APPLIED_RATIO, MIN_SAMPLES};
+use super::{CalibrationReport, MAX_APPLIED_RATIO, MIN_SAMPLES, min_applied_ratio};
 use dpm_model::{ActorKind, MAX_CALENDAR_HOURS, Plan, ThreePointEstimate, WorkItem};
 use dpm_schedule::RemainingOptions;
 use serde::{Deserialize, Serialize};
@@ -149,7 +149,7 @@ fn factor(report: &CalibrationReport, executor: ActorKind, tasks: usize) -> Appl
     let measured = group.and_then(|g| g.median);
     let sufficient = group.is_some_and(|g| g.sufficient);
     let (factor, applied, reason) = match measured {
-        Some(median) if sufficient && in_band(median) => (
+        Some(median) if sufficient && in_band(median, executor) => (
             median,
             true,
             format!(
@@ -161,8 +161,9 @@ fn factor(report: &CalibrationReport, executor: ActorKind, tasks: usize) -> Appl
             false,
             format!(
                 "median actual/estimated ratio {median:.3} of {samples} verified {executor} \
-                 task(s) lies outside {MIN_APPLIED_RATIO}-{MAX_APPLIED_RATIO}, which points at \
-                 the records rather than the estimates; estimates kept"
+                 task(s) lies outside {}-{MAX_APPLIED_RATIO} for {executor} work, which points at \
+                 the records rather than the estimates; estimates kept",
+                min_applied_ratio(executor)
             ),
         ),
         _ => (
@@ -185,10 +186,10 @@ fn factor(report: &CalibrationReport, executor: ActorKind, tasks: usize) -> Appl
     }
 }
 
-/// Whether a measured median is plausible enough to scale estimates by; a median near 0 would
-/// collapse the forecast to nothing, which no honest record supports.
-fn in_band(median: f64) -> bool {
-    median.is_finite() && (MIN_APPLIED_RATIO..=MAX_APPLIED_RATIO).contains(&median)
+/// Whether a measured median is plausible enough to scale an executor kind's estimates by; a
+/// median near 0 would collapse the forecast to nothing, which no honest record supports.
+fn in_band(median: f64, executor: ActorKind) -> bool {
+    median.is_finite() && (min_applied_ratio(executor)..=MAX_APPLIED_RATIO).contains(&median)
 }
 
 fn review_delay(plan: &Plan, report: &CalibrationReport) -> AppliedReviewDelay {

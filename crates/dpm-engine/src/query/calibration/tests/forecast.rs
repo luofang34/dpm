@@ -33,22 +33,42 @@ fn a_median_outside_the_band_is_reported_but_never_applied() {
 }
 
 #[test]
-fn the_band_edges_are_applied() {
-    for median in [MIN_APPLIED_RATIO, MAX_APPLIED_RATIO] {
+fn the_band_edges_are_applied_per_executor_kind() {
+    for median in [
+        MIN_AGENT_APPLIED_RATIO,
+        MIN_APPLIED_RATIO,
+        MAX_APPLIED_RATIO,
+    ] {
         let (log, report) = with_median(median);
         let calibrated = status_calibrated(&log.plan, false, at(50.0), &report).expect("status");
-        let applied = calibrated.calibration.expect("calibration");
-        let agent = applied.factors.first().expect("factor");
-        assert!(agent.applied, "{median}");
-        close(agent.factor, median);
+        for factor in calibrated.calibration.expect("calibration").factors {
+            let floor = min_applied_ratio(factor.executor);
+            assert_eq!(
+                factor.applied,
+                median >= floor,
+                "{median} {:?}",
+                factor.executor
+            );
+            if !factor.applied {
+                assert!(factor.reason.contains("outside"), "{}", factor.reason);
+            }
+        }
     }
+    assert_eq!(min_applied_ratio(ActorKind::Human), MIN_APPLIED_RATIO);
+    assert_eq!(min_applied_ratio(ActorKind::Service), MIN_APPLIED_RATIO);
+    assert_eq!(min_applied_ratio(ActorKind::Agent), MIN_AGENT_APPLIED_RATIO);
     let report = Log::scenario().report(50.0);
     assert_eq!(
         (
             report.rules.min_applied_ratio,
+            report.rules.min_agent_applied_ratio,
             report.rules.max_applied_ratio
         ),
-        (MIN_APPLIED_RATIO, MAX_APPLIED_RATIO)
+        (
+            MIN_APPLIED_RATIO,
+            MIN_AGENT_APPLIED_RATIO,
+            MAX_APPLIED_RATIO
+        )
     );
 }
 

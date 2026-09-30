@@ -30,11 +30,23 @@ pub const BULK_WINDOW_SECONDS: i64 = 180;
 /// the whole interval fell outside the task's working hours.
 pub const MIN_ACTUAL_SECONDS: i64 = 60;
 
-/// Smallest group median a calibrated forecast applies; anything lower says the records, not the
-/// estimates, are wrong. Agents finishing human-scale estimates routinely measure 0.01-0.1, so
-/// the floor sits below that range; near-zero samples are already excluded by
-/// [`MIN_ACTUAL_SECONDS`].
-pub const MIN_APPLIED_RATIO: f64 = 0.005;
+/// Smallest group median a calibrated forecast applies to people and services; lower says the
+/// records, such as times typed in afterwards, not the estimates, are wrong.
+pub const MIN_APPLIED_RATIO: f64 = 0.05;
+
+/// Smallest group median a calibrated forecast applies to agents. Agents finishing human-scale
+/// estimates routinely measure 0.01-0.1, so their floor sits below that range; near-zero samples
+/// are already excluded by [`MIN_ACTUAL_SECONDS`].
+pub const MIN_AGENT_APPLIED_RATIO: f64 = 0.005;
+
+/// Smallest group median a calibrated forecast applies to an executor kind.
+#[must_use]
+pub fn min_applied_ratio(executor: dpm_model::ActorKind) -> f64 {
+    match executor {
+        dpm_model::ActorKind::Agent => MIN_AGENT_APPLIED_RATIO,
+        dpm_model::ActorKind::Human | dpm_model::ActorKind::Service => MIN_APPLIED_RATIO,
+    }
+}
 
 /// Largest group median a calibrated forecast applies.
 pub const MAX_APPLIED_RATIO: f64 = 50.0;
@@ -72,8 +84,10 @@ pub struct CalibrationRules {
     pub bulk_window_seconds: i64,
     /// Samples with less actual time than this are excluded as `no_working_time`.
     pub min_actual_seconds: i64,
-    /// Smallest group median a calibrated forecast applies.
+    /// Smallest group median a calibrated forecast applies to people and services.
     pub min_applied_ratio: f64,
+    /// Smallest group median a calibrated forecast applies to agents.
+    pub min_agent_applied_ratio: f64,
     /// Largest group median a calibrated forecast applies.
     pub max_applied_ratio: f64,
     /// Reviews recorded within this many seconds of their submission are not waits.
@@ -258,6 +272,7 @@ pub fn calibration(
             bulk_window_seconds: BULK_WINDOW_SECONDS,
             min_actual_seconds: MIN_ACTUAL_SECONDS,
             min_applied_ratio: MIN_APPLIED_RATIO,
+            min_agent_applied_ratio: MIN_AGENT_APPLIED_RATIO,
             max_applied_ratio: MAX_APPLIED_RATIO,
             review_floor_seconds: REVIEW_FLOOR_SECONDS,
             actual_hours: if plan.calendars.is_some() {
