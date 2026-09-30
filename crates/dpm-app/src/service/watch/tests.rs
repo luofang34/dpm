@@ -64,6 +64,7 @@ fn every_commit_is_reported_once_and_nothing_else_is() {
         operation_id: None,
         command: Command::Start {
             work: app.work_id_blocking("TEST-A").expect("work"),
+            occurred_at: None,
         },
         ..request
     })

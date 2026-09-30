@@ -73,14 +73,19 @@ fn portable_nested_workspace_keeps_cross_repository_execution_and_history() {
     assert_eq!(app.plan_blocking().expect("read only queries"), portable);
     for command in [
         Command::Claim { work: a },
-        Command::Start { work: a },
+        Command::Start {
+            work: a,
+            occurred_at: None,
+        },
         Command::Submit {
             work: a,
             note: None,
+            occurred_at: None,
         },
         Command::Verify {
             work: a,
             note: None,
+            occurred_at: None,
         },
     ] {
         let actor = if matches!(command, Command::Verify { .. }) {

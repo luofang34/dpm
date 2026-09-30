@@ -216,7 +216,13 @@ fn context_steps(a: WorkItemId, added: WorkItemId, gate: dpm_model::DecisionId) 
 fn execution_steps(a: WorkItemId, b: WorkItemId) -> Vec<Step> {
     let work = a;
     vec![
-        (finisher(), Command::Start { work }),
+        (
+            finisher(),
+            Command::Start {
+                work,
+                occurred_at: None,
+            },
+        ),
         (
             finisher(),
             Command::ReportProgress {
@@ -240,9 +246,22 @@ fn execution_steps(a: WorkItemId, b: WorkItemId) -> Vec<Step> {
                 artifact: evidence(),
             },
         ),
-        (finisher(), Command::Submit { work, note: None }),
+        (
+            finisher(),
+            Command::Submit {
+                work,
+                note: None,
+                occurred_at: None,
+            },
+        ),
         (successor(), Command::Claim { work: b }),
-        (successor(), Command::Start { work: b }),
+        (
+            successor(),
+            Command::Start {
+                work: b,
+                occurred_at: None,
+            },
+        ),
         (
             reviewer(),
             Command::Reject {
@@ -273,6 +292,7 @@ fn review_steps(
             Command::Submit {
                 work: a,
                 note: None,
+                occurred_at: None,
             },
         ),
         (reviewer(), revalidate),
@@ -295,6 +315,7 @@ fn review_steps(
             Command::Verify {
                 work: a,
                 note: None,
+                occurred_at: None,
             },
         ),
     ]
@@ -452,4 +473,5 @@ fn a_missing_genesis_fails_verification() {
     ));
 }
 
+mod occurrence;
 mod precision;

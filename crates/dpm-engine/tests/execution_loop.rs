@@ -109,7 +109,10 @@ fn complete_input(plan: &mut Plan, input: dpm_model::WorkItemId) {
     apply_command(
         plan,
         agent.clone(),
-        Command::Start { work: input },
+        Command::Start {
+            work: input,
+            occurred_at: None,
+        },
         Utc::now(),
         dpm_model::OperationId::new(),
     )
@@ -120,6 +123,7 @@ fn complete_input(plan: &mut Plan, input: dpm_model::WorkItemId) {
         Command::Submit {
             work: input,
             note: Some("input documented".into()),
+            occurred_at: None,
         },
         Utc::now(),
         dpm_model::OperationId::new(),
@@ -131,6 +135,7 @@ fn complete_input(plan: &mut Plan, input: dpm_model::WorkItemId) {
         Command::Verify {
             work: input,
             note: Some("criteria checked".into()),
+            occurred_at: None,
         },
         Utc::now(),
         dpm_model::OperationId::new(),

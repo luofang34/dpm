@@ -163,20 +163,38 @@ fn excluded_in_flight() -> (Plan, DecisionId) {
     run(&mut plan, reviewer(), decide, t(0));
     let design = id(&plan, "SUP-DESIGN");
     run(&mut plan, owner(), Command::Claim { work: design }, t(0));
-    run(&mut plan, owner(), Command::Start { work: design }, t(0));
+    run(
+        &mut plan,
+        owner(),
+        Command::Start {
+            work: design,
+            occurred_at: None,
+        },
+        t(0),
+    );
     let submit = Command::Submit {
         work: design,
         note: None,
+        occurred_at: None,
     };
     run(&mut plan, owner(), submit, t(0));
     let verify = Command::Verify {
         work: design,
         note: None,
+        occurred_at: None,
     };
     run(&mut plan, reviewer(), verify, t(1));
     let quote = id(&plan, "SUP-A-QUOTE");
     run(&mut plan, owner(), Command::Claim { work: quote }, t(2));
-    run(&mut plan, owner(), Command::Start { work: quote }, t(2));
+    run(
+        &mut plan,
+        owner(),
+        Command::Start {
+            work: quote,
+            occurred_at: None,
+        },
+        t(2),
+    );
     let proposal = replace(&plan, supplier, "B");
     let replacement = *proposal
         .decisions

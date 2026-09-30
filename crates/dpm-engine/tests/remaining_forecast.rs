@@ -26,7 +26,13 @@ fn started_pair(kind: DependencyKind, lag: f64) -> (Plan, WorkItemId, WorkItemId
     plan.risks.clear();
     plan.dependencies = vec![Dependency::new(a, b, kind, lag)];
     let owner = ActorId::agent("author");
-    for command in [Command::Claim { work: a }, Command::Start { work: a }] {
+    for command in [
+        Command::Claim { work: a },
+        Command::Start {
+            work: a,
+            occurred_at: None,
+        },
+    ] {
         apply_command(
             &mut plan,
             owner.clone(),
@@ -67,6 +73,7 @@ fn a_provisional_start_stays_a_conservative_forecast_until_verification() {
     let submit = Command::Submit {
         work: a,
         note: None,
+        occurred_at: None,
     };
     apply_command(
         &mut plan,

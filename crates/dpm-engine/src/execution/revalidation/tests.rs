@@ -93,11 +93,25 @@ fn revalidate(work: WorkItemId, dependency: DependencyId, attempt: u32) -> Comma
     }
 }
 
+fn begin(work: WorkItemId) -> Command {
+    Command::Start {
+        work,
+        occurred_at: None,
+    }
+}
 fn submit(work: WorkItemId) -> Command {
-    Command::Submit { work, note: None }
+    Command::Submit {
+        work,
+        note: None,
+        occurred_at: None,
+    }
 }
 fn verify(work: WorkItemId) -> Command {
-    Command::Verify { work, note: None }
+    Command::Verify {
+        work,
+        note: None,
+        occurred_at: None,
+    }
 }
 fn reject(work: WorkItemId) -> Command {
     Command::Reject {
@@ -168,7 +182,7 @@ fn agree(plan: &Plan, hour: i64) -> Vec<UnmetGate> {
 fn started_on_first_attempt(p: &mut Pair) {
     let (a, b) = (p.a, p.b);
     ok(&mut p.plan, &author(), Command::Claim { work: a }, 0);
-    ok(&mut p.plan, &author(), Command::Start { work: a }, 0);
+    ok(&mut p.plan, &author(), begin(a), 0);
     ok(&mut p.plan, &author(), submit(a), 1);
     let claim = gate_report(&p.plan, b, Transition::Claim, t(2)).expect("claim");
     assert!(claim.ready);
@@ -181,7 +195,7 @@ fn started_on_first_attempt(p: &mut Pair) {
         [1]
     );
     ok(&mut p.plan, &builder(), Command::Claim { work: b }, 2);
-    ok(&mut p.plan, &builder(), Command::Start { work: b }, 3);
+    ok(&mut p.plan, &builder(), begin(b), 3);
     let recorded = &p.plan.work_items[&b].execution.basis;
     assert_eq!(recorded.len(), 1);
     assert_eq!(
@@ -379,7 +393,7 @@ fn provisional_lag_elapses_from_the_attempt_and_a_verified_basis_needs_no_review
     let mut p = provisional(2.0, DependencyPolicy::Hard);
     let (a, b) = (p.a, p.b);
     ok(&mut p.plan, &author(), Command::Claim { work: a }, 0);
-    ok(&mut p.plan, &author(), Command::Start { work: a }, 0);
+    ok(&mut p.plan, &author(), begin(a), 0);
     let awaiting = gate_report(&p.plan, b, Transition::Claim, t(1)).expect("report");
     assert!(awaiting.reasons()[0].contains("pending submission attempt"));
     ok(&mut p.plan, &author(), submit(a), 1);
@@ -389,7 +403,7 @@ fn provisional_lag_elapses_from_the_attempt_and_a_verified_basis_needs_no_review
         "{error:?}"
     );
     ok(&mut p.plan, &builder(), Command::Claim { work: b }, 3);
-    ok(&mut p.plan, &builder(), Command::Start { work: b }, 3);
+    ok(&mut p.plan, &builder(), begin(b), 3);
     ok(&mut p.plan, &reviewer(), verify(a), 4);
     let [status] = basis_status(&p.plan, &p.plan.work_items[&b])
         .try_into()
@@ -403,7 +417,7 @@ fn verifying_the_attempt_never_delays_an_elapsing_provisional_start() {
     let mut p = provisional(24.0, DependencyPolicy::Hard);
     let (a, b) = (p.a, p.b);
     ok(&mut p.plan, &author(), Command::Claim { work: a }, 0);
-    ok(&mut p.plan, &author(), Command::Start { work: a }, 0);
+    ok(&mut p.plan, &author(), begin(a), 0);
     ok(&mut p.plan, &author(), submit(a), 1);
     ok(&mut p.plan, &reviewer(), verify(a), 5);
     let report = gate_report(&p.plan, b, Transition::Claim, t(24)).expect("report");
@@ -415,7 +429,7 @@ fn verifying_the_attempt_never_delays_an_elapsing_provisional_start() {
     let open = gate_report(&p.plan, b, Transition::Claim, t(25)).expect("report");
     assert!(open.ready && open.provisional.is_empty(), "{open:?}");
     ok(&mut p.plan, &builder(), Command::Claim { work: b }, 25);
-    ok(&mut p.plan, &builder(), Command::Start { work: b }, 25);
+    ok(&mut p.plan, &builder(), begin(b), 25);
     assert!(
         p.plan.work_items[&b].execution.basis.is_empty(),
         "a verified attempt is not a provisional basis"
@@ -428,10 +442,10 @@ fn revalidation_is_an_independent_human_or_service_review() {
     let (a, b) = (p.a, p.b);
     let (owner_a, owner_b) = (ActorId::human("alice"), ActorId::human("bob"));
     ok(&mut p.plan, &owner_a, Command::Claim { work: a }, 0);
-    ok(&mut p.plan, &owner_a, Command::Start { work: a }, 0);
+    ok(&mut p.plan, &owner_a, begin(a), 0);
     ok(&mut p.plan, &owner_a, submit(a), 1);
     ok(&mut p.plan, &owner_b, Command::Claim { work: b }, 2);
-    ok(&mut p.plan, &owner_b, Command::Start { work: b }, 2);
+    ok(&mut p.plan, &owner_b, begin(b), 2);
     ok(&mut p.plan, &reviewer(), reject(a), 3);
     ok(&mut p.plan, &owner_a, submit(a), 4);
     for actor in [owner_a, owner_b, ActorId::agent("helper")] {

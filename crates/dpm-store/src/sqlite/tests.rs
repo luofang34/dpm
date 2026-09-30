@@ -133,7 +133,10 @@ fn forged_snapshots_and_duplicate_operation_ids_are_atomic_failures() {
     let mut second = apply_command(
         &mut plan,
         ActorId::agent("owner"),
-        Command::Start { work },
+        Command::Start {
+            work,
+            occurred_at: None,
+        },
         Utc::now(),
         dpm_model::OperationId::new(),
     )

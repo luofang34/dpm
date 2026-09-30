@@ -57,10 +57,13 @@ pub enum Command {
         /// Non-empty explanation of the change of executor.
         reason: String,
     },
-    /// Begin executing a claimed task, recording its start event at the operation time.
+    /// Begin executing a claimed task, recording its start event.
     Start {
         /// Claimed task owned by the caller.
         work: WorkItemId,
+        /// When execution actually began, if before the commit; absent means the commit time.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        occurred_at: Option<DateTime<Utc>>,
     },
     /// Suspend a task while preserving any existing owner.
     Block {
@@ -89,6 +92,10 @@ pub enum Command {
         work: WorkItemId,
         /// Optional evidence summary.
         note: Option<String>,
+        /// When the result was actually submitted, if before the commit; absent means the
+        /// commit time.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        occurred_at: Option<DateTime<Utc>>,
     },
     /// Accept a submitted result as a different actor.
     Verify {
@@ -96,6 +103,10 @@ pub enum Command {
         work: WorkItemId,
         /// Optional verification evidence.
         note: Option<String>,
+        /// When the result was actually verified, if before the commit; absent means the
+        /// commit time.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        occurred_at: Option<DateTime<Utc>>,
     },
     /// Attach new evidence without replacing an existing artifact.
     AttachArtifact {
@@ -258,6 +269,38 @@ pub enum EngineError {
         transition: crate::Transition,
         /// The same structured conditions the gate report returns for this transition.
         unmet: Vec<crate::UnmetGate>,
+    },
+    /// A supplied occurrence time lies after the time the operation commits.
+    #[error(
+        "work item {key} cannot record its {transition} at {occurred_at}: that is after the operation commits at {committed_at}"
+    )]
+    OccurrenceInFuture {
+        /// Affected work.
+        work: WorkItemId,
+        /// Human key of the affected work.
+        key: Key,
+        /// Transition whose event time was supplied.
+        transition: crate::Transition,
+        /// Supplied occurrence time.
+        occurred_at: DateTime<Utc>,
+        /// Commit time of the operation.
+        committed_at: DateTime<Utc>,
+    },
+    /// A supplied occurrence time precedes the latest time already recorded for the task.
+    #[error(
+        "work item {key} cannot record its {transition} at {occurred_at}: that is before its previous recorded event at {previous_at}"
+    )]
+    OccurrenceBeforePrevious {
+        /// Affected work.
+        work: WorkItemId,
+        /// Human key of the affected work.
+        key: Key,
+        /// Transition whose event time was supplied.
+        transition: crate::Transition,
+        /// Supplied occurrence time.
+        occurred_at: DateTime<Utc>,
+        /// Latest time already recorded in the task's execution history.
+        previous_at: DateTime<Utc>,
     },
     /// Progress and submission follow an explicit start; a claim only reserves work.
     #[error("work item {0} has not started; start it before reporting progress or submitting")]

@@ -90,8 +90,8 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
     let at = Utc::now();
     for command in [
         Command::Claim { work },
-        Command::Start { work },
-        Command::Submit { work, note: None },
+        start_command(work),
+        submit_command(work),
     ] {
         apply_command(
             &mut plan,
@@ -145,7 +145,7 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
     apply_command(
         &mut plan,
         owner,
-        Command::Submit { work, note: None },
+        submit_command(work),
         at,
         dpm_model::OperationId::new(),
     )
@@ -153,10 +153,33 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
     apply_command(
         &mut plan,
         reviewer,
-        Command::Verify { work, note: None },
+        verify_command(work),
         at,
         dpm_model::OperationId::new(),
     )
     .expect("verify");
     assert!(plan.work_items[&work].execution.last_rejection.is_some());
+}
+
+fn start_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Start {
+        work,
+        occurred_at: None,
+    }
+}
+
+fn submit_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Submit {
+        work,
+        note: None,
+        occurred_at: None,
+    }
+}
+
+fn verify_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Verify {
+        work,
+        note: None,
+        occurred_at: None,
+    }
 }

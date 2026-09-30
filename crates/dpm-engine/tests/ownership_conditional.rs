@@ -67,21 +67,39 @@ fn excluded_quote(started: bool) -> (Plan, WorkItemId) {
     run(&mut plan, &lead(), decide, 1);
     let design = id(&plan, "SUP-DESIGN");
     run(&mut plan, &worker(), Command::Claim { work: design }, 2);
-    run(&mut plan, &worker(), Command::Start { work: design }, 2);
+    run(
+        &mut plan,
+        &worker(),
+        Command::Start {
+            work: design,
+            occurred_at: None,
+        },
+        2,
+    );
     let submit = Command::Submit {
         work: design,
         note: None,
+        occurred_at: None,
     };
     run(&mut plan, &worker(), submit, 2);
     let verify = Command::Verify {
         work: design,
         note: None,
+        occurred_at: None,
     };
     run(&mut plan, &lead(), verify, 2);
     let quote = id(&plan, "SUP-A-QUOTE");
     run(&mut plan, &worker(), Command::Claim { work: quote }, 3);
     if started {
-        run(&mut plan, &worker(), Command::Start { work: quote }, 3);
+        run(
+            &mut plan,
+            &worker(),
+            Command::Start {
+                work: quote,
+                occurred_at: None,
+            },
+            3,
+        );
     }
     let change =
         dpm_engine::plan_change(&plan, &switch_to_b(&plan, supplier), "Supplier A withdrew")
@@ -158,6 +176,7 @@ fn excluded_started_work_changes_hands_but_still_takes_no_transition() {
     let submit = Command::Submit {
         work: quote,
         note: None,
+        occurred_at: None,
     };
     let EngineError::NotReady { unmet, .. } = refused(&mut plan, &other, submit, 6) else {
         panic!("excluded work must stay gated");

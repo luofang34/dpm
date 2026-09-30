@@ -30,7 +30,13 @@ fn an_imported_hard_float_replays_after_lifecycle_commands() {
     let mut r = Recorder::with_plan(dir.path(), &with_lag("1.929842284342272e-18"));
     let a = r.id("TEST-A");
     r.run(lead(), Command::Claim { work: a });
-    r.run(lead(), Command::Start { work: a });
+    r.run(
+        lead(),
+        Command::Start {
+            work: a,
+            occurred_at: None,
+        },
+    );
     let lag = r.plan().dependencies[0].lag_hours;
     assert_eq!(lag.to_bits(), HARD_LAG.to_bits());
 }

@@ -260,7 +260,13 @@ fn plan_changes_cannot_author_or_rewrite_event_times() {
     let task = plan.find_work_by_key("TEST-A").expect("task").id;
     let gate = plan.find_decision_by_key("TEST-GATE").expect("gate").id;
     let worker = ActorId::agent("worker");
-    for command in [Command::Claim { work: task }, Command::Start { work: task }] {
+    for command in [
+        Command::Claim { work: task },
+        Command::Start {
+            work: task,
+            occurred_at: None,
+        },
+    ] {
         apply_command(
             &mut plan,
             worker.clone(),

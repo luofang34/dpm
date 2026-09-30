@@ -178,21 +178,9 @@ fn proposals_cannot_record_or_remove_waivers_or_change_started_prerequisites() {
     let gate = plan.find_decision_by_key("TEST-GATE").expect("gate").id;
     for (actor, command) in [
         (ActorId::agent("w"), Command::Claim { work: a }),
-        (ActorId::agent("w"), Command::Start { work: a }),
-        (
-            ActorId::agent("w"),
-            Command::Submit {
-                work: a,
-                note: None,
-            },
-        ),
-        (
-            ActorId::human("r"),
-            Command::Verify {
-                work: a,
-                note: None,
-            },
-        ),
+        (ActorId::agent("w"), start_command(a)),
+        (ActorId::agent("w"), submit_command(a)),
+        (ActorId::human("r"), verify_command(a)),
         (
             ActorId::human("r"),
             Command::Decide {
@@ -315,4 +303,27 @@ fn a_waiver_never_moves_with_an_edited_or_removed_edge() {
     let mut retargeted = plan.clone();
     edge_mut(&mut retargeted, ss).lag_hours = 40.0;
     apply(&mut plan, retargeted).expect("unwaived edges are edited through review");
+}
+
+fn start_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Start {
+        work,
+        occurred_at: None,
+    }
+}
+
+fn submit_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Submit {
+        work,
+        note: None,
+        occurred_at: None,
+    }
+}
+
+fn verify_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Verify {
+        work,
+        note: None,
+        occurred_at: None,
+    }
 }

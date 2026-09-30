@@ -69,12 +69,19 @@ fn nested_packages_complete_from_children_without_persisting_completion() {
     plan.work_items.get_mut(&parent).expect("package").parent = Some(outer_id);
     for (actor, command) in [
         ("worker", Command::Claim { work: task }),
-        ("worker", Command::Start { work: task }),
+        (
+            "worker",
+            Command::Start {
+                work: task,
+                occurred_at: None,
+            },
+        ),
         (
             "worker",
             Command::Submit {
                 work: task,
                 note: None,
+                occurred_at: None,
             },
         ),
         (
@@ -82,6 +89,7 @@ fn nested_packages_complete_from_children_without_persisting_completion() {
             Command::Verify {
                 work: task,
                 note: None,
+                occurred_at: None,
             },
         ),
     ] {
@@ -200,12 +208,20 @@ fn gated_milestone() -> (Plan, [WorkItemId; 3], dpm_model::DecisionId) {
     let (worker, reviewer) = (ActorId::agent("worker"), ActorId::human("reviewer"));
     for (actor, command, hour) in [
         (&worker, Command::Claim { work: a }, 0),
-        (&worker, Command::Start { work: a }, 0),
+        (
+            &worker,
+            Command::Start {
+                work: a,
+                occurred_at: None,
+            },
+            0,
+        ),
         (
             &worker,
             Command::Submit {
                 work: a,
                 note: None,
+                occurred_at: None,
             },
             1,
         ),
@@ -214,6 +230,7 @@ fn gated_milestone() -> (Plan, [WorkItemId; 3], dpm_model::DecisionId) {
             Command::Verify {
                 work: a,
                 note: None,
+                occurred_at: None,
             },
             2,
         ),

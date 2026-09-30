@@ -44,9 +44,35 @@ fn lead() -> ActorId {
 fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
     let work = id(plan, key);
     run(plan, &worker(), Command::Claim { work }, at);
-    run(plan, &worker(), Command::Start { work }, at);
-    run(plan, &worker(), Command::Submit { work, note: None }, at);
-    run(plan, &lead(), Command::Verify { work, note: None }, at);
+    run(
+        plan,
+        &worker(),
+        Command::Start {
+            work,
+            occurred_at: None,
+        },
+        at,
+    );
+    run(
+        plan,
+        &worker(),
+        Command::Submit {
+            work,
+            note: None,
+            occurred_at: None,
+        },
+        at,
+    );
+    run(
+        plan,
+        &lead(),
+        Command::Verify {
+            work,
+            note: None,
+            occurred_at: None,
+        },
+        at,
+    );
 }
 
 /// Supplier A is chosen at +1h and its quote is started at +3h; the lead switches to B at +4h.
@@ -71,7 +97,15 @@ fn switched_under_started_work() -> (Plan, DecisionId) {
     complete(&mut plan, "SUP-DESIGN", t(2));
     let quote = id(&plan, "SUP-A-QUOTE");
     run(&mut plan, &worker(), Command::Claim { work: quote }, t(3));
-    run(&mut plan, &worker(), Command::Start { work: quote }, t(3));
+    run(
+        &mut plan,
+        &worker(),
+        Command::Start {
+            work: quote,
+            occurred_at: None,
+        },
+        t(3),
+    );
     let proposed = switch_to_b(&plan, supplier);
     let replacement_id = *proposed
         .decisions

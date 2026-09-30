@@ -85,16 +85,29 @@ fn detail_shows_the_rejected_basis_and_affected_successor_from_the_shared_report
     };
     let steps = [
         (ActorId::agent("author"), Command::Claim { work: a }),
-        (ActorId::agent("author"), Command::Start { work: a }),
+        (
+            ActorId::agent("author"),
+            Command::Start {
+                work: a,
+                occurred_at: None,
+            },
+        ),
         (
             ActorId::agent("author"),
             Command::Submit {
                 work: a,
                 note: None,
+                occurred_at: None,
             },
         ),
         (ActorId::agent("builder"), Command::Claim { work: b }),
-        (ActorId::agent("builder"), Command::Start { work: b }),
+        (
+            ActorId::agent("builder"),
+            Command::Start {
+                work: b,
+                occurred_at: None,
+            },
+        ),
         (
             ActorId::human("reviewer"),
             Command::Reject {

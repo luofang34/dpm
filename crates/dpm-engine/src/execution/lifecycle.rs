@@ -1,6 +1,9 @@
 //! Task lifecycle commands. Each relation-gated transition asks the shared gate evaluator at the
-//! operation's own timestamp and records that timestamp as the transition's event.
+//! time its event occurred and records that time as the transition's event. Start, submit and
+//! verify may name an earlier occurrence time; otherwise the event occurs at the operation's own
+//! timestamp.
 
+use super::occurrence;
 use super::{nonempty, owns, task_mut};
 use crate::{EngineError, GateReport, Transition, gates};
 use chrono::{DateTime, Utc};
@@ -77,9 +80,11 @@ pub(super) fn start(
     plan: &mut Plan,
     actor: &ActorId,
     work: WorkItemId,
-    at: DateTime<Utc>,
+    occurred_at: Option<DateTime<Utc>>,
+    committed_at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     require_status(plan, actor, work, WorkStatus::Claimed)?;
+    let at = occurrence::resolve(plan, work, Transition::Start, occurred_at, committed_at)?;
     let report = permit(plan, work, Transition::Start, at)?;
     let item = task_mut(plan, work)?;
     item.execution.status = WorkStatus::InProgress;
@@ -187,9 +192,11 @@ pub(super) fn submit(
     plan: &mut Plan,
     actor: &ActorId,
     work: WorkItemId,
-    at: DateTime<Utc>,
+    occurred_at: Option<DateTime<Utc>>,
+    committed_at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     require_status(plan, actor, work, WorkStatus::InProgress)?;
+    let at = occurrence::resolve(plan, work, Transition::Submit, occurred_at, committed_at)?;
     permit(plan, work, Transition::Submit, at)?;
     let item = task_mut(plan, work)?;
     item.execution.status = WorkStatus::Submitted;
@@ -211,7 +218,8 @@ pub(super) fn verify(
     plan: &mut Plan,
     actor: &ActorId,
     work: WorkItemId,
-    at: DateTime<Utc>,
+    occurred_at: Option<DateTime<Utc>>,
+    committed_at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     let item = task_mut(plan, work)?;
     if item.execution.status != WorkStatus::Submitted {
@@ -227,6 +235,7 @@ pub(super) fn verify(
         });
     }
     super::refuse_evidence_author(plan, actor, work, "verify work whose evidence it authored")?;
+    let at = occurrence::resolve(plan, work, Transition::Verify, occurred_at, committed_at)?;
     permit(plan, work, Transition::Verify, at)?;
     let item = task_mut(plan, work)?;
     item.execution.status = WorkStatus::Verified;

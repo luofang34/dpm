@@ -38,3 +38,39 @@ pub struct ExecutionRecord {
     /// Non-empty reason while the task is blocked.
     pub block_reason: Option<String>,
 }
+
+impl ExecutionRecord {
+    /// Latest time carried by any lifecycle, ownership, review or basis record of this execution.
+    ///
+    /// A claim records no time of its own, so an unstarted first claim contributes nothing; a
+    /// backfilled event must still not precede anything the task's history already orders.
+    #[must_use]
+    pub fn latest_recorded_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        let events = [
+            self.events.started_at,
+            self.events.submitted_at,
+            self.events.verified_at,
+            self.last_rejection.as_ref().map(|r| r.at),
+        ];
+        let reviews = self.attempts.iter().flat_map(|a| {
+            let closed = match &a.outcome {
+                AttemptOutcome::Pending => None,
+                AttemptOutcome::Rejected { at, .. } | AttemptOutcome::Verified { at, .. } => {
+                    Some(*at)
+                }
+            };
+            [Some(a.submitted_at), closed]
+        });
+        events
+            .into_iter()
+            .chain(reviews)
+            .flatten()
+            .chain(self.handoffs.iter().map(|h| h.at))
+            .chain(self.releases.iter().map(|r| r.at))
+            .chain(self.basis.iter().map(|b| b.recorded_at))
+            .max()
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -28,9 +28,32 @@ fn apply(plan: &mut Plan, actor: &str, command: Command) -> Operation {
 
 fn finish(plan: &mut Plan, work: WorkItemId) {
     apply(plan, "owner", Command::Claim { work });
-    apply(plan, "owner", Command::Start { work });
-    apply(plan, "owner", Command::Submit { work, note: None });
-    apply(plan, "reviewer", Command::Verify { work, note: None });
+    apply(
+        plan,
+        "owner",
+        Command::Start {
+            work,
+            occurred_at: None,
+        },
+    );
+    apply(
+        plan,
+        "owner",
+        Command::Submit {
+            work,
+            note: None,
+            occurred_at: None,
+        },
+    );
+    apply(
+        plan,
+        "reviewer",
+        Command::Verify {
+            work,
+            note: None,
+            occurred_at: None,
+        },
+    );
 }
 
 #[test]
@@ -38,9 +61,20 @@ fn failed_commands_are_atomic_and_self_verification_is_rejected() {
     let mut plan = fixture();
     let work = task(&plan);
     apply(&mut plan, "owner", Command::Claim { work });
-    apply(&mut plan, "owner", Command::Start { work });
+    apply(
+        &mut plan,
+        "owner",
+        Command::Start {
+            work,
+            occurred_at: None,
+        },
+    );
     for command in [
-        Command::Submit { work, note: None },
+        Command::Submit {
+            work,
+            note: None,
+            occurred_at: None,
+        },
         Command::Block {
             work,
             reason: "blocked".into(),
@@ -59,20 +93,40 @@ fn failed_commands_are_atomic_and_self_verification_is_rejected() {
         );
         assert_eq!(plan, before);
     }
-    apply(&mut plan, "owner", Command::Submit { work, note: None });
+    apply(
+        &mut plan,
+        "owner",
+        Command::Submit {
+            work,
+            note: None,
+            occurred_at: None,
+        },
+    );
     let before = plan.clone();
     assert!(matches!(
         apply_command(
             &mut plan,
             ActorId::agent("owner"),
-            Command::Verify { work, note: None },
+            Command::Verify {
+                work,
+                note: None,
+                occurred_at: None
+            },
             Utc::now(),
             dpm_model::OperationId::new()
         ),
         Err(EngineError::SelfVerification(_))
     ));
     assert_eq!(plan, before);
-    apply(&mut plan, "reviewer", Command::Verify { work, note: None });
+    apply(
+        &mut plan,
+        "reviewer",
+        Command::Verify {
+            work,
+            note: None,
+            occurred_at: None,
+        },
+    );
     assert!(completion(&plan, chrono::Utc::now()).contains(&work));
 }
 
@@ -299,7 +353,13 @@ fn execution_commands(work: WorkItemId) -> Vec<(ActorId, Command)> {
     let reviewer = ActorId::human("reviewer");
     vec![
         (agent.clone(), Command::Claim { work }),
-        (agent.clone(), Command::Start { work }),
+        (
+            agent.clone(),
+            Command::Start {
+                work,
+                occurred_at: None,
+            },
+        ),
         (
             agent.clone(),
             Command::Block {
@@ -316,8 +376,22 @@ fn execution_commands(work: WorkItemId) -> Vec<(ActorId, Command)> {
                 note: None,
             },
         ),
-        (agent, Command::Submit { work, note: None }),
-        (reviewer.clone(), Command::Verify { work, note: None }),
+        (
+            agent,
+            Command::Submit {
+                work,
+                note: None,
+                occurred_at: None,
+            },
+        ),
+        (
+            reviewer.clone(),
+            Command::Verify {
+                work,
+                note: None,
+                occurred_at: None,
+            },
+        ),
         (
             reviewer.clone(),
             Command::Reject {

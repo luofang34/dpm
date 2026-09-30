@@ -44,20 +44,38 @@ fn switched_with_blocked_work() -> Plan {
     run(&mut plan, "lead", decide, 0);
     let design = id(&plan, "SUP-DESIGN");
     run(&mut plan, "worker", Command::Claim { work: design }, 0);
-    run(&mut plan, "worker", Command::Start { work: design }, 0);
+    run(
+        &mut plan,
+        "worker",
+        Command::Start {
+            work: design,
+            occurred_at: None,
+        },
+        0,
+    );
     let submit = Command::Submit {
         work: design,
         note: None,
+        occurred_at: None,
     };
     run(&mut plan, "worker", submit, 0);
     let verify = Command::Verify {
         work: design,
         note: None,
+        occurred_at: None,
     };
     run(&mut plan, "lead", verify, 1);
     let quote = id(&plan, "SUP-A-QUOTE");
     run(&mut plan, "worker", Command::Claim { work: quote }, 2);
-    run(&mut plan, "worker", Command::Start { work: quote }, 2);
+    run(
+        &mut plan,
+        "worker",
+        Command::Start {
+            work: quote,
+            occurred_at: None,
+        },
+        2,
+    );
     let block = Command::Block {
         work: quote,
         reason: "supplier A stopped answering".into(),
@@ -69,7 +87,15 @@ fn switched_with_blocked_work() -> Plan {
     run(&mut plan, "lead", change, 4);
     let b_quote = id(&plan, "SUP-B-QUOTE");
     run(&mut plan, "other", Command::Claim { work: b_quote }, 5);
-    run(&mut plan, "other", Command::Start { work: b_quote }, 5);
+    run(
+        &mut plan,
+        "other",
+        Command::Start {
+            work: b_quote,
+            occurred_at: None,
+        },
+        5,
+    );
     let block = Command::Block {
         work: b_quote,
         reason: "awaiting B's price list".into(),

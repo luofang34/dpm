@@ -240,13 +240,17 @@ fn out_of_scope_dependency_never_satisfies_in_scope_work() {
         ),
         (
             ActorId::agent("worker"),
-            Command::Start { work: predecessor },
+            Command::Start {
+                work: predecessor,
+                occurred_at: None,
+            },
         ),
         (
             ActorId::agent("worker"),
             Command::Submit {
                 work: predecessor,
                 note: None,
+                occurred_at: None,
             },
         ),
         (
@@ -254,6 +258,7 @@ fn out_of_scope_dependency_never_satisfies_in_scope_work() {
             Command::Verify {
                 work: predecessor,
                 note: None,
+                occurred_at: None,
             },
         ),
     ] {

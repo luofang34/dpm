@@ -49,8 +49,15 @@ fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
     let worker = ActorId::agent("worker");
     for command in [
         Command::Claim { work },
-        Command::Start { work },
-        Command::Submit { work, note: None },
+        Command::Start {
+            work,
+            occurred_at: None,
+        },
+        Command::Submit {
+            work,
+            note: None,
+            occurred_at: None,
+        },
     ] {
         apply_command(
             plan,
@@ -61,7 +68,11 @@ fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
         )
         .expect("execute");
     }
-    let verify = Command::Verify { work, note: None };
+    let verify = Command::Verify {
+        work,
+        note: None,
+        occurred_at: None,
+    };
     apply_command(
         plan,
         ActorId::human("lead"),

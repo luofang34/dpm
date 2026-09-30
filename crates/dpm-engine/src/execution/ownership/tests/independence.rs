@@ -56,6 +56,7 @@ fn rework_can_be_handed_to_the_reviewer_who_rejected_it_while_independent() {
         let verify = Command::Verify {
             work: a,
             note: None,
+            occurred_at: None,
         };
         assert!(not_allowed(&refused(
             &mut plan,
@@ -138,6 +139,7 @@ fn a_releaser_that_attached_evidence_cannot_verify_the_result() {
     let verify = Command::Verify {
         work: a,
         note: None,
+        occurred_at: None,
     };
     assert!(not_allowed(&refused(&mut plan, &releaser, verify, 4)));
     assert!(not_allowed(&refused(&mut plan, &releaser, reject(a), 4)));
@@ -164,6 +166,7 @@ fn a_releaser_that_attached_nothing_is_still_a_former_holder() {
     let verify = Command::Verify {
         work: a,
         note: None,
+        occurred_at: None,
     };
     assert!(not_allowed(&refused(&mut plan, &releaser, verify, 4)));
 }
@@ -190,6 +193,7 @@ fn an_evidence_author_is_not_an_independent_reviewer() {
     let verify = Command::Verify {
         work: a,
         note: None,
+        occurred_at: None,
     };
     assert!(not_allowed(&refused(
         &mut plan,
@@ -242,6 +246,7 @@ fn a_planning_source_author_may_still_review_the_task() {
     let verify = Command::Verify {
         work: a,
         note: None,
+        occurred_at: None,
     };
     ok(&mut plan, &author(), verify, 3);
 }

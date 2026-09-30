@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 mod cli;
 mod interchange;
+mod lifecycle;
 mod ownership;
 mod preconditions;
 mod validation;
@@ -164,7 +165,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 properties.insert("percent".into(),json!({"type":"integer","minimum":0,"maximum":100}));
                 properties.insert("note".into(),json!({"type":"string"})); required.push("percent");
             },
-            "submit_work"|"verify_work" => { properties.insert("note".into(),json!({"type":"string"})); },
+            "start_work"|"submit_work"|"verify_work" => lifecycle::schema(name, &mut properties),
             "attach_git_head" => { properties.insert("asset".into(),json!({"type":"string"})); },
             "add_artifact" => { properties.insert("artifact".into(),artifact_schema()); required.push("artifact"); },
             "link_external"|"unlink_external" => {
@@ -230,6 +231,7 @@ struct Arguments {
     observed: Option<ExternalState>,
     dependency: Option<String>,
     attempt: Option<u32>,
+    at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 fn default_true() -> bool {
@@ -363,6 +365,10 @@ fn mutation_blocking(
         return app.external_unlink_command_blocking(&key, &required(args.identity, "identity")?);
     }
     let work = app.work_id_blocking(&key)?;
+    if lifecycle::handles(name) {
+        return lifecycle::command(name, work, args.note, args.at)
+            .ok_or_else(|| AppError::InvalidRequest(format!("unknown tool {name}")));
+    }
     match name {
         "attach_git_head" => Ok(Command::AttachArtifact {
             work,
@@ -374,7 +380,6 @@ fn mutation_blocking(
             reason: required(args.reason, "reason")?,
         }),
         "claim_work" => Ok(Command::Claim { work }),
-        "start_work" => Ok(Command::Start { work }),
         "report_blocker" => Ok(Command::Block {
             work,
             reason: required(args.blocker, "blocker")?,
@@ -383,14 +388,6 @@ fn mutation_blocking(
         "report_progress" => Ok(Command::ReportProgress {
             work,
             percent: required(args.percent, "percent")?,
-            note: args.note,
-        }),
-        "submit_work" => Ok(Command::Submit {
-            work,
-            note: args.note,
-        }),
-        "verify_work" => Ok(Command::Verify {
-            work,
             note: args.note,
         }),
         "add_artifact" => Ok(Command::AttachArtifact {

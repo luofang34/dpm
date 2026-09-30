@@ -158,7 +158,8 @@ and displays its revision with the error; `r` retries.
 
 Only planned tasks can be claimed. A claim reserves work; `start` begins it and records the start
 event, and progress reports and submission require it. Submitted work requires a different actor to
-verify it. Blocking and resuming claimed work retains its owner, and started work resumes started. Nonempty capability filters are eligibility constraints.
+verify it. For work recorded after the fact, `start`, `submit` and `verify` take `--at RFC3339`, the
+time the event actually occurred; the operation keeps its own commit time. Blocking and resuming claimed work retains its owner, and started work resumes started. Nonempty capability filters are eligibility constraints.
 Decision gates on a work package also gate its descendants. Milestones complete when all their
 prerequisites complete; work packages complete when all children complete. These aggregate statuses
 are derived in `status`, `show`, `explain`, and the console, and never written into stored work state.

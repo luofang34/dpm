@@ -55,12 +55,28 @@ fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
     let work = id(plan, key);
     for command in [
         Command::Claim { work },
-        Command::Start { work },
-        Command::Submit { work, note: None },
+        Command::Start {
+            work,
+            occurred_at: None,
+        },
+        Command::Submit {
+            work,
+            note: None,
+            occurred_at: None,
+        },
     ] {
         run(plan, worker(), command, at);
     }
-    run(plan, lead(), Command::Verify { work, note: None }, at);
+    run(
+        plan,
+        lead(),
+        Command::Verify {
+            work,
+            note: None,
+            occurred_at: None,
+        },
+        at,
+    );
 }
 
 /// A refused command reports the applicability gate and changes nothing, not even the revision.
@@ -279,7 +295,15 @@ fn changing_a_choice_after_work_starts_requires_a_reviewed_change_and_keeps_the_
     complete(&mut plan, "SUP-DESIGN", t(2));
     let quote = id(&plan, "SUP-A-QUOTE");
     run(&mut plan, worker(), Command::Claim { work: quote }, t(3));
-    run(&mut plan, worker(), Command::Start { work: quote }, t(3));
+    run(
+        &mut plan,
+        worker(),
+        Command::Start {
+            work: quote,
+            occurred_at: None,
+        },
+        t(3),
+    );
     let decision = supplier(&plan);
     let again = apply_command(
         &mut plan.clone(),
@@ -329,6 +353,7 @@ fn changing_a_choice_after_work_starts_requires_a_reviewed_change_and_keeps_the_
         Command::Submit {
             work: quote,
             note: None,
+            occurred_at: None,
         },
     );
     assert!(

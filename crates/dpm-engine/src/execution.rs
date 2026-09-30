@@ -61,14 +61,18 @@ fn execute(
             },
             at,
         ),
-        Command::Start { work } => start(plan, actor, *work, at),
+        Command::Start { work, occurred_at } => start(plan, actor, *work, *occurred_at, at),
         Command::Block { work, reason } => block(plan, actor, *work, reason),
         Command::Unblock { work } => unblock(plan, actor, *work),
         Command::ReportProgress { work, percent, .. } => {
             report_progress(plan, actor, *work, *percent)
         }
-        Command::Submit { work, .. } => submit(plan, actor, *work, at),
-        Command::Verify { work, .. } => verify(plan, actor, *work, at),
+        Command::Submit {
+            work, occurred_at, ..
+        } => submit(plan, actor, *work, *occurred_at, at),
+        Command::Verify {
+            work, occurred_at, ..
+        } => verify(plan, actor, *work, *occurred_at, at),
         Command::AttachArtifact { work, artifact } => attach(plan, actor, *work, artifact),
         Command::LinkExternal(request) => tracking::link(plan, actor, request, at),
         Command::UnlinkExternal { work, reference } => tracking::unlink(plan, *work, *reference),
@@ -244,6 +248,7 @@ fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
 
 mod choice;
 mod lifecycle;
+mod occurrence;
 mod ownership;
 mod revalidation;
 mod review;

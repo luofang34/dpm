@@ -160,11 +160,20 @@ forecast and every lifecycle command read the same result for the same plan and 
 
 #### Execution events
 
-A claim reserves work; it is not a start. The lifecycle commands record their own operation
-timestamps as event facts on the task (`events.started_at`, `submitted_at`, `verified_at`), and
-`decide` records `Decision.resolved_at`, as does applying a reviewed replacement decision. No
-command accepts a caller-chosen event time, plan changes cannot add or rewrite these facts, and validation requires `started <= submitted <= verified`, so a
-command stamped before the event it follows is refused with no state change. Progress reports and
+A claim reserves work; it is not a start. The lifecycle commands record event facts on the task
+(`events.started_at`, `submitted_at`, `verified_at`), and `decide` records `Decision.resolved_at`,
+as does applying a reviewed replacement decision. An event occurs at the operation's own timestamp
+unless `start`, `submit` or `verify` names an earlier occurrence time (`occurred_at` in the
+command, CLI `--at`, tool argument `at`) for work recorded after the fact. The operation keeps its
+commit timestamp, so history holds both; the task's event, the gates evaluated for the transition,
+its submission attempt or review and any dependency basis it captures all use the occurrence
+time, so forecasts and calibration read honest times. An occurrence time after the commit
+(`OccurrenceInFuture`) or before the latest time already recorded for the task — its events,
+attempts and reviews, handoffs, releases or basis; a claim records none
+(`OccurrenceBeforePrevious`) — is refused with both times named. No other command accepts a
+caller-chosen event time, plan changes cannot add or rewrite these facts, and validation requires
+`started <= submitted <= verified`, so a command stamped before the event it follows is refused
+with no state change. Progress reports and
 submission require an explicit start. Unblocking started work returns it to `InProgress`; a rejection
 clears the rejected submission time. Work that started before start times were recorded has no
 `started_at`; blocking it sets `events.start_unrecorded`, so gates, progress reports and `unblock`

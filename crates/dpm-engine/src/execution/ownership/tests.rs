@@ -94,11 +94,22 @@ fn handoff(work: WorkItemId, from: ActorId, to: ActorId) -> Command {
 
 fn start(plan: &mut Plan, actor: &ActorId, work: WorkItemId, hour: i64) {
     ok(plan, actor, Command::Claim { work }, hour);
-    ok(plan, actor, Command::Start { work }, hour);
+    ok(plan, actor, begin(work), hour);
+}
+
+fn begin(work: WorkItemId) -> Command {
+    Command::Start {
+        work,
+        occurred_at: None,
+    }
 }
 
 fn submit(work: WorkItemId) -> Command {
-    Command::Submit { work, note: None }
+    Command::Submit {
+        work,
+        note: None,
+        occurred_at: None,
+    }
 }
 
 fn listed(plan: &Plan, work: WorkItemId, hour: i64) -> bool {
@@ -177,7 +188,7 @@ fn release_is_refused_for_anyone_but_the_owner_of_an_unstarted_claim() {
         }
     ));
     ok(&mut plan, &first(), Command::Unblock { work: a }, 0);
-    ok(&mut plan, &first(), Command::Start { work: a }, 1);
+    ok(&mut plan, &first(), begin(a), 1);
     assert!(matches!(
         refused(&mut plan, &first(), release(a), 2),
         EngineError::AlreadyStarted(_)
@@ -203,7 +214,7 @@ fn releasing_an_unstarted_predecessor_never_releases_ss_or_sf_successors() {
             Transition::Claim
         } else {
             ok(&mut plan, &second(), Command::Claim { work: b }, 1);
-            ok(&mut plan, &second(), Command::Start { work: b }, 1);
+            ok(&mut plan, &second(), begin(b), 1);
             Transition::Submit
         };
         let report = gate_report(&plan, b, transition, t(2)).expect("gates");
@@ -264,6 +275,7 @@ fn only_humans_and_services_authorize_a_handoff_and_every_fact_stays() {
     let verify = Command::Verify {
         work: a,
         note: None,
+        occurred_at: None,
     };
     assert!(matches!(
         refused(&mut plan, &first(), verify.clone(), 4),
@@ -282,7 +294,7 @@ fn a_human_may_take_over_work_but_never_review_it_afterwards() {
     ok(&mut plan, &first(), Command::Claim { work: a }, 0);
     ok(&mut plan, &lead(), handoff(a, first(), lead()), 1);
     assert_eq!(plan.work_items[&a].execution.status, WorkStatus::Claimed);
-    ok(&mut plan, &lead(), Command::Start { work: a }, 2);
+    ok(&mut plan, &lead(), begin(a), 2);
     ok(&mut plan, &lead(), handoff(a, lead(), second()), 3);
     ok(&mut plan, &second(), submit(a), 4);
     let reject = Command::Reject {

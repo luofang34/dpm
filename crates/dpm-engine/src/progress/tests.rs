@@ -32,7 +32,7 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
         0.0,
     ));
     apply(&mut plan, Command::Claim { work });
-    apply(&mut plan, Command::Start { work });
+    apply(&mut plan, start_command(work));
     // One clock reading for both forecasts: started work's remaining duration depends on it, and
     // only the progress report may differ between them.
     let now = chrono::Utc::now();
@@ -70,12 +70,12 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
     );
     let after = plan.find_work_by_key("TEST-B").expect("after");
     assert!(!is_ready(&plan, after, chrono::Utc::now()));
-    apply(&mut plan, Command::Submit { work, note: None });
+    apply(&mut plan, submit_command(work));
     assert!(!progress(&plan, chrono::Utc::now()).expect("progress").work[&work].verified);
     apply_command(
         &mut plan,
         ActorId::human("reviewer"),
-        Command::Verify { work, note: None },
+        verify_command(work),
         Utc::now(),
         dpm_model::OperationId::new(),
     )
@@ -118,7 +118,7 @@ fn report_validation_is_atomic_and_blocked_corrections_preserve_the_blocker() {
     );
     assert_eq!(plan, before);
     apply(&mut plan, Command::Claim { work });
-    apply(&mut plan, Command::Start { work });
+    apply(&mut plan, start_command(work));
     for (actor, command) in [
         ("other", report.clone()),
         (
@@ -191,7 +191,7 @@ fn nested_packages_average_leaf_tasks_once_and_legacy_submissions_show_100_perce
     plan.work_items.get_mut(&a).expect("a").parent = Some(parent);
     plan.work_items.get_mut(&b).expect("b").parent = Some(nested);
     apply(&mut plan, Command::Claim { work: a });
-    apply(&mut plan, Command::Start { work: a });
+    apply(&mut plan, start_command(a));
     apply(
         &mut plan,
         Command::ReportProgress {
@@ -201,14 +201,8 @@ fn nested_packages_average_leaf_tasks_once_and_legacy_submissions_show_100_perce
         },
     );
     apply(&mut plan, Command::Claim { work: b });
-    apply(&mut plan, Command::Start { work: b });
-    apply(
-        &mut plan,
-        Command::Submit {
-            work: b,
-            note: None,
-        },
-    );
+    apply(&mut plan, start_command(b));
+    apply(&mut plan, submit_command(b));
     assert_eq!(plan.work_items[&b].execution.reported_progress_percent, 0);
     let before = plan.clone();
     let projection = progress(&plan, chrono::Utc::now()).expect("progress");
@@ -254,4 +248,27 @@ fn import_defaults_reports_to_zero_and_rejects_invalid_progress() {
             scope: crate::ProgressScope::Counted,
         }
     );
+}
+
+fn start_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Start {
+        work,
+        occurred_at: None,
+    }
+}
+
+fn submit_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Submit {
+        work,
+        note: None,
+        occurred_at: None,
+    }
+}
+
+fn verify_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Verify {
+        work,
+        note: None,
+        occurred_at: None,
+    }
 }

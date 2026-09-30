@@ -33,6 +33,7 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
         command: Command::Submit {
             work,
             note: Some("acceptance passed".into()),
+            occurred_at: None,
         },
     };
     let refused = app
@@ -44,7 +45,10 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
         base_revision: 1,
         base_lineage: None,
         operation_id: None,
-        command: Command::Start { work },
+        command: Command::Start {
+            work,
+            occurred_at: None,
+        },
     })
     .expect("start");
     app.execute_blocking(CommandRequest {
@@ -59,7 +63,11 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
         base_revision: 3,
         base_lineage: None,
         operation_id: None,
-        command: Command::Verify { work, note: None },
+        command: Command::Verify {
+            work,
+            note: None,
+            occurred_at: None,
+        },
     };
     assert!(app.execute_blocking(verify.clone()).is_err());
     app.execute_blocking(CommandRequest {

@@ -165,30 +165,12 @@ fn the_list_matches_the_tasks_the_remaining_projection_runs_at_zero_hours() {
     let quote = plan.find_work_by_key("SUP-B-QUOTE").expect("work").id;
     for (actor, command) in [
         ("worker", Command::Claim { work: design }),
-        ("worker", Command::Start { work: design }),
-        (
-            "worker",
-            Command::Submit {
-                work: design,
-                note: None,
-            },
-        ),
-        (
-            "lead",
-            Command::Verify {
-                work: design,
-                note: None,
-            },
-        ),
+        ("worker", start_command(design)),
+        ("worker", submit_command(design)),
+        ("lead", verify_command(design)),
         ("worker", Command::Claim { work: quote }),
-        ("worker", Command::Start { work: quote }),
-        (
-            "worker",
-            Command::Submit {
-                work: quote,
-                note: None,
-            },
-        ),
+        ("worker", start_command(quote)),
+        ("worker", submit_command(quote)),
     ] {
         let actor = if actor == "lead" {
             ActorId::human(actor)
@@ -218,4 +200,27 @@ fn the_list_matches_the_tasks_the_remaining_projection_runs_at_zero_hours() {
         .collect();
     assert_eq!(listed(&plan), projected);
     assert_eq!(listed(&plan), ["SUP-B-QUOTE", "SUP-BUILD"]);
+}
+
+fn start_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Start {
+        work,
+        occurred_at: None,
+    }
+}
+
+fn submit_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Submit {
+        work,
+        note: None,
+        occurred_at: None,
+    }
+}
+
+fn verify_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Verify {
+        work,
+        note: None,
+        occurred_at: None,
+    }
 }

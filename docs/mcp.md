@@ -68,12 +68,12 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | claim KEY | claim_work | Reserve only ready tasks; a claim is not a start |
 | release KEY --reason TEXT | release_work | Owner gives up an unstarted claim; the task returns to Planned without an owner and the release is recorded |
 | handoff KEY --to KIND:NAME --reason TEXT | handoff_work | Human/service moves claimed, started or blocked work to another owner; every recorded fact stays |
-| start KEY | start_work | Owner starts claimed work; records the start event SS/SF successors wait for |
+| start KEY --at RFC3339 | start_work | Owner starts claimed work; records the start event SS/SF successors wait for, optionally when it actually occurred |
 | block KEY REASON | report_blocker | Record blocker and preserve owner |
 | unblock KEY | unblock_work | Resume without changing owner |
 | progress KEY PERCENT --note TEXT | report_progress | Owner reports 0..100 execution; verification remains separate |
-| submit KEY --note TEXT | submit_work | Request independent verification of started work once FF/SF gates are released |
-| verify KEY --note TEXT | verify_work | Refuse holders and evidence authors; re-check every relation and decision; record the finish event |
+| submit KEY --note TEXT --at RFC3339 | submit_work | Request independent verification of started work once FF/SF gates are released; `at` backfills the submission time |
+| verify KEY --note TEXT --at RFC3339 | verify_work | Refuse holders and evidence authors; re-check every relation and decision; record the finish event, optionally when it actually occurred |
 | decide KEY OUTCOME | decide_gate | Human/service resolves an open decision (agents are refused); with `options`, OUTCOME is exactly one option key |
 | artifact KEY FILE.json | add_artifact | Owner attaches the same Artifact JSON object to its task |
 | attach-git-head KEY --asset KEY | attach_git_head | Owner captures HEAD for an explicit workspace asset; locator binding is the default |
@@ -635,6 +635,8 @@ The workflow below applies to an authorized execution workspace; tool availabili
    reserves the task.
 4. Call start_work when execution begins. Its operation time is the start event that SS/SF
    successors wait for; report_progress and submit_work are refused until the task has started.
+   When recording work after the fact, pass `at` with the time it actually began (likewise for
+   submit_work and verify_work); see [execution events](#execution-events-and-elapsed-lag).
 5. Perform the work and acceptance checks. Use report_progress for intermediate execution reports;
    use add_artifact or attach_git_head to record evidence while you own the task.
 6. Call submit_work with an evidence summary once `explain_work.transitions.submit.ready` holds.
@@ -659,8 +661,19 @@ ownership, return only `code` and `message`; read `explain_work` `transitions` f
 
 Lifecycle commands record their own operation time: `start_work` sets `work.events.started_at`,
 `submit_work` sets `submitted_at` (cleared by `reject_work`), `verify_work` sets `verified_at`, and
-`decide_gate` sets the decision's `resolved_at`. No tool accepts an event time; plan changes cannot
-add or rewrite these fields (omit `resolved_at` from a replacement decision: `apply_change` records
+`decide_gate` sets the decision's `resolved_at`.
+
+Work recorded after the fact passes when it actually happened: the optional RFC 3339 argument `at`
+of `start_work`, `submit_work` and `verify_work` (CLI `start`, `submit`, `verify --at RFC3339`)
+becomes the event time, the time the transition's gates are evaluated at, the submission attempt's
+`submitted_at` or verification's `at`, and the `recorded_at` of any dependency basis the start
+captures. The command records it as `occurred_at` while the operation keeps its own commit
+`timestamp`, so `history` shows both; without `at` the operation is exactly as before, with no
+`occurred_at` key. `at` after the commit, or before the latest time the task already records
+(events, attempts and reviews, handoffs, releases, basis; a claim records no time), is refused with
+`invalid_command` and a message naming the task and both times; a malformed time is
+`invalid_request`. This additive argument leaves `api_version` unchanged. No other tool accepts an
+event time; plan changes cannot add or rewrite these fields (omit `resolved_at` from a replacement decision: `apply_change` records
 the operation's own time as its `resolved_at`), and a command whose
 time precedes the event it follows is refused unchanged. `report_blocker` on work that started
 before start times were recorded sets `work.events.start_unrecorded`: the work still counts as

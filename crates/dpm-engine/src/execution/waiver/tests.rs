@@ -335,16 +335,29 @@ fn a_successor_owner_cannot_waive_away_its_own_invalidated_provisional_basis() {
     };
     for (actor, command) in [
         (&author, Command::Claim { work: a }),
-        (&author, Command::Start { work: a }),
+        (
+            &author,
+            Command::Start {
+                work: a,
+                occurred_at: None,
+            },
+        ),
         (
             &author,
             Command::Submit {
                 work: a,
                 note: None,
+                occurred_at: None,
             },
         ),
         (&owner, Command::Claim { work: b }),
-        (&owner, Command::Start { work: b }),
+        (
+            &owner,
+            Command::Start {
+                work: b,
+                occurred_at: None,
+            },
+        ),
         (&reviewer, reject),
     ] {
         run(&mut plan, actor.clone(), command).expect("setup");
@@ -403,10 +416,19 @@ fn a_successor_owner_may_verify_the_result_it_consumes_but_not_waive_it() {
         .start_basis = dpm_model::StartBasis::Provisional;
     let (alice, bob) = (ActorId::human("alice"), ActorId::human("bob"));
     run(&mut plan, alice.clone(), Command::Claim { work: a }).expect("claim A");
-    run(&mut plan, alice.clone(), Command::Start { work: a }).expect("start A");
+    run(
+        &mut plan,
+        alice.clone(),
+        Command::Start {
+            work: a,
+            occurred_at: None,
+        },
+    )
+    .expect("start A");
     let submit = Command::Submit {
         work: a,
         note: None,
+        occurred_at: None,
     };
     run(&mut plan, alice.clone(), submit).expect("submit A");
     run(&mut plan, bob.clone(), Command::Claim { work: b }).expect("claim B provisionally");
@@ -414,6 +436,7 @@ fn a_successor_owner_may_verify_the_result_it_consumes_but_not_waive_it() {
     let verify = || Command::Verify {
         work: a,
         note: None,
+        occurred_at: None,
     };
     let before = plan.clone();
     assert!(matches!(

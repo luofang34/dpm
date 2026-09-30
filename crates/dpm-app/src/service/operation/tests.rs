@@ -37,7 +37,10 @@ fn a_resent_identity_returns_the_recorded_operation_and_other_content_is_refused
     assert_eq!(app.plan_blocking().expect("plan").revision, 1);
 
     let start = CommandRequest {
-        command: Command::Start { work },
+        command: Command::Start {
+            work,
+            occurred_at: None,
+        },
         ..claim.clone()
     };
     let refused = app.execute_blocking(start).expect_err("other content");
@@ -130,7 +133,15 @@ fn restores_start_a_new_lineage_and_still_answer_recorded_identities() {
     let first = app.execute_blocking(claim.clone()).expect("claim");
     assert_eq!(first.lineage_id, source);
     app.backup_blocking(&backup).expect("backup");
-    let start = request(&app, "worker", Command::Start { work }, OperationId::new());
+    let start = request(
+        &app,
+        "worker",
+        Command::Start {
+            work,
+            occurred_at: None,
+        },
+        OperationId::new(),
+    );
     let mut archive = Application::open_blocking(&backup).expect("archive");
     assert_eq!(
         archive

@@ -268,16 +268,8 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
     assert_eq!(plan.work_items[&b].execution.status, WorkStatus::Planned);
 
     run(&mut plan, "worker", Command::Claim { work: a }).expect("claim");
-    run(&mut plan, "worker", Command::Start { work: a }).expect("start");
-    run(
-        &mut plan,
-        "worker",
-        Command::Submit {
-            work: a,
-            note: None,
-        },
-    )
-    .expect("submit");
+    run(&mut plan, "worker", start_command(a)).expect("start");
+    run(&mut plan, "worker", submit_command(a)).expect("submit");
     let observed = chrono::Utc::now();
     let submitted = projections(&plan, observed);
     let Command::LinkExternal(mut merged) = request(
@@ -305,14 +297,7 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
     );
     assert!(plan.artifacts.is_empty());
     assert!(matches!(
-        run(
-            &mut plan,
-            "worker",
-            Command::Verify {
-                work: a,
-                note: None
-            }
-        ),
+        run(&mut plan, "worker", verify_command(a)),
         Err(EngineError::SelfVerification(_))
     ));
     let explained = explain_work(&plan, a, chrono::Utc::now()).expect("explain");
@@ -461,3 +446,26 @@ mod generated;
 mod kind;
 mod neighbours;
 mod rules;
+
+fn start_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Start {
+        work,
+        occurred_at: None,
+    }
+}
+
+fn submit_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Submit {
+        work,
+        note: None,
+        occurred_at: None,
+    }
+}
+
+fn verify_command(work: dpm_model::WorkItemId) -> Command {
+    Command::Verify {
+        work,
+        note: None,
+        occurred_at: None,
+    }
+}

@@ -202,10 +202,11 @@ fn mutate_blocking(
 
 fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, Command), CliError> {
     let pair = match command {
-        lifecycle
-        @ (Commands::Ratify { .. } | Commands::Reject { .. } | Commands::Start { .. }) => {
-            lifecycle_mutation_blocking(app, lifecycle)?
-        }
+        lifecycle @ (Commands::Ratify { .. }
+        | Commands::Reject { .. }
+        | Commands::Start { .. }
+        | Commands::Submit { .. }
+        | Commands::Verify { .. }) => lifecycle_mutation_blocking(app, lifecycle)?,
         Commands::Ownership(command) => crate::ownership::mutation_blocking(app, command)?,
         Commands::Block {
             key,
@@ -234,28 +235,6 @@ fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, C
             Command::ReportProgress {
                 work: app.work_id_blocking(&key)?,
                 percent,
-                note,
-            },
-        ),
-        Commands::Submit {
-            key,
-            note,
-            actor: who,
-        } => (
-            actor(&who)?,
-            Command::Submit {
-                work: app.work_id_blocking(&key)?,
-                note,
-            },
-        ),
-        Commands::Verify {
-            key,
-            note,
-            actor: who,
-        } => (
-            actor(&who)?,
-            Command::Verify {
-                work: app.work_id_blocking(&key)?,
                 note,
             },
         ),
@@ -393,14 +372,47 @@ fn lifecycle_mutation_blocking(
                 reason,
             },
         ),
-        Commands::Start { key, actor: who } => (
+        Commands::Start {
+            key,
+            actor: who,
+            at,
+        } => (
             actor(&who)?,
             Command::Start {
                 work: app.work_id_blocking(&key)?,
+                occurred_at: at,
+            },
+        ),
+        Commands::Submit {
+            key,
+            note,
+            actor: who,
+            at,
+        } => (
+            actor(&who)?,
+            Command::Submit {
+                work: app.work_id_blocking(&key)?,
+                note,
+                occurred_at: at,
+            },
+        ),
+        Commands::Verify {
+            key,
+            note,
+            actor: who,
+            at,
+        } => (
+            actor(&who)?,
+            Command::Verify {
+                work: app.work_id_blocking(&key)?,
+                note,
+                occurred_at: at,
             },
         ),
         _ => {
-            return Err(CliError::Input("expected contract or start command".into()));
+            return Err(CliError::Input(
+                "expected a contract or lifecycle command".into(),
+            ));
         }
     })
 }

@@ -117,6 +117,9 @@ pub(crate) enum Commands {
         key: String,
         #[arg(long)]
         actor: String,
+        /// When execution actually began, if before now; the operation keeps its commit time.
+        #[arg(long, value_name = "RFC3339")]
+        at: Option<chrono::DateTime<chrono::Utc>>,
     },
     /// Mark work blocked with a concrete reason.
     Block {
@@ -147,6 +150,9 @@ pub(crate) enum Commands {
         note: Option<String>,
         #[arg(long)]
         actor: String,
+        /// When the result was actually submitted, if before now; the operation keeps its commit time.
+        #[arg(long, value_name = "RFC3339")]
+        at: Option<chrono::DateTime<chrono::Utc>>,
     },
     /// Verify submitted work, recording the finish event FS/FF successors wait for.
     Verify {
@@ -155,6 +161,9 @@ pub(crate) enum Commands {
         note: Option<String>,
         #[arg(long)]
         actor: String,
+        /// When the result was actually verified, if before now; the operation keeps its commit time.
+        #[arg(long, value_name = "RFC3339")]
+        at: Option<chrono::DateTime<chrono::Utc>>,
     },
     /// Resolve an open decision as a human or service; a decision with options takes exactly one option key as outcome.
     Decide {

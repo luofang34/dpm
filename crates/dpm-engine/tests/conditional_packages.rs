@@ -34,12 +34,28 @@ fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
     let work = id(plan, key);
     for command in [
         Command::Claim { work },
-        Command::Start { work },
-        Command::Submit { work, note: None },
+        Command::Start {
+            work,
+            occurred_at: None,
+        },
+        Command::Submit {
+            work,
+            note: None,
+            occurred_at: None,
+        },
     ] {
         run(plan, "worker", command, at);
     }
-    run(plan, "lead", Command::Verify { work, note: None }, at);
+    run(
+        plan,
+        "lead",
+        Command::Verify {
+            work,
+            note: None,
+            occurred_at: None,
+        },
+        at,
+    );
 }
 
 /// The fixture plus an unconditional package whose only task applies only to supplier A, without

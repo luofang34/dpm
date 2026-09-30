@@ -36,7 +36,14 @@ fn release_and_handoff_are_recorded_operations_that_survive_restart() {
         .expect("release");
     execute(&mut app, first.clone(), release);
     execute(&mut app, first.clone(), Command::Claim { work });
-    execute(&mut app, first.clone(), Command::Start { work });
+    execute(
+        &mut app,
+        first.clone(),
+        Command::Start {
+            work,
+            occurred_at: None,
+        },
+    );
     let handoff = app
         .handoff_command_blocking("TEST-A", "agent:second", "first agent stopped".into())
         .expect("handoff");

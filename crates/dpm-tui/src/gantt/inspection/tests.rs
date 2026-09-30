@@ -308,7 +308,10 @@ fn run(plan: &mut Plan, commands: Vec<dpm_engine::Command>, hour: u32) {
 fn begin(work: WorkItemId) -> Vec<dpm_engine::Command> {
     vec![
         dpm_engine::Command::Claim { work },
-        dpm_engine::Command::Start { work },
+        dpm_engine::Command::Start {
+            work,
+            occurred_at: None,
+        },
     ]
 }
 
@@ -388,6 +391,7 @@ fn inspector_shows_a_provisional_start_released_on_a_pending_attempt() {
     steps.push(dpm_engine::Command::Submit {
         work: a,
         note: None,
+        occurred_at: None,
     });
     run(&mut plan, steps, 1);
     run(&mut plan, begin(b), 2);

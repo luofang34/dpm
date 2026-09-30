@@ -320,11 +320,9 @@ fn detail_shows_recorded_events_and_every_transition_gate() {
         .with_ymd_and_hms(2026, 9, 1, 8, 0, 0)
         .single()
         .expect("time");
-    let worker = dpm_model::ActorId::agent("worker");
-    for command in [
-        dpm_engine::Command::Claim { work },
-        dpm_engine::Command::Start { work },
-    ] {
+    let (worker, occurred_at) = (dpm_model::ActorId::agent("worker"), None);
+    use dpm_engine::Command::{Claim, Start};
+    for command in [Claim { work }, Start { work, occurred_at }] {
         dpm_engine::apply_command(
             &mut plan,
             worker.clone(),

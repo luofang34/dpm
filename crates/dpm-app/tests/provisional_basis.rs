@@ -85,7 +85,11 @@ fn revalidate(ids: Ids, attempt: u32) -> Command {
 }
 
 fn submit(work: WorkItemId) -> Command {
-    Command::Submit { work, note: None }
+    Command::Submit {
+        work,
+        note: None,
+        occurred_at: None,
+    }
 }
 
 /// B starts on A's first attempt, which is then rejected; returns every view at that point and
@@ -99,12 +103,21 @@ fn start_on_rejected_attempt(app: &mut Application, ids: Ids) -> (Value, DateTim
     ok(app, &ActorId::human("reviewer"), decide);
     for command in [
         Command::Claim { work: a },
-        Command::Start { work: a },
+        Command::Start {
+            work: a,
+            occurred_at: None,
+        },
         submit(a),
     ] {
         ok(app, &ActorId::agent("author"), command);
     }
-    for command in [Command::Claim { work: b }, Command::Start { work: b }] {
+    for command in [
+        Command::Claim { work: b },
+        Command::Start {
+            work: b,
+            occurred_at: None,
+        },
+    ] {
         ok(app, &ActorId::agent("builder"), command);
     }
     let reject = Command::Reject {
@@ -155,6 +168,7 @@ fn rejection_resubmission_and_revalidation_survive_restart_and_concurrent_writer
     let verify = Command::Verify {
         work: ids.a,
         note: None,
+        occurred_at: None,
     };
     ok(&mut app, &reviewer, verify);
     drop(app);

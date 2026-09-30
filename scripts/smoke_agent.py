@@ -569,9 +569,12 @@ if __name__ == '__main__':
         adapters_smoke(Path(directory))
         from smoke_operations import operations_smoke
         operations_smoke(Path(directory))
+        from smoke_occurrence import occurrence_smoke
+        occurrence_smoke(Path(directory))
     print('PASS: CLI/MCP query parity, revision conflicts, evidence, blockers, gates and independent verification')
     print('PASS: scoped next parity, outside-scope visibility, limits and unknown scope keys without state change')
     print('PASS: CLI/MCP dependency identity, soft-edge waiver/restore, refusals and non-gating links')
     print('PASS: CLI/MCP start events, elapsed-lag gates, unknown legacy event times and lead explanations')
+    print('PASS: CLI/MCP occurrence times for start, submit and verify, their refusals and history')
     print('PASS: CLI/MCP release and handoff parity, refusals, evidence-author and holder independence, history after restart')
     print('PASS: CLI/MCP conditional work: options, applicability gates, branch joins, excluded packages, scenarios and reviewed choice changes')

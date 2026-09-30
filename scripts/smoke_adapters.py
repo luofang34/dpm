@@ -3,6 +3,7 @@
 import json
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from smoke_agent import CLI, MCP, ROOT, Agent, run_cli, run_cli_envelope
@@ -163,6 +164,11 @@ def soften(plan):
     edge['policy'], edge['rationale'] = 'Soft', 'B may start from a prototype of A'
 
 
+def occurred_now():
+    """An occurrence time after every event both twin stores have recorded so far."""
+    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
 def lifecycle_parity(directory, reviewer, worker, heir):
     plan = json.loads(FIXTURE.read_text())
     next(w for w in plan['work_items'].values() if w['key'] == 'TEST-A')['execution']['status'] = 'Proposed'
@@ -181,7 +187,10 @@ def lifecycle_parity(directory, reviewer, worker, heir):
         twins.mutate(worker, 'claim_work', task, 'claim', 'TEST-A')
         twins.mutate(reviewer, 'handoff_work', {**task, 'to': heir, 'reason': 'Rebalance'},
                      'handoff', 'TEST-A', '--to', heir, '--reason', 'Rebalance')
-        twins.mutate(heir, 'start_work', task, 'start', 'TEST-A')
+        # A backfilled start: both stores record the same occurrence time beside their own commits.
+        at = occurred_now()
+        started = twins.mutate(heir, 'start_work', {**task, 'at': at}, 'start', 'TEST-A', '--at', at)
+        assert started['command']['Start']['occurred_at'] and started['timestamp'], started
         twins.mutate(heir, 'report_progress', {**task, 'percent': 40, 'note': 'Half way'},
                      'progress', 'TEST-A', '40', '--note', 'Half way')
         twins.mutate(heir, 'report_blocker', {**task, 'blocker': 'Fixture missing'}, 'block', 'TEST-A', 'Fixture missing')
@@ -201,8 +210,10 @@ def lifecycle_parity(directory, reviewer, worker, heir):
         twins.mutate(heir, 'unlink_external', {**task, 'identity': identity}, 'unlink-external', 'TEST-A', *flags)
         twins.mutate(heir, 'submit_work', {**task, 'note': 'Evidence attached'}, 'submit', 'TEST-A', '--note', 'Evidence attached')
         twins.mutate(reviewer, 'reject_work', {**task, 'reason': 'Report incomplete'}, 'reject', 'TEST-A', 'Report incomplete')
-        twins.mutate(heir, 'submit_work', task, 'submit', 'TEST-A')
-        twins.mutate(reviewer, 'verify_work', {**task, 'note': 'Checked'}, 'verify', 'TEST-A', '--note', 'Checked')
+        at = occurred_now()
+        twins.mutate(heir, 'submit_work', {**task, 'at': at}, 'submit', 'TEST-A', '--at', at)
+        at = occurred_now()
+        twins.mutate(reviewer, 'verify_work', {**task, 'note': 'Checked', 'at': at}, 'verify', 'TEST-A', '--note', 'Checked', '--at', at)
         twins.mutate(reviewer, 'decide_gate', {'decision': 'TEST-GATE', 'outcome': 'Proceed'}, 'decide', 'TEST-GATE', 'Proceed')
         return twins.finish()
     finally:

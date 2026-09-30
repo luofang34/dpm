@@ -112,28 +112,12 @@ fn views_agree(plan: &Plan, work: WorkItemId, hour: i64) {
 /// Drive the predecessor to its required event; returns that event's hour.
 fn predecessor_event(plan: &mut Plan, a: WorkItemId, kind: DependencyKind) -> i64 {
     ok(plan, &worker(), Command::Claim { work: a }, 0);
-    ok(plan, &worker(), Command::Start { work: a }, 0);
+    ok(plan, &worker(), start(a), 0);
     if kind.predecessor_endpoint() == Endpoint::Start {
         return 0;
     }
-    ok(
-        plan,
-        &worker(),
-        Command::Submit {
-            work: a,
-            note: None,
-        },
-        1,
-    );
-    ok(
-        plan,
-        &ActorId::human("reviewer"),
-        Command::Verify {
-            work: a,
-            note: None,
-        },
-        2,
-    );
+    ok(plan, &worker(), submit(a), 1);
+    ok(plan, &ActorId::human("reviewer"), verify(a), 2);
     2
 }
 
@@ -158,51 +142,19 @@ fn each_relation_gates_its_own_transition_until_24h_have_elapsed() {
                 "{kind:?}"
             );
             ok(&mut plan, &other, Command::Claim { work: b }, open);
-            ok(&mut plan, &other, Command::Start { work: b }, open);
-            ok(
-                &mut plan,
-                &other,
-                Command::Submit {
-                    work: b,
-                    note: None,
-                },
-                open,
-            );
+            ok(&mut plan, &other, start(b), open);
+            ok(&mut plan, &other, submit(b), open);
         } else {
             ok(&mut plan, &other, Command::Claim { work: b }, 0);
-            ok(&mut plan, &other, Command::Start { work: b }, 0);
-            let release = refused(
-                &mut plan,
-                &other,
-                Command::Submit {
-                    work: b,
-                    note: None,
-                },
-                open - 1,
-            );
+            ok(&mut plan, &other, start(b), 0);
+            let release = refused(&mut plan, &other, submit(b), open - 1);
             assert!(
                 matches!(release, Release::Elapsing { opens_at, .. } if opens_at == t(open)),
                 "{kind:?}"
             );
-            ok(
-                &mut plan,
-                &other,
-                Command::Submit {
-                    work: b,
-                    note: None,
-                },
-                open,
-            );
+            ok(&mut plan, &other, submit(b), open);
         }
-        ok(
-            &mut plan,
-            &reviewer,
-            Command::Verify {
-                work: b,
-                note: None,
-            },
-            open,
-        );
+        ok(&mut plan, &reviewer, verify(b), open);
         let events = plan.work_items[&b].execution.events;
         assert_eq!(events.verified_at, Some(t(open)), "{kind:?}");
         assert!(events.started_at.is_some() && events.submitted_at.is_some());
@@ -229,28 +181,14 @@ fn restored_edges_gate_start_and_verification_of_work_reserved_or_submitted_whil
         ok(&mut plan, &other, Command::Claim { work: b }, 0);
         let finish_gate = kind.successor_endpoint() == Endpoint::Finish;
         if finish_gate {
-            ok(&mut plan, &other, Command::Start { work: b }, 0);
-            ok(
-                &mut plan,
-                &other,
-                Command::Submit {
-                    work: b,
-                    note: None,
-                },
-                0,
-            );
+            ok(&mut plan, &other, start(b), 0);
+            ok(&mut plan, &other, submit(b), 0);
         }
         ok(&mut plan, &lead, restore, 0);
         let (gated, actor) = if finish_gate {
-            (
-                Command::Verify {
-                    work: b,
-                    note: None,
-                },
-                &reviewer,
-            )
+            (verify(b), &reviewer)
         } else {
-            (Command::Start { work: b }, &other)
+            (start(b), &other)
         };
         assert_eq!(
             refused(&mut plan, actor, gated.clone(), 0),
@@ -283,10 +221,7 @@ fn a_claim_reserves_work_but_only_a_start_releases_start_to_start_successors() {
         Release::AwaitingEvent
     );
     for command in [
-        Command::Submit {
-            work: a,
-            note: None,
-        },
+        submit(a),
         Command::ReportProgress {
             work: a,
             percent: 10,
@@ -301,7 +236,7 @@ fn a_claim_reserves_work_but_only_a_start_releases_start_to_start_successors() {
         );
         assert_eq!(plan, before);
     }
-    ok(&mut plan, &worker(), Command::Start { work: a }, 6);
+    ok(&mut plan, &worker(), start(a), 6);
     assert_eq!(plan.work_items[&a].execution.events.started_at, Some(t(6)));
     views_agree(&plan, b, 6);
     ok(
@@ -391,10 +326,7 @@ fn a_blocked_legacy_start_still_releases_start_edges_and_resumes_in_progress() {
             resumed.execution.events.started_at, None,
             "no start time is invented"
         );
-        let submit = Command::Submit {
-            work: a,
-            note: None,
-        };
+        let submit = submit(a);
         ok(&mut plan, &worker(), submit, 3);
     }
 }
@@ -433,12 +365,27 @@ fn a_lead_shapes_the_schedule_but_never_releases_work_before_the_event() {
     );
 }
 
+fn start(work: WorkItemId) -> Command {
+    Command::Start {
+        work,
+        occurred_at: None,
+    }
+}
+
 fn submit(work: WorkItemId) -> Command {
-    Command::Submit { work, note: None }
+    Command::Submit {
+        work,
+        note: None,
+        occurred_at: None,
+    }
 }
 
 fn verify(work: WorkItemId) -> Command {
-    Command::Verify { work, note: None }
+    Command::Verify {
+        work,
+        note: None,
+        occurred_at: None,
+    }
 }
 
 #[test]
@@ -446,7 +393,7 @@ fn event_times_are_the_command_times_and_cannot_be_backdated() {
     let (mut plan, a, _) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
     let reviewer = ActorId::human("reviewer");
     ok(&mut plan, &worker(), Command::Claim { work: a }, 3);
-    ok(&mut plan, &worker(), Command::Start { work: a }, 5);
+    ok(&mut plan, &worker(), start(a), 5);
     let before = plan.clone();
     assert!(run(&mut plan, &worker(), submit(a), 4).is_err());
     assert_eq!(plan, before, "a submission before the recorded start");
@@ -462,4 +409,5 @@ fn event_times_are_the_command_times_and_cannot_be_backdated() {
     );
 }
 
+mod occurrence;
 mod timing;
