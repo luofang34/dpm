@@ -1,6 +1,6 @@
 //! A forecast that applies measured factors to a copy of the plan, on request only.
 
-use super::{CalibrationReport, MIN_SAMPLES};
+use super::{CalibrationReport, MAX_APPLIED_RATIO, MIN_APPLIED_RATIO, MIN_SAMPLES};
 use dpm_model::{ActorKind, MAX_CALENDAR_HOURS, Plan, ThreePointEstimate, WorkItem};
 use dpm_schedule::RemainingOptions;
 use serde::{Deserialize, Serialize};
@@ -146,21 +146,31 @@ fn factor(report: &CalibrationReport, executor: ActorKind, tasks: usize) -> Appl
         .iter()
         .find(|g| g.executor == executor);
     let samples = group.map_or(0, |g| g.samples);
-    let measured = group.map(|g| g.median);
-    let usable = measured.filter(|m| m.is_finite() && *m >= 0.0);
-    let (factor, applied, reason) = match (group, usable) {
-        (Some(g), Some(median)) if g.sufficient => (
+    let measured = group.and_then(|g| g.median);
+    let sufficient = group.is_some_and(|g| g.sufficient);
+    let (factor, applied, reason) = match measured {
+        Some(median) if sufficient && in_band(median) => (
             median,
             true,
             format!(
-                "median actual/estimated ratio of {samples} verified {executor:?} task(s) applied"
+                "median actual/estimated ratio of {samples} verified {executor} task(s) applied"
+            ),
+        ),
+        Some(median) if sufficient => (
+            1.0,
+            false,
+            format!(
+                "median actual/estimated ratio {median:.3} of {samples} verified {executor} \
+                 task(s) lies outside {MIN_APPLIED_RATIO}-{MAX_APPLIED_RATIO}, which points at \
+                 the records rather than the estimates; estimates kept"
             ),
         ),
         _ => (
             1.0,
             false,
             format!(
-                "{samples} verified {executor:?} sample(s), fewer than the {MIN_SAMPLES} needed; estimates kept"
+                "{samples} verified {executor} sample(s), fewer than the {MIN_SAMPLES} needed; \
+                 estimates kept"
             ),
         ),
     };
@@ -173,6 +183,12 @@ fn factor(report: &CalibrationReport, executor: ActorKind, tasks: usize) -> Appl
         applied,
         reason,
     }
+}
+
+/// Whether a measured median is plausible enough to scale estimates by; a median near 0 would
+/// collapse the forecast to nothing, which no honest record supports.
+fn in_band(median: f64) -> bool {
+    median.is_finite() && (MIN_APPLIED_RATIO..=MAX_APPLIED_RATIO).contains(&median)
 }
 
 fn review_delay(plan: &Plan, report: &CalibrationReport) -> AppliedReviewDelay {
@@ -189,14 +205,16 @@ fn review_delay(plan: &Plan, report: &CalibrationReport) -> AppliedReviewDelay {
             median,
             true,
             format!(
-                "median wait of {samples} {verifier:?} review(s) added after each unverified task's work"
+                "median wait of {samples} {verifier} review(s) added after each unverified \
+                 task's work"
             ),
         ),
         _ => (
             0.0,
             false,
             format!(
-                "{samples} {verifier:?} review(s) measured, fewer than the {MIN_SAMPLES} needed; no review delay added"
+                "{samples} {verifier} review(s) measured, fewer than the {MIN_SAMPLES} needed; \
+                 no review delay added"
             ),
         ),
     };

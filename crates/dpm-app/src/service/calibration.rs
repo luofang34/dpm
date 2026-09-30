@@ -5,8 +5,8 @@ use crate::AppError;
 use dpm_engine::{CalibrationReport, Operation};
 use dpm_model::Plan;
 
-/// Reads of the snapshot and the whole log tried before a concurrent writer is reported.
-const CONSISTENT_READS: usize = 3;
+/// Reads of the snapshot and whole log before reporting a workspace that keeps changing.
+const CONSISTENT_READS: usize = 10;
 
 /// Largest history page the store serves.
 const PAGE: u16 = 1000;
@@ -47,18 +47,10 @@ impl Application {
     /// uses. The log pages and the snapshot are separate reads, so a commit between them is
     /// detected by their revisions and the whole read repeated.
     fn plan_with_history_blocking(&self) -> Result<(Plan, Vec<Operation>), AppError> {
-        let mut observed = (0, 0);
-        for _ in 0..CONSISTENT_READS {
-            let (revisions, history) = self.whole_history_blocking()?;
-            let plan = self.plan_blocking()?;
-            match revisions {
-                Some(revision) if revision == plan.revision => return Ok((plan, history)),
-                Some(revision) => observed = (revision, plan.revision),
-                None => observed = (plan.revision, plan.revision),
-            }
-        }
-        let (expected, actual) = observed;
-        Err(AppError::Conflict { expected, actual })
+        consistent_read(|| {
+            let (revision, history) = self.whole_history_blocking()?;
+            Ok((revision, self.plan_blocking()?, history))
+        })
     }
 
     /// Every operation in append order, with the revision all pages were read at, or `None` when
@@ -79,6 +71,24 @@ impl Application {
             history.extend(page.entries.into_iter().map(|e| e.operation.operation));
         }
     }
+}
+
+/// Repeat `read` (log revision, snapshot, log) until the log and the snapshot agree on a revision.
+///
+/// Each read is fast and the query writes nothing, so it retries at once; the bound only stops a
+/// workspace that never stops changing from holding the query forever.
+fn consistent_read(
+    mut read: impl FnMut() -> Result<(Option<u64>, Plan, Vec<Operation>), AppError>,
+) -> Result<(Plan, Vec<Operation>), AppError> {
+    for _ in 0..CONSISTENT_READS {
+        let (revision, plan, history) = read()?;
+        if revision == Some(plan.revision) {
+            return Ok((plan, history));
+        }
+    }
+    Err(AppError::HistoryChanging {
+        reads: CONSISTENT_READS,
+    })
 }
 
 #[cfg(test)]

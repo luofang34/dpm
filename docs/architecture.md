@@ -525,16 +525,19 @@ device. Task durations are sampled independently; correlated overruns are not mo
 operation log the application layer passes in, at one clock reading. Each verified task whose
 verified submission and start are recorded and in the log gives one sample: the hours from its start
 to that submission (working hours of its calendar when the plan has calendars) over its PERT
-expectation, grouped by the kind of the submitting actor and by required capability. Work whose
-start and submit were committed within minutes without occurrence times, work started before the
-log began, and unestimated work are excluded and counted by reason. Review waits run from each
+expectation, grouped by the kind of the submitting actor and by required capability. The review
+waits of rejected attempts are subtracted, since they are measured as reviews. Work claimed, started
+and submitted within minutes without occurrence times, work started before the log began, attempts
+held by more than one actor kind, intervals with under a minute of working time and unestimated work
+are excluded and counted by reason, overall and per executor kind. Review waits run from each
 submission attempt to its review, by reviewer kind; decision waits from the reviewed change that
-added a decision to its resolution, by deciding kind. Flow metrics (cycle and lead time,
-throughput, aging work in progress, claim episodes) read the same records.
+added a decision to its resolution, by deciding kind. Flow metrics (cycle and lead time, throughput,
+aging work in progress, claim episodes) read the same records and skip the same bulk-recorded work.
 
 These are derived views, never state: no estimate is rewritten. A calibrated `status` forecasts a
 copy of the plan whose unfinished estimates are scaled by their executor kind's median ratio and
-whose unverified tasks wait the verifier kind's median review time, each only with enough samples;
+whose unverified tasks wait the verifier kind's median review time, each only with enough samples
+and a factor only within a plausible band, so a record of zero time never collapses the forecast;
 `dpm-schedule` places that review delay before the verifier's calendar, and a plan without
 calendars is placed on `always` calendars so nothing else moves. The default forecast is untouched.
 

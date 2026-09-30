@@ -103,8 +103,9 @@ impl Log {
     }
 
     /// Human A (2 h of a 4 h estimate, reviewed by an agent), agent B (rejected once, 2 h 50 min
-    /// of 20 h), agent D (backfilled, 16 h of 32 h), bulk-recorded C, unestimated E, and F
-    /// released, claimed again and handed off.
+    /// of 20 h, less the 1 h its rejected attempt waited), agent D (backfilled, 16 h of 32 h), C
+    /// claimed, started and submitted in one sitting, unestimated E, and F released, claimed again
+    /// and handed off.
     pub(crate) fn scenario() -> Self {
         let mut log = Self::new();
         let e = log.id("TEST-E");
@@ -126,7 +127,7 @@ impl Log {
         log.start("agent:coder", "TEST-D", 30.0, Some(10.0));
         log.submit("agent:coder", "TEST-D", 30.0 + 30.0 / 3600.0, Some(26.0));
         log.verify("human:bob", "TEST-D", 40.0);
-        log.claim("agent:coder", "TEST-C", 20.5);
+        log.claim("agent:coder", "TEST-C", 21.0);
         log.start("agent:coder", "TEST-C", 21.0, None);
         log.submit("agent:coder", "TEST-C", 21.0 + 60.0 / 3600.0, None);
         log.verify("human:bob", "TEST-C", 22.0);
@@ -173,7 +174,8 @@ fn verified_work_is_measured_per_executor_kind_and_capability() {
         .map(|s| (s.key.0.as_str(), s.executor, s.actual_hours, s.ratio))
         .collect();
     assert_eq!(samples.len(), 3, "{samples:?}");
-    let b_actual = 3.0 - 10.0 / 60.0;
+    // Start to verified submission less the hour the rejected attempt waited for its review.
+    let b_actual = 3.0 - 10.0 / 60.0 - 1.0;
     for ((key, executor, actual, ratio), expected) in samples.iter().zip([
         ("TEST-A", ActorKind::Human, 2.0, 0.5),
         ("TEST-B", ActorKind::Agent, b_actual, b_actual / 20.0),
@@ -190,7 +192,10 @@ fn verified_work_is_measured_per_executor_kind_and_capability() {
         .find(|g| g.executor == ActorKind::Agent)
         .expect("agent");
     assert_eq!((agents.samples, agents.sufficient), (2, false));
-    close(agents.median, (b_actual / 20.0 + 0.5) / 2.0);
+    close(
+        agents.median.expect("median"),
+        (b_actual / 20.0 + 0.5) / 2.0,
+    );
     let rust = report
         .estimates
         .by_capability
@@ -382,7 +387,7 @@ fn a_calibrated_status_applies_sufficient_factors_to_a_copy_only() {
 
     for group in &mut report.estimates.by_executor {
         group.sufficient = true;
-        group.median = 0.1;
+        group.median = Some(0.1);
     }
     for group in &mut report.reviews.by_kind {
         group.sufficient = true;
@@ -421,3 +426,7 @@ fn a_review_recorded_with_its_submission_is_no_wait() {
     // The execution itself is still measured: 2 h of a 4 h estimate.
     close(report.estimates.samples.first().expect("sample").ratio, 0.5);
 }
+
+mod bulk;
+mod forecast;
+mod records;

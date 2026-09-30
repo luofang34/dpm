@@ -1,13 +1,13 @@
 //! Flow of work through execution: cycle and lead time, throughput, aging work in progress and
 //! how reliably a claim ends in verified work.
 
-use super::calibration::{HistoryIndex, ascending, elapsed_hours};
-use crate::{Command, Operation};
+use super::calibration::{HistoryIndex, ascending, elapsed_hours, exclusions};
+use crate::{Command, Exclusion, ExclusionReason, Operation};
 use chrono::{DateTime, Datelike, TimeDelta, Utc};
-use dpm_model::{ActorId, ActorKind, Key, Plan, WorkItemId, WorkStatus};
+use dpm_model::{ActorId, ActorKind, Key, Plan, WorkItem, WorkItemId, WorkStatus};
 use dpm_schedule::percentile;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// ISO weeks the throughput history covers, the current one included.
 pub const THROUGHPUT_WEEKS: usize = 8;
@@ -15,9 +15,9 @@ pub const THROUGHPUT_WEEKS: usize = 8;
 /// Flow metrics at one clock reading.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlowReport {
-    /// Elapsed hours from start to verification of verified tasks.
+    /// Elapsed hours from start to verification of verified tasks not recorded in bulk.
     pub cycle_time: Durations,
-    /// Elapsed hours from the first claim to verification of verified tasks.
+    /// Elapsed hours from the first claim to verification of verified tasks not recorded in bulk.
     pub lead_time: Durations,
     /// Tasks verified in recent periods.
     pub throughput: Throughput,
@@ -28,7 +28,7 @@ pub struct FlowReport {
 }
 
 /// Distribution of elapsed durations.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Durations {
     /// Number of tasks measured.
     pub count: usize,
@@ -36,6 +36,8 @@ pub struct Durations {
     pub median_hours: Option<f64>,
     /// 85th percentile elapsed hours; absent without tasks.
     pub p85_hours: Option<f64>,
+    /// Verified tasks not measured, grouped by reason.
+    pub excluded: Vec<Exclusion>,
 }
 
 /// Tasks verified in recent periods, counted by their verification time.
@@ -103,52 +105,88 @@ pub struct ClaimOutcomes {
     pub verified_after_rejection: usize,
     /// The holder gave the claim back.
     pub released: usize,
-    /// A human or service moved the work to another holder.
+    /// A human or service moved the work to another holder; a transfer, not a failure.
     pub handed_off: usize,
     /// Still held.
     pub open: usize,
-    /// `verified` among closed episodes; absent while none has closed.
+    /// `verified / (verified + released)`: handed-off and open episodes count on neither side;
+    /// absent while no episode was verified or released.
     pub verified_fraction: Option<f64>,
 }
 
 /// Flow metrics of a plan and the log it results from.
-pub(crate) fn flow(plan: &Plan, index: &HistoryIndex<'_>, now: DateTime<Utc>) -> FlowReport {
-    let verified: Vec<_> = plan
+///
+/// Cycle and lead time skip the work calibration found recorded in bulk (`bulk`): its start and
+/// submission are when someone typed them in, not when the work happened.
+pub(crate) fn flow(
+    plan: &Plan,
+    index: &HistoryIndex<'_>,
+    bulk: &BTreeSet<WorkItemId>,
+    now: DateTime<Utc>,
+) -> FlowReport {
+    let done: Vec<&WorkItem> = plan
         .work_items
         .values()
         .filter(|w| w.is_executable() && w.execution.status.satisfies_dependency())
-        .filter_map(|w| w.execution.events.verified_at.map(|at| (w, at)))
         .collect();
-    let cycle = verified
-        .iter()
-        .filter_map(|(w, at)| w.execution.events.started_at.map(|s| elapsed_hours(s, *at)))
-        .collect();
-    let lead = verified
-        .iter()
-        .filter_map(|(w, at)| {
-            let claim = index
-                .of(w.id)
-                .iter()
-                .find(|op| matches!(op.command, Command::Claim { .. }))?;
-            Some(elapsed_hours(claim.timestamp, *at))
-        })
-        .collect();
+    let mut cycle = Measured::default();
+    let mut lead = Measured::default();
+    let mut verified = Vec::new();
+    for work in done {
+        let Some(at) = work.execution.events.verified_at else {
+            cycle.skip(ExclusionReason::VerificationUnrecorded, work);
+            lead.skip(ExclusionReason::VerificationUnrecorded, work);
+            continue;
+        };
+        verified.push(at);
+        if bulk.contains(&work.id) {
+            cycle.skip(ExclusionReason::BulkRecorded, work);
+            lead.skip(ExclusionReason::BulkRecorded, work);
+            continue;
+        }
+        match work.execution.events.started_at {
+            Some(started) => cycle.hours.push(elapsed_hours(started, at)),
+            None => cycle.skip(ExclusionReason::StartUnrecorded, work),
+        }
+        let claim = index
+            .of(work.id)
+            .iter()
+            .find(|op| matches!(op.command, Command::Claim { .. }));
+        match claim {
+            Some(claim) => lead.hours.push(elapsed_hours(claim.timestamp, at)),
+            None => lead.skip(ExclusionReason::ClaimedBeforeHistory, work),
+        }
+    }
     FlowReport {
-        cycle_time: durations(cycle),
-        lead_time: durations(lead),
-        throughput: throughput(verified.iter().map(|(_, at)| *at), now),
+        cycle_time: cycle.durations(),
+        lead_time: lead.durations(),
+        throughput: throughput(verified.iter().copied(), now),
         aging: aging(plan, index, now),
         reliability: reliability(index.work_operations()),
     }
 }
 
-fn durations(hours: Vec<f64>) -> Durations {
-    let sorted = ascending(hours);
-    let known = !sorted.is_empty();
-    Durations {
-        count: sorted.len(),
-        median_hours: known.then(|| percentile(&sorted, 0.5)),
-        p85_hours: known.then(|| percentile(&sorted, 0.85)),
+/// Durations measured so far and the tasks skipped, with why.
+#[derive(Default)]
+struct Measured {
+    hours: Vec<f64>,
+    skipped: Vec<(ExclusionReason, Key)>,
+}
+
+impl Measured {
+    fn skip(&mut self, reason: ExclusionReason, work: &WorkItem) {
+        self.skipped.push((reason, work.key.clone()));
+    }
+
+    fn durations(self) -> Durations {
+        let sorted = ascending(self.hours);
+        let known = !sorted.is_empty();
+        Durations {
+            count: sorted.len(),
+            median_hours: known.then(|| percentile(&sorted, 0.5)),
+            p85_hours: known.then(|| percentile(&sorted, 0.85)),
+            excluded: exclusions(self.skipped),
+        }
     }
 }
 
@@ -304,8 +342,10 @@ fn count(outcomes: &mut ClaimOutcomes, ending: Ending) {
     *slot = slot.wrapping_add(1);
 }
 
+/// A handoff transfers the work rather than failing it, so its episode counts on neither side of
+/// `verified_fraction`.
 fn finish(mut outcomes: ClaimOutcomes) -> ClaimOutcomes {
-    let closed = outcomes.verified + outcomes.released + outcomes.handed_off;
+    let closed = outcomes.verified + outcomes.released;
     outcomes.verified_fraction = (closed > 0).then(|| outcomes.verified as f64 / closed as f64);
     outcomes
 }

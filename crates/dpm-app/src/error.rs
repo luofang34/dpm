@@ -79,6 +79,16 @@ pub enum AppError {
         /// Revision currently stored.
         actual: u64,
     },
+    /// A read of the snapshot together with its whole operation log never saw both at one
+    /// revision, because other clients kept committing.
+    #[error(
+        "the workspace kept changing during the read: {reads} reads of the snapshot and its \
+         operation log each saw a new commit; retry when writes pause"
+    )]
+    HistoryChanging {
+        /// Reads attempted.
+        reads: usize,
+    },
     /// A principal argument is not spelled `KIND:NAME`.
     #[error(transparent)]
     Actor(#[from] dpm_model::ActorParseError),
@@ -122,6 +132,7 @@ impl AppError {
             Self::Unsupported { .. } => "unsupported",
             Self::ReadOnlyProject => "read_only_project",
             Self::Conflict { .. }
+            | Self::HistoryChanging { .. }
             | Self::Engine(dpm_engine::EngineError::RevisionConflict { .. })
             | Self::Store(dpm_store::StoreError::RevisionConflict { .. }) => "revision_conflict",
             #[cfg(feature = "git")]

@@ -161,3 +161,31 @@ fn next_advises_an_actor_that_holds_claims_without_changing_candidates() {
     assert_eq!(holder["advisories"][0]["kind"], "holding_claims");
     assert_eq!(holder["advisories"][0]["holding"], json!(["TEST-A"]));
 }
+
+#[test]
+fn a_read_retries_while_commits_land_and_then_says_the_workspace_kept_changing() {
+    let mut reads = 0;
+    let settled = consistent_read(|| {
+        reads += 1;
+        let plan = fixture();
+        let revision = (reads == CONSISTENT_READS).then_some(plan.revision);
+        Ok((revision.or(Some(plan.revision + 1)), plan, Vec::new()))
+    });
+    assert!(settled.is_ok());
+    assert_eq!(reads, CONSISTENT_READS);
+
+    let mut reads = 0;
+    let busy = consistent_read(|| {
+        reads += 1;
+        let plan = fixture();
+        Ok((None, plan, Vec::new()))
+    });
+    assert_eq!(reads, CONSISTENT_READS, "the retries are bounded");
+    let error = busy.expect_err("never consistent");
+    assert!(
+        matches!(error, AppError::HistoryChanging { reads: 10 }),
+        "{error:?}"
+    );
+    assert!(error.to_string().contains("kept changing during the read"));
+    assert_eq!(error.code(), "revision_conflict");
+}

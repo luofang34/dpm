@@ -23,7 +23,8 @@ def calibration_smoke(directory):
     def after(milliseconds):
         return stamp(base + timedelta(milliseconds=milliseconds))
 
-    # Backfilled with occurrence times, so the pair is measured even though it was committed at once.
+    # Backfilled with occurrence times, so not recorded in bulk, but a millisecond of work is no
+    # measurement.
     run_cli(database, 'start', 'TEST-A', '--at', after(1), '--actor', 'agent:worker')
     run_cli(database, 'submit', 'TEST-A', '--at', after(2), '--actor', 'agent:worker')
     run_cli(database, 'verify', 'TEST-A', '--actor', 'human:reviewer')
@@ -52,8 +53,18 @@ def calibration_smoke(directory):
     assert anonymous == run_cli_envelope(database, '--clock', at, 'next', '--deterministic-only')
 
     report = calibration['data']
-    assert [s['key'] for s in report['estimates']['samples']] == ['TEST-A'], report['estimates']
-    assert report['estimates']['excluded'] == [{'reason': 'bulk_recorded', 'count': 1, 'keys': ['TEST-B']}]
+    assert report['estimates']['samples'] == [], report['estimates']
+    assert report['estimates']['excluded'] == [
+        {'reason': 'bulk_recorded', 'count': 1, 'keys': ['TEST-B']},
+        {'reason': 'no_working_time', 'count': 1, 'keys': ['TEST-A']},
+    ], report['estimates']
+    agent = report['estimates']['by_executor'][0]
+    assert agent['executor'] == 'Agent' and agent['samples'] == 0 and agent['median'] is None, agent
+    assert agent['excluded'] == [{'reason': 'bulk_recorded', 'count': 1},
+                                 {'reason': 'no_working_time', 'count': 1}], agent
+    # Cycle time keeps the backfilled task and skips the bulk-recorded one, saying so.
+    assert report['flow']['cycle_time']['count'] == 1, report['flow']
+    assert report['flow']['cycle_time']['excluded'] == [{'reason': 'bulk_recorded', 'count': 1, 'keys': ['TEST-B']}]
     assert report['history']['operations'] == 10 and report['rules']['min_samples'] == 5
     assert report['flow']['reliability']['total']['verified'] == 2
     assert [w['key'] for w in report['flow']['aging']] == ['TEST-D']
@@ -70,7 +81,8 @@ def calibration_smoke(directory):
 
     text = subprocess.run([str(CLI), '--database', str(database), 'calibration'], cwd=ROOT,
                           capture_output=True, text=True, timeout=15, check=True).stdout
-    assert 'Estimates: 1 sample(s)' in text and 'excluded BulkRecorded: 1' in text, text
+    assert 'Estimates: 0 sample(s)' in text and 'excluded bulk_recorded: 1 (TEST-B)' in text, text
+    assert '  agent: no measurement over 0' in text and 'Human' not in text, text
 
     # The repository's read-only preview has no history, so the report has no samples.
     preview = subprocess.run([str(CLI), '--json', 'calibration'], cwd=ROOT, capture_output=True,

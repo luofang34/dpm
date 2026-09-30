@@ -27,11 +27,12 @@ pub use query::{
     Advisory, AgingWork, AppliedCalibration, AppliedFactor, AppliedReviewDelay,
     BULK_WINDOW_SECONDS, BasisReport, CalibrationReport, CalibrationRules, ClaimOutcomes,
     Durations, EstimateCalibration, EstimateSample, Exclusion, ExclusionReason, FlowReport,
-    HistoryCoverage, HolderOutcomes, HourBasis, InapplicableWork, MAX_SCENARIOS, MIN_SAMPLES,
-    NextWorkCandidate, NextWorkQuery, OpenChoices, REVIEW_FLOOR_SECONDS, RatioGroup, Reliability,
-    ScenarioForecast, StatusSummary, THROUGHPUT_WEEKS, Throughput, WaitGroup, WaitReport,
-    WeekCount, WorkExplanation, advisories, calibration, excluded_in_flight, explain_work,
-    in_status_scope, is_unestimated, next_work, status, status_calibrated, unestimated,
+    HistoryCoverage, HolderOutcomes, HourBasis, InapplicableWork, MAX_APPLIED_RATIO, MAX_SCENARIOS,
+    MIN_ACTUAL_SECONDS, MIN_APPLIED_RATIO, MIN_SAMPLES, NextWorkCandidate, NextWorkQuery,
+    OpenChoices, REVIEW_FLOOR_SECONDS, RatioGroup, ReasonCount, Reliability, ScenarioForecast,
+    StatusSummary, THROUGHPUT_WEEKS, Throughput, WaitGroup, WaitReport, WeekCount, WorkExplanation,
+    advisories, calibration, excluded_in_flight, explain_work, in_status_scope, is_unestimated,
+    next_work, status, status_calibrated, unestimated,
 };
 pub use readiness::{completion, is_ready, show_work};
 

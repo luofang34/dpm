@@ -1,15 +1,18 @@
 //! Actual execution time of verified tasks against their estimates.
 
-use super::history::{backfilled, occurred};
+use super::history::occurred;
 use super::{
-    BULK_WINDOW_SECONDS, EstimateCalibration, EstimateSample, ExclusionReason, HistoryIndex,
-    MIN_SAMPLES, RatioGroup, ascending, exclusions,
+    EstimateCalibration, EstimateSample, ExclusionReason, HistoryIndex, MIN_ACTUAL_SECONDS,
+    exclusions,
 };
-use crate::{Command, EngineError};
+use crate::{Command, Operation};
 use chrono::{DateTime, Utc};
 use dpm_model::{ActorKind, AttemptOutcome, Key, Plan, WorkItem, WorkItemId};
-use dpm_schedule::percentile;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+
+mod attempt;
+mod bulk;
+mod groups;
 
 /// Estimate calibration and the tasks whose start and submit were recorded in bulk.
 pub(super) struct Measured {
@@ -17,12 +20,19 @@ pub(super) struct Measured {
     pub(super) bulk: BTreeSet<WorkItemId>,
 }
 
+/// A verified task left out of the samples, attributed to an executor kind when one is known.
+pub(super) struct Excluded<'a> {
+    kind: Option<ActorKind>,
+    capabilities: &'a BTreeSet<String>,
+    reason: ExclusionReason,
+}
+
 /// Measure every verified task, or say why it cannot be measured.
-pub(super) fn measure(plan: &Plan, index: &HistoryIndex<'_>) -> Result<Measured, EngineError> {
+pub(super) fn measure(plan: &Plan, index: &HistoryIndex<'_>) -> Measured {
     let bulk: BTreeSet<WorkItemId> = plan
         .work_items
         .values()
-        .filter(|w| w.is_executable() && bulk_recorded(index, w.id))
+        .filter(|w| w.is_executable() && bulk::bulk_recorded(index, w.id))
         .map(|w| w.id)
         .collect();
     let mut verified: Vec<&WorkItem> = plan
@@ -32,22 +42,30 @@ pub(super) fn measure(plan: &Plan, index: &HistoryIndex<'_>) -> Result<Measured,
         .collect();
     verified.sort_by(|a, b| a.key.natural_cmp(&b.key));
     let mut samples = Vec::new();
-    let mut excluded: Vec<(ExclusionReason, Key)> = Vec::new();
+    let mut excluded: Vec<Excluded<'_>> = Vec::new();
+    let mut keys: Vec<(ExclusionReason, Key)> = Vec::new();
     for work in verified {
-        match sample(plan, index, &bulk, work)? {
+        match sample(plan, index, &bulk, work) {
             Ok(sample) => samples.push(sample),
-            Err(reason) => excluded.push((reason, work.key.clone())),
+            Err(reason) => {
+                keys.push((reason, work.key.clone()));
+                excluded.push(Excluded {
+                    kind: attributed(index, work),
+                    capabilities: &work.contract.capabilities,
+                    reason,
+                });
+            }
         }
     }
-    Ok(Measured {
+    Measured {
         calibration: EstimateCalibration {
-            by_executor: groups(&samples, false),
-            by_capability: groups(&samples, true),
+            by_executor: groups::groups(&samples, &excluded, false),
+            by_capability: groups::groups(&samples, &excluded, true),
             samples,
-            excluded: exclusions(excluded),
+            excluded: exclusions(keys),
         },
         bulk,
-    })
+    }
 }
 
 /// One verified task's sample, or the first reason it cannot be one.
@@ -56,39 +74,40 @@ fn sample(
     index: &HistoryIndex<'_>,
     bulk: &BTreeSet<WorkItemId>,
     work: &WorkItem,
-) -> Result<Result<EstimateSample, ExclusionReason>, EngineError> {
+) -> Result<EstimateSample, ExclusionReason> {
     let estimated = work.expected_duration_hours();
-    let Some(estimated) = (estimated > 0.0).then_some(estimated) else {
-        return Ok(Err(ExclusionReason::Unestimated));
-    };
-    let Some(started) = work.execution.events.started_at else {
-        return Ok(Err(ExclusionReason::StartUnrecorded));
-    };
-    let Some(submitted) = verified_submission(work) else {
-        return Ok(Err(ExclusionReason::SubmitUnrecorded));
-    };
+    let estimated = (estimated > 0.0)
+        .then_some(estimated)
+        .ok_or(ExclusionReason::Unestimated)?;
+    let started = work
+        .execution
+        .events
+        .started_at
+        .ok_or(ExclusionReason::StartUnrecorded)?;
+    let submitted = verified_submission(work).ok_or(ExclusionReason::SubmitUnrecorded)?;
     let start_op = index.last(work.id, |c| matches!(c, Command::Start { .. }));
-    let submit_op = index
-        .of(work.id)
-        .iter()
-        .rev()
-        .find(|op| matches!(op.command, Command::Submit { .. }) && occurred(op) == submitted)
-        .copied();
-    let (Some(_), Some(submit_op)) = (start_op, submit_op) else {
-        return Ok(Err(ExclusionReason::NotInHistory));
+    let (Some(start_op), Some(submit_op)) = (start_op, submit_operation(index, work.id, submitted))
+    else {
+        return Err(ExclusionReason::NotInHistory);
     };
     if bulk.contains(&work.id) {
-        return Ok(Err(ExclusionReason::BulkRecorded));
+        return Err(ExclusionReason::BulkRecorded);
     }
-    let actual = dpm_schedule::worked_between(plan, work, started, submitted)?;
-    Ok(Ok(EstimateSample {
+    if attempt::mixed_executors(index.of(work.id), start_op, submit_op) {
+        return Err(ExclusionReason::MixedExecutors);
+    }
+    let actual = attempt::actual_hours(plan, work, started, submitted)?;
+    if actual < MIN_ACTUAL_SECONDS as f64 / 3600.0 {
+        return Err(ExclusionReason::NoWorkingTime);
+    }
+    Ok(EstimateSample {
         key: work.key.clone(),
         executor: submit_op.actor.kind,
         capabilities: work.contract.capabilities.clone(),
         estimated_hours: estimated,
         actual_hours: actual,
         ratio: actual / estimated,
-    }))
+    })
 }
 
 /// Submission time of the attempt that was verified; the recorded submission for work verified
@@ -101,59 +120,27 @@ fn verified_submission(work: &WorkItem) -> Option<DateTime<Utc>> {
     }
 }
 
-/// Whether the task's latest start and the first submission after it were committed within
-/// [`BULK_WINDOW_SECONDS`] of each other, neither naming an occurrence time.
-pub(super) fn bulk_recorded(index: &HistoryIndex<'_>, work: WorkItemId) -> bool {
-    let operations = index.of(work);
-    let Some(start) = operations
+/// The logged submit that recorded the submission at `submitted`.
+fn submit_operation<'a>(
+    index: &HistoryIndex<'a>,
+    work: WorkItemId,
+    submitted: DateTime<Utc>,
+) -> Option<&'a Operation> {
+    index
+        .of(work)
         .iter()
-        .rposition(|op| matches!(op.command, Command::Start { .. }))
-    else {
-        return false;
-    };
-    let mut after = operations.iter().skip(start);
-    let (Some(start), Some(submit)) = (
-        after.next(),
-        after.find(|op| matches!(op.command, Command::Submit { .. })),
-    ) else {
-        return false;
-    };
-    backfilled(&start.command).is_none()
-        && backfilled(&submit.command).is_none()
-        && (submit.timestamp - start.timestamp).num_seconds().abs() <= BULK_WINDOW_SECONDS
+        .rev()
+        .find(|op| matches!(op.command, Command::Submit { .. }) && occurred(op) == submitted)
+        .copied()
 }
 
-/// Ratio distributions per executor kind, or per executor kind and capability.
-fn groups(samples: &[EstimateSample], by_capability: bool) -> Vec<RatioGroup> {
-    let mut grouped: BTreeMap<(ActorKind, Option<&str>), Vec<f64>> = BTreeMap::new();
-    for sample in samples {
-        if by_capability {
-            for capability in &sample.capabilities {
-                grouped
-                    .entry((sample.executor, Some(capability.as_str())))
-                    .or_default()
-                    .push(sample.ratio);
-            }
-        } else {
-            grouped
-                .entry((sample.executor, None))
-                .or_default()
-                .push(sample.ratio);
-        }
-    }
-    grouped
-        .into_iter()
-        .map(|((executor, capability), ratios)| {
-            let sorted = ascending(ratios);
-            RatioGroup {
-                executor,
-                capability: capability.map(str::to_owned),
-                samples: sorted.len(),
-                median: percentile(&sorted, 0.5),
-                p25: percentile(&sorted, 0.25),
-                p75: percentile(&sorted, 0.75),
-                sufficient: sorted.len() >= MIN_SAMPLES,
-            }
-        })
-        .collect()
+/// Kind an excluded task's time would have counted for: its verified submitter's, else its latest
+/// submitter's, else its owner's.
+fn attributed(index: &HistoryIndex<'_>, work: &WorkItem) -> Option<ActorKind> {
+    let submitter = verified_submission(work)
+        .and_then(|at| submit_operation(index, work.id, at))
+        .or_else(|| index.last(work.id, |c| matches!(c, Command::Submit { .. })));
+    submitter
+        .map(|op| op.actor.kind)
+        .or_else(|| work.execution.owner.as_ref().map(|o| o.kind))
 }

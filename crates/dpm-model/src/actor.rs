@@ -46,14 +46,20 @@ impl ActorId {
     }
 }
 
+/// The lowercase word a principal's spelling starts with, also used in prose.
+impl std::fmt::Display for ActorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Human => "human",
+            Self::Agent => "agent",
+            Self::Service => "service",
+        })
+    }
+}
+
 impl std::fmt::Display for ActorId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let kind = match self.kind {
-            ActorKind::Human => "human",
-            ActorKind::Agent => "agent",
-            ActorKind::Service => "service",
-        };
-        write!(f, "{kind}:{}", self.name)
+        write!(f, "{}:{}", self.kind, self.name)
     }
 }
 

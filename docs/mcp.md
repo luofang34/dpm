@@ -885,52 +885,71 @@ blocking work appears in `outside_scope` when it is itself eligible.
 
 `calibration` / `get_calibration` reads the snapshot and the whole operation log (the pages
 `history` serves, at one revision) and returns a report; nothing is stored and no estimate is
-rewritten. It works on the read-only preview too, whose empty history yields no samples.
+rewritten. It works on the read-only preview too, whose empty history yields no samples. The log
+and the snapshot are read separately and repeated until they agree on a revision; a workspace that
+keeps committing through ten such reads is reported as `revision_conflict` saying so.
 
 | Field | Meaning |
 | --- | --- |
-| rules | `min_samples` (5), `bulk_window_seconds` (180), `review_floor_seconds` (10) and `actual_hours`: `working` with calendars, else `elapsed` |
+| rules | `min_samples` (5), `bulk_window_seconds` (180), `min_actual_seconds` (60), `min_applied_ratio` (0.02) and `max_applied_ratio` (50), `review_floor_seconds` (10) and `actual_hours`: `working` with calendars, else `elapsed` |
 | history | `operations` read and the first one's commit time |
-| estimates.samples[] | Each measured verified task: `key`, `executor` (kind of the actor who submitted the verified attempt), `capabilities`, `estimated_hours` (PERT expected), `actual_hours` (start to that submission, on the task's calendar), `ratio` |
-| estimates.by_executor[] / by_capability[] | Per executor kind, and per kind and required capability: `samples`, `median`, `p25`, `p75`, `sufficient` |
+| estimates.samples[] | Each measured verified task: `key`, `executor` (kind of the actor who submitted the verified attempt), `capabilities`, `estimated_hours` (PERT expected), `actual_hours` (start to that submission on the task's calendar, less the review waits of its rejected attempts), `ratio` |
+| estimates.by_executor[] / by_capability[] | Per executor kind, and per kind and required capability: `samples`, `median`, `p25`, `p75` (null without samples), `sufficient`, and `excluded[]` `{reason, count}` of that kind's verified tasks left out; a kind whose work was all excluded still has a group |
 | estimates.excluded[] / reviews.excluded[] / decisions.excluded[] | `{reason, count, keys}` for everything not measured; for reviews `count` counts reviews and `keys` names each task once |
 | reviews.by_kind[] | Elapsed hours from each submission attempt to its rejection or verification, per reviewer kind: `count`, `median_hours`, `p80_hours`, `sufficient` |
 | decisions.by_kind[] | Elapsed hours from the reviewed change that added a decision to its resolution, per deciding actor kind |
-| flow.cycle_time / lead_time | Start, or first claim, to verification of verified tasks: `count`, `median_hours`, `p85_hours` |
+| flow.cycle_time / lead_time | Start, or first claim, to verification of verified tasks: `count`, `median_hours`, `p85_hours`, and `excluded[]` `{reason, count, keys}` |
 | flow.throughput | Verified in the last 7 and 28 days, and per ISO week (UTC) for the last 8 weeks |
 | flow.aging[] | Claimed, started, blocked and submitted work: `key`, `status`, `owner`, `hours_since_claim` (the current holder's claim or handoff), `hours_since_start`; oldest first |
-| flow.reliability | Claim episodes (each claim, and each handoff for its recipient) ended `verified` (and `verified_after_rejection`), `released`, `handed_off` or still `open`, with `verified_fraction` among closed ones; `total` and `by_holder` kind |
+| flow.reliability | Claim episodes (each claim, and each handoff for its recipient) ended `verified` (and `verified_after_rejection`), `released`, `handed_off` or still `open`, with `verified_fraction` = verified / (verified + released); `total` and `by_holder` kind |
 
 A verified task is excluded from estimate calibration, with the reason, when it is `unestimated`
 (no estimate or 0 expected hours), its start was never recorded (`start_unrecorded`), its verified
 submission has no time (`submit_unrecorded`), its start or that submission is not in the log the
-store holds (`not_in_history`, such as work imported already started), or its latest start and the
-first submission after it were committed within 180 seconds of each other without an occurrence time
-(`bulk_recorded`): work recorded after the fact in one sitting says nothing about its duration, so
-backfill it with `at` instead. The same rule drops genuinely short work, so fast executors' ratios
-lean high. Reviews of bulk-recorded work are excluded too, as are reviews recorded within 10
+store holds (`not_in_history`, such as work imported already started), or it was `bulk_recorded`:
+its latest start and the first submission after it name no occurrence time and were committed
+within 180 seconds of each other and of the claim (or handoff) that gave its holder the work. That
+is work recorded after the fact in one sitting, which says nothing about its duration; backfill it
+with `at` instead. A claim committed earlier means the holder had the work that long, so a quick
+start-to-submit is measured as genuinely short work; when the claim predates the log, start and
+submit alone decide. It is also excluded when actors of more than one kind held the attempt from
+its start to the verified submission (`mixed_executors`: a handoff between a human and an agent),
+when its calendar cannot count the interval (`calendar_out_of_range`), and when less than
+`min_actual_seconds` of actual time remains (`no_working_time`: a start and submit backfilled to
+one instant, or an interval entirely outside working hours). Each `by_executor` group counts its
+own exclusions, attributed to the kind that submitted, so a group's ratio can be read against what
+it left out. Reviews of bulk-recorded work are excluded too, as are reviews recorded within 10
 seconds of their submission (`reviewed_on_submission`: they measure the recording, not a wait) and
 verifications recorded before attempts existed (`attempt_unrecorded`); decisions present before the
 log began are `opened_before_history`, and reviewed replacements, created already decided, are
 `replacement`.
 
 A ratio describes how estimates were written for that kind of executor, not effort or
-productivity: estimates are durations of the task's calendar, blocked time counts, and rework after
-a rejection is part of the actual time. Medians of a few samples move a lot; `sufficient` marks
-groups with at least `min_samples`. Cycle and lead times use the recorded times as they stand, so
-bulk-recorded work distorts them; `estimates.excluded` names it.
+productivity: estimates are durations of the task's calendar, so blocked time counts and rework
+after a rejection is part of the actual time. The time a rejected attempt waited for its review is
+not: it is measured as a review wait and subtracted from the execution. Medians of a few samples
+move a lot; `sufficient` marks groups with at least `min_samples`. Cycle and lead time skip the
+same bulk-recorded work (`bulk_recorded`), and name verified tasks without a recorded start
+(`start_unrecorded`), verification (`verification_unrecorded`) or, for lead time, first claim in
+the log (`claimed_before_history`). A claim episode ended by a handoff is a transfer, not a failure,
+so `verified_fraction` counts it on neither side.
 
 `status --calibrated` / `project_status` with `calibrated: true` forecasts a copy of the plan in
 which every unfinished estimated task's optimistic, most-likely and pessimistic hours are multiplied
 by the median ratio of the kind it resolves to (its owner's, else `schedule.executor`, else
-`calendars.default_executor`, else Human), and every task still awaiting verification waits the
-median review time of the verifier kind (`calendars.verifier`, else Human) in elapsed hours after its
-work before the verifier's calendar applies; a submitted task waits it again from the clock reading,
-so the forecast errs late. A factor or delay applies only when its group is `sufficient`; otherwise
-it is 1 or 0 h. The result gains `calibration`: `min_samples`, `factors[]` (`executor`, `tasks`,
-`samples`, `measured`, `factor`, `applied`, `reason`), `review_delay` (`verifier`, `samples`,
-`measured_hours`, `hours`, `applied`, `reason`) and `capped` (scaled estimates held to the calendar
-limit). Without the option the output is unchanged and has no `calibration` key.
+`calendars.default_executor`, else Human; to have agent ratios apply to work not yet claimed, set
+`"executor": "Agent"` in the task's `schedule` or `"default_executor": "Agent"` in `calendars`), and
+every task still awaiting verification waits the median review time of the verifier kind
+(`calendars.verifier`, else Human) in elapsed hours after its work before the verifier's calendar
+applies; a submitted task waits it again from the clock reading, so the forecast errs late. A factor
+or delay applies only when its group is `sufficient`, and a factor only when its median lies within
+`min_applied_ratio`..`max_applied_ratio`: a median outside that band points at the records rather
+than the estimates, so it is reported in `measured` with the reason and not applied. Otherwise the
+factor is 1 and the delay 0 h. The result gains `calibration`: `min_samples`, `factors[]`
+(`executor`, `tasks`, `samples`, `measured`, `factor`, `applied`, `reason`), `review_delay`
+(`verifier`, `samples`, `measured_hours`, `hours`, `applied`, `reason`) and `capped` (scaled
+estimates held to the calendar limit). Without the option the output is unchanged and has no
+`calibration` key.
 
 `next --actor KIND:NAME` / `next_work` with `actor` adds `advisories`: `{"kind": "holding_claims",
 "actor", "holding": [KEY...], "reason"}` when that actor already owns claimed, started or blocked
