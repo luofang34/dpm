@@ -64,7 +64,8 @@ fn typed_results_serialize_to_the_json_adapters_return() {
         data(
             &app,
             Query::Status {
-                probabilistic: false
+                probabilistic: false,
+                calibrated: false,
             }
         ),
         expected
@@ -97,6 +98,7 @@ fn typed_results_serialize_to_the_json_adapters_return() {
         limit: 5,
         project_keys: BTreeSet::new(),
         asset_keys: BTreeSet::new(),
+        actor: None,
     };
     assert_eq!(
         serde_json::to_value(&next).expect("json"),

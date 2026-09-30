@@ -37,19 +37,29 @@ impl Application {
             interchange @ (Query::ImportMspdi { .. } | Query::ExportMspdi { .. }) => respond(
                 self.observe_blocking(|plan, _, _| crate::interchange::query(plan, interchange))?,
             ),
-            Query::Status { probabilistic } => respond(self.status_blocking(probabilistic)?),
+            Query::Status {
+                probabilistic,
+                calibrated: false,
+            } => respond(self.status_blocking(probabilistic)?),
+            Query::Status {
+                probabilistic,
+                calibrated: true,
+            } => respond(self.status_calibrated_blocking(probabilistic)?),
+            Query::Calibration => respond(self.calibration_blocking()?),
             Query::Next {
                 capabilities,
                 probabilistic,
                 limit,
                 project_keys,
                 asset_keys,
+                actor,
             } => respond(self.next_blocking(&NextRequest {
                 capabilities,
                 probabilistic,
                 limit,
                 project_keys,
                 asset_keys,
+                actor,
             })?),
             Query::Show { key } => respond(self.show_blocking(&key)?),
             Query::Explain { key } => respond(self.explain_blocking(&key)?),

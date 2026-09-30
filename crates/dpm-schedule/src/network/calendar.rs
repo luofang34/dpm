@@ -2,7 +2,7 @@
 //!
 //! An activity starts at its first working moment after its start constraints, works its
 //! duration in working hours, and a task still awaiting verification finishes at the verifier
-//! calendar's next working moment. Finish constraints (FF, SF) move the start so that the work
+//! calendar's next working moment after any requested review delay. Finish constraints (FF, SF) move the start so that the work
 //! ends no earlier than they require. Elapsed lags stay elapsed hours; working lags count the
 //! successor's calendar in both passes, as the execution gates do.
 
@@ -101,7 +101,7 @@ impl Network {
                 };
             }
             let verified = match placement.review(position)? {
-                Some(verifier) => verifier.align(done)?,
+                Some(verifier) => verifier.align(done + placement.review_delay())?,
                 None => done,
             };
             earliest.push(finite(*id, start)?);
@@ -138,8 +138,10 @@ impl Network {
             }
             let calendar = placement.execution(position)?;
             let review = placement.review(position)?;
+            // Inverts the forward review: aligning back never undershoots a verified finish the
+            // forward pass reached, so the work may end the whole delay before it.
             let done_by = match review {
-                Some(verifier) => verifier.align_back(finish_bound)?,
+                Some(verifier) => verifier.align_back(finish_bound)? - placement.review_delay(),
                 None => finish_bound,
             };
             let start = start_bound.min(calendar.sub(done_by, duration)?);

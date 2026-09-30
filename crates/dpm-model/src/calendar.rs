@@ -14,6 +14,7 @@ mod working;
 pub use clock::{ClockTime, WorkingPeriod};
 pub use working::{BeyondCalendar, MAX_WINDOW_HOURS, WorkingTime};
 pub(crate) mod validate;
+pub use validate::MAX_CALENDAR_HOURS;
 
 /// Built-in calendar counting every hour, the elapsed-time behaviour of a plan without calendars.
 pub const ALWAYS: &str = "always";

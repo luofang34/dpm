@@ -1,13 +1,20 @@
 //! Remaining projections on working calendars, with fixed expected times in Europe/Berlin.
 #![cfg(test)]
 
+#[path = "calendar_projection/review_delay.rs"]
+mod review_delay;
+
 use chrono::{DateTime, TimeZone, Utc};
+use dpm_model::Timeline;
 use dpm_model::{
     AcceptanceCriterion, ActorId, ActorKind, Calendars, Dependency, DependencyKind, Key, LagBasis,
     Plan, Priority, Project, ProjectId, ThreePointEstimate, WorkItem, WorkItemId, WorkKind,
     WorkStatus,
 };
-use dpm_schedule::{SimulationConfig, deterministic_remaining, simulate_remaining};
+use dpm_schedule::{
+    RemainingOptions, SimulationConfig, deterministic_remaining, deterministic_remaining_with,
+    simulate_remaining,
+};
 use std::collections::BTreeSet;
 
 /// Local Berlin time in March 2026 (CET, before the daylight-saving change).
@@ -358,8 +365,9 @@ impl Random {
     }
 }
 
-/// Random small networks mixing executor kinds, relation kinds, signed lags and lag bases: the
-/// latest times never precede the earliest ones, so float is never negative before clamping.
+/// Random small networks mixing executor kinds, relation kinds, signed lags, lag bases and review
+/// delays, with and without calendars: the latest times never precede the earliest ones, so float
+/// is never negative before clamping.
 #[test]
 fn random_calendar_networks_keep_latest_times_after_earliest() {
     let kinds = [
@@ -374,10 +382,14 @@ fn random_calendar_networks_keep_latest_times_after_earliest() {
         let now =
             berlin(2, 0) + chrono::TimeDelta::milliseconds((random.below(7 * 86_400) * 997) as i64);
         let verifier = executors[random.below(3) as usize];
-        let mut plan = Builder::new(Some(Calendars {
+        let calendars = (case % 5 != 0).then(|| Calendars {
             verifier,
             ..Calendars::in_zone("Europe/Berlin")
-        }));
+        });
+        let mut plan = Builder::new(calendars);
+        let options = RemainingOptions {
+            review_delay_hours: random.below(4) as f64 * 3.5,
+        };
         let count = 2 + random.below(6);
         let ids: Vec<WorkItemId> = (0..count)
             .map(|n| {
@@ -401,7 +413,9 @@ fn random_calendar_networks_keep_latest_times_after_earliest() {
                 basis,
             );
         }
-        let schedule = deterministic_remaining(&plan.plan, now).expect("schedule");
+        let timeline = Timeline::at(&plan.plan, now);
+        let schedule =
+            deterministic_remaining_with(&plan.plan, &timeline, options).expect("schedule");
         for (id, activity) in &schedule.activities {
             assert!(
                 activity.latest_start_hours >= activity.earliest_start_hours - 1e-6

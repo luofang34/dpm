@@ -96,7 +96,13 @@ pub enum Query {
     Status {
         /// Compute seeded uncertainty projections.
         probabilistic: bool,
+        /// Apply measured estimate factors and review waits that have enough samples, and state
+        /// them; absent or false leaves the forecast unchanged.
+        #[serde(default)]
+        calibrated: bool,
     },
+    /// Calibration of estimates, review and decision waits, and flow metrics from history.
+    Calibration,
     /// Globally ranked executable leaf tasks, narrowed to a visible query-only scope.
     Next {
         /// Requested capabilities; empty preserves the engine's unfiltered operator view.
@@ -111,6 +117,10 @@ pub enum Query {
         /// WorkspaceAsset keys that returned work must fit; empty does not filter.
         #[serde(default)]
         asset_keys: BTreeSet<String>,
+        /// Actor about to choose work; adds advice such as the claims it already holds, never
+        /// changing the candidates.
+        #[serde(default)]
+        actor: Option<ActorId>,
     },
     /// Work contract with projected container/milestone status.
     Show {

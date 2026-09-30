@@ -64,6 +64,8 @@ pub struct NextRequest {
     pub project_keys: BTreeSet<String>,
     /// WorkspaceAsset keys returned work must fit; empty does not filter.
     pub asset_keys: BTreeSet<String>,
+    /// Actor about to choose work, for advice such as the claims it already holds.
+    pub actor: Option<dpm_model::ActorId>,
 }
 
 impl Application {
@@ -108,13 +110,11 @@ impl Application {
                 capabilities: request.capabilities.clone(),
                 use_probabilistic_criticality: request.probabilistic,
             };
-            Ok(dpm_engine::next_in_scope(
-                plan,
-                &query,
-                &scope,
-                request.limit,
-                now,
-            )?)
+            let mut result = dpm_engine::next_in_scope(plan, &query, &scope, request.limit, now)?;
+            if let Some(actor) = &request.actor {
+                result.advisories = dpm_engine::advisories(plan, actor);
+            }
+            Ok(result)
         })
     }
     /// One work contract with its projected status and progress.

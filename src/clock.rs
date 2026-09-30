@@ -34,7 +34,9 @@ fn is_query(command: &Commands) -> bool {
             | Commands::Show { .. }
             | Commands::Explain { .. }
             | Commands::Export
-            | Commands::Store(StoreCommand::History { .. } | StoreCommand::Revision)
+            | Commands::Store(
+                StoreCommand::History { .. } | StoreCommand::Revision | StoreCommand::Calibration
+            )
             | Commands::Plan {
                 command: PlanCommand::Template
                     | PlanCommand::Diff { .. }

@@ -143,6 +143,7 @@ fn next_query(project_keys: &[&str], asset_keys: &[&str], limit: usize) -> Query
         limit,
         project_keys: project_keys.iter().map(|k| k.to_string()).collect(),
         asset_keys: asset_keys.iter().map(|k| k.to_string()).collect(),
+        actor: None,
     }
 }
 

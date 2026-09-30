@@ -182,7 +182,7 @@ fn closed_stretches(name: &str, definition: &CalendarDefinition) -> Result<(), V
 /// Largest estimate or lag, in hours, a plan with calendars may state: about 24 years of
 /// Standard working time, far below the reach of a projection window, so one task can never put
 /// every forecast out of range.
-const MAX_CALENDAR_HOURS: f64 = 50_000.0;
+pub const MAX_CALENDAR_HOURS: f64 = 50_000.0;
 
 fn within_calendar_range(plan: &Plan) -> Result<(), ValidationError> {
     let reason =

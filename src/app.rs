@@ -29,6 +29,7 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
     let command = command.unwrap_or(if json {
         Commands::Status {
             no_simulation: false,
+            calibrated: false,
         }
     } else {
         Commands::Tui
@@ -97,25 +98,12 @@ fn run_open_blocking(
             },
             json,
         ),
-        Commands::Status { no_simulation } => {
-            let response = app.query_blocking(Query::Status {
-                probabilistic: !no_simulation,
-            })?;
-            if json {
-                return output::response_blocking(response, true);
-            }
-            let unestimated: Vec<dpm_model::Key> = serde_json::from_value(
-                response
-                    .data
-                    .get("unestimated")
-                    .cloned()
-                    .unwrap_or_default(),
-            )
-            .unwrap_or_default();
-            if let Some(line) = output::unestimated_line(&unestimated) {
-                output::text_blocking(&line)?;
-            }
-            output::text_blocking(&serde_json::to_string_pretty(&response.data)?)
+        Commands::Status {
+            no_simulation,
+            calibrated,
+        } => crate::calibration::status_blocking(app, !no_simulation, calibrated, json),
+        Commands::Store(StoreCommand::Calibration) => {
+            crate::calibration::calibration_blocking(app, json)
         }
         Commands::Next {
             capabilities,
@@ -123,6 +111,7 @@ fn run_open_blocking(
             asset_keys,
             limit,
             deterministic_only,
+            actor: who,
         } => {
             let response = app.query_blocking(Query::Next {
                 capabilities: capabilities.into_iter().collect(),
@@ -130,6 +119,7 @@ fn run_open_blocking(
                 probabilistic: !deterministic_only,
                 project_keys: project_keys.into_iter().collect(),
                 asset_keys: asset_keys.into_iter().collect(),
+                actor: who.as_deref().map(actor).transpose()?,
             })?;
             if json {
                 return output::response_blocking(response, true);

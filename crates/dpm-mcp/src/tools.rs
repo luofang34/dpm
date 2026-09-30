@@ -60,7 +60,11 @@ const NAMES: &[(&str, &str)] = &[
     ),
     (
         "project_status",
-        "Project execution counts and schedule forecast",
+        "Project execution counts and schedule forecast; calibrated applies measured estimate ratios and review waits and states each factor",
+    ),
+    (
+        "get_calibration",
+        "Compare estimates with recorded working time per executor kind, measure review and decision waits, and report cycle time, throughput, aging work and claim reliability; bulk-recorded work is excluded and counted",
     ),
     (
         "next_work",
@@ -134,7 +138,7 @@ const NAMES: &[(&str, &str)] = &[
 
 pub(crate) fn definitions() -> Vec<Value> {
     NAMES.iter().chain(ownership::NAMES.iter()).chain(validation::NAMES.iter()).map(|(name,description)| {
-        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_revision" | "workspace_list" | "project_status" | "next_work" | "get_work" | "explain_work");
+        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_revision" | "workspace_list" | "project_status" | "get_calibration" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
         if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"start_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external"|"revalidate_basis") {
@@ -155,10 +159,11 @@ pub(crate) fn definitions() -> Vec<Value> {
             "validate_plan" => validation::schema(&mut properties, &mut required),
             "history" => { properties.insert("after_sequence".into(),json!({"type":"integer","minimum":0,"default":0})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"maximum":1000,"default":100})); },
             "workspace_register" => { properties.insert("database".into(),json!({"type":"string"})); properties.insert("replace".into(),json!({"type":"boolean","default":false})); required.push("database"); },
-            "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); },
+            "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); properties.insert("calibrated".into(),json!({"type":"boolean","default":false,"description":"Apply measured factors with enough samples to a copy of the plan and report them under calibration"})); },
             "next_work" => { properties.insert("capabilities".into(),json!({"type":"array","items":{"type":"string"}})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"default":5})); properties.insert("probabilistic".into(),json!({"type":"boolean","default":true}));
                 properties.insert("project_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"Project keys whose subtrees form a query-only scope; not a directory"}));
-                properties.insert("asset_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"WorkspaceAsset keys returned work must fit: at least one named, every write listed"})); },
+                properties.insert("asset_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"WorkspaceAsset keys returned work must fit: at least one named, every write listed"}));
+                properties.insert("actor".into(),json!({"type":"string","description":"KIND:NAME about to choose work; adds advisories such as claims it already holds, never changing candidates"})); },
             "reject_work" => { properties.insert("reason".into(),json!({"type":"string","minLength":1})); required.push("reason"); },
             "report_blocker" => { properties.insert("blocker".into(),json!({"type":"string","minLength":1})); required.push("blocker"); },
             "report_progress" => {
@@ -214,6 +219,9 @@ struct Arguments {
     asset_keys: BTreeSet<String>,
     #[serde(default = "default_true")]
     probabilistic: bool,
+    #[serde(default)]
+    calibrated: bool,
+    actor: Option<String>,
     #[serde(default = "default_limit")]
     limit: usize,
     blocker: Option<String>,
@@ -282,13 +290,16 @@ pub(crate) fn call_tool_blocking(
         }),
         "project_status" => Some(Query::Status {
             probabilistic: args.probabilistic,
+            calibrated: args.calibrated,
         }),
+        "get_calibration" => Some(Query::Calibration),
         "next_work" => Some(Query::Next {
             capabilities: args.capabilities.clone(),
             probabilistic: args.probabilistic,
             limit: args.limit,
             project_keys: args.project_keys.clone(),
             asset_keys: args.asset_keys.clone(),
+            actor: args.actor.as_deref().map(str::parse).transpose()?,
         }),
         "get_work" => Some(Query::Show {
             key: required(args.key.clone(), "key")?,

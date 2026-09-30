@@ -3,6 +3,7 @@
 mod app;
 mod args;
 mod bootstrap;
+mod calibration;
 mod clock;
 mod console;
 mod error;

@@ -152,6 +152,10 @@ pub(crate) fn next_text_blocking(result: &NextWorkResult) -> Result<(), CliError
             }
         ))?;
     }
+    for advisory in &result.advisories {
+        let dpm_engine::Advisory::HoldingClaims { reason, .. } = advisory;
+        text_blocking(&format!("Advisory: {reason}"))?;
+    }
     Ok(())
 }
 

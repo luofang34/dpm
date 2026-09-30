@@ -59,7 +59,10 @@ fn views(app: &mut Application, at: DateTime<Utc>) -> Value {
     let views = serde_json::json!({
         "a": query(Query::Explain { key: "TEST-A".into() }),
         "b": query(Query::Explain { key: "TEST-B".into() }),
-        "status": query(Query::Status { probabilistic: false }),
+        "status": query(Query::Status {
+            probabilistic: false,
+            calibrated: false,
+        }),
         "revision": app.plan_blocking().expect("plan").revision,
     });
     views

@@ -5,7 +5,7 @@ use super::simulation_config;
 use crate::EngineError;
 use chrono::{DateTime, Utc};
 use dpm_model::{Applicability, DecisionId, DecisionStatus, Key, Plan, Timeline};
-use dpm_schedule::{deterministic_remaining, simulate_remaining};
+use dpm_schedule::{RemainingOptions, deterministic_remaining_with, simulate_remaining_with};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -95,6 +95,7 @@ pub(crate) fn open_choices(
     plan: &Plan,
     probabilistic: bool,
     now: DateTime<Utc>,
+    options: RemainingOptions,
 ) -> Result<Option<OpenChoices>, EngineError> {
     let open = open_decisions(plan);
     if open.is_empty() {
@@ -116,7 +117,7 @@ pub(crate) fn open_choices(
                     (*id, key.clone(), option)
                 })
                 .collect();
-            scenarios.push(forecast(plan, &choices, probabilistic, now)?);
+            scenarios.push(forecast(plan, &choices, (probabilistic, options), now)?);
         }
     }
     Ok(Some(OpenChoices {
@@ -129,7 +130,7 @@ pub(crate) fn open_choices(
 fn forecast(
     plan: &Plan,
     choices: &[(DecisionId, Key, String)],
-    probabilistic: bool,
+    (probabilistic, options): (bool, RemainingOptions),
     now: DateTime<Utc>,
 ) -> Result<ScenarioForecast, EngineError> {
     let mut hypothetical = plan.clone();
@@ -140,14 +141,20 @@ fn forecast(
             decision.resolved_at = Some(now);
         }
     }
-    let schedule = deterministic_remaining(&hypothetical, now)?;
+    let timeline = Timeline::at(&hypothetical, now);
+    let schedule = deterministic_remaining_with(&hypothetical, &timeline, options)?;
     let simulation = if probabilistic
         && hypothetical
             .work_items
             .values()
             .any(|w| w.schedule.estimate.is_some())
     {
-        Some(simulate_remaining(&hypothetical, simulation_config(), now)?)
+        Some(simulate_remaining_with(
+            &hypothetical,
+            simulation_config(),
+            &timeline,
+            options,
+        )?)
     } else {
         None
     };
@@ -175,6 +182,6 @@ fn forecast(
         p80_finish_hours: simulation.as_ref().map(|s| s.p80_finish_hours),
         p95_finish_hours: simulation.as_ref().map(|s| s.p95_finish_hours),
         stranded,
-        unestimated: super::unestimated(&hypothetical, &Timeline::at(&hypothetical, now)),
+        unestimated: super::unestimated(&hypothetical, &timeline),
     })
 }

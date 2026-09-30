@@ -205,6 +205,7 @@ enum Intent {
 
 mod clock;
 pub use clock::QueryClock;
+mod calibration;
 mod query;
 mod typed;
 pub use typed::{NextRequest, Observed, StatusView, WorkDetail, WorkspaceRevision};

@@ -18,9 +18,16 @@ fn a_preview_answers_queries_in_every_feature_set() {
     let status = app
         .query_blocking(Query::Status {
             probabilistic: false,
+            calibrated: false,
         })
         .expect("status");
     assert_eq!(status.data["total_work"], 7);
+    let calibration = app.query_blocking(Query::Calibration).expect("calibration");
+    assert_eq!(calibration.data["history"]["operations"], 0);
+    assert_eq!(
+        calibration.data["estimates"]["samples"],
+        serde_json::json!([])
+    );
     assert!(app.ensure_writable().is_err(), "a preview never writes");
 }
 

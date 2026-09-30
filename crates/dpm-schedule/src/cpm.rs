@@ -1,7 +1,7 @@
 use crate::network::{EPSILON, Network, finite};
 use crate::placement::Placement;
 use crate::remaining_duration::RemainingDuration;
-use crate::{ActivityCalendar, ActivitySchedule, Schedule, ScheduleError};
+use crate::{ActivityCalendar, ActivitySchedule, RemainingOptions, Schedule, ScheduleError};
 use dpm_model::{Dependency, Plan, Release, WorkItemId};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -38,6 +38,17 @@ pub fn deterministic_remaining_at(
     plan: &Plan,
     timeline: &dpm_model::Timeline,
 ) -> Result<Schedule, ScheduleError> {
+    deterministic_remaining_with(plan, timeline, RemainingOptions::default())
+}
+
+/// Remaining projection with caller-requested adjustments such as a review delay after the work
+/// of every task still awaiting verification.
+pub fn deterministic_remaining_with(
+    plan: &Plan,
+    timeline: &dpm_model::Timeline,
+    options: RemainingOptions,
+) -> Result<Schedule, ScheduleError> {
+    options.validate()?;
     plan.validate()?;
     let remaining = remaining_plan_at(plan, timeline)?;
     let durations = remaining
@@ -47,7 +58,7 @@ pub fn deterministic_remaining_at(
         .collect();
     let network = Network::compile(&remaining.plan)?;
     let dense = dense(&network, &durations)?;
-    let mut placement = remaining.placement(&network, timeline, &dense)?;
+    let mut placement = remaining.placement(&network, timeline, &dense, options)?;
     let mut schedule = project(&network, &dense, placement.as_mut())?;
     schedule
         .activities
@@ -84,13 +95,15 @@ impl Remaining {
             .collect()
     }
 
-    /// Calendar placement of this projection, or `None` for a plan without calendars. The
-    /// initial window covers several times the total work and lag, so widening is rare.
+    /// Calendar placement of this projection, or `None` for a plan without calendars and
+    /// without a review delay. The initial window covers several times the total work, lag and
+    /// review delay, so widening is rare.
     pub(crate) fn placement(
         &self,
         network: &Network,
         timeline: &dpm_model::Timeline,
         durations: &[f64],
+        options: RemainingOptions,
     ) -> Result<Option<Placement>, ScheduleError> {
         let work: f64 = durations.iter().sum();
         let lags: f64 = self
@@ -99,12 +112,14 @@ impl Remaining {
             .iter()
             .map(|d| d.lag_hours.abs())
             .sum();
+        let reviews = options.review_delay_hours * self.awaiting.len() as f64;
         Placement::new(
             &self.plan,
             network,
             timeline,
             &self.awaiting,
-            5.0 * (work + lags),
+            5.0 * (work + lags + reviews),
+            options,
         )
     }
 }
@@ -129,7 +144,7 @@ fn elapsed_since_start(
         })
         .filter_map(|(id, work)| match work.start_event()? {
             dpm_model::EventTime::Recorded(at) => Some(
-                crate::placement::worked_since(plan, work, at, timeline.now())
+                crate::placement::worked_between(plan, work, at, timeline.now())
                     .map(|hours| (*id, hours)),
             ),
             dpm_model::EventTime::Unrecorded => None,

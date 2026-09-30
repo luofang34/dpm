@@ -24,6 +24,9 @@ pub enum ScheduleError {
     #[error("the projection needs working time beyond the supported calendar range")]
     /// A calendar has no working time within the range a projection can compile.
     CalendarRange,
+    #[error("review delay {0} h must be finite and non-negative")]
+    /// A requested review delay is negative or not finite.
+    InvalidReviewDelay(f64),
     #[error("simulation requires at least one iteration")]
     /// At least one Monte Carlo iteration is required.
     NoSimulationIterations,

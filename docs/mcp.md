@@ -59,8 +59,9 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | plan export-mspdi --project-key KEY | export_mspdi | One project's work as MSPDI with a report of omitted data |
 | revision | workspace_revision | Committed revision and lineage read without loading the plan; poll it before reloading other views |
 | history --after-sequence N --limit N | history | Chronological operation pages with actor, time, reason and command |
-| status | project_status | Counts and optional Monte Carlo forecast |
-| next --project-key KEY --asset-key KEY | next_work | Full-graph ranking, then [scope](#scoped-next) and limit; outside-scope work stays visible |
+| status --calibrated | project_status | Counts and optional Monte Carlo forecast; `calibrated` applies [measured factors](#calibration-and-flow) to a copy of the plan |
+| calibration | get_calibration | [Estimate ratios, review and decision waits, and flow](#calibration-and-flow) measured from history |
+| next --project-key KEY --asset-key KEY --actor KIND:NAME | next_work | Full-graph ranking, then [scope](#scoped-next) and limit; outside-scope work stays visible; `actor` adds a holding-claims advisory |
 | show KEY | get_work | Objective, steps/results, scope, acceptance/checks and derived status |
 | explain KEY | explain_work | Readiness, dependencies, resolved requirements/gates/risks/evidence |
 | ratify KEY | ratify_contract | Human/service approves a complete Proposed contract |
@@ -879,6 +880,64 @@ Membership, applied to eligible work; each empty axis does not filter and non-em
 Unknown project or asset keys fail with `not_found` instead of matching nothing. A dependency
 outside the scope is evaluated like any other: in-scope work waiting on it stays unready, and the
 blocking work appears in `outside_scope` when it is itself eligible.
+
+## Calibration and flow
+
+`calibration` / `get_calibration` reads the snapshot and the whole operation log (the pages
+`history` serves, at one revision) and returns a report; nothing is stored and no estimate is
+rewritten. It works on the read-only preview too, whose empty history yields no samples.
+
+| Field | Meaning |
+| --- | --- |
+| rules | `min_samples` (5), `bulk_window_seconds` (180), `review_floor_seconds` (10) and `actual_hours`: `working` with calendars, else `elapsed` |
+| history | `operations` read and the first one's commit time |
+| estimates.samples[] | Each measured verified task: `key`, `executor` (kind of the actor who submitted the verified attempt), `capabilities`, `estimated_hours` (PERT expected), `actual_hours` (start to that submission, on the task's calendar), `ratio` |
+| estimates.by_executor[] / by_capability[] | Per executor kind, and per kind and required capability: `samples`, `median`, `p25`, `p75`, `sufficient` |
+| estimates.excluded[] / reviews.excluded[] / decisions.excluded[] | `{reason, count, keys}` for everything not measured; for reviews `count` counts reviews and `keys` names each task once |
+| reviews.by_kind[] | Elapsed hours from each submission attempt to its rejection or verification, per reviewer kind: `count`, `median_hours`, `p80_hours`, `sufficient` |
+| decisions.by_kind[] | Elapsed hours from the reviewed change that added a decision to its resolution, per deciding actor kind |
+| flow.cycle_time / lead_time | Start, or first claim, to verification of verified tasks: `count`, `median_hours`, `p85_hours` |
+| flow.throughput | Verified in the last 7 and 28 days, and per ISO week (UTC) for the last 8 weeks |
+| flow.aging[] | Claimed, started, blocked and submitted work: `key`, `status`, `owner`, `hours_since_claim` (the current holder's claim or handoff), `hours_since_start`; oldest first |
+| flow.reliability | Claim episodes (each claim, and each handoff for its recipient) ended `verified` (and `verified_after_rejection`), `released`, `handed_off` or still `open`, with `verified_fraction` among closed ones; `total` and `by_holder` kind |
+
+A verified task is excluded from estimate calibration, with the reason, when it is `unestimated`
+(no estimate or 0 expected hours), its start was never recorded (`start_unrecorded`), its verified
+submission has no time (`submit_unrecorded`), its start or that submission is not in the log the
+store holds (`not_in_history`, such as work imported already started), or its latest start and the
+first submission after it were committed within 180 seconds of each other without an occurrence time
+(`bulk_recorded`): work recorded after the fact in one sitting says nothing about its duration, so
+backfill it with `at` instead. The same rule drops genuinely short work, so fast executors' ratios
+lean high. Reviews of bulk-recorded work are excluded too, as are reviews recorded within 10
+seconds of their submission (`reviewed_on_submission`: they measure the recording, not a wait) and
+verifications recorded before attempts existed (`attempt_unrecorded`); decisions present before the
+log began are `opened_before_history`, and reviewed replacements, created already decided, are
+`replacement`.
+
+A ratio describes how estimates were written for that kind of executor, not effort or
+productivity: estimates are durations of the task's calendar, blocked time counts, and rework after
+a rejection is part of the actual time. Medians of a few samples move a lot; `sufficient` marks
+groups with at least `min_samples`. Cycle and lead times use the recorded times as they stand, so
+bulk-recorded work distorts them; `estimates.excluded` names it.
+
+`status --calibrated` / `project_status` with `calibrated: true` forecasts a copy of the plan in
+which every unfinished estimated task's optimistic, most-likely and pessimistic hours are multiplied
+by the median ratio of the kind it resolves to (its owner's, else `schedule.executor`, else
+`calendars.default_executor`, else Human), and every task still awaiting verification waits the
+median review time of the verifier kind (`calendars.verifier`, else Human) in elapsed hours after its
+work before the verifier's calendar applies; a submitted task waits it again from the clock reading,
+so the forecast errs late. A factor or delay applies only when its group is `sufficient`; otherwise
+it is 1 or 0 h. The result gains `calibration`: `min_samples`, `factors[]` (`executor`, `tasks`,
+`samples`, `measured`, `factor`, `applied`, `reason`), `review_delay` (`verifier`, `samples`,
+`measured_hours`, `hours`, `applied`, `reason`) and `capped` (scaled estimates held to the calendar
+limit). Without the option the output is unchanged and has no `calibration` key.
+
+`next --actor KIND:NAME` / `next_work` with `actor` adds `advisories`: `{"kind": "holding_claims",
+"actor", "holding": [KEY...], "reason"}` when that actor already owns claimed, started or blocked
+work. Advice never removes or reorders candidates, and without an actor, or with nothing held, the
+result has no `advisories` key. The tool takes the actor as an argument rather than its configured
+actor so that its result equals the CLI's for the same arguments. These additions leave
+`api_version` and `result_version` unchanged.
 
 ## Task instructions
 

@@ -1,8 +1,8 @@
-use crate::ScheduleError;
 use crate::network::{EPSILON, Network};
 use crate::placement::Placement;
 use crate::remaining_duration::RemainingDuration;
 use crate::sampling::XorShift64;
+use crate::{RemainingOptions, ScheduleError};
 use dpm_model::{Plan, WorkItemId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -39,7 +39,11 @@ pub struct SimulationSummary {
     pub criticality: BTreeMap<WorkItemId, f64>,
 }
 
-fn percentile(sorted: &[f64], p: f64) -> f64 {
+/// Linearly interpolated percentile `p` (0..=1) of ascending values; 0 for no values.
+///
+/// Every consumer that summarizes samples uses this one definition, so results are reproducible.
+#[must_use]
+pub fn percentile(sorted: &[f64], p: f64) -> f64 {
     if sorted.is_empty() {
         return 0.0;
     }
@@ -89,12 +93,24 @@ pub fn simulate_remaining_at(
     config: SimulationConfig,
     timeline: &dpm_model::Timeline,
 ) -> Result<SimulationSummary, ScheduleError> {
+    simulate_remaining_with(plan, config, timeline, RemainingOptions::default())
+}
+
+/// Sample the remaining graph with caller-requested adjustments, the same ones
+/// [`deterministic_remaining_with`](crate::deterministic_remaining_with) applies.
+pub fn simulate_remaining_with(
+    plan: &Plan,
+    config: SimulationConfig,
+    timeline: &dpm_model::Timeline,
+    options: RemainingOptions,
+) -> Result<SimulationSummary, ScheduleError> {
+    options.validate()?;
     plan.validate()?;
     let remaining = crate::cpm::remaining_plan_at(plan, timeline)?;
     let durations = remaining.durations()?;
     let network = Network::compile(&remaining.plan)?;
     let expected: Vec<f64> = durations.iter().map(|(_, d)| d.expected()).collect();
-    let mut placement = remaining.placement(&network, timeline, &expected)?;
+    let mut placement = remaining.placement(&network, timeline, &expected, options)?;
     let mut summary = simulate_inner(&network, config, &durations, placement.as_mut())?;
     summary
         .criticality

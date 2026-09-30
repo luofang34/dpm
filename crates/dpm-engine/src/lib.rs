@@ -24,9 +24,14 @@ pub use scope::{
 pub use command::{Command, EngineError, ExternalLinkRequest, Operation};
 pub use execution::apply_command;
 pub use query::{
-    BasisReport, InapplicableWork, MAX_SCENARIOS, NextWorkCandidate, NextWorkQuery, OpenChoices,
-    ScenarioForecast, StatusSummary, WorkExplanation, excluded_in_flight, explain_work,
-    in_status_scope, is_unestimated, next_work, status, unestimated,
+    Advisory, AgingWork, AppliedCalibration, AppliedFactor, AppliedReviewDelay,
+    BULK_WINDOW_SECONDS, BasisReport, CalibrationReport, CalibrationRules, ClaimOutcomes,
+    Durations, EstimateCalibration, EstimateSample, Exclusion, ExclusionReason, FlowReport,
+    HistoryCoverage, HolderOutcomes, HourBasis, InapplicableWork, MAX_SCENARIOS, MIN_SAMPLES,
+    NextWorkCandidate, NextWorkQuery, OpenChoices, REVIEW_FLOOR_SECONDS, RatioGroup, Reliability,
+    ScenarioForecast, StatusSummary, THROUGHPUT_WEEKS, Throughput, WaitGroup, WaitReport,
+    WeekCount, WorkExplanation, advisories, calibration, excluded_in_flight, explain_work,
+    in_status_scope, is_unestimated, next_work, status, status_calibrated, unestimated,
 };
 pub use readiness::{completion, is_ready, show_work};
 

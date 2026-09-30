@@ -519,6 +519,25 @@ sampling order, and transcendental functions come from the pure-Rust `libm` (cli
 platform ones), so a query is bit-for-bit reproducible for the same plan and clock reading on every
 device. Task durations are sampled independently; correlated overruns are not modeled.
 
+## Calibration and flow
+
+`dpm-engine` measures how recorded work compared with its estimates from the snapshot and the
+operation log the application layer passes in, at one clock reading. Each verified task whose
+verified submission and start are recorded and in the log gives one sample: the hours from its start
+to that submission (working hours of its calendar when the plan has calendars) over its PERT
+expectation, grouped by the kind of the submitting actor and by required capability. Work whose
+start and submit were committed within minutes without occurrence times, work started before the
+log began, and unestimated work are excluded and counted by reason. Review waits run from each
+submission attempt to its review, by reviewer kind; decision waits from the reviewed change that
+added a decision to its resolution, by deciding kind. Flow metrics (cycle and lead time,
+throughput, aging work in progress, claim episodes) read the same records.
+
+These are derived views, never state: no estimate is rewritten. A calibrated `status` forecasts a
+copy of the plan whose unfinished estimates are scaled by their executor kind's median ratio and
+whose unverified tasks wait the verifier kind's median review time, each only with enough samples;
+`dpm-schedule` places that review delay before the verifier's calendar, and a plan without
+calendars is placed on `always` calendars so nothing else moves. The default forecast is untouched.
+
 ## Persistence
 
 SQLite v0.1 commits a JSON domain snapshot and a semantic operation record in one transaction.

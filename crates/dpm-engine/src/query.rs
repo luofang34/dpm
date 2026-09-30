@@ -4,7 +4,10 @@ use dpm_model::{
     Applicability, BasisStatus, DecisionStatus, Plan, Priority, Timeline, WorkItem, WorkItemId,
     WorkStatus, basis_status,
 };
-use dpm_schedule::{SimulationConfig, deterministic_remaining_at, simulate_remaining_at};
+use dpm_schedule::{
+    RemainingOptions, SimulationConfig, deterministic_remaining_at, deterministic_remaining_with,
+    simulate_remaining_at, simulate_remaining_with,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -14,6 +17,20 @@ mod estimates;
 pub use estimates::{is_unestimated, unestimated};
 mod explain;
 pub use explain::{BasisReport, WorkExplanation, explain_work};
+mod advisory;
+pub use advisory::{Advisory, advisories};
+mod calibration;
+pub use calibration::{
+    AppliedCalibration, AppliedFactor, AppliedReviewDelay, BULK_WINDOW_SECONDS, CalibrationReport,
+    CalibrationRules, EstimateCalibration, EstimateSample, Exclusion, ExclusionReason,
+    HistoryCoverage, HourBasis, MIN_SAMPLES, REVIEW_FLOOR_SECONDS, RatioGroup, WaitGroup,
+    WaitReport, calibration,
+};
+mod flow;
+pub use flow::{
+    AgingWork, ClaimOutcomes, Durations, FlowReport, HolderOutcomes, Reliability, THROUGHPUT_WEEKS,
+    Throughput, WeekCount,
+};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Execution counts and remaining schedule projections.
 pub struct StatusSummary {
@@ -66,6 +83,9 @@ pub struct StatusSummary {
     /// Open decisions that condition work, with one forecast per option combination.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open_choices: Option<OpenChoices>,
+    /// Measured factors the forecasts applied, present only for a calibrated status.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calibration: Option<AppliedCalibration>,
 }
 
 pub(crate) fn simulation_config() -> SimulationConfig {
@@ -90,10 +110,38 @@ pub fn status(
     probabilistic: bool,
     now: DateTime<Utc>,
 ) -> Result<StatusSummary, EngineError> {
+    status_with(plan, probabilistic, now, None)
+}
+
+/// [`status`] whose forecasts scale each unfinished task's estimate by its executor kind's
+/// measured ratio and add the verifier kind's measured review wait, each only when enough samples
+/// support it; `calibration` in the result states what was applied and why. The plan itself is
+/// never changed.
+pub fn status_calibrated(
+    plan: &Plan,
+    probabilistic: bool,
+    now: DateTime<Utc>,
+    report: &CalibrationReport,
+) -> Result<StatusSummary, EngineError> {
+    status_with(plan, probabilistic, now, Some(report))
+}
+
+fn status_with(
+    plan: &Plan,
+    probabilistic: bool,
+    now: DateTime<Utc>,
+    report: Option<&CalibrationReport>,
+) -> Result<StatusSummary, EngineError> {
     plan.validate()?;
     let timeline = Timeline::at(plan, now);
-    let schedule = deterministic_remaining_at(plan, &timeline)?;
-    let open_choices = choices::open_choices(plan, probabilistic, now)?;
+    let calibrated = report.map(|r| calibration::calibrated_forecast(plan, r));
+    let (forecast, options) = match &calibrated {
+        Some((scaled, options, _)) => (scaled, *options),
+        None => (plan, RemainingOptions::default()),
+    };
+    let forecast_timeline = Timeline::at(forecast, now);
+    let schedule = deterministic_remaining_with(forecast, &forecast_timeline, options)?;
+    let open_choices = choices::open_choices(forecast, probabilistic, now, options)?;
     // Mutually exclusive branches have no probability model, so no single percentile is given.
     let simulation = if probabilistic
         && open_choices.is_none()
@@ -102,7 +150,12 @@ pub fn status(
             .values()
             .any(|w| w.schedule.estimate.is_some())
     {
-        Some(simulate_remaining_at(plan, simulation_config(), &timeline)?)
+        Some(simulate_remaining_with(
+            forecast,
+            simulation_config(),
+            &forecast_timeline,
+            options,
+        )?)
     } else {
         None
     };
@@ -141,6 +194,7 @@ pub fn status(
         unestimated: unestimated(plan, &timeline),
         not_applicable: choices::not_applicable(plan, &timeline),
         open_choices,
+        calibration: calibrated.map(|(_, _, applied)| applied),
     })
 }
 

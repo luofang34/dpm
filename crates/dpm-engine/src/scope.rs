@@ -174,6 +174,10 @@ pub struct NextWorkResult {
     pub candidates: Vec<ScopedCandidate>,
     /// Eligible work excluded by scope.
     pub outside_scope: OutsideScope,
+    /// Advice for the actor the caller named, such as work it already holds; it never filters or
+    /// reorders candidates, and is absent when no actor was named or no advice applies.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub advisories: Vec<crate::Advisory>,
 }
 
 /// Rank eligible work on the full graph at an adapter-supplied time, then partition it by scope and
@@ -217,6 +221,7 @@ pub fn next_in_scope(
         in_scope_count,
         candidates: inside,
         outside_scope: outside,
+        advisories: Vec::new(),
     })
 }
 

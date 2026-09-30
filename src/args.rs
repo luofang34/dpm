@@ -77,6 +77,10 @@ pub(crate) enum Commands {
     Status {
         #[arg(long)]
         no_simulation: bool,
+        /// Apply measured estimate ratios and review waits that have enough samples to the
+        /// forecast, and state each factor; the stored plan is unchanged.
+        #[arg(long)]
+        calibrated: bool,
     },
     /// Recommend executable work and explain the ranking.
     Next {
@@ -92,6 +96,10 @@ pub(crate) enum Commands {
         limit: usize,
         #[arg(long)]
         deterministic_only: bool,
+        /// Actor about to choose work (KIND:NAME); adds advice such as the claims it already
+        /// holds, without changing the candidates.
+        #[arg(long)]
+        actor: Option<String>,
     },
     /// Show one work item by human-readable key.
     Show { key: String },
@@ -265,6 +273,9 @@ pub(crate) enum StoreCommand {
         #[arg(long, default_value_t = 100)]
         limit: u16,
     },
+    /// Compare estimates with recorded working time, measure review and decision waits, and
+    /// report flow from history.
+    Calibration,
     /// Write a consistent, verified copy of the store, including all history, to a new file.
     Backup {
         /// New backup file; an existing file is never overwritten.

@@ -5,8 +5,8 @@
 //! over a window of hours after the clock reading; a pass that leaves the window is repeated on a
 //! wider one, so results never depend on the window chosen.
 
-use crate::ScheduleError;
 use crate::network::Network;
+use crate::{RemainingOptions, ScheduleError};
 use dpm_model::{
     BeyondCalendar, Calendars, MAX_WINDOW_HOURS, Plan, ResolvedCalendar, Timeline, WorkItemId,
     WorkingTime,
@@ -31,21 +31,29 @@ pub(crate) struct Placement {
     review: Vec<Option<usize>>,
     /// Resolved calendar of each executable task, for reports.
     pub(crate) resolved: BTreeMap<WorkItemId, ResolvedCalendar>,
+    /// Elapsed hours a review waits after the work ends, before the verifier's calendar applies.
+    review_delay: f64,
 }
 
 impl Placement {
-    /// Placement of a remaining projection, or `None` for a plan without calendars.
+    /// Placement of a remaining projection, or `None` for a plan without calendars that needs
+    /// no review delay.
     ///
-    /// `awaiting` lists the tasks whose verification the projection still waits for.
+    /// `awaiting` lists the tasks whose verification the projection still waits for. A review
+    /// delay in a plan without calendars places every activity on the `always` calendar, which
+    /// reproduces the elapsed projection apart from the delay.
     pub(crate) fn new(
         plan: &Plan,
         network: &Network,
         timeline: &Timeline,
         awaiting: &BTreeSet<WorkItemId>,
         horizon: f64,
+        options: RemainingOptions,
     ) -> Result<Option<Self>, ScheduleError> {
-        let Some(calendars) = plan.calendars.clone() else {
-            return Ok(None);
+        let (calendars, reported) = match (&plan.calendars, options.delays_review()) {
+            (Some(calendars), _) => (calendars.clone(), true),
+            (None, true) => (elapsed_calendars(), false),
+            (None, false) => return Ok(None),
         };
         let mut names: Vec<String> = Vec::new();
         let mut index = |name: &str| match names.iter().position(|n| n == name) {
@@ -67,7 +75,7 @@ impl Placement {
             let calendar = calendars.resolve(work);
             execution.push(index(&calendar.calendar));
             review.push(awaiting.contains(id).then_some(verifier));
-            if work.is_executable() {
+            if work.is_executable() && reported {
                 resolved.insert(*id, calendar);
             }
         }
@@ -83,6 +91,7 @@ impl Placement {
             execution,
             review,
             resolved,
+            review_delay: options.review_delay_hours,
         };
         placement.compile()?;
         Ok(Some(placement))
@@ -154,6 +163,11 @@ impl Placement {
         self.calendar(*index)
     }
 
+    /// Elapsed hours a review waits after the work ends.
+    pub(crate) fn review_delay(&self) -> f64 {
+        self.review_delay
+    }
+
     /// Verifier calendar of a task at a position that still awaits verification.
     pub(crate) fn review(&self, position: usize) -> Result<Option<&WorkingTime>, Placed> {
         match self.review.get(position) {
@@ -183,9 +197,26 @@ impl From<ScheduleError> for Placed {
     }
 }
 
-/// Hours between a started task's start and the clock reading: working hours of its calendar
-/// when the plan has calendars, elapsed hours otherwise.
-pub(crate) fn worked_since(
+/// Calendars in which every kind works every hour, so placement adds nothing but a review delay.
+fn elapsed_calendars() -> Calendars {
+    let always = || dpm_model::ALWAYS.to_owned();
+    Calendars {
+        kinds: dpm_model::KindCalendars {
+            human: always(),
+            agent: always(),
+            service: always(),
+        },
+        ..Calendars::in_zone("UTC")
+    }
+}
+
+/// Hours between two instants of a task's work, such as its start and the clock reading: working
+/// hours of the task's calendar when the plan has calendars, elapsed hours otherwise; zero when
+/// `until` precedes `from`.
+///
+/// Remaining forecasts measure started work with it, and calibration measures recorded work with
+/// it, so both count the same hours.
+pub fn worked_between(
     plan: &Plan,
     work: &dpm_model::WorkItem,
     started: chrono::DateTime<chrono::Utc>,
