@@ -11,6 +11,9 @@ use crate::ScheduleError;
 use crate::placement::{Placed, Placement};
 use dpm_model::{Endpoint, WorkingTime};
 
+/// Earliest starts, verified finishes and review waits by topological position.
+type Forward = (Vec<f64>, Vec<f64>, Vec<f64>);
+
 /// A projected time at a topological position, or the far end of an edge.
 fn read(values: &[f64], position: usize) -> Result<f64, Placed> {
     Ok(time_at(values, position)?)
@@ -25,10 +28,11 @@ fn forward(edge: &Edge, event: f64, successor: &WorkingTime) -> Result<f64, Plac
     }
 }
 
-/// The latest predecessor event an edge allows, measured back from the successor's event.
+/// The latest predecessor event an edge allows, measured back from the successor's event; it
+/// never precedes an event whose forward bound is the successor's event.
 fn backward(edge: &Edge, event: f64, successor: &WorkingTime) -> Result<f64, Placed> {
     if edge.working {
-        Ok(successor.shift(event, -edge.lag)?)
+        Ok(successor.unshift(event, edge.lag)?)
     } else {
         Ok(event - edge.lag)
     }
@@ -46,6 +50,21 @@ impl Network {
     }
 
     fn placed_pass(&self, durations: &[f64], placement: &Placement) -> Result<Times, Placed> {
+        let (earliest, earliest_finish, review_wait) = self.forward_placed(durations, placement)?;
+        let finish = earliest_finish.iter().copied().fold(0.0_f64, f64::max);
+        let (latest, latest_finish) = self.backward_placed(durations, placement, finish)?;
+        Ok(Times {
+            earliest,
+            latest,
+            earliest_finish,
+            latest_finish,
+            review_wait,
+            finish,
+        })
+    }
+
+    /// Earliest starts, verified finishes and review waits by topological position.
+    fn forward_placed(&self, durations: &[f64], placement: &Placement) -> Result<Forward, Placed> {
         let count = self.order.len();
         let (mut earliest, mut earliest_finish) =
             (Vec::with_capacity(count), Vec::with_capacity(count));
@@ -71,7 +90,16 @@ impl Network {
             if duration > 0.0 {
                 start = calendar.next_working(start)?;
             }
-            let done = calendar.add(start, duration)?.max(finish_bound);
+            let mut done = calendar.add(start, duration)?;
+            if done < finish_bound {
+                // The work cannot end in a gap of its calendar: it is held to the next working
+                // moment at or after the finish constraint.
+                done = if duration > 0.0 {
+                    calendar.align(finish_bound)?
+                } else {
+                    finish_bound
+                };
+            }
             let verified = match placement.review(position)? {
                 Some(verifier) => verifier.align(done)?,
                 None => done,
@@ -80,7 +108,17 @@ impl Network {
             earliest_finish.push(finite(*id, verified)?);
             review_wait.push(verified - done);
         }
-        let finish = earliest_finish.iter().copied().fold(0.0_f64, f64::max);
+        Ok((earliest, earliest_finish, review_wait))
+    }
+
+    /// Latest starts and finishes by topological position for a project finish.
+    fn backward_placed(
+        &self,
+        durations: &[f64],
+        placement: &Placement,
+        finish: f64,
+    ) -> Result<(Vec<f64>, Vec<f64>), Placed> {
+        let count = self.order.len();
         let mut latest = vec![0.0; count];
         let mut latest_finish = vec![0.0; count];
         for (position, (id, edges)) in self.order.iter().zip(&self.outgoing).enumerate().rev() {
@@ -105,26 +143,16 @@ impl Network {
                 None => finish_bound,
             };
             let start = start_bound.min(calendar.sub(done_by, duration)?);
-            let done = calendar.add(start, duration)?;
-            let verified = match review {
-                Some(verifier) => verifier.align(done)?,
-                None => done,
-            };
+            // The latest finish is the bound itself: a finish held to a constraint in a calendar
+            // gap may end later than its latest start plus the work.
             if let (Some(slot), Some(end)) =
                 (latest.get_mut(position), latest_finish.get_mut(position))
             {
                 *slot = finite(*id, start)?;
-                *end = finite(*id, verified.min(finish_bound))?;
+                *end = finite(*id, finish_bound)?;
             }
         }
-        Ok(Times {
-            earliest,
-            latest,
-            earliest_finish,
-            latest_finish,
-            review_wait,
-            finish,
-        })
+        Ok((latest, latest_finish))
     }
 
     /// Slack before a successor bound or the project finish would move, on calendars.

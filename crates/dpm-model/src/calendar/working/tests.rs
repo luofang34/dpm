@@ -148,3 +148,107 @@ fn offsets_widen_their_window_until_the_answer_fits() {
         "2000 working hours take about a year: {long}"
     );
 }
+
+/// Origins that are not whole hours, like a clock reading with milliseconds.
+fn offsets() -> impl Iterator<Item = DateTime<Utc>> {
+    [
+        0_i64,
+        1,
+        37_001,
+        999_999,
+        1_234_567,
+        86_399_999,
+        2_300_000_000,
+        17,
+    ]
+    .into_iter()
+    .map(|ms| origin() + chrono::TimeDelta::milliseconds(ms))
+}
+
+#[test]
+fn span_boundaries_are_exact_whatever_the_origin() {
+    for origin in offsets() {
+        let calendar = WorkingTime::compile(
+            CalendarRules::Standard,
+            chrono_tz::Europe::Berlin,
+            origin,
+            -200.0,
+            24.0 * 40.0,
+        )
+        .expect("compiled");
+        let spans: Vec<(f64, f64)> = calendar
+            .spans
+            .iter()
+            .map(|(a, b)| (hours(*a), hours(*b)))
+            .collect();
+        for pair in spans.windows(2) {
+            let [(start, end), (next, _)] = pair else {
+                continue;
+            };
+            assert_eq!(calendar.align(*end), Ok(*end), "an end is working time");
+            assert_eq!(
+                calendar.next_working(*end),
+                Ok(*next),
+                "work resumes next span"
+            );
+            assert_eq!(calendar.align(*start), Ok(*start));
+            assert_eq!(calendar.align_back(*end + 0.5), Ok(*end));
+            assert_eq!(
+                calendar.sub(*next + 1.0, 1.0),
+                Ok(*next),
+                "latest start is the next span"
+            );
+            assert_eq!(calendar.add(*start, end - start), Ok(*end));
+        }
+    }
+}
+
+#[test]
+fn backward_operations_never_undershoot_forward_ones() {
+    let calendar = standard(24.0 * 60.0);
+    let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state >> 11) as f64 / (1_u64 << 53) as f64
+    };
+    for _ in 0..2000 {
+        let t = 24.0 * 7.0 + next() * 24.0 * 21.0;
+        let hours = (next() * 30.0 * 4.0).round() / 4.0;
+        let forward = calendar.add(t, hours).expect("add");
+        assert!(
+            calendar.sub(forward, hours).expect("sub") >= t - 1e-6,
+            "{t} {hours}"
+        );
+        let back = calendar.sub(t, hours).expect("sub");
+        assert!(
+            calendar.add_late(back, hours).expect("add_late") >= t - 1e-6,
+            "{t} {hours}"
+        );
+        for lag in [hours, -hours] {
+            let shifted = calendar.shift(t, lag).expect("shift");
+            assert!(calendar.unshift(shifted, lag).expect("unshift") >= t - 1e-6);
+        }
+    }
+}
+
+#[test]
+fn windows_longer_than_a_century_are_refused() {
+    let rules = CalendarRules::Standard;
+    let zone = chrono_tz::Europe::Berlin;
+    assert!(WorkingTime::compile(rules, zone, origin(), 0.0, MAX_WINDOW_HOURS + 24.0).is_none());
+    let mut closed = crate::standard_definition();
+    closed.exceptions.push(CalendarException {
+        from: NaiveDate::from_ymd_opt(2026, 3, 1).expect("date"),
+        to: NaiveDate::from_ymd_opt(9999, 12, 31),
+        hours: Vec::new(),
+        name: Some("until further notice".into()),
+    });
+    let started = std::time::Instant::now();
+    assert_eq!(
+        WorkingTime::offset_after(CalendarRules::Weekly(&closed), zone, origin(), 8.0),
+        None
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(20));
+}

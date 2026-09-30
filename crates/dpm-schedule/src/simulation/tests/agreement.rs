@@ -80,7 +80,7 @@ fn remaining_mean_finish_equals_the_remaining_critical_path_for_started_work() {
     second.execution.events.started_at = Some(at(2));
     let now = at(5);
     let timeline = dpm_model::Timeline::at(&plan, now);
-    let remaining = crate::cpm::remaining_plan_at(&plan, &timeline);
+    let remaining = crate::cpm::remaining_plan_at(&plan, &timeline).expect("remaining");
     let expected = crate::deterministic_remaining(&plan, now)
         .expect("cpm")
         .project_finish_hours;

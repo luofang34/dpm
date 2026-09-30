@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 mod clock;
 mod working;
 pub use clock::{ClockTime, WorkingPeriod};
-pub use working::{BeyondCalendar, WorkingTime};
+pub use working::{BeyondCalendar, MAX_WINDOW_HOURS, WorkingTime};
 pub(crate) mod validate;
 
 /// Built-in calendar counting every hour, the elapsed-time behaviour of a plan without calendars.

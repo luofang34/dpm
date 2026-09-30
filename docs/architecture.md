@@ -270,7 +270,13 @@ than the constraint; the finish is then held at the constraint if calendar gaps 
 sooner. A task that still awaits verification finishes at the next working moment of the verifier's
 calendar, which `explain` reports as `schedule.calendar.review_wait_hours`, together with the
 calendar, executor kind and the rule that chose them. Latest times run the same arithmetic
-backwards, and floats stay elapsed hours. The baseline projection (`deterministic`, `simulate`) has
+backwards, with inverses that never undershoot the forward operations, so latest times never
+precede earliest ones; a finish held to a constraint keeps that bound as its latest finish. Floats
+stay elapsed hours. Work that waits for the verifier's calendar may have float without delaying the
+project, so a plan whose finish is set by a review window can have no critical task. Calendar
+arithmetic is exact to the millisecond, so results do not depend on the clock reading's sub-hour
+part or on the window compiled; a window never exceeds a century, and work that would need more,
+such as a calendar closed "until further notice", reports the projection as out of range. The baseline projection (`deterministic`, `simulate`) has
 no clock reading and stays calendar-free. Derived dates are never stored.
 
 ### Dependency identity, policy and waivers

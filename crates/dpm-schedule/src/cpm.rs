@@ -39,7 +39,7 @@ pub fn deterministic_remaining_at(
     timeline: &dpm_model::Timeline,
 ) -> Result<Schedule, ScheduleError> {
     plan.validate()?;
-    let remaining = remaining_plan_at(plan, timeline);
+    let remaining = remaining_plan_at(plan, timeline)?;
     let durations = remaining
         .durations()?
         .into_iter()
@@ -119,7 +119,7 @@ fn elapsed_since_start(
     plan: &Plan,
     timeline: &dpm_model::Timeline,
     excluded: &BTreeSet<WorkItemId>,
-) -> BTreeMap<WorkItemId, f64> {
+) -> Result<BTreeMap<WorkItemId, f64>, ScheduleError> {
     plan.work_items
         .iter()
         .filter(|(id, work)| {
@@ -128,12 +128,10 @@ fn elapsed_since_start(
                 && !work.execution.status.satisfies_dependency()
         })
         .filter_map(|(id, work)| match work.start_event()? {
-            dpm_model::EventTime::Recorded(at) => Some((
-                *id,
-                crate::placement::worked_since(plan, work, at, timeline.now()).unwrap_or_else(
-                    || ((timeline.now() - at).num_milliseconds() as f64 / 3_600_000.0).max(0.0),
-                ),
-            )),
+            dpm_model::EventTime::Recorded(at) => Some(
+                crate::placement::worked_since(plan, work, at, timeline.now())
+                    .map(|hours| (*id, hours)),
+            ),
             dpm_model::EventTime::Unrecorded => None,
         })
         .collect()
@@ -150,7 +148,10 @@ fn elapsed_since_start(
 /// origin unless its own remaining constraints push it later, which only delays the forecast, and
 /// runs for its remaining duration from there. Work the shared evaluator reports
 /// as not applicable keeps no duration and no edge, so it cannot move applicable work.
-pub(crate) fn remaining_plan_at(plan: &Plan, timeline: &dpm_model::Timeline) -> Remaining {
+pub(crate) fn remaining_plan_at(
+    plan: &Plan,
+    timeline: &dpm_model::Timeline,
+) -> Result<Remaining, ScheduleError> {
     let mut remaining = plan.clone();
     let now = timeline.now();
     let completed = timeline.completed();
@@ -173,21 +174,18 @@ pub(crate) fn remaining_plan_at(plan: &Plan, timeline: &dpm_model::Timeline) -> 
             if !completed.contains(&d.predecessor) && !started_from(plan, timeline, d) {
                 return Some(d.clone());
             }
-            let lag_hours = match timeline.edge(plan, d) {
+            // A lag already elapsing ends at a fixed instant, measured in elapsed hours from now.
+            let (lag_hours, lag_basis) = match timeline.edge(plan, d) {
                 Release::Released { .. }
                 | Release::SkippedBranch { .. }
                 | Release::AwaitingEvent => return None,
-                Release::Elapsing { opens_at, .. } => {
-                    (opens_at - now).num_milliseconds() as f64 / 3_600_000.0
-                }
+                Release::Elapsing { opens_at, .. } => (
+                    (opens_at - now).num_milliseconds() as f64 / 3_600_000.0,
+                    dpm_model::LagBasis::Elapsed,
+                ),
                 Release::UnrecordedEventTime
                 | Release::LagOutOfRange { .. }
-                | Release::NotSelected => d.lag_hours,
-            };
-            // A lag already elapsing ends at a fixed instant, measured in elapsed hours from now.
-            let lag_basis = match timeline.edge(plan, d) {
-                Release::Elapsing { .. } => dpm_model::LagBasis::Elapsed,
-                _ => d.lag_basis,
+                | Release::NotSelected => (d.lag_hours, d.lag_basis),
             };
             Some(Dependency {
                 lag_hours,
@@ -203,12 +201,12 @@ pub(crate) fn remaining_plan_at(plan: &Plan, timeline: &dpm_model::Timeline) -> 
         .filter(|w| !excluded.contains(&w.id))
         .map(|w| w.id)
         .collect();
-    Remaining {
+    Ok(Remaining {
         awaiting,
-        elapsed: elapsed_since_start(plan, timeline, &excluded),
+        elapsed: elapsed_since_start(plan, timeline, &excluded)?,
         plan: remaining,
         excluded,
-    }
+    })
 }
 
 /// Whether a start-based edge (SS, SF) waits on a predecessor start that has already occurred.

@@ -90,7 +90,7 @@ pub fn simulate_remaining_at(
     timeline: &dpm_model::Timeline,
 ) -> Result<SimulationSummary, ScheduleError> {
     plan.validate()?;
-    let remaining = crate::cpm::remaining_plan_at(plan, timeline);
+    let remaining = crate::cpm::remaining_plan_at(plan, timeline)?;
     let durations = remaining.durations()?;
     let network = Network::compile(&remaining.plan)?;
     let expected: Vec<f64> = durations.iter().map(|(_, d)| d.expected()).collect();

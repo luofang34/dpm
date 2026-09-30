@@ -126,7 +126,7 @@ fn zone() -> Option<Calendars> {
 }
 
 fn hours(now: DateTime<Utc>, at: DateTime<Utc>) -> f64 {
-    (at - now).num_minutes() as f64 / 60.0
+    (at - now).num_milliseconds() as f64 / 3_600_000.0
 }
 
 fn close(actual: f64, expected: f64) {
@@ -305,4 +305,123 @@ fn simulation_places_samples_on_the_same_calendars() {
     long.task(1, 2000.0, ActorKind::Human);
     let simulation = simulate_remaining(&long.plan, config, now).expect("wide window");
     assert!(simulation.p50_finish_hours > 24.0 * 7.0 * 49.0);
+}
+
+#[test]
+fn clock_readings_with_milliseconds_do_not_invent_review_waits() {
+    for step in 0..40_i64 {
+        let now = berlin(2, 0) + chrono::TimeDelta::milliseconds(37_000 * step + 1);
+        let mut plan = Builder::new(zone());
+        let task = plan.task(1, 8.0, ActorKind::Human);
+        let schedule = deterministic_remaining(&plan.plan, now).expect("schedule");
+        let activity = &schedule.activities[&task];
+        close(activity.earliest_finish_hours, hours(now, berlin(2, 17)));
+        let calendar = activity.calendar.as_ref().expect("calendar");
+        close(calendar.review_wait_hours, 0.0);
+    }
+}
+
+#[test]
+fn a_start_finish_edge_from_agent_work_keeps_latest_after_earliest() {
+    let now = Utc
+        .with_ymd_and_hms(2026, 3, 2, 0, 1, 0)
+        .single()
+        .expect("now");
+    let mut plan = Builder::new(zone());
+    let agent = plan.task(1, 0.0, ActorKind::Agent);
+    let human = plan.task(2, 13.0, ActorKind::Human);
+    plan.link(
+        agent,
+        human,
+        DependencyKind::StartFinish,
+        0.0,
+        LagBasis::Elapsed,
+    );
+    let schedule = deterministic_remaining(&plan.plan, now).expect("schedule");
+    for activity in schedule.activities.values() {
+        assert!(activity.latest_start_hours >= activity.earliest_start_hours - 1e-6);
+    }
+}
+
+struct Random(u64);
+
+impl Random {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+
+    fn below(&mut self, n: u64) -> u64 {
+        self.next() % n
+    }
+}
+
+/// Random small networks mixing executor kinds, relation kinds, signed lags and lag bases: the
+/// latest times never precede the earliest ones, so float is never negative before clamping.
+#[test]
+fn random_calendar_networks_keep_latest_times_after_earliest() {
+    let kinds = [
+        DependencyKind::FinishStart,
+        DependencyKind::StartStart,
+        DependencyKind::FinishFinish,
+        DependencyKind::StartFinish,
+    ];
+    let executors = [ActorKind::Human, ActorKind::Agent, ActorKind::Service];
+    let mut random = Random(0x5EED_CA1E_2026);
+    for case in 0..1500 {
+        let now =
+            berlin(2, 0) + chrono::TimeDelta::milliseconds((random.below(7 * 86_400) * 997) as i64);
+        let verifier = executors[random.below(3) as usize];
+        let mut plan = Builder::new(Some(Calendars {
+            verifier,
+            ..Calendars::in_zone("Europe/Berlin")
+        }));
+        let count = 2 + random.below(6);
+        let ids: Vec<WorkItemId> = (0..count)
+            .map(|n| {
+                let executor = executors[random.below(3) as usize];
+                plan.task(n + 1, random.below(17) as f64 * 0.75, executor)
+            })
+            .collect();
+        for (to, successor) in ids.iter().enumerate().skip(1) {
+            let from = random.below(to as u64) as usize;
+            let lag = random.below(16) as f64 - 6.0;
+            let basis = if random.below(2) == 0 {
+                LagBasis::Working
+            } else {
+                LagBasis::Elapsed
+            };
+            plan.link(
+                ids[from],
+                *successor,
+                kinds[random.below(4) as usize],
+                lag,
+                basis,
+            );
+        }
+        let schedule = deterministic_remaining(&plan.plan, now).expect("schedule");
+        for (id, activity) in &schedule.activities {
+            assert!(
+                activity.latest_start_hours >= activity.earliest_start_hours - 1e-6
+                    && activity.latest_finish_hours >= activity.earliest_finish_hours - 1e-6,
+                "case {case} {id} at {now}: {activity:?}\n{:#?}\n{:?}",
+                plan.plan
+                    .dependencies
+                    .iter()
+                    .map(|d| (d.predecessor, d.successor, d.kind, d.lag_hours, d.lag_basis))
+                    .collect::<Vec<_>>(),
+                plan.plan
+                    .work_items
+                    .values()
+                    .map(|w| (
+                        w.id,
+                        w.schedule.executor,
+                        w.schedule.estimate.map(|e| e.likely_hours)
+                    ))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
 }

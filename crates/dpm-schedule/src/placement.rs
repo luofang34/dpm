@@ -8,11 +8,13 @@
 use crate::ScheduleError;
 use crate::network::Network;
 use dpm_model::{
-    BeyondCalendar, Calendars, Plan, ResolvedCalendar, Timeline, WorkItemId, WorkingTime,
+    BeyondCalendar, Calendars, MAX_WINDOW_HOURS, Plan, ResolvedCalendar, Timeline, WorkItemId,
+    WorkingTime,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Wider windows tried before a projection gives up; each doubles the span.
+/// Wider windows tried before a projection gives up; each doubles the span, and no window
+/// exceeds the calendar's maximum.
 const WIDENINGS: usize = 24;
 
 /// Compiled calendars and each activity's execution and review calendars.
@@ -72,7 +74,10 @@ impl Placement {
         let mut placement = Self {
             calendars,
             origin: timeline.now(),
-            window: (-24.0 * 14.0, horizon.max(24.0 * 7.0 * 8.0)),
+            window: (
+                -24.0 * 14.0,
+                horizon.clamp(24.0 * 7.0 * 8.0, MAX_WINDOW_HOURS / 2.0),
+            ),
             names,
             compiled: Vec::new(),
             execution,
@@ -103,10 +108,19 @@ impl Placement {
         Ok(())
     }
 
-    /// Double the window on both sides and recompile.
+    /// Widen the window, mostly forwards where projections grow, and recompile; a window at the
+    /// maximum is out of range.
     fn widen(&mut self) -> Result<(), ScheduleError> {
         let span = self.window.1 - self.window.0;
-        self.window = (self.window.0 - span, self.window.1 + span);
+        if span >= MAX_WINDOW_HOURS {
+            return Err(ScheduleError::CalendarRange);
+        }
+        let grown = (span * 2.0).min(MAX_WINDOW_HOURS);
+        let before = (grown - span) / 4.0;
+        self.window = (
+            self.window.0 - before,
+            self.window.1 + (grown - span - before),
+        );
         self.compile()
     }
 
@@ -169,17 +183,24 @@ impl From<ScheduleError> for Placed {
     }
 }
 
-/// Working hours of a started task's calendar between its start and the clock reading.
+/// Hours between a started task's start and the clock reading: working hours of its calendar
+/// when the plan has calendars, elapsed hours otherwise.
 pub(crate) fn worked_since(
     plan: &Plan,
     work: &dpm_model::WorkItem,
     started: chrono::DateTime<chrono::Utc>,
     now: chrono::DateTime<chrono::Utc>,
-) -> Option<f64> {
-    let calendars = plan.calendars.as_ref()?;
-    let rules = calendars.rules(&calendars.resolve(work).calendar)?;
-    let zone = calendars.zone().ok()?;
+) -> Result<f64, ScheduleError> {
     let hours = ((now - started).num_milliseconds() as f64 / 3_600_000.0).max(0.0);
-    let calendar = WorkingTime::compile(rules, zone, started, -24.0, hours + 24.0)?;
-    calendar.between(0.0, hours).ok()
+    let Some(calendars) = plan.calendars.as_ref() else {
+        return Ok(hours);
+    };
+    let rules = calendars
+        .rules(&calendars.resolve(work).calendar)
+        .ok_or(ScheduleError::CalendarRange)?;
+    let zone = calendars.zone().map_err(|_| ScheduleError::CalendarRange)?;
+    WorkingTime::compile(rules, zone, started, -24.0, hours + 24.0)
+        .ok_or(ScheduleError::CalendarRange)?
+        .between(0.0, hours)
+        .map_err(|_| ScheduleError::CalendarRange)
 }
