@@ -175,7 +175,11 @@ attempts and reviews, handoffs, releases or basis, and its claim (`OccurrenceBef
 is refused with both times named. An unstarted claim records `events.claimed_at`, the claim's or
 the reserving handoff's time; the start clears it, as the start time then orders the history, and a
 release returns the work unowned without one. Because work is claimed before it starts, this floor
-also covers tasks that apply_change added or that were ratified later. A claim recorded before
+also covers tasks that apply_change added or that were ratified later. Only the claim of work that has not started carries
+the field, so a store whose snapshot holds such a claim without it fails `verify-store` (its replay
+now derives `claimed_at`) until that work starts; the data is intact. Backfilling covers the time
+since the claim: work nobody claimed in advance is claimed when recorded, and `claim` itself takes
+no occurrence time. A claim recorded before
 claim times existed has none; the choice gate below still holds such a start after its selection.
 Conditional work cannot record a transition before the choice that selected it: the gate evaluator
 reports `Choice {key, chosen_at}` while the selecting decision of the work or a containing package

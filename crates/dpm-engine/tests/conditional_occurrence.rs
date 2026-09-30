@@ -174,3 +174,27 @@ fn an_excluded_branch_is_skipped_only_once_the_choice_was_made() {
         }
     );
 }
+
+#[test]
+fn an_edge_into_ordinary_work_from_an_excluded_branch_never_releases() {
+    let plan = chosen_at_ten();
+    let (from, to) = (id(&plan, "SUP-B-QUOTE"), id(&plan, "SUP-B-QUAL"));
+    let edge = plan
+        .dependencies
+        .iter()
+        .find(|d| d.predecessor == from && d.successor == to)
+        .expect("branch edge");
+    // Before the choice the branch was still open, so its edge waits for the event; once the
+    // choice excluded it, the edge never releases ordinary work.
+    assert_eq!(
+        Timeline::at(&plan, t(9)).edge(&plan, edge),
+        Release::AwaitingEvent
+    );
+    for hour in [10, 30] {
+        assert_eq!(
+            Timeline::at(&plan, t(hour)).edge(&plan, edge),
+            Release::NotSelected,
+            "at +{hour}h"
+        );
+    }
+}
