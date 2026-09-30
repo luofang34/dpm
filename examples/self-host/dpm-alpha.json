@@ -1507,44 +1507,49 @@
       "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
       "parent": "cc81da22-ff27-51ec-811f-7ffdcc4257b2",
       "kind": "Task",
-      "title": "Introduce working-calendar inputs",
+      "title": "Schedule working time on actor-kind calendars",
       "contract": {
-        "objective": "Add a calendar abstraction without embedding dates into authoritative derived schedules or attempting resource leveling.",
+        "objective": "Let one plan schedule people on working calendars and agents around the clock: an optional calendars block with an IANA time zone, named weekly calendars with dated exceptions, built-in standard and always calendars, defaults per actor kind, a per-task executor kind and calendar override, working-time lags and a verifier calendar that reviews and decisions wait for. A plan without the block forecasts exactly as today.",
         "acceptance": [
           {
-            "text": "Define elapsed-hour and weekday/exception mappings with explicit origin/timezone rules."
+            "text": "Without a calendars block every projection, report and export is unchanged."
           },
           {
-            "text": "Test boundaries, non-working periods and positive/negative lag semantics."
+            "text": "With only a time zone, human work follows the MS Project Standard calendar (Mon-Fri 08:00-12:00, 13:00-17:00), agent and service work run always, unassigned work defaults to human and reviews wait for the human calendar."
           },
           {
-            "text": "Preserve existing elapsed-hour outputs and document how calendar projections differ."
+            "text": "A task resolves its calendar as: task override, then its owner's availability entry, then the kind of its owner, planned executor or workspace default; explain names the calendar, executor kind and verifier wait it used."
+          },
+          {
+            "text": "Estimates are working hours on that calendar; started work is conditioned on working hours since its start; lags are elapsed unless a dependency counts them in the successor's working time, and execution gates and forecasts release such lags at the same instant."
+          },
+          {
+            "text": "Microsoft Project XML import maps the project calendar and working-time lags; export writes them back."
           }
         ],
         "instructions": {
           "steps": [
             {
-              "action": "Specify calendar origin, timezone, working periods, exceptions and lag interpretation.",
-              "expected_result": "Examples distinguish elapsed-hour durations from calendar placements and boundary rules."
+              "action": "Add the calendars block, executor kind, task calendar override and dependency lag basis to the model with validation (time zone, overlapping or unordered intervals, unknown calendar names, calendars without working time).",
+              "expected_result": "Plans without the block serialize byte-for-byte as before; invalid calendars are rejected at import and plan apply."
             },
             {
-              "action": "Implement calendar inputs and mapping as scheduling projections preserving the elapsed-hours mode.",
-              "expected_result": "The same authoritative graph can produce either documented calendar or elapsed-hour views."
+              "action": "Compile calendars into origin-relative working intervals and project remaining work with calendar-dependent durations, working-time lags and verifier alignment in both the deterministic and the simulated forecast.",
+              "expected_result": "Fixed expected dates cover weekends, exceptions, a daylight-saving change, every relation kind and signed lags."
             },
             {
-              "action": "Test nonworking periods, exception boundaries and signed lag and document limitations.",
-              "expected_result": "Boundary cases have deterministic expected results and do not become stored derived dates."
+              "action": "Expose the resolved calendar, executor and verifier wait through explain, status and the Gantt feed with CLI/MCP parity, and map MSPDI calendars on import and export.",
+              "expected_result": "Parity smoke and interchange round-trip tests pass; docs describe the defaults and the precedence."
             }
           ],
           "in_scope": [
-            "Working-calendar abstraction and elapsed-to-calendar projection."
+            "Calendars, executor kinds, working-time durations and lags, verifier waits, explain fields and MSPDI calendar mapping."
           ],
           "out_of_scope": [
-            "Global resource allocation, payroll/time accounting or platform-specific calendar UI."
+            "Resource levelling, capacity or allocation, timesheets, deadlines and date constraints, or calendar editing UI."
           ],
           "verification": [
-            "Check weekend/exception crossings, timezones and positive/negative lag with fixed expected dates.",
-            "Run schedule tests and ./ci.sh; compare existing elapsed-hour outputs unchanged."
+            "Calendar arithmetic and projection tests with fixed dates, interchange round trips, parity smoke and ./ci.sh."
           ]
         },
         "capabilities": [
@@ -1574,7 +1579,7 @@
         "block_reason": null
       },
       "schedule": {
-        "priority": "P2",
+        "priority": "P1",
         "estimate": {
           "optimistic_hours": 4,
           "likely_hours": 10,
@@ -4018,10 +4023,16 @@
       "kind": "Task",
       "title": "Calibrate estimates and report flow from history",
       "contract": {
-        "objective": "Use recorded start, submit and verify events to show how estimates compare with actual elapsed time, and report cycle time, throughput, aging work in progress and claim-to-verify reliability.",
+        "objective": "Use recorded start, submit and verify events to compare estimates with actual working time per executor kind, measure review and decision waits per verifier kind, and report cycle time, throughput, aging work in progress and claim-to-verify reliability, without ever rewriting stored estimates.",
         "acceptance": [
           {
-            "text": "Calibration compares actual start-to-verify time with O/M/P per capability and per actor."
+            "text": "Calibration reports actual/estimated ratios per executor kind and capability with sample sizes."
+          },
+          {
+            "text": "Review and decision waits are reported per verifier kind; the forecast can apply the measured ratio and waits only on request, and explains the factor it applied."
+          },
+          {
+            "text": "Work whose start and submit were recorded within a few minutes of each other, or backfilled without an occurrence time, is excluded from calibration and the report states how many items it excluded and why."
           },
           {
             "text": "Flow metrics report cycle time, throughput, aging work in progress and claim-to-verify reliability."
@@ -4033,23 +4044,23 @@
         "instructions": {
           "steps": [
             {
-              "action": "Derive the metrics from execution events and the operation history.",
-              "expected_result": "Tests use synthetic histories."
+              "action": "Derive calibration, waits and flow metrics from execution events and the operation history.",
+              "expected_result": "Tests use synthetic histories with human, agent and backfilled records."
             },
             {
-              "action": "Expose them through status and a dedicated query with CLI/MCP parity.",
-              "expected_result": "Parity smoke passes."
+              "action": "Expose them through status, a dedicated query and an opt-in calibrated forecast with CLI/MCP parity.",
+              "expected_result": "Parity smoke passes; the default forecast is unchanged."
             },
             {
               "action": "Document what the metrics can and cannot say.",
-              "expected_result": "Docs state sample-size caveats."
+              "expected_result": "Docs state sample-size caveats and the exclusion rule."
             }
           ],
           "in_scope": [
-            "Derived calibration and flow metrics."
+            "Derived calibration, waits and flow metrics, and an opt-in calibrated forecast."
           ],
           "out_of_scope": [
-            "Timesheets, effort accounting or hard work-in-progress limits."
+            "Timesheets, effort accounting, hard work-in-progress limits or changing stored estimates."
           ],
           "verification": [
             "Synthetic-history tests, parity smoke and ./ci.sh."
@@ -4255,6 +4266,88 @@
           "optimistic_hours": 3.0,
           "likely_hours": 6.0,
           "pessimistic_hours": 12.0
+        },
+        "priority": "P1"
+      },
+      "order": [
+        800
+      ]
+    },
+    "751adb50-d6a6-506d-9cc6-6091a4af4b56": {
+      "id": "751adb50-d6a6-506d-9cc6-6091a4af4b56",
+      "key": "CORE-70",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "004053ca-ec68-52d2-9886-a47289a0d592",
+      "kind": "Task",
+      "title": "Record when lifecycle events actually occurred",
+      "contract": {
+        "objective": "Let start, submit and verify record when the event occurred, separately from when the operation was written, so work recorded after the fact keeps honest times for forecasts and calibration.",
+        "acceptance": [
+          {
+            "text": "start, submit and verify accept an optional occurrence time through the CLI and agent tools."
+          },
+          {
+            "text": "An occurrence time in the future, before the task's previous event, or before its claim is rejected."
+          },
+          {
+            "text": "The operation keeps its own commit timestamp, so history shows both times; omitting the option behaves as today."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Add the optional occurrence time to the lifecycle commands and validate it in the engine.",
+              "expected_result": "Engine tests cover each rejection and gate evaluation at the backfilled time."
+            },
+            {
+              "action": "Expose it in CLI and MCP and extend the parity smoke and command table.",
+              "expected_result": "Parity smoke passes for all three transitions."
+            },
+            {
+              "action": "Document when to pass an occurrence time and how history shows both times.",
+              "expected_result": "Docs state that recording in real time needs no option and that backfilled times are validated."
+            }
+          ],
+          "in_scope": [
+            "Occurrence times for start, submit and verify."
+          ],
+          "out_of_scope": [
+            "Editing or deleting recorded operations, or occurrence times for other commands."
+          ],
+          "verification": [
+            "Engine tests, parity smoke and ./ci.sh."
+          ]
+        },
+        "capabilities": [
+          "agents",
+          "rust"
+        ],
+        "requirement_ids": [
+          "087248db-f9e4-5c27-968d-c2b539178037"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "block_reason": null,
+        "owner": null,
+        "reported_progress_percent": 0,
+        "status": "Planned"
+      },
+      "schedule": {
+        "estimate": {
+          "optimistic_hours": 2.0,
+          "likely_hours": 4.0,
+          "pessimistic_hours": 8.0
         },
         "priority": "P1"
       },
@@ -5462,6 +5555,38 @@
       "id": "a897cac1-1dc1-5027-9203-d94fc00493f8",
       "predecessor": "c7410550-4cac-57e5-a21a-61decb79ac34",
       "successor": "93fd3281-1b7c-5ef5-a379-39ffc39e9843",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "996b0eb9-196c-5597-af31-b5f06341ba88",
+      "predecessor": "4a93dad1-0e4b-5683-902b-3dc7dff3d586",
+      "successor": "751adb50-d6a6-506d-9cc6-6091a4af4b56",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "8e0d2f3a-b2e0-522a-9ffb-da6d6347b3fa",
+      "predecessor": "751adb50-d6a6-506d-9cc6-6091a4af4b56",
+      "successor": "f31377c3-739b-53b1-962c-bdcb9609af27",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "35455b56-7b2d-5e8e-925c-dfb18fd1ca80",
+      "predecessor": "751adb50-d6a6-506d-9cc6-6091a4af4b56",
+      "successor": "1ff06074-d521-5696-a71f-0aa120dfee23",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "93d7ca15-f818-570d-ab79-b26287907b5a",
+      "predecessor": "40063ef5-e801-5876-9888-3bff011e437c",
+      "successor": "1ff06074-d521-5696-a71f-0aa120dfee23",
       "kind": "FinishStart",
       "lag_hours": 0.0,
       "policy": "Hard"
