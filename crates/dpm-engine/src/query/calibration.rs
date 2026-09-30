@@ -31,8 +31,10 @@ pub const BULK_WINDOW_SECONDS: i64 = 180;
 pub const MIN_ACTUAL_SECONDS: i64 = 60;
 
 /// Smallest group median a calibrated forecast applies; anything lower says the records, not the
-/// estimates, are wrong.
-pub const MIN_APPLIED_RATIO: f64 = 0.02;
+/// estimates, are wrong. Agents finishing human-scale estimates routinely measure 0.01-0.1, so
+/// the floor sits below that range; near-zero samples are already excluded by
+/// [`MIN_ACTUAL_SECONDS`].
+pub const MIN_APPLIED_RATIO: f64 = 0.005;
 
 /// Largest group median a calibrated forecast applies.
 pub const MAX_APPLIED_RATIO: f64 = 50.0;

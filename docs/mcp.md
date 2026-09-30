@@ -891,7 +891,7 @@ keeps committing through ten such reads is reported as `revision_conflict` sayin
 
 | Field | Meaning |
 | --- | --- |
-| rules | `min_samples` (5), `bulk_window_seconds` (180), `min_actual_seconds` (60), `min_applied_ratio` (0.02) and `max_applied_ratio` (50), `review_floor_seconds` (10) and `actual_hours`: `working` with calendars, else `elapsed` |
+| rules | `min_samples` (5), `bulk_window_seconds` (180), `min_actual_seconds` (60), `min_applied_ratio` (0.005) and `max_applied_ratio` (50), `review_floor_seconds` (10) and `actual_hours`: `working` with calendars, else `elapsed` |
 | history | `operations` read and the first one's commit time |
 | estimates.samples[] | Each measured verified task: `key`, `executor` (kind of the actor who submitted the verified attempt), `capabilities`, `estimated_hours` (PERT expected), `actual_hours` (start to that submission on the task's calendar, less the review waits of its rejected attempts), `ratio` |
 | estimates.by_executor[] / by_capability[] | Per executor kind, and per kind and required capability: `samples`, `median`, `p25`, `p75` (null without samples), `sufficient`, and `excluded[]` `{reason, count}` of that kind's verified tasks left out; a kind whose work was all excluded still has a group |

@@ -15,7 +15,7 @@ fn with_median(median: f64) -> (Log, CalibrationReport) {
 
 #[test]
 fn a_median_outside_the_band_is_reported_but_never_applied() {
-    for median in [0.0, 0.01, 60.0, f64::NAN] {
+    for median in [0.0, 0.001, 60.0, f64::NAN] {
         let (log, report) = with_median(median);
         let plain = status(&log.plan, false, at(50.0)).expect("status");
         let calibrated = status_calibrated(&log.plan, false, at(50.0), &report).expect("status");
