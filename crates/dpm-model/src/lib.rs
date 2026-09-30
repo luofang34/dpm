@@ -1,6 +1,8 @@
 //! Authoritative domain types and structural validation for execution plans.
 
 mod actor;
+mod calendar;
+pub use calendar::*;
 mod credentials;
 mod events;
 pub use events::*;

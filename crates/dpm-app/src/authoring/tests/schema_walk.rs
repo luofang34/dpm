@@ -278,6 +278,7 @@ impl<'a> Walk<'a> {
             Shape::Float => ("number", None),
             Shape::Str => ("string", None),
             Shape::Time => ("string", Some("date-time")),
+            Shape::Date => ("string", Some("date")),
             Shape::Uuid => ("string", Some("uuid")),
             other => {
                 self.gaps

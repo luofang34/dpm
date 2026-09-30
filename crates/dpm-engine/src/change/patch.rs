@@ -99,6 +99,16 @@ fn apply_one(value: &mut Value, current: &Plan, change: &EntityChange) -> Result
             replace(slot, change)
         }
         ("links", None) => patch_links(root, current, change),
+        ("calendars", None) => {
+            let found = root.get("calendars").cloned().unwrap_or(Value::Null);
+            fresh(&found, change)?;
+            if change.after.is_null() {
+                root.remove("calendars");
+            } else {
+                root.insert("calendars".into(), change.after.clone());
+            }
+            Ok(())
+        }
         ("dependencies", Some(id)) => patch_edges(root, id, change),
         (collection, Some(id)) if super::KEYED_COLLECTIONS.contains(&collection) => {
             let map = root

@@ -57,6 +57,8 @@ fn task(project: ProjectId, key: &str, hours: f64) -> WorkItem {
                 likely_hours: hours,
                 pessimistic_hours: hours,
             }),
+            executor: None,
+            calendar: None,
         },
     }
 }

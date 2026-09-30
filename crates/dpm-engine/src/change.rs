@@ -24,7 +24,7 @@ pub use replacement::AffectedWork;
 #[serde(deny_unknown_fields)]
 pub struct EntityChange {
     /// Domain collection such as `external_references`, `dependencies` per edge, or the workspace-wide
-    /// `workspace` / `links`.
+    /// `workspace` / `links` / `calendars`.
     pub collection: String,
     /// Stable entity identity, absent for workspace-wide values.
     pub id: Option<String>,
@@ -136,6 +136,13 @@ pub(crate) fn differences(
         None,
         &sorted_links(current)?,
         &sorted_links(proposed)?,
+    );
+    append(
+        &mut changes,
+        "calendars",
+        None,
+        field(&before, "calendars"),
+        field(&after, "calendars"),
     );
     Ok(changes)
 }

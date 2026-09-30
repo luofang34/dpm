@@ -149,6 +149,8 @@ fn new_work(id: WorkItemId, key: Key, kind: WorkKind, project: ProjectId) -> Wor
         schedule: dpm_model::ScheduleInputs {
             priority: dpm_model::Priority::default(),
             estimate: None,
+            executor: None,
+            calendar: None,
         },
     }
 }

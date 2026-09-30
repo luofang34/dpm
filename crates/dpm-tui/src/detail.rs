@@ -98,6 +98,17 @@ fn append_schedule(lines: &mut Vec<String>, detail: &WorkExplanation) {
             "Free float {:.1} / total float {:.1}; critical={}",
             schedule.free_float_hours, schedule.total_float_hours, schedule.critical
         ));
+        if let Some(calendar) = &schedule.calendar {
+            let source = match calendar.resolved.source {
+                dpm_model::CalendarSource::Task => "the task's own calendar",
+                dpm_model::CalendarSource::Actor => "the owner's availability",
+                dpm_model::CalendarSource::Kind => "the executor kind",
+            };
+            values.push(format!(
+                "Calendar {} for {:?} work, from {source}; verification waits {:.1} h for the verifier",
+                calendar.resolved.calendar, calendar.resolved.executor, calendar.review_wait_hours
+            ));
+        }
     }
     section(lines, "Remaining schedule (elapsed hours)", values);
 }

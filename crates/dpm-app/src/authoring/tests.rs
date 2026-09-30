@@ -181,6 +181,28 @@ fn authored_extremes() -> Value {
     doc["links"] =
         json!([{"kind": "RelatesTo", "source": ids[0], "target": ids[1], "note": "context"}]);
     doc["dependencies"][0]["rationale"] = "ordering".into();
+    doc["dependencies"][0]["lag_basis"] = "Working".into();
+    doc["calendars"] = json!({
+        "time_zone": "Europe/Berlin",
+        "definitions": {"evenings": {
+            "week": {"mon": [{"from": "18:00", "to": "22:00"}], "tue": [{"from": "18:00", "to": "22:00"}],
+                     "wed": [{"from": "18:00", "to": "22:00"}], "thu": [{"from": "18:00", "to": "22:00"}],
+                     "fri": [{"from": "18:00", "to": "22:00"}], "sat": [{"from": "10:00", "to": "24:00"}],
+                     "sun": [{"from": "10:00", "to": "18:00"}]},
+            "exceptions": [{"from": "2026-12-24", "to": "2026-12-26", "hours": [{"from": "10:00", "to": "12:00"}], "name": "Holidays"}]
+        }},
+        "kinds": {"human": "evenings", "agent": "always", "service": "standard"},
+        "actors": {"human:lead": "standard"},
+        "default_executor": "Agent",
+        "verifier": "Service"
+    });
+    if let Some(work) = doc["work_items"]
+        .as_object_mut()
+        .and_then(|m| m.values_mut().find(|w| w["kind"] == "Task"))
+    {
+        work["schedule"]["executor"] = "Human".into();
+        work["schedule"]["calendar"] = "standard".into();
+    }
     for asset in doc["assets"]
         .as_object_mut()
         .into_iter()

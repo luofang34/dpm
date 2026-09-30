@@ -135,7 +135,9 @@ impl Timeline {
             };
         }
         let event = self.event(plan, edge.predecessor, edge.kind.predecessor_endpoint());
-        Release::evaluate(event, edge.lag_hours, self.now)
+        Release::evaluate_with(event, edge.lag_hours, self.now, |at, hours| {
+            plan.lag_end(edge, at, hours)
+        })
     }
 
     /// Decisions naming this work or a containing package as blocked, with their release state.

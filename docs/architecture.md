@@ -46,14 +46,16 @@ expectation of a task's three-point estimate, or 0 for milestones and unestimate
 an unestimated task is not a claim about its duration, so `dpm-engine` names every outstanding
 applicable unestimated task beside each forecast (`unestimated`) instead of leaving it optimistic
 in silence; an explicit 0/0/0 estimate is a stated duration and is not listed. Work packages cannot
-be dependency endpoints. v0.1 uses elapsed hours; working calendars are a future input adapter and
-must not change dependency semantics. Remaining forecasts measure from the
+be dependency endpoints. Without a calendars block every hour counts; with one, durations are
+working hours placed on calendars as described under [Calendars](#calendars), while the dependency
+semantics stay the same. Remaining forecasts measure from the
 adapter-supplied clock reading, give completed tasks zero duration and remove constraints into
 completed tasks or reached milestones, using the same completion and decision-gate projection as
 execution queries. A task that is not complete but has a recorded start event (in progress, blocked
 or submitted) contributes only its remaining duration: its estimate conditioned on the task still
-running after the hours elapsed since that start (see [Uncertain durations](#uncertain-durations)).
-Blocked intervals count as elapsed, because estimates are elapsed hours rather than effort. A start
+running after the hours elapsed since that start (see [Uncertain durations](#uncertain-durations)),
+counted on the task's calendar when the plan has calendars. Blocked intervals count, because
+estimates are durations rather than effort. A start
 whose time was never recorded keeps the whole duration instead of assuming a head start. A task
 that has outlasted its pessimistic bound projects to finish at the clock reading, which is no
 earlier than execution can release its successors, since finish-based edges still wait for its
@@ -230,7 +232,9 @@ An edge is released at the clock reading `now` when its predecessor event has oc
 and `t + max(L, 0) <= now`. Positive lag is elapsed calendar time and cannot be bypassed: a gate
 24 hours after an event is closed at +23 h and open at +24 h. Negative lag (a lead) shapes the
 schedule projection only; execution still waits for the event itself, and `explain` says so.
-Working-time calendars do not apply to execution lag.
+A dependency with `lag_basis: Working` counts its positive lag in working hours of the successor's
+calendar instead; the gate and the forecast use the same calendar arithmetic, so they open at the
+same instant. Without calendars a working lag is elapsed.
 
 Work completed before event times were recorded keeps its lifecycle but has no time. Such an event
 has occurred at an unknown time: it releases zero or negative lag, while a positive lag that needs it
@@ -241,6 +245,33 @@ milestone or package whose time depends on an unrecorded event has an unrecorded
 `UnmetGate::Dependency` reports the edge identity, policy, relation, lag, the required predecessor
 event (`requires`) and its `release` state (`awaiting_event`, `elapsing` with `event_at` and
 `opens_at`, `unrecorded_event_time` or `lag_out_of_range`).
+
+### Calendars
+
+A plan's optional `calendars` block names an IANA `time_zone`, named weekly calendars with dated
+exceptions, and the calendar of each actor kind. Two calendars are built in: `always`, where every
+hour is working time, and `standard`, Microsoft Project's Standard calendar (Monday to Friday,
+08:00-12:00 and 13:00-17:00), which a plan may redefine. The defaults follow Microsoft Project
+once the block exists: people work on `standard`, agents and services on `always`, work with neither
+an owner nor a planned `executor` is done by `default_executor` (Human), and verification waits for
+the `verifier` kind's calendar (Human). A plan without the block schedules exactly as every hour
+counting, so adding calendars is an explicit reviewed change.
+
+A task's calendar is, from most to least specific: its own `schedule.calendar`; its owner's entry
+in `calendars.actors` (availability only, never capacity or allocation); the calendar of its owner's
+kind, else of its planned `schedule.executor`, else of `default_executor`. Its estimate counts
+working hours on that calendar.
+
+Remaining forecasts compile each calendar into working spans in hours after the clock reading, in
+UTC, so daylight-saving changes and exceptions are exact. A task starts at the first working moment
+after its start constraints, and its work ends when its duration of working hours has passed. A
+finish constraint (FF, SF) moves the start back on the calendar so that the work ends no earlier
+than the constraint; the finish is then held at the constraint if calendar gaps would end it
+sooner. A task that still awaits verification finishes at the next working moment of the verifier's
+calendar, which `explain` reports as `schedule.calendar.review_wait_hours`, together with the
+calendar, executor kind and the rule that chose them. Latest times run the same arithmetic
+backwards, and floats stay elapsed hours. The baseline projection (`deterministic`, `simulate`) has
+no clock reading and stays calendar-free. Derived dates are never stored.
 
 ### Dependency identity, policy and waivers
 
@@ -439,7 +470,8 @@ its simulated duration:
   expectation `(O + 4M + P) / 6` that CPM uses. Samples are `O + (P − O)·X/(X + Y)` with gamma
   draws `X ~ Γ(α)`, `Y ~ Γ(β)` (Marsaglia–Tsang over Box–Muller normals, from the seeded
   generator). An estimate with `O = P` is exact.
-- **Remaining duration of started work.** With `e` hours elapsed since the recorded start, the
+- **Remaining duration of started work.** With `e` hours since the recorded start (working hours of
+  the task's calendar when the plan has calendars), the
   remaining duration is `D − e` conditioned on `D > e`. While `e ≤ O` nothing is ruled out and it
   is the whole distribution shifted by `e` (CPM: `PERT − e`). For `O < e < P` the conditional density
   is tabulated on a fine grid once per projection; simulation inverts that table with one uniform

@@ -36,6 +36,9 @@ pub struct Plan {
     /// Contextual work relationships that never gate readiness, scheduling or progress.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<WorkLink>,
+    /// Working calendars; every hour is working time when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calendars: Option<Calendars>,
 }
 
 impl Plan {
@@ -58,6 +61,7 @@ impl Plan {
             dependencies: Vec::new(),
             external_references: BTreeMap::new(),
             links: Vec::new(),
+            calendars: None,
         }
     }
 

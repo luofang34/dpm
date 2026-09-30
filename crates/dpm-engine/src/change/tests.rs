@@ -307,3 +307,39 @@ fn plan_changes_cannot_author_or_rewrite_event_times() {
         assert_eq!(plan, before, "case {case}");
     }
 }
+
+#[test]
+fn calendars_are_added_edited_and_removed_as_one_reviewed_value() {
+    let mut plan = fixture();
+    let mut proposal = plan.clone();
+    proposal.calendars = Some(dpm_model::Calendars::in_zone("Europe/Berlin"));
+    let preview = propose_change(&plan, &proposal).expect("add calendars");
+    assert_eq!(preview.changes.len(), 1);
+    let added = preview.changes.first().expect("change");
+    assert_eq!(
+        (added.collection.as_str(), added.id.as_ref()),
+        ("calendars", None)
+    );
+    assert!(added.before.is_null());
+    let stale = patch(&proposal, &preview.changes);
+    assert!(matches!(stale, Err(EngineError::StaleChange { .. })));
+    apply(&mut plan, proposal.clone()).expect("apply calendars");
+    assert_eq!(plan.calendars, proposal.calendars);
+
+    let mut edited = plan.clone();
+    if let Some(calendars) = edited.calendars.as_mut() {
+        calendars.verifier = dpm_model::ActorKind::Agent;
+    }
+    let preview = propose_change(&plan, &edited).expect("edit calendars");
+    assert_eq!(
+        preview.changes.first().map(|c| c.fields.clone()),
+        Some(vec!["verifier".to_owned()])
+    );
+    let replayed = patch(&plan, &preview.changes).expect("replay");
+    assert_eq!(replayed.calendars, edited.calendars);
+
+    let mut removed = plan.clone();
+    removed.calendars = None;
+    apply(&mut plan, removed).expect("remove calendars");
+    assert!(plan.calendars.is_none());
+}

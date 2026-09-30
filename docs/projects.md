@@ -208,6 +208,7 @@ it never starts its gated tasks. Future semantic plan editing and sync are track
 
 Plan format 3 groups work into `contract`, `execution` and `schedule`, and uses explicit fractional
 sibling `order` values with stable IDs as tie breakers. Repository and folder references live in
-`assets`. This unpublished format intentionally rejects format 2; preserve its database and export
+`assets`. An optional `calendars` block, a task's `schedule.executor` and `schedule.calendar`, and a
+dependency's `lag_basis` place work on working time; plans without them are unchanged. This unpublished format intentionally rejects format 2; preserve its database and export
 with its original binary before converting the export and initializing a new store. Never replace
 the archived operation log. Locator version 3 uses `asset`; the JSON API version is 9.

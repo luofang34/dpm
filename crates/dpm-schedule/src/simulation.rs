@@ -1,5 +1,6 @@
 use crate::ScheduleError;
 use crate::network::{EPSILON, Network};
+use crate::placement::Placement;
 use crate::remaining_duration::RemainingDuration;
 use crate::sampling::XorShift64;
 use dpm_model::{Plan, WorkItemId};
@@ -66,7 +67,8 @@ pub fn simulate(plan: &Plan, config: SimulationConfig) -> Result<SimulationSumma
         .iter()
         .map(|(id, work)| Ok((*id, RemainingDuration::of(*id, work, false, 0.0)?)))
         .collect::<Result<Vec<_>, ScheduleError>>()?;
-    simulate_inner(plan, config, &durations)
+    let network = Network::compile(plan)?;
+    simulate_inner(&network, config, &durations, None)
 }
 
 /// Monte Carlo projection of remaining applicable work from the execution state at a clock reading.
@@ -90,7 +92,10 @@ pub fn simulate_remaining_at(
     plan.validate()?;
     let remaining = crate::cpm::remaining_plan_at(plan, timeline);
     let durations = remaining.durations()?;
-    let mut summary = simulate_inner(&remaining.plan, config, &durations)?;
+    let network = Network::compile(&remaining.plan)?;
+    let expected: Vec<f64> = durations.iter().map(|(_, d)| d.expected()).collect();
+    let mut placement = remaining.placement(&network, timeline, &expected)?;
+    let mut summary = simulate_inner(&network, config, &durations, placement.as_mut())?;
     summary
         .criticality
         .retain(|id, _| !remaining.excluded.contains(id));
@@ -99,14 +104,14 @@ pub fn simulate_remaining_at(
 
 /// Sample every activity's duration source, in work-item id order, and project each sample.
 fn simulate_inner(
-    plan: &Plan,
+    network: &Network,
     config: SimulationConfig,
     durations_by_id: &[(WorkItemId, RemainingDuration)],
+    mut placement: Option<&mut Placement>,
 ) -> Result<SimulationSummary, ScheduleError> {
     if config.iterations == 0 {
         return Err(ScheduleError::NoSimulationIterations);
     }
-    let network = Network::compile(plan)?;
     let mut rng = XorShift64::new(config.seed);
     let mut finishes = Vec::with_capacity(config.iterations);
     let mut critical_counts = vec![0_usize; network.order().len()];
@@ -129,7 +134,10 @@ fn simulate_inner(
                 return Err(ScheduleError::InvalidDuration(*id));
             }
         }
-        let times = network.times(&durations)?;
+        let times = match placement.as_deref_mut() {
+            Some(placement) => network.times_placed(&durations, placement)?,
+            None => network.times(&durations)?,
+        };
         finishes.push(times.finish);
         for (at, count) in critical_counts.iter_mut().enumerate() {
             if network.total_float(&times, at)? <= EPSILON {

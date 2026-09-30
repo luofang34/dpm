@@ -18,4 +18,5 @@ thiserror.workspace = true
 workspace = true
 
 [dev-dependencies]
+chrono-tz.workspace = true
 serde_json.workspace = true

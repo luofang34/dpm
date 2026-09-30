@@ -114,6 +114,18 @@ impl Release {
     /// projection: execution still waits for the event itself, so it is treated as zero here.
     #[must_use]
     pub fn evaluate(event: Option<EventTime>, lag_hours: f64, now: DateTime<Utc>) -> Self {
+        Self::evaluate_with(event, lag_hours, now, hours_after)
+    }
+
+    /// Evaluate one constraint whose positive lag ends at `lag_end(event_at, hours)`, such as
+    /// working hours of a calendar; `None` from it means the lag is out of range.
+    #[must_use]
+    pub fn evaluate_with(
+        event: Option<EventTime>,
+        lag_hours: f64,
+        now: DateTime<Utc>,
+        lag_end: impl FnOnce(DateTime<Utc>, f64) -> Option<DateTime<Utc>>,
+    ) -> Self {
         let Some(event) = event else {
             return Self::AwaitingEvent;
         };
@@ -123,15 +135,13 @@ impl Release {
             EventTime::Unrecorded => Self::Released {
                 at: EventTime::Unrecorded,
             },
-            EventTime::Recorded(event_at) => {
-                match lag_delta(delay).and_then(|d| event_at.checked_add_signed(d)) {
-                    Some(opens_at) if opens_at <= now => Self::Released {
-                        at: EventTime::Recorded(opens_at),
-                    },
-                    Some(opens_at) => Self::Elapsing { event_at, opens_at },
-                    None => Self::LagOutOfRange { event_at },
-                }
-            }
+            EventTime::Recorded(event_at) => match lag_end(event_at, delay) {
+                Some(opens_at) if opens_at <= now => Self::Released {
+                    at: EventTime::Recorded(opens_at),
+                },
+                Some(opens_at) => Self::Elapsing { event_at, opens_at },
+                None => Self::LagOutOfRange { event_at },
+            },
         }
     }
 
@@ -143,6 +153,11 @@ impl Release {
             _ => None,
         }
     }
+}
+
+/// The instant `hours` elapsed hours after `at`; `None` outside chrono's range.
+pub(crate) fn hours_after(at: DateTime<Utc>, hours: f64) -> Option<DateTime<Utc>> {
+    lag_delta(hours).and_then(|delta| at.checked_add_signed(delta))
 }
 
 /// Millisecond-resolution elapsed lag; `None` when it exceeds the representable range.

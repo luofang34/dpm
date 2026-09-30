@@ -93,3 +93,21 @@ fn a_provisional_start_stays_a_conservative_forecast_until_verification() {
         "only verification finishes A in the forecast"
     );
 }
+
+#[test]
+fn working_time_lags_open_the_gate_and_the_forecast_on_the_successors_calendar() {
+    let (mut plan, _, b) = started_pair(DependencyKind::StartStart, 8.0);
+    plan.dependencies[0].lag_basis = dpm_model::LagBasis::Working;
+    plan.calendars = Some(dpm_model::Calendars::in_zone("UTC"));
+    plan.work_items.get_mut(&b).expect("b").schedule.executor = Some(dpm_model::ActorKind::Human);
+    let claim = |hour| gate_report(&plan, b, Transition::Claim, t(hour)).expect("gates");
+    // A started Tuesday 00:00; eight Standard hours of B's calendar end Tuesday 17:00.
+    assert!(!claim(16).ready);
+    assert!(claim(17).ready);
+    assert_eq!(
+        forecast_start(&plan, b, 4),
+        28.0,
+        "B's work begins Wednesday 08:00"
+    );
+    assert_eq!(forecast_start(&plan, b, 20), 12.0);
+}

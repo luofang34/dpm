@@ -232,10 +232,11 @@ impl Timeline {
         .and_then(WorkItem::current_attempt);
         match current {
             Some(attempt) => StartRelease {
-                release: Release::evaluate(
+                release: Release::evaluate_with(
                     Some(EventTime::Recorded(attempt.submitted_at)),
                     edge.lag_hours,
                     self.now(),
+                    |at, hours| plan.lag_end(edge, at, hours),
                 ),
                 attempt: Some(attempt.number),
                 provisional: attempt.outcome == AttemptOutcome::Pending,

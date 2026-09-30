@@ -1,6 +1,7 @@
 use crate::network::{EPSILON, Network, finite};
+use crate::placement::Placement;
 use crate::remaining_duration::RemainingDuration;
-use crate::{ActivitySchedule, Schedule, ScheduleError};
+use crate::{ActivityCalendar, ActivitySchedule, Schedule, ScheduleError};
 use dpm_model::{Dependency, Plan, Release, WorkItemId};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -44,7 +45,10 @@ pub fn deterministic_remaining_at(
         .into_iter()
         .map(|(id, duration)| (id, duration.expected()))
         .collect();
-    let mut schedule = deterministic_with_durations(&remaining.plan, &durations)?;
+    let network = Network::compile(&remaining.plan)?;
+    let dense = dense(&network, &durations)?;
+    let mut placement = remaining.placement(&network, timeline, &dense)?;
+    let mut schedule = project(&network, &dense, placement.as_mut())?;
     schedule
         .activities
         .retain(|id, _| !remaining.excluded.contains(id));
@@ -60,8 +64,10 @@ pub(crate) struct Remaining {
     pub(crate) plan: Plan,
     /// Work that is not applicable and must not appear in any remaining projection.
     pub(crate) excluded: BTreeSet<WorkItemId>,
-    /// Hours from each outstanding task's recorded start event to the origin.
+    /// Hours of each outstanding task's calendar from its recorded start event to the origin.
     pub(crate) elapsed: BTreeMap<WorkItemId, f64>,
+    /// Applicable tasks whose verification is still outstanding.
+    pub(crate) awaiting: BTreeSet<WorkItemId>,
 }
 
 impl Remaining {
@@ -77,12 +83,38 @@ impl Remaining {
             })
             .collect()
     }
+
+    /// Calendar placement of this projection, or `None` for a plan without calendars. The
+    /// initial window covers several times the total work and lag, so widening is rare.
+    pub(crate) fn placement(
+        &self,
+        network: &Network,
+        timeline: &dpm_model::Timeline,
+        durations: &[f64],
+    ) -> Result<Option<Placement>, ScheduleError> {
+        let work: f64 = durations.iter().sum();
+        let lags: f64 = self
+            .plan
+            .dependencies
+            .iter()
+            .map(|d| d.lag_hours.abs())
+            .sum();
+        Placement::new(
+            &self.plan,
+            network,
+            timeline,
+            &self.awaiting,
+            5.0 * (work + lags),
+        )
+    }
 }
 
-/// Hours between each outstanding applicable task's recorded start and the origin.
+/// Hours between each outstanding applicable task's recorded start and the origin: working hours
+/// of its calendar when the plan has calendars, elapsed hours otherwise.
 ///
-/// Blocked intervals count, since estimates are elapsed hours. A start whose time was never
-/// recorded is absent, so that task keeps its whole duration rather than an assumed head start.
+/// Blocked intervals count, since estimates are durations and not effort. A start whose time was
+/// never recorded is absent, so that task keeps its whole duration rather than an assumed head
+/// start.
 fn elapsed_since_start(
     plan: &Plan,
     timeline: &dpm_model::Timeline,
@@ -98,7 +130,9 @@ fn elapsed_since_start(
         .filter_map(|(id, work)| match work.start_event()? {
             dpm_model::EventTime::Recorded(at) => Some((
                 *id,
-                ((timeline.now() - at).num_milliseconds() as f64 / 3_600_000.0).max(0.0),
+                crate::placement::worked_since(plan, work, at, timeline.now()).unwrap_or_else(
+                    || ((timeline.now() - at).num_milliseconds() as f64 / 3_600_000.0).max(0.0),
+                ),
             )),
             dpm_model::EventTime::Unrecorded => None,
         })
@@ -150,13 +184,27 @@ pub(crate) fn remaining_plan_at(plan: &Plan, timeline: &dpm_model::Timeline) -> 
                 | Release::LagOutOfRange { .. }
                 | Release::NotSelected => d.lag_hours,
             };
+            // A lag already elapsing ends at a fixed instant, measured in elapsed hours from now.
+            let lag_basis = match timeline.edge(plan, d) {
+                Release::Elapsing { .. } => dpm_model::LagBasis::Elapsed,
+                _ => d.lag_basis,
+            };
             Some(Dependency {
                 lag_hours,
+                lag_basis,
                 ..d.clone()
             })
         })
         .collect();
+    let awaiting = plan
+        .work_items
+        .values()
+        .filter(|w| w.is_executable() && !w.execution.status.satisfies_dependency())
+        .filter(|w| !excluded.contains(&w.id))
+        .map(|w| w.id)
+        .collect();
     Remaining {
+        awaiting,
         elapsed: elapsed_since_start(plan, timeline, &excluded),
         plan: remaining,
         excluded,
@@ -183,6 +231,12 @@ pub fn deterministic_with_durations(
     durations: &Times,
 ) -> Result<Schedule, ScheduleError> {
     let network = Network::compile(plan)?;
+    let dense = dense(&network, durations)?;
+    project(&network, &dense, None)
+}
+
+/// Durations by topological position, each finite and non-negative.
+fn dense(network: &Network, durations: &Times) -> Result<Vec<f64>, ScheduleError> {
     let mut dense = Vec::with_capacity(network.order().len());
     for id in network.order() {
         let duration = durations
@@ -193,27 +247,56 @@ pub fn deterministic_with_durations(
         }
         dense.push(*duration);
     }
-    let times = network.times(&dense)?;
+    Ok(dense)
+}
+
+/// Project a compiled network, on calendars when a placement is given.
+fn project(
+    network: &Network,
+    dense: &[f64],
+    mut placement: Option<&mut Placement>,
+) -> Result<Schedule, ScheduleError> {
+    let times = match placement.as_deref_mut() {
+        Some(placement) => network.times_placed(dense, placement)?,
+        None => network.times(dense)?,
+    };
+    let placement = placement.as_deref();
     let mut activities = BTreeMap::new();
     let mut critical_activities = Vec::new();
-    let spans = times.earliest.iter().zip(&times.latest).zip(&dense);
-    for ((at, id), ((earliest, latest), duration)) in network.order().iter().enumerate().zip(spans)
-    {
+    for (at, id) in network.order().iter().enumerate() {
+        let read = |values: &[f64]| {
+            values
+                .get(at)
+                .copied()
+                .ok_or(ScheduleError::UnknownPosition(at))
+        };
         let total_float = network.total_float(&times, at)?;
         let critical = total_float <= EPSILON;
         if critical {
             critical_activities.push(*id);
         }
+        let calendar = placement
+            .and_then(|p| p.resolved.get(id))
+            .map(|resolved| -> Result<_, ScheduleError> {
+                Ok(ActivityCalendar {
+                    resolved: resolved.clone(),
+                    review_wait_hours: read(&times.review_wait)?,
+                })
+            })
+            .transpose()?;
         activities.insert(
             *id,
             ActivitySchedule {
-                earliest_start_hours: *earliest,
-                earliest_finish_hours: finite(*id, earliest + duration)?,
-                latest_start_hours: *latest,
-                latest_finish_hours: finite(*id, latest + duration)?,
+                earliest_start_hours: read(&times.earliest)?,
+                earliest_finish_hours: finite(*id, read(&times.earliest_finish)?)?,
+                latest_start_hours: read(&times.latest)?,
+                latest_finish_hours: finite(*id, read(&times.latest_finish)?)?,
                 total_float_hours: total_float,
-                free_float_hours: network.free_float(&dense, &times, at)?.min(total_float),
+                free_float_hours: network
+                    .free_float(dense, &times, at, placement)?
+                    .min(total_float),
                 critical,
+                calendar,
             },
         );
     }

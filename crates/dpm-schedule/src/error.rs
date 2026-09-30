@@ -21,6 +21,9 @@ pub enum ScheduleError {
     #[error("schedule position {0} is outside the compiled dependency network")]
     /// A position read from a compiled network has no activity; the projection is inconsistent.
     UnknownPosition(usize),
+    #[error("the projection needs working time beyond the supported calendar range")]
+    /// A calendar has no working time within the range a projection can compile.
+    CalendarRange,
     #[error("simulation requires at least one iteration")]
     /// At least one Monte Carlo iteration is required.
     NoSimulationIterations,

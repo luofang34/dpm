@@ -691,8 +691,9 @@ the adapter for that response.
 | SF | submission | start (`started_at`) |
 
 Verification re-checks all four relation kinds and decisions. Only verification is a predecessor's
-finish. Positive lag must elapse in calendar time after the event (`release.state: elapsing` with
-`event_at` and `opens_at`); negative lag affects the schedule only and never releases work before the
+finish. Positive lag must elapse after the event (`release.state: elapsing` with `event_at` and
+`opens_at`), in working hours of the successor's calendar when the dependency has
+`lag_basis: Working` and the plan has calendars; negative lag affects the schedule only and never releases work before the
 event, which `why_now` states. Tasks verified or started before event times were recorded, and
 decisions resolved before then, count as having occurred at an unrecorded time: zero or negative lag
 releases, positive lag reports `release.state: unrecorded_event_time` with an actionable reason.
@@ -709,12 +710,37 @@ Durations in these forecasts follow one model for CPM and Monte Carlo: the deter
 of every activity is the mean of its simulated one. A task's whole duration is beta-PERT, whose mean
 is the PERT expectation `(O + 4M + P) / 6`. A task with a recorded start event that is not yet
 Verified or Done (in progress, blocked or submitted) contributes only its remaining duration,
-conditioned on still running after the hours elapsed since that start; blocked time counts as
-elapsed, and a start with an unrecorded time keeps the whole duration. The remainder is never
+conditioned on still running after the hours since that start (working hours of its calendar when
+the plan has calendars); blocked time counts, and a start with an unrecorded time keeps the whole duration. The remainder is never
 `max(expected − elapsed, 0)`: a task within its pessimistic bound always keeps a positive remainder,
 and one past it projects to finish at the clock reading, never before, while its successors' gates
 still wait for verification. Remaining forecasts of started work therefore shrink as the clock
 advances between two queries of the same revision.
+
+### Working calendars
+
+Plans without a `calendars` block count every hour. To schedule people on working time, add one in a
+reviewed change; `{"time_zone": "Europe/Berlin"}` alone gives Microsoft Project's defaults: human
+work on the built-in `standard` calendar (Monday to Friday, 08:00-12:00 and 13:00-17:00), agent and
+service work on `always`, work without an owner or `schedule.executor` treated as human, and
+verification waiting for the human calendar. Finer control, all optional:
+
+| Field | Meaning |
+| --- | --- |
+| `calendars.definitions.NAME` | `week` (`mon`..`sun`: `[{"from": "08:00", "to": "12:00"}]`) and dated `exceptions` (`from`, optional `to`, `hours`, `name`); redefining `standard` replaces the built-in, `always` is reserved |
+| `calendars.kinds` | calendar name for `human`, `agent`, `service` |
+| `calendars.actors` | `"kind:name": calendar`, the availability of a named owner; never capacity |
+| `calendars.default_executor`, `calendars.verifier` | actor kinds for unowned work and for review |
+| `schedule.executor` | kind expected to do an unowned task |
+| `schedule.calendar` | calendar a task follows regardless of who does it |
+| `dependency.lag_basis` | `Working` counts the lag on the successor's calendar; default `Elapsed` |
+
+Estimates are working hours of the task's calendar, which is its own calendar, else its owner's
+`actors` entry, else the calendar of its owner's kind, planned executor or default executor.
+Schedule hours in `project_status`, `explain_work.schedule` and the Gantt stay elapsed hours from
+the clock reading; with calendars, `explain_work.schedule.calendar` names the calendar, executor,
+the rule that chose them (`task`, `actor` or `kind`) and `review_wait_hours`, the time verification
+waits for the verifier's calendar after the work ends.
 
 A task without an estimate enters the remaining CPM and Monte Carlo at 0 h; the forecast does not
 guess a duration, so it is optimistic by that task's real duration. `project_status.unestimated`

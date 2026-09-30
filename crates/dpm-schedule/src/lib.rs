@@ -3,6 +3,7 @@
 mod cpm;
 mod error;
 mod network;
+mod placement;
 mod projection;
 mod remaining_duration;
 mod sampling;
@@ -13,7 +14,7 @@ pub use cpm::{
     deterministic_with_durations,
 };
 pub use error::ScheduleError;
-pub use projection::{ActivitySchedule, Schedule};
+pub use projection::{ActivityCalendar, ActivitySchedule, Schedule};
 pub use simulation::{
     SimulationConfig, SimulationSummary, simulate, simulate_remaining, simulate_remaining_at,
 };

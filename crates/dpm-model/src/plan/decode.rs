@@ -44,4 +44,6 @@ struct Shape {
         std::collections::BTreeMap<crate::ExternalReferenceId, crate::ExternalReference>,
     #[serde(default)]
     links: Vec<crate::WorkLink>,
+    #[serde(default)]
+    calendars: Option<crate::Calendars>,
 }

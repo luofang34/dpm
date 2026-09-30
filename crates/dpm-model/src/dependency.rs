@@ -89,6 +89,24 @@ pub struct DependencyWaiver {
     pub reason: String,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Whether a lag counts elapsed hours or working hours of the successor's calendar.
+pub enum LagBasis {
+    /// Wall-clock hours, such as curing or waiting time.
+    #[default]
+    Elapsed,
+    /// Working hours of the successor's calendar; elapsed hours in a plan without calendars.
+    Working,
+}
+
+impl LagBasis {
+    /// Whether this is the default elapsed basis, which serialization omits.
+    #[must_use]
+    pub fn is_elapsed(&self) -> bool {
+        *self == Self::Elapsed
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Independently addressable temporal constraint between two work items.
 #[serde(deny_unknown_fields)]
@@ -103,6 +121,9 @@ pub struct Dependency {
     pub kind: DependencyKind,
     /// Positive values add delay; negative values are lead time.
     pub lag_hours: f64,
+    /// Whether the lag counts elapsed or working hours.
+    #[serde(default, skip_serializing_if = "LagBasis::is_elapsed")]
+    pub lag_basis: LagBasis,
     /// Whether the constraint may be waived.
     #[serde(default)]
     pub policy: DependencyPolicy,
@@ -177,6 +198,7 @@ impl Dependency {
             successor,
             kind,
             lag_hours,
+            lag_basis: LagBasis::Elapsed,
             policy: DependencyPolicy::Hard,
             start_basis: StartBasis::Verified,
             rationale: None,

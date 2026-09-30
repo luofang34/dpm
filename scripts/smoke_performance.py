@@ -9,7 +9,7 @@ import time
 import uuid
 from pathlib import Path
 
-from smoke_agent import Agent, CLI, ROOT, run_cli
+from smoke_agent import Agent, CLI, ROOT, pinned_clock, run_cli
 
 
 def generated(count, shape):
@@ -23,9 +23,12 @@ def generated(count, shape):
         work['schedule']['estimate'] = dict(optimistic_hours=1., likely_hours=2., pessimistic_hours=3.)
         plan['work_items'][work['id']] = work
         if i and shape != 'flat':
-            parent = i - 1 if shape == 'chain' else (i - 1) // 3
+            parent = (i - 1) // 3 if shape == 'branch' else i - 1
             plan['dependencies'].append(dict(id=str(uuid.UUID(int=(78 << 96) + i)),
                 predecessor=identity(parent), successor=work['id'], kind='FinishStart', lag_hours=0.))
+    if shape == 'calendar':
+        # A chain of human work on the Standard calendar: every pass does calendar arithmetic.
+        plan['calendars'] = {'time_zone': 'Europe/Berlin'}
     return plan
 
 
@@ -38,21 +41,25 @@ def timed_cli(binary, database, args):
 
 def smoke(directory, count=5000, budget=5., baseline=None):
     results = []
-    for shape in ('flat', 'chain', 'branch'):
+    for shape in ('flat', 'chain', 'branch', 'calendar'):
         source, database = directory / f'{shape}.json', directory / f'{shape}.sqlite'
         source.write_text(json.dumps(generated(count, shape)))
         run_cli(database, 'import', str(source))
         worker = Agent(database, 'agent:performance')
+        # Calendar forecasts depend on the time of day, so both adapters read one pinned clock.
+        clock = pinned_clock()
+        observer = Agent(database, 'agent:performance', clock=clock)
         try:
             queries = [(('status',), 'project_status', {}), (('next',), 'next_work', {}),
                        (('explain', 'PERF-1'), 'explain_work', {'key': 'PERF-1'})]
             for command, tool, arguments in queries:
-                output, elapsed = timed_cli(CLI, database, command)
+                output, elapsed = timed_cli(CLI, database, ('--clock', clock, *command))
                 assert elapsed < budget, (shape, command, elapsed, budget)
-                if baseline:
-                    previous, _ = timed_cli(baseline, database, command)
+                # A baseline binary predating calendars cannot read the calendar plan.
+                if baseline and shape != 'calendar':
+                    previous, _ = timed_cli(baseline, database, ('--clock', clock, *command))
                     assert previous == output, (shape, command, 'query output changed')
-                remote = worker.call(tool, arguments)
+                remote = observer.call(tool, arguments)
                 assert remote == json.loads(output), (shape, tool, 'adapter divergence')
                 results.append(dict(shape=shape, tasks=count, query=command[0], seconds=elapsed))
             started = time.perf_counter()
@@ -63,6 +70,7 @@ def smoke(directory, count=5000, budget=5., baseline=None):
             assert worker.call('get_work', {'key': 'PERF-1'})['data'] == run_cli(database, 'show', 'PERF-1')
         finally:
             worker.close()
+            observer.close()
     return results
 
 

@@ -24,6 +24,7 @@ pub(super) enum Shape {
     Float,
     Str,
     Time,
+    Date,
     Uuid,
     Option(Box<Shape>),
     Seq(Box<Shape>),
@@ -304,9 +305,16 @@ impl<'de> Deserializer<'de> for Tracer<'_> {
     }
 
     fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, TraceError> {
-        if expecting(&visitor).contains("date and time") {
+        let expecting = expecting(&visitor);
+        if expecting.contains("date and time") {
             self.put(Shape::Time);
             visitor.visit_str("2026-09-01T00:00:00Z")
+        } else if expecting.contains("date string") {
+            self.put(Shape::Date);
+            visitor.visit_str("2026-09-01")
+        } else if expecting.contains("local time") {
+            self.put(Shape::Str);
+            visitor.visit_str("08:00")
         } else {
             self.put(Shape::Str);
             visitor.visit_str("text")

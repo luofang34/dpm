@@ -47,7 +47,7 @@ pub enum ValidationError {
     },
 }
 
-pub(super) fn invalid(
+pub(crate) fn invalid(
     entity: &'static str,
     id: impl std::fmt::Display,
     reason: impl Into<String>,
@@ -86,6 +86,7 @@ impl Plan {
         graph::validate(self)?;
         conditions::validate(self)?;
         dependency::validate(self)?;
+        crate::calendar::validate::validate(self)?;
         provisional::validate(self)
     }
 }

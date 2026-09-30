@@ -96,6 +96,8 @@ impl Network {
             schedule: dpm_model::ScheduleInputs {
                 priority: Priority::P2,
                 estimate,
+                executor: None,
+                calendar: None,
             },
         };
         self.plan.work_items.insert(id, work);

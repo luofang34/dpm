@@ -7,6 +7,8 @@ use crate::ScheduleError;
 use dpm_model::{DependencyKind, Plan, WorkItemId};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+mod calendar;
+
 /// Absolute tolerance, in hours, below which total float counts as zero.
 ///
 /// Inputs are elapsed hours; at a million hours the f64 spacing is about 1e-10, so rounding from
@@ -20,6 +22,8 @@ struct Edge {
     other: usize,
     kind: DependencyKind,
     lag: f64,
+    /// The lag counts working hours of the successor's calendar.
+    working: bool,
 }
 
 /// A validated plan's activities in topological order with their incoming and outgoing edges.
@@ -34,10 +38,17 @@ pub(crate) struct Network {
     outgoing: Vec<Vec<Edge>>,
 }
 
-/// Earliest and latest start times by topological position, and the project finish.
+/// Earliest and latest start and finish times by topological position, and the project finish.
+///
+/// A finish is the event successors wait for: with calendars, a task's verification, which may
+/// wait for the verifier's working time after its execution ends.
 pub(crate) struct Times {
     pub(crate) earliest: Vec<f64>,
     pub(crate) latest: Vec<f64>,
+    pub(crate) earliest_finish: Vec<f64>,
+    pub(crate) latest_finish: Vec<f64>,
+    /// Hours between the end of execution and the verified finish at the earliest times.
+    pub(crate) review_wait: Vec<f64>,
     pub(crate) finish: f64,
 }
 
@@ -100,6 +111,7 @@ impl Network {
                 other,
                 kind: dep.kind,
                 lag: dep.lag_hours,
+                working: dep.lag_basis == dpm_model::LagBasis::Working,
             };
             if let Some(edges) = outgoing.get_mut(from) {
                 edges.push(edge(to));
@@ -159,7 +171,16 @@ impl Network {
                 *slot = bound;
             }
         }
+        let with_durations = |starts: &[f64]| -> Result<Vec<f64>, ScheduleError> {
+            let pairs = self.order.iter().zip(starts).zip(durations);
+            pairs
+                .map(|((id, start), duration)| finite(*id, start + duration))
+                .collect()
+        };
         Ok(Times {
+            earliest_finish: with_durations(&earliest)?,
+            latest_finish: with_durations(&latest)?,
+            review_wait: vec![0.0; earliest.len()],
             earliest,
             latest,
             finish,
@@ -172,7 +193,11 @@ impl Network {
         durations: &[f64],
         times: &Times,
         position: usize,
+        placement: Option<&crate::placement::Placement>,
     ) -> Result<f64, ScheduleError> {
+        if let Some(placement) = placement {
+            return self.free_float_placed(times, position, placement);
+        }
         let (Some(id), Some(edges)) = (self.order.get(position), self.outgoing.get(position))
         else {
             return Err(ScheduleError::UnknownPosition(position));

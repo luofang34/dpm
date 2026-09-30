@@ -117,6 +117,9 @@
         "$ref": "#/$defs/WorkLink"
       },
       "description": "Contextual relationships that never gate readiness or scheduling."
+    },
+    "calendars": {
+      "$ref": "#/$defs/Calendars"
     }
   },
   "$defs": {
@@ -974,6 +977,13 @@
             }
           ],
           "description": "Managed by waive_dependency."
+        },
+        "lag_basis": {
+          "enum": [
+            "Elapsed",
+            "Working"
+          ],
+          "description": "Working counts lag in the successor's working hours; default Elapsed."
         }
       }
     },
@@ -1403,12 +1413,207 @@
               "type": "null"
             }
           ],
-          "description": "Required for tasks; null for packages and milestones."
+          "description": "Required for tasks; null for packages and milestones. Working hours of the task's calendar when the plan has calendars."
+        },
+        "executor": {
+          "enum": [
+            "Human",
+            "Agent",
+            "Service"
+          ],
+          "description": "Kind expected to do the work while unowned; default is calendars.default_executor."
+        },
+        "calendar": {
+          "type": "string",
+          "description": "Calendar this task follows regardless of who does it; needs calendars."
         }
       },
       "required": [
         "priority"
       ]
+    },
+    "ClockTime": {
+      "type": "string",
+      "pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$",
+      "description": "Local time HH:MM; 24:00 ends a period at midnight."
+    },
+    "WorkingPeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/ClockTime"
+        },
+        "to": {
+          "$ref": "#/$defs/ClockTime"
+        }
+      },
+      "description": "Local working period; periods of one day are ordered and do not overlap."
+    },
+    "CalendarDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "week"
+      ],
+      "properties": {
+        "week": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mon": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WorkingPeriod"
+              }
+            },
+            "tue": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WorkingPeriod"
+              }
+            },
+            "wed": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WorkingPeriod"
+              }
+            },
+            "thu": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WorkingPeriod"
+              }
+            },
+            "fri": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WorkingPeriod"
+              }
+            },
+            "sat": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WorkingPeriod"
+              }
+            },
+            "sun": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WorkingPeriod"
+              }
+            }
+          },
+          "description": "Working periods per weekday; an omitted day is not worked. At least one day needs working time."
+        },
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from"
+            ],
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date"
+              },
+              "to": {
+                "type": "string",
+                "format": "date",
+                "description": "Last covered date, inclusive; defaults to from."
+              },
+              "hours": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/WorkingPeriod"
+                }
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "description": "Dates whose periods replace the week; no hours means not worked. Exceptions of one calendar do not overlap."
+          }
+        }
+      }
+    },
+    "Calendars": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time_zone"
+      ],
+      "description": "Working calendars. Omit it and every hour counts. With only time_zone, human work follows the built-in standard calendar (Mon-Fri 08:00-12:00, 13:00-17:00, like Microsoft Project), agent and service work runs always, work without an executor is human and verification waits for the human calendar. Estimates are then working hours of each task's calendar.",
+      "properties": {
+        "time_zone": {
+          "type": "string",
+          "description": "IANA time zone such as Europe/Berlin."
+        },
+        "definitions": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1,
+            "not": {
+              "const": "always"
+            }
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/CalendarDefinition"
+          },
+          "description": "Named calendars; defining standard replaces the built-in, always is reserved."
+        },
+        "kinds": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "human": {
+              "type": "string",
+              "description": "Default standard."
+            },
+            "agent": {
+              "type": "string",
+              "description": "Default always."
+            },
+            "service": {
+              "type": "string",
+              "description": "Default always."
+            }
+          },
+          "description": "Calendar name per actor kind."
+        },
+        "actors": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^(human|agent|service):.+$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Availability of named actors (kind:name -> calendar) while they own work; never capacity."
+        },
+        "default_executor": {
+          "enum": [
+            "Human",
+            "Agent",
+            "Service"
+          ],
+          "description": "Kind expected to do work that has neither an executor nor an owner; default Human."
+        },
+        "verifier": {
+          "enum": [
+            "Human",
+            "Agent",
+            "Service"
+          ],
+          "description": "Kind that verifies submitted work; verification waits for its calendar. Default Human."
+        }
+      }
     }
   }
 }
