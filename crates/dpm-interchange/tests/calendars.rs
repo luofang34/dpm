@@ -280,3 +280,59 @@ fn a_workspace_with_other_kind_calendars_names_the_source_calendar_on_each_task(
     assert_eq!(parked.outcome, dpm_interchange::ItemOutcome::Skipped);
     assert!(parked.rejected.iter().all(|f| f.field != "calendar"));
 }
+
+#[test]
+fn a_workspace_with_calendars_imports_in_its_own_zone_without_one_given() {
+    let source = plan();
+    let xml = export_mspdi(&source, "TEST").expect("export").xml;
+    let mut workspace = source.clone();
+    workspace.work_items.clear();
+    workspace.dependencies.clear();
+    let imported = import_mspdi(&workspace, &xml, &options(None)).expect("import");
+    let candidate = imported.candidate;
+    let calendar = |key: &str| {
+        let work = candidate.find_work_by_key(key).expect(key);
+        candidate.work_calendar(work).expect("calendars").calendar
+    };
+    assert_eq!(calendar("TEST-C"), ALWAYS, "elapsed durations stay elapsed");
+    assert_eq!(calendar("TEST-B"), "Night");
+    let bases: Vec<_> = candidate
+        .dependencies
+        .iter()
+        .filter(|d| d.lag_hours != 0.0)
+        .map(|d| (d.lag_hours, d.lag_basis))
+        .collect();
+    assert_eq!(bases, [(8.0, LagBasis::Working), (2.0, LagBasis::Elapsed)]);
+}
+
+#[test]
+fn updating_a_calendar_names_the_existing_work_that_follows_it() {
+    let source = plan();
+    let xml = export_mspdi(&source, "TEST").expect("export").xml;
+    let mut workspace = source.clone();
+    if let Some(calendars) = workspace.calendars.as_mut() {
+        calendars.definitions.insert(
+            "Night".into(),
+            CalendarDefinition {
+                week: WeekPattern {
+                    fri: vec![WorkingPeriod::new(
+                        ClockTime::hours(20),
+                        ClockTime::hours(24),
+                    )],
+                    ..WeekPattern::default()
+                },
+                exceptions: Vec::new(),
+            },
+        );
+    }
+    let imported = import_mspdi(&workspace, &xml, &options(None)).expect("import");
+    let night = imported
+        .report
+        .calendars
+        .iter()
+        .find(|c| c.calendar.as_deref() == Some("Night"))
+        .expect("night report");
+    assert_eq!(night.outcome, dpm_interchange::CalendarOutcome::Updated);
+    let affected: Vec<_> = night.affected_work.iter().map(|k| k.0.as_str()).collect();
+    assert_eq!(affected, ["TEST-B"]);
+}

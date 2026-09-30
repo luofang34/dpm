@@ -96,19 +96,18 @@ pub(crate) fn import(
                 continue;
             }
         };
-        let (name, outcome) =
-            if calendar.name.eq_ignore_ascii_case("Standard") && combined.definition == standard {
-                (STANDARD.to_owned(), CalendarOutcome::BuiltIn)
-            } else if calendar.name.eq_ignore_ascii_case("24 Hours")
-                && combined.definition == always_definition()
-            {
-                (ALWAYS.to_owned(), CalendarOutcome::BuiltIn)
-            } else {
-                let name = unique_name(calendar, &mut taken);
-                let outcome = store(&mut calendars, &name, combined.definition);
-                (name, outcome)
-            };
+        let (name, outcome) = place(
+            calendar,
+            combined.definition,
+            &standard,
+            &mut calendars,
+            &mut taken,
+        );
         names.insert(calendar.uid, name.clone());
+        let affected_work = match outcome {
+            CalendarOutcome::Updated => following(current, &name),
+            _ => Vec::new(),
+        };
         reports.push(CalendarReport {
             uid: calendar.uid,
             name: calendar.name.clone(),
@@ -116,6 +115,7 @@ pub(crate) fn import(
             outcome,
             approximated: combined.approximated,
             rejected: combined.rejected,
+            affected_work,
         });
     }
     let mut findings = Vec::new();
@@ -200,6 +200,7 @@ fn skipped(calendar: &SourceCalendar, reason: &str) -> CalendarReport {
         outcome: CalendarOutcome::Skipped,
         approximated: calendar.approximated.clone(),
         rejected,
+        affected_work: Vec::new(),
     }
 }
 
@@ -223,6 +224,38 @@ fn unique_name(calendar: &SourceCalendar, taken: &mut BTreeSet<String>) -> Strin
     }
     taken.insert(name.clone());
     name
+}
+
+/// The workspace calendar a source calendar becomes: a built-in it equals, or a stored definition.
+fn place(
+    calendar: &SourceCalendar,
+    definition: CalendarDefinition,
+    standard: &CalendarDefinition,
+    calendars: &mut Calendars,
+    taken: &mut BTreeSet<String>,
+) -> (String, CalendarOutcome) {
+    if calendar.name.eq_ignore_ascii_case("Standard") && definition == *standard {
+        (STANDARD.to_owned(), CalendarOutcome::BuiltIn)
+    } else if calendar.name.eq_ignore_ascii_case("24 Hours") && definition == always_definition() {
+        (ALWAYS.to_owned(), CalendarOutcome::BuiltIn)
+    } else {
+        let name = unique_name(calendar, taken);
+        let outcome = store(calendars, &name, definition);
+        (name, outcome)
+    }
+}
+
+/// Keys of the workspace's work that follows a calendar today.
+fn following(current: &Plan, name: &str) -> Vec<dpm_model::Key> {
+    let Some(calendars) = &current.calendars else {
+        return Vec::new();
+    };
+    current
+        .work_items
+        .values()
+        .filter(|w| w.is_executable() && calendars.resolve(w).calendar == name)
+        .map(|w| w.key.clone())
+        .collect()
 }
 
 /// Store a definition; a same-named workspace calendar is replaced, since the document owns it.

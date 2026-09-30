@@ -56,9 +56,20 @@ pub(crate) fn query(plan: &Plan, query: Query) -> Result<Value, AppError> {
 /// the candidate removes because the document omits it), also names the source task or link and
 /// the attempted change; the engine refusal stays the source of the error.
 fn refusal(plan: &Plan, result: &ImportResult, error: dpm_engine::EngineError) -> AppError {
-    let dpm_engine::EngineError::InvalidCommand { entity, .. } = &error else {
-        return AppError::Engine(error);
+    // A validation failure names the candidate's work by identity; the report knows it by key.
+    let entity = match &error {
+        dpm_engine::EngineError::InvalidCommand { entity, .. } => entity.clone(),
+        dpm_engine::EngineError::Validation(dpm_model::ValidationError::Invalid { id, .. }) => {
+            result
+                .candidate
+                .work_items
+                .values()
+                .find(|w| w.id.to_string() == *id)
+                .map_or_else(|| id.clone(), |w| w.key.0.clone())
+        }
+        _ => return AppError::Engine(error),
     };
+    let entity = &entity;
     if let Some(change) = result.source_change(plan, entity) {
         return AppError::Interchange(InterchangeError::Refused {
             change,

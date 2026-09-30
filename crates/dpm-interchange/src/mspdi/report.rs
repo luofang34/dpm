@@ -199,6 +199,10 @@ pub struct CalendarReport {
     pub approximated: Vec<Finding>,
     /// Source data the candidate does not carry, such as recurring exceptions.
     pub rejected: Vec<Finding>,
+    /// Existing work that follows an `Updated` calendar, whose schedule the update changes
+    /// whether or not the import touches it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub affected_work: Vec<Key>,
 }
 
 /// Full import report returned with the candidate and its reviewed preview.

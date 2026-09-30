@@ -119,8 +119,13 @@ pub fn import_mspdi(
         &prefix,
         options.match_existing_by,
     )?;
-    let calendars = options
+    // A workspace with calendars schedules imported work on them, so its own zone applies when
+    // the request names none; without calendars a zone is what opts into importing them.
+    let zone = options
         .time_zone
+        .clone()
+        .or_else(|| current.calendars.as_ref().map(|c| c.time_zone.clone()));
+    let calendars = zone
         .as_deref()
         .map(|zone| calendars::import(current, &source, zone))
         .transpose()?;

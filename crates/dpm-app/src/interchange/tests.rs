@@ -241,3 +241,37 @@ fn export_query_returns_the_document_and_report() {
     let reimport = import(&app, xml, "TEST").expect("re-import");
     assert_eq!(reimport["preview"]["changes"], serde_json::json!([]));
 }
+
+#[test]
+fn a_candidate_failing_validation_names_the_source_task() {
+    let app = application();
+    let exported = app
+        .query_blocking(Query::ExportMspdi {
+            project_key: "TEST".into(),
+        })
+        .expect("export")
+        .data;
+    let xml = exported["xml"].as_str().expect("xml");
+    let (head, rest) = xml.split_once("<Name>Contract A</Name>").expect("task A");
+    let (duration, tail) = rest.split_once("</Duration>").expect("duration");
+    let (before, _) = duration.split_once("<Duration>").expect("duration start");
+    let edited =
+        format!("{head}<Name>Contract A</Name>{before}<Duration>PT60000H0M0S</Duration>{tail}");
+    let error = app
+        .query_blocking(Query::ImportMspdi {
+            xml: edited,
+            project_key: "TEST".into(),
+            key_prefix: Some("MSP".into()),
+            match_existing_by: None,
+            keep_existing_priority: false,
+            time_zone: Some("Europe/Berlin".into()),
+        })
+        .expect_err("50000 h is the most a plan with calendars may state");
+    let message = error.to_string();
+    for expected in ["UID 1", "TEST-A", "50000"] {
+        assert!(
+            message.contains(expected),
+            "{expected} missing from: {message}"
+        );
+    }
+}

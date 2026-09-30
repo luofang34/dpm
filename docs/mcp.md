@@ -434,8 +434,9 @@ Interchange preserves plan structure, not calendar dates. Source start and finis
 because DPM derives dates from the graph. Resources, assignments and date constraints are reported
 as not imported. `report.source.scope` states this boundary in every import report.
 
-MSPDI carries no IANA time zone, so calendars are imported only when the import names one
-(`--time-zone Europe/Berlin` / `time_zone`). Without it, calendars (including resource calendars)
+MSPDI carries no IANA time zone, so a workspace without calendars imports them only when the
+import names one (`--time-zone Europe/Berlin` / `time_zone`); a workspace that has calendars
+imports in its own zone when none is named. Without a zone and without workspace calendars, calendars (including resource calendars)
 are reported as not imported, the document-level finding says that a time zone imports them, and
 every hour counts as elapsed: elapsed duration/lag formats (`em`, `eh`, `ed`, `ew`, `emo`) convert
 exactly, while working-time formats (`m`, `h`, `d`, `w`, `mo`) keep their hour value but lose the
@@ -453,7 +454,9 @@ default hours, and seconds are dropped with a finding. A derived calendar (`Base
 inherits the weekdays it does not list and the exceptions of its base on dates it does not define.
 Single date-range exceptions are read from `<Exceptions>` (`TimePeriod`, `DayWorking`,
 `WorkingTimes`, `Name`), or from legacy `DayType` 0 week days when the calendar has no
-`<Exceptions>`; recurring exceptions (`Occurrences` above 1), alternate `WorkWeeks` and an exception
+`<Exceptions>`. Microsoft Project writes a multi-day exception such as a vacation as a daily
+recurrence (`Type` 1, `Period` 1) over its `TimePeriod`, which is read as that date range; other
+recurrences, alternate `WorkWeeks` and an exception
 overlapping an earlier one are reported, not guessed. Calendars that only resources use are skipped
 with a finding, as is a calendar with no working time. A calendar named Standard with the hours of
 the workspace's `standard` maps to it, and one named 24 Hours that works every hour maps to
@@ -465,8 +468,11 @@ project calendar for people, which the reviewed change then applies to human wor
 own calendar, else the project calendar; its estimate counts working hours of that calendar and a
 working-time lag counts working hours of the successor's calendar, neither reported as approximated.
 `report.calendars` has one entry per source calendar with `uid`, `name`, the workspace `calendar`,
-`outcome` (`Created`, `Updated`, `Unchanged`, `BuiltIn`, `Skipped`) and `approximated` and
-`rejected` findings; it is omitted without a time zone.
+`outcome` (`Created`, `Updated`, `Unchanged`, `BuiltIn`, `Skipped`), `approximated` and
+`rejected` findings, and for an `Updated` calendar `affected_work`, the existing work that follows
+it, whose schedule the update changes too; it is omitted when no calendars are imported. A
+candidate the plan validation refuses, such as a task longer than the 50000 hours a plan with
+calendars may state, names the source task like any other refusal.
 
 Work packages cannot be dependency endpoints. A summary finishes with its last child and starts
 with its first, so a summary predecessor of an FS or FF link and a summary successor of an FS or

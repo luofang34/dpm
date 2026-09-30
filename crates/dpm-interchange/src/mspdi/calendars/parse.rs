@@ -92,7 +92,12 @@ fn read_content(node: Node, calendar: &mut SourceCalendar) -> Result<(), String>
     }
     for node in children(node, "Exceptions").flat_map(|e| children(e, "Exception")) {
         let occurrences = text(node, "Occurrences").and_then(|v| v.trim().parse::<i64>().ok());
-        if occurrences.is_some_and(|n| n > 1) {
+        // Microsoft Project writes an ordinary multi-day exception, such as a vacation, as a daily
+        // recurrence every day (Type 1, Period 1) whose TimePeriod spans the dates; only other
+        // recurrences repeat on dates the TimePeriod does not list.
+        let daily = text(node, "Type").is_none_or(|v| v.trim() == "1")
+            && text(node, "Period").is_none_or(|v| v.trim() == "1");
+        if occurrences.is_some_and(|n| n > 1) && !daily {
             calendar.rejected.push(Finding::new(
                 "exception",
                 format!(

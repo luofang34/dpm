@@ -51,8 +51,13 @@ fn calendar(uid: i64, name: &str, base: Option<i64>, days: &str, extra: &str) ->
 }
 
 fn exception(name: &str, from: &str, to: &str, occurrences: u32, body: &str) -> String {
+    recurrence(name, from, to, occurrences, 1, body)
+}
+
+/// An exception with a recurrence `kind`: 1 daily, 6 weekly, as Microsoft Project writes them.
+fn recurrence(name: &str, from: &str, to: &str, occurrences: u32, kind: u8, body: &str) -> String {
     format!(
-        "<Exception><EnteredByOccurrences>0</EnteredByOccurrences><TimePeriod><FromDate>{from}</FromDate><ToDate>{to}</ToDate></TimePeriod><Occurrences>{occurrences}</Occurrences><Name>{name}</Name><Type>1</Type>{body}</Exception>"
+        "<Exception><EnteredByOccurrences>0</EnteredByOccurrences><TimePeriod><FromDate>{from}</FromDate><ToDate>{to}</ToDate></TimePeriod><Occurrences>{occurrences}</Occurrences><Name>{name}</Name><Type>{kind}</Type><Period>1</Period>{body}</Exception>"
     )
 }
 
@@ -221,50 +226,6 @@ fn derived_calendar_inherits_unlisted_days_and_base_exceptions_it_does_not_redef
             .preserved
             .contains(&"calendar".to_string())
     );
-}
-
-#[test]
-fn recurring_and_overlapping_exceptions_are_reported_not_guessed() {
-    let exceptions = format!(
-        "<Exceptions>{}{}{}</Exceptions>",
-        exception(
-            "Every Monday",
-            "2026-01-05T00:00:00",
-            "2026-03-30T23:59:00",
-            12,
-            OFF
-        ),
-        exception(
-            "Audit",
-            "2026-05-04T00:00:00",
-            "2026-05-06T23:59:00",
-            1,
-            OFF
-        ),
-        exception(
-            "Overlap",
-            "2026-05-06T00:00:00",
-            "2026-05-07T23:59:00",
-            1,
-            OFF
-        )
-    );
-    let xml = document(
-        &[calendar(1, "Office", None, &standard_week(), &exceptions)],
-        &[],
-    );
-    let result = import(&workspace(), &xml);
-    let office = definition(&result, "Office");
-    assert_eq!(office.exceptions.len(), 1);
-    assert_eq!(office.exceptions[0].name.as_deref(), Some("Audit"));
-    let rejected: Vec<_> = result.report.calendars[0]
-        .rejected
-        .iter()
-        .map(|f| f.detail.as_str())
-        .collect();
-    assert_eq!(rejected.len(), 2, "{rejected:?}");
-    assert!(rejected[0].contains("recurring exception \"Every Monday\""));
-    assert!(rejected[1].contains("overlaps exception \"Audit\""));
 }
 
 #[test]
@@ -470,3 +431,5 @@ fn time_zones_are_validated_and_must_match_the_workspace() {
     let error = import_mspdi(&plan, &xml, &options(Some(ZONE))).expect_err("mismatch");
     assert!(matches!(error, InterchangeError::TimeZoneMismatch { .. }));
 }
+
+mod exceptions;
