@@ -1,4 +1,4 @@
-use crate::network::{EPSILON, Network, finite};
+use crate::network::{EPSILON, Network};
 use crate::placement::Placement;
 use crate::remaining_duration::RemainingDuration;
 use crate::{ActivityCalendar, ActivitySchedule, RemainingOptions, Schedule, ScheduleError};
@@ -288,22 +288,21 @@ fn project(
         if critical {
             critical_activities.push(*id);
         }
-        let calendar = placement
-            .and_then(|p| p.resolved.get(id))
-            .map(|resolved| -> Result<_, ScheduleError> {
-                Ok(ActivityCalendar {
+        let (earliest_finish, latest_finish, review_wait) = times.finishes(network, dense, at)?;
+        let calendar =
+            placement
+                .and_then(|p| p.resolved.get(id))
+                .map(|resolved| ActivityCalendar {
                     resolved: resolved.clone(),
-                    review_wait_hours: read(&times.review_wait)?,
-                })
-            })
-            .transpose()?;
+                    review_wait_hours: review_wait,
+                });
         activities.insert(
             *id,
             ActivitySchedule {
                 earliest_start_hours: read(&times.earliest)?,
-                earliest_finish_hours: finite(*id, read(&times.earliest_finish)?)?,
+                earliest_finish_hours: earliest_finish,
                 latest_start_hours: read(&times.latest)?,
-                latest_finish_hours: finite(*id, read(&times.latest_finish)?)?,
+                latest_finish_hours: latest_finish,
                 total_float_hours: total_float,
                 free_float_hours: network
                     .free_float(dense, &times, at, placement)?

@@ -6,8 +6,10 @@
 //! queries are integers, so a value on a bucket boundary ranks the same way in the index as in
 //! the query.
 
-/// Bucket width: one day of milliseconds keeps the index small for century-long windows.
-const BUCKET: i64 = 86_400_000;
+/// Bucket width as a power of two, 2^26 ms (about 18.6 hours), so a bucket is a shift rather
+/// than a division; it keeps the index small for century-long windows and a bucket's scan short.
+const BUCKET_BITS: u32 = 26;
+const BUCKET: i64 = 1 << BUCKET_BITS;
 
 /// Sorted values with the rank of each bucket of their range.
 #[derive(Debug, Clone, PartialEq)]
@@ -40,7 +42,7 @@ impl Ranked {
     }
 
     fn start(&self, t: i64) -> usize {
-        let bucket = t.saturating_sub(self.low).div_euclid(BUCKET);
+        let bucket = t.saturating_sub(self.low) >> BUCKET_BITS;
         let Ok(bucket) = usize::try_from(bucket) else {
             return 0;
         };

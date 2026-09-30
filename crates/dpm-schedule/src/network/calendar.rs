@@ -87,11 +87,12 @@ impl Network {
             if finish_bound > start {
                 start = start.max(calendar.sub(finish_bound, duration)?);
             }
-            if duration > 0.0 {
-                start = calendar.next_working(start)?;
-            }
-            let mut done = calendar.add(start, duration)?;
+            let (start, mut done) = calendar.place(start, duration)?;
+            // Work placed on the calendar ends at a working moment, already aligned for a review
+            // on the same calendar without delay.
+            let mut aligned = duration > 0.0 && placement.reviewed_on_own_calendar(position);
             if done < finish_bound {
+                aligned = false;
                 // The work cannot end in a gap of its calendar: it is held to the next working
                 // moment at or after the finish constraint.
                 done = if duration > 0.0 {
@@ -101,6 +102,7 @@ impl Network {
                 };
             }
             let verified = match placement.review(position)? {
+                Some(_) if aligned => done,
                 Some(verifier) => verifier.align(done + placement.review_delay())?,
                 None => done,
             };
@@ -140,11 +142,17 @@ impl Network {
             let review = placement.review(position)?;
             // Inverts the forward review: aligning back never undershoots a verified finish the
             // forward pass reached, so the work may end the whole delay before it.
-            let done_by = match review {
-                Some(verifier) => verifier.align_back(finish_bound)? - placement.review_delay(),
-                None => finish_bound,
+            let latest_start = match review {
+                Some(_) if placement.reviewed_on_own_calendar(position) => {
+                    calendar.retreat(finish_bound, duration)?
+                }
+                Some(verifier) => calendar.sub(
+                    verifier.align_back(finish_bound)? - placement.review_delay(),
+                    duration,
+                )?,
+                None => calendar.sub(finish_bound, duration)?,
             };
-            let start = start_bound.min(calendar.sub(done_by, duration)?);
+            let start = start_bound.min(latest_start);
             // The latest finish is the bound itself: a finish held to a constraint in a calendar
             // gap may end later than its latest start plus the work.
             if let (Some(slot), Some(end)) =

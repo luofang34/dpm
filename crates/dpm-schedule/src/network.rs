@@ -41,7 +41,9 @@ pub(crate) struct Network {
 /// Earliest and latest start and finish times by topological position, and the project finish.
 ///
 /// A finish is the event successors wait for: with calendars, a task's verification, which may
-/// wait for the verifier's working time after its execution ends.
+/// wait for the verifier's working time after its execution ends. The elapsed pass leaves the
+/// finish and review vectors empty, since a finish is then its start plus its duration and
+/// simulations would otherwise allocate them for every sample.
 pub(crate) struct Times {
     pub(crate) earliest: Vec<f64>,
     pub(crate) latest: Vec<f64>,
@@ -89,6 +91,32 @@ fn time_at(values: &[f64], position: usize) -> Result<f64, ScheduleError> {
         .get(position)
         .copied()
         .ok_or(ScheduleError::UnknownPosition(position))
+}
+
+impl Times {
+    /// Earliest and latest finish and review wait of the activity at a position.
+    pub(crate) fn finishes(
+        &self,
+        network: &Network,
+        durations: &[f64],
+        position: usize,
+    ) -> Result<(f64, f64, f64), ScheduleError> {
+        if self.earliest_finish.is_empty() {
+            let id = network
+                .order
+                .get(position)
+                .ok_or(ScheduleError::UnknownPosition(position))?;
+            let duration = at(durations, position, *id)?;
+            let earliest = finite(*id, time_at(&self.earliest, position)? + duration)?;
+            let latest = finite(*id, time_at(&self.latest, position)? + duration)?;
+            return Ok((earliest, latest, 0.0));
+        }
+        Ok((
+            time_at(&self.earliest_finish, position)?,
+            time_at(&self.latest_finish, position)?,
+            time_at(&self.review_wait, position)?,
+        ))
+    }
 }
 
 impl Network {
@@ -171,16 +199,10 @@ impl Network {
                 *slot = bound;
             }
         }
-        let with_durations = |starts: &[f64]| -> Result<Vec<f64>, ScheduleError> {
-            let pairs = self.order.iter().zip(starts).zip(durations);
-            pairs
-                .map(|((id, start), duration)| finite(*id, start + duration))
-                .collect()
-        };
         Ok(Times {
-            earliest_finish: with_durations(&earliest)?,
-            latest_finish: with_durations(&latest)?,
-            review_wait: vec![0.0; earliest.len()],
+            earliest_finish: Vec::new(),
+            latest_finish: Vec::new(),
+            review_wait: Vec::new(),
             earliest,
             latest,
             finish,

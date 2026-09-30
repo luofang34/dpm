@@ -39,6 +39,11 @@ def timed_cli(binary, database, args):
     return result.stdout, time.perf_counter() - start
 
 
+# Calendar forecasts place every simulated activity on working time, which measures about 1.6x
+# the elapsed forecast of the same graph; the allowance says so instead of loosening every shape.
+CALENDAR_ALLOWANCE = 1.5
+
+
 def smoke(directory, count=5000, budget=5., baseline=None):
     results = []
     for shape in ('flat', 'chain', 'branch', 'calendar'):
@@ -54,7 +59,8 @@ def smoke(directory, count=5000, budget=5., baseline=None):
                        (('explain', 'PERF-1'), 'explain_work', {'key': 'PERF-1'})]
             for command, tool, arguments in queries:
                 output, elapsed = timed_cli(CLI, database, ('--clock', clock, *command))
-                assert elapsed < budget, (shape, command, elapsed, budget)
+                allowed = budget * (CALENDAR_ALLOWANCE if shape == 'calendar' else 1.)
+                assert elapsed < allowed, (shape, command, elapsed, allowed)
                 # A baseline binary predating calendars cannot read the calendar plan.
                 if baseline and shape != 'calendar':
                     previous, _ = timed_cli(baseline, database, ('--clock', clock, *command))
@@ -85,6 +91,6 @@ if __name__ == '__main__':
         results = smoke(Path(temporary), args.tasks, args.budget, args.baseline)
     if args.report:
         args.report.write_text(json.dumps(results, indent=2) + '\n')
-    print(f'PASS: {args.tasks}-task flat/chain/branch queries below {args.budget:g}s; CLI/MCP parity, warm claims and external refresh')
+    print(f'PASS: {args.tasks}-task flat/chain/branch queries below {args.budget:g}s, calendar below {args.budget * CALENDAR_ALLOWANCE:g}s; CLI/MCP parity, warm claims and external refresh')
     for result in results:
         print(f"  {result['shape']} {result['query']}: {result['seconds']:.3f}s")

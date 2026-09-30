@@ -22,13 +22,19 @@ impl WorkingTime {
         }
     }
 
-    /// Working milliseconds between the window start and `t`.
-    fn worked(&self, t: i64) -> Result<i64, BeyondCalendar> {
+    /// Working milliseconds between the window start and `t`, and the last span starting at or
+    /// before `t`.
+    fn locate(&self, t: i64) -> Result<(i64, Option<(i64, i64)>), BeyondCalendar> {
         let Some(index) = self.starts.through(t).checked_sub(1) else {
-            return Ok(0);
+            return Ok((0, None));
         };
         let ((start, end), before) = self.span(index)?;
-        Ok(before + t.min(end) - start)
+        Ok((before + t.min(end) - start, Some((start, end))))
+    }
+
+    /// Working milliseconds between the window start and `t`.
+    fn worked(&self, t: i64) -> Result<i64, BeyondCalendar> {
+        Ok(self.locate(t)?.0)
     }
 
     /// The instant inside span `index` at which `target` working milliseconds have passed.
@@ -51,7 +57,16 @@ impl WorkingTime {
         if amount <= 0 {
             return Ok(t);
         }
-        let target = self.worked(from)? + amount;
+        let (worked, span) = self.locate(from)?;
+        // Work that ends inside the span it starts in needs no second lookup.
+        if let Some((start, end)) = span
+            && from >= start
+            && from < end
+            && from + amount <= end
+        {
+            return Ok(hours(from + amount));
+        }
+        let target = worked + amount;
         let end = self.instant(self.through.below(target), target)?;
         Ok(hours(end.max(from)))
     }
@@ -79,7 +94,16 @@ impl WorkingTime {
         if amount <= 0 {
             return Ok(t);
         }
-        let target = self.worked(to)? - amount;
+        let (worked, span) = self.locate(to)?;
+        // Work that starts inside the span it ends in needs no second lookup.
+        if let Some((start, end)) = span
+            && to > start
+            && to <= end
+            && to - amount > start
+        {
+            return Ok(hours(to - amount));
+        }
+        let target = worked - amount;
         if target < 0 {
             return Err(BeyondCalendar);
         }
@@ -124,6 +148,59 @@ impl WorkingTime {
         let at = self.at(t)?;
         let ((start, _), _) = self.span(self.ends.through(at))?;
         Ok(if start > at { hours(start) } else { t })
+    }
+
+    /// Where work of `hours` starting no earlier than `t` runs: its start, the first moment that
+    /// working time follows, and its end, the earliest time the hours have passed. Equal to
+    /// `next_working` then `add`, with one lookup when the work fits in one span.
+    pub fn place(&self, t: f64, hours_of_work: f64) -> Result<(f64, f64), BeyondCalendar> {
+        if self.always {
+            return Ok((t, t + hours_of_work.max(0.0)));
+        }
+        let amount = millis(hours_of_work).ok_or(BeyondCalendar)?;
+        if amount <= 0 {
+            return Ok((t, t));
+        }
+        let at = self.at(t)?;
+        let index = self.ends.through(at);
+        let ((start, end), before) = self.span(index)?;
+        let begin = start.max(at);
+        let starts = if begin > at { hours(begin) } else { t };
+        if begin + amount <= end {
+            return Ok((starts, hours(begin + amount)));
+        }
+        let target = before + (begin - start) + amount;
+        let finish = self.instant(self.through.below(target), target)?;
+        Ok((starts, hours(finish.max(begin))))
+    }
+
+    /// The latest start from which `hours` of work end by `align_back(t)`: equal to `align_back`
+    /// then `sub`, with one lookup when the work fits in one span.
+    pub fn retreat(&self, t: f64, hours_of_work: f64) -> Result<f64, BeyondCalendar> {
+        if self.always {
+            return Ok(t - hours_of_work.max(0.0));
+        }
+        let at = self.at(t)?;
+        let index = self
+            .starts
+            .through(at)
+            .checked_sub(1)
+            .ok_or(BeyondCalendar)?;
+        let ((start, end), before) = self.span(index)?;
+        let to = at.min(end);
+        let amount = millis(hours_of_work).ok_or(BeyondCalendar)?;
+        if amount <= 0 {
+            return Ok(if end < at { hours(end) } else { t });
+        }
+        if to - amount > start {
+            return Ok(hours(to - amount));
+        }
+        let target = before + (to - start) - amount;
+        if target < 0 {
+            return Err(BeyondCalendar);
+        }
+        let begin = self.instant(self.through.through(target), target)?;
+        Ok(hours(begin.min(to)))
     }
 
     /// Latest moment at or before `t` whose `align` is not after `t`.

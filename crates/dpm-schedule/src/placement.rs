@@ -168,6 +168,16 @@ impl Placement {
         self.review_delay
     }
 
+    /// Whether the task at a position is reviewed on its own execution calendar with no delay,
+    /// so work ending at a working moment is already aligned for review.
+    pub(crate) fn reviewed_on_own_calendar(&self, position: usize) -> bool {
+        self.review_delay == 0.0
+            && matches!(
+                (self.review.get(position), self.execution.get(position)),
+                (Some(Some(review)), Some(execution)) if review == execution
+            )
+    }
+
     /// Verifier calendar of a task at a position that still awaits verification.
     pub(crate) fn review(&self, position: usize) -> Result<Option<&WorkingTime>, Placed> {
         match self.review.get(position) {

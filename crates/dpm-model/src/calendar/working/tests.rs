@@ -252,3 +252,53 @@ fn windows_longer_than_a_century_are_refused() {
     );
     assert!(started.elapsed() < std::time::Duration::from_secs(20));
 }
+
+#[test]
+fn placing_work_equals_finding_working_time_then_adding() {
+    for origin in offsets() {
+        let calendar = WorkingTime::compile(
+            CalendarRules::Standard,
+            chrono_tz::Europe::Berlin,
+            origin,
+            -48.0,
+            24.0 * 60.0,
+        )
+        .expect("compiled");
+        let mut t = 0.0;
+        while t < 24.0 * 14.0 {
+            for hours in [0.0, 0.25, 3.5, 4.0, 9.0, 41.0] {
+                let start = if hours > 0.0 {
+                    calendar.next_working(t).expect("next")
+                } else {
+                    t
+                };
+                let expected = (start, calendar.add(start, hours).expect("add"));
+                assert_eq!(calendar.place(t, hours), Ok(expected), "{t} {hours}");
+            }
+            t += 0.37;
+        }
+    }
+}
+
+#[test]
+fn retreating_equals_aligning_back_then_subtracting() {
+    for origin in offsets() {
+        let calendar = WorkingTime::compile(
+            CalendarRules::Standard,
+            chrono_tz::Europe::Berlin,
+            origin,
+            -24.0 * 30.0,
+            24.0 * 60.0,
+        )
+        .expect("compiled");
+        let mut t = 24.0 * 7.0;
+        while t < 24.0 * 21.0 {
+            for hours in [0.0, 0.25, 3.5, 4.0, 9.0, 41.0] {
+                let back = calendar.align_back(t).expect("back");
+                let expected = calendar.sub(back, hours).expect("sub");
+                assert_eq!(calendar.retreat(t, hours), Ok(expected), "{t} {hours}");
+            }
+            t += 0.37;
+        }
+    }
+}
