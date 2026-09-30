@@ -743,7 +743,7 @@ verification waiting for the human calendar. Finer control, all optional:
 | `schedule.calendar` | calendar a task follows regardless of who does it |
 | `dependency.lag_basis` | `Working` counts the lag on the successor's calendar; default `Elapsed` |
 
-Estimates are working hours of the task's calendar, which is its own calendar, else its owner's
+Estimates are working hours of the task's calendar (at most 50000 hours, like lags, in a plan with calendars), which is its own calendar, else its owner's
 `actors` entry, else the calendar of its owner's kind, planned executor or default executor.
 Schedule hours in `project_status`, `explain_work.schedule` and the Gantt stay elapsed hours from
 the clock reading; with calendars, `explain_work.schedule.calendar` names the calendar, executor,

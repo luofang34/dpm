@@ -59,6 +59,7 @@ pub(crate) fn validate(plan: &Plan) -> Result<(), ValidationError> {
             ));
         }
     }
+    within_calendar_range(plan)?;
     for work in plan.work_items.values() {
         if let Some(name) = work.schedule.calendar.as_deref().filter(|n| !known(n)) {
             return Err(invalid(
@@ -176,4 +177,31 @@ fn closed_stretches(name: &str, definition: &CalendarDefinition) -> Result<(), V
         }
     }
     Ok(())
+}
+
+/// Largest estimate or lag, in hours, a plan with calendars may state: about 24 years of
+/// Standard working time, far below the reach of a projection window, so one task can never put
+/// every forecast out of range.
+const MAX_CALENDAR_HOURS: f64 = 50_000.0;
+
+fn within_calendar_range(plan: &Plan) -> Result<(), ValidationError> {
+    let reason =
+        format!("with calendars, estimates and lags are at most {MAX_CALENDAR_HOURS} hours");
+    for work in plan.work_items.values() {
+        if work
+            .schedule
+            .estimate
+            .is_some_and(|e| e.pessimistic_hours > MAX_CALENDAR_HOURS)
+        {
+            return Err(invalid("work estimate", work.id, reason));
+        }
+    }
+    match plan
+        .dependencies
+        .iter()
+        .find(|d| d.lag_hours.abs() > MAX_CALENDAR_HOURS)
+    {
+        Some(edge) => Err(invalid("dependency lag", edge.id, reason)),
+        None => Ok(()),
+    }
 }

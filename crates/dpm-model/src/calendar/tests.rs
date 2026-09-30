@@ -282,3 +282,28 @@ fn closures_longer_than_five_years_are_rejected() {
         .insert("closed".into(), definition);
     assert!(plan.validate().is_err());
 }
+
+#[test]
+fn calendar_plans_bound_estimates_and_lags() {
+    let mut plan = with_zone();
+    plan.find_work_by_key_mut("TEST-A")
+        .expect("task")
+        .schedule
+        .estimate = Some(ThreePointEstimate {
+        optimistic_hours: 1.0,
+        likely_hours: 2.0,
+        pessimistic_hours: 60_000.0,
+    });
+    assert!(plan.validate().is_err());
+    let mut plan = with_zone();
+    if let Some(edge) = plan.dependencies.first_mut() {
+        edge.lag_hours = -60_000.0;
+    }
+    assert!(plan.validate().is_err());
+    let mut plan = fixture();
+    if let Some(edge) = plan.dependencies.first_mut() {
+        edge.lag_hours = 60_000.0;
+    }
+    plan.validate()
+        .expect("without calendars every hour counts, as before");
+}
