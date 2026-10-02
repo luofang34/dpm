@@ -482,6 +482,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "dpm-claude"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dpm-app",
+ "dpm-engine",
+ "dpm-model",
+ "dpm-native",
+ "rustix",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "dpm-engine"
 version = "0.1.0"
 dependencies = [

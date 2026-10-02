@@ -16,7 +16,7 @@ use dpm_model::{ActivityKind, ArtifactId, Observation, OperationId, RunEventId, 
 #[derive(Debug)]
 pub(crate) enum RunCommand {
     /// Start a run on a claimed or started task its executor owns.
-    Start(StartArgs),
+    Start(Box<StartArgs>),
     /// Record a run's lifecycle transition.
     Report {
         run: RunId,
@@ -70,6 +70,10 @@ pub(crate) struct StartArgs {
     pub(crate) provider: Option<String>,
     pub(crate) session: Option<String>,
     pub(crate) turn: Option<String>,
+    pub(crate) requested_model: Option<String>,
+    pub(crate) observed_model: Option<String>,
+    pub(crate) runtime_version: Option<String>,
+    pub(crate) configuration_digest: Option<String>,
     pub(crate) observation: Observation,
     pub(crate) source_commits: Vec<String>,
     pub(crate) source_artifacts: Vec<ArtifactId>,
@@ -188,6 +192,18 @@ fn start() -> Command {
         .arg(option("provider", "provider", "Provider word of the runtime session, such as codex", value_parser!(String)).requires("session"))
         .arg(option("session", "session", "The provider's session identifier", value_parser!(String)).requires("provider"))
         .arg(option("turn", "turn", "The provider's turn identifier within the session", value_parser!(String)).requires("session"))
+        .arg(option("requested_model", "requested-model", "The model the recorder asked the runtime to use", value_parser!(String)).requires("session"))
+        .arg(option("observed_model", "observed-model", "The model the runtime announced", value_parser!(String)).requires("session"))
+        .arg(option("runtime_version", "runtime-version", "The runtime's version as it announced it", value_parser!(String)).requires("session"))
+        .arg(
+            option(
+                "configuration_digest",
+                "configuration-digest",
+                "SHA-256 in lowercase hex of the canonical public configuration the runtime started with",
+                value_parser!(String),
+            )
+            .requires("session"),
+        )
         .arg(
             option(
                 "observation",
@@ -331,7 +347,7 @@ impl Subcommand for RunCommand {
 impl FromArgMatches for RunCommand {
     fn from_arg_matches(matches: &ArgMatches) -> Result<Self, clap::Error> {
         match matches.subcommand() {
-            Some(("start", m)) => Ok(Self::Start(StartArgs {
+            Some(("start", m)) => Ok(Self::Start(Box::new(StartArgs {
                 key: required(m, "key")?,
                 actor: required(m, "actor")?,
                 executor: one(m, "executor")?,
@@ -340,11 +356,15 @@ impl FromArgMatches for RunCommand {
                 provider: one(m, "provider")?,
                 session: one(m, "session")?,
                 turn: one(m, "turn")?,
+                requested_model: one(m, "requested_model")?,
+                observed_model: one(m, "observed_model")?,
+                runtime_version: one(m, "runtime_version")?,
+                configuration_digest: one(m, "configuration_digest")?,
                 observation: required(m, "observation")?,
                 source_commits: many(m, "source_commits")?,
                 source_artifacts: many(m, "source_artifacts")?,
                 observed_at: one(m, "observed_at")?,
-            })),
+            }))),
             Some(("report", m)) => Ok(Self::Report {
                 run: required(m, "run")?,
                 state: required(m, "state")?,

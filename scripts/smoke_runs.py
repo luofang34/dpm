@@ -67,23 +67,36 @@ def project_unchanged(twin, revision, operations):
 
 
 def lifecycle_parity(twin):
-    session = {'provider': 'codex', 'session': 'thread-1'}
+    # Provenance is attested once, when the run starts: the tool's object and the CLI flags are one record.
+    provenance = {'requested_model': 'model-a', 'observed_model': 'model-b', 'runtime_version': '1.2.3',
+                  'configuration_digest': 'ab' * 32}
+    flags = ['--requested-model', 'model-a', '--observed-model', 'model-b', '--runtime-version', '1.2.3',
+             '--configuration-digest', 'ab' * 32]
+    session = {'provider': 'codex', 'session': 'thread-1', 'provenance': provenance}
     started = twin.both('start_run', {'key': 'TEST-A', 'run_id': RUN, 'session': session},
                         'run', 'start', 'TEST-A', '--actor', WORKER, '--run-id', RUN,
-                        '--provider', 'codex', '--session', 'thread-1')
+                        '--provider', 'codex', '--session', 'thread-1', *flags)
     data = started['data']
+    assert data['run']['run']['session']['provenance'] == provenance, data
     assert started['revision'] == 3 and data['replayed'] is False, started
     assert data['run']['status'] == 'working' and data['run']['run']['observation'] == 'reported_only', data
     assert data['run']['run']['contract']['revision'] == 3 and data['run']['run']['contract']['work_key'] == 'TEST-A'
     again = twin.both('start_run', {'key': 'TEST-A', 'run_id': RUN, 'session': session},
                       'run', 'start', 'TEST-A', '--actor', WORKER, '--run-id', RUN,
-                      '--provider', 'codex', '--session', 'thread-1')
+                      '--provider', 'codex', '--session', 'thread-1', *flags)
     assert again['data']['replayed'] is True and again['data']['run']['run'] == data['run']['run']
     conflict = twin.both('start_run', {'key': 'TEST-A', 'run_id': RUN, 'session': {**session, 'turn': 'turn-2'}},
                          'run', 'start', 'TEST-A', '--actor', WORKER, '--run-id', RUN,
-                         '--provider', 'codex', '--session', 'thread-1', '--turn', 'turn-2',
+                         '--provider', 'codex', '--session', 'thread-1', '--turn', 'turn-2', *flags,
                          error='duplicate_run_record')
     assert conflict['details']['recorded']['id'] == RUN
+    # Changed provenance under the same identity is a conflict too: it is immutable.
+    changed = {**provenance, 'observed_model': 'model-c'}
+    twin.both('start_run', {'key': 'TEST-A', 'run_id': RUN, 'session': {**session, 'provenance': changed}},
+              'run', 'start', 'TEST-A', '--actor', WORKER, '--run-id', RUN,
+              '--provider', 'codex', '--session', 'thread-1',
+              '--requested-model', 'model-a', '--observed-model', 'model-c', '--runtime-version', '1.2.3',
+              '--configuration-digest', 'ab' * 32, error='duplicate_run_record')
     # Only a service may label a run managed: nothing else can observe the executor.
     managed = '0192f000-0000-7000-8000-0000000000a9'
     twin.both('start_run', {'key': 'TEST-A', 'run_id': managed, 'observation': 'managed'},

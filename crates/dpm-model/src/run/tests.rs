@@ -11,6 +11,7 @@ fn start() -> RunStart {
             provider: "codex".into(),
             session: "thread-1".into(),
             turn: Some("turn-4".into()),
+            provenance: None,
         }),
         observation: Observation::ReportedOnly,
         sources: vec![RunSource::GitCommit {
@@ -194,6 +195,60 @@ fn kind_and_observation_words_fail_with_typed_errors_naming_the_word() {
     assert!(error.to_string().contains("telemetry"));
     let error = "observed".parse::<Observation>().expect_err("unknown mode");
     assert!(error.to_string().contains("observed"));
+}
+
+#[test]
+fn provenance_is_bounded_typed_and_absent_runs_keep_decoding() {
+    let mut session = RunSession {
+        provider: "claude".into(),
+        session: "s".into(),
+        turn: None,
+        provenance: Some(Box::new(RunProvenance {
+            requested_model: Some("claude-sonnet-5-5".into()),
+            observed_model: Some("claude-sonnet-5-5".into()),
+            runtime_version: Some("2.1.287".into()),
+            configuration_digest: Some("a".repeat(64)),
+        })),
+    };
+    session.validate().expect("valid provenance");
+    // A stored run from before provenance existed has none and decodes unchanged.
+    let old: RunSession =
+        serde_json::from_str(r#"{"provider":"codex","session":"t"}"#).expect("old record");
+    assert_eq!(old.provenance, None);
+    assert!(
+        !serde_json::to_string(&old)
+            .expect("json")
+            .contains("provenance")
+    );
+    for bad in [
+        RunProvenance {
+            requested_model: Some(String::new()),
+            ..RunProvenance::default()
+        },
+        RunProvenance {
+            observed_model: Some("x".repeat(MAX_PROVENANCE_BYTES + 1)),
+            ..RunProvenance::default()
+        },
+        RunProvenance {
+            runtime_version: Some("a\nb".into()),
+            ..RunProvenance::default()
+        },
+        RunProvenance {
+            configuration_digest: Some("NOT-HEX".into()),
+            ..RunProvenance::default()
+        },
+        RunProvenance {
+            configuration_digest: Some("A".repeat(64)),
+            ..RunProvenance::default()
+        },
+    ] {
+        session.provenance = Some(Box::new(bad));
+        assert!(session.validate().is_err(), "{:?}", session.provenance);
+    }
+    assert!(
+        serde_json::from_str::<RunProvenance>(r#"{"model":"x"}"#).is_err(),
+        "unknown fields are refused"
+    );
 }
 
 #[test]

@@ -20,6 +20,34 @@ pub struct RunSession {
     /// The provider's turn or request identifier within the session, if it has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turn: Option<String>,
+    /// The runtime's identity and configuration as the recorder attests them when the run starts.
+    /// Fixed for the life of the run and compared when a start is resent. Boxed so that a start
+    /// request without it stays small.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<Box<RunProvenance>>,
+}
+
+/// What the recorder attests about the runtime a run executed in, fixed when the run starts.
+///
+/// The requested and the observed model are kept apart: the first is what the recorder asked the
+/// runtime to use, the second what the runtime announced it used. Neither is a place for secrets.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RunProvenance {
+    /// The model the recorder asked for; absent when it left the choice to the runtime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_model: Option<String>,
+    /// The model the runtime announced, when it announced one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_model: Option<String>,
+    /// The runtime's version as it announced it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_version: Option<String>,
+    /// SHA-256, in lowercase hex, of the canonical public configuration the runtime was started
+    /// with: permission mode, tools, allowed rules and confinement. The configuration itself is
+    /// not stored, only what identifies it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration_digest: Option<String>,
 }
 
 /// How completely DPM observes the executor.

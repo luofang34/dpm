@@ -13,7 +13,7 @@ use dpm_app::{
     Application, Query, RunActivityRequest, RunCommand as Command, RunLinkRequest,
     RunReportRequest, RunStartRequest,
 };
-use dpm_model::{ActivityInput, AssetId, LineageId, RunSession, RunSource};
+use dpm_model::{ActivityInput, AssetId, LineageId, RunProvenance, RunSession, RunSource};
 
 /// What a `run` subcommand asks the application to do.
 enum Action {
@@ -45,7 +45,7 @@ pub(crate) fn command_blocking(
 fn action(command: RunCommand, base_lineage: Option<LineageId>) -> Result<Action, CliError> {
     Ok(match command {
         RunCommand::Start(args) => {
-            Action::Write(Command::Start(start_request(args, base_lineage)?))
+            Action::Write(Command::Start(start_request(*args, base_lineage)?))
         }
         RunCommand::Report {
             run,
@@ -118,11 +118,28 @@ fn start_request(
     args: StartArgs,
     base_lineage: Option<LineageId>,
 ) -> Result<RunStartRequest, CliError> {
+    let provenance = [
+        &args.requested_model,
+        &args.observed_model,
+        &args.runtime_version,
+        &args.configuration_digest,
+    ]
+    .iter()
+    .any(|value| value.is_some())
+    .then(|| {
+        Box::new(RunProvenance {
+            requested_model: args.requested_model.clone(),
+            observed_model: args.observed_model.clone(),
+            runtime_version: args.runtime_version.clone(),
+            configuration_digest: args.configuration_digest.clone(),
+        })
+    });
     let session = match (args.provider, args.session) {
         (Some(provider), Some(session)) => Some(RunSession {
             provider,
             session,
             turn: args.turn,
+            provenance,
         }),
         _ => None,
     };

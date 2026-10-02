@@ -110,7 +110,10 @@ fn start(schema: &mut Schema) {
     schema.field("executor", json!({"type":"string","pattern":"^(human|agent|service):.+$","description":"KIND:NAME doing the work; defaults to this tool's configured actor"}), false);
     schema.field("parent", uuid("Run that spawned this one"), false);
     schema.field("session", json!({"type":"object","additionalProperties":false,"required":["provider","session"],"properties":{
-        "provider":{"type":"string","pattern":"^[a-z][a-z0-9_-]{0,31}$"},"session":{"type":"string","minLength":1},"turn":{"type":"string","minLength":1}}}), false);
+        "provider":{"type":"string","pattern":"^[a-z][a-z0-9_-]{0,31}$"},"session":{"type":"string","minLength":1},"turn":{"type":"string","minLength":1},
+        "provenance":{"type":"object","additionalProperties":false,"description":"What the recorder attests about the runtime, fixed when the run starts","properties":{
+            "requested_model":{"type":"string","minLength":1,"maxLength":128},"observed_model":{"type":"string","minLength":1,"maxLength":128},
+            "runtime_version":{"type":"string","minLength":1,"maxLength":128},"configuration_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}}}), false);
     schema.field("observation", json!({"type":"string","enum":["managed","reported_only"],"default":"reported_only","description":"Only a service may record managed; silence from a reported-only run proves nothing"}), false);
     schema.field("sources", sources_schema(), false);
     schema.field("observed_at", timestamp("the run began"), false);

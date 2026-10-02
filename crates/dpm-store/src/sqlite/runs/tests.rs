@@ -173,6 +173,7 @@ fn a_resent_start_returns_the_recorded_run_and_a_changed_one_is_refused() {
         provider: "codex".into(),
         session: "other".into(),
         turn: None,
+        provenance: None,
     });
     assert!(matches!(
         fixture.store.start_blocking(&changed, fixture.lineage),

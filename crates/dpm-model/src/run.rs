@@ -22,10 +22,10 @@ pub use lifecycle::{
     LifecycleEntry, LifecycleEvent, LifecyclePage, RunState, RunStateParseError, RunTransition,
 };
 pub use record::{
-    ContractObservation, ExactSource, Observation, ObservationParseError, RunLink, RunRecord,
-    RunSession, RunSource, RunStart,
+    ContractObservation, ExactSource, Observation, ObservationParseError, RunLink, RunProvenance,
+    RunRecord, RunSession, RunSource, RunStart,
 };
-pub use validation::{MAX_DETAIL_BYTES, MAX_SOURCES, is_exact_commit};
+pub use validation::{MAX_DETAIL_BYTES, MAX_PROVENANCE_BYTES, MAX_SOURCES, is_exact_commit};
 pub use view::{LineageStatus, ObservedStatus, Orphan, RunSnapshot, RunView};
 
 #[cfg(test)]

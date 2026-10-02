@@ -302,6 +302,7 @@ fn exact_retries_are_answered_and_changed_content_under_one_identity_is_refused(
             provider: "codex".into(),
             session: "thread".into(),
             turn: None,
+            provenance: None,
         }),
         ..request.clone()
     };

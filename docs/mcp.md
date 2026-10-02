@@ -418,7 +418,11 @@ beside the archive, while run reads stay available.
 
 **What a run records.** `start_run` / `run start` names the task, the `executor` (default: the acting
 principal), an optional parent run and provider session (`provider`, `session`, `turn`: opaque
-identifiers, never secrets), `observation` and exact `sources`. The task must be claimed or started
+identifiers, never secrets) with optional `provenance` (`requested_model`, `observed_model`,
+`runtime_version`, `configuration_digest`: what the recorder attests about the runtime, kept apart
+as asked versus announced, and immutable like the rest of the session; the CLI spells them
+`--requested-model`, `--observed-model`, `--runtime-version` and `--configuration-digest`),
+`observation` and exact `sources`. The task must be claimed or started
 and owned by the executor. The run keeps, as typed immutable content, the workspace, lineage and plan
 `revision` it observed, the work key, the number of earlier submissions and the whole authored
 `contract`; later reviewed plan changes edit the plan, not that record. A source is an exact
