@@ -43,16 +43,23 @@ impl Application {
     /// side of the boundary: a helper process reads lines from a pipe and a foreign-function host
     /// passes strings, and both call this.
     pub fn native_json_blocking(&mut self, line: &str) -> String {
-        let response = match serde_json::from_str::<Value>(line) {
-            Err(error) => failure("", NativeError::Malformed(error)),
-            Ok(value) => self.native_value_blocking(&value),
-        };
+        let response = self.native_line_blocking(line);
         serde_json::to_string(&response).unwrap_or_else(|error| {
             json!({"protocol": NATIVE_PROTOCOL_VERSION, "id": response.id, "ok": false,
                    "error": {"api_version": crate::API_VERSION, "code": "invalid_request",
                              "message": format!("response could not be encoded: {error}")}})
             .to_string()
         })
+    }
+
+    /// Answer one request line with the typed response, so a transport can bound how the answer is
+    /// encoded. The version is checked before the call is decoded, exactly as for
+    /// [`Application::native_json_blocking`], which serializes this.
+    pub fn native_line_blocking(&mut self, line: &str) -> NativeResponse {
+        match serde_json::from_str::<Value>(line) {
+            Err(error) => failure("", NativeError::Malformed(error)),
+            Ok(value) => self.native_value_blocking(&value),
+        }
     }
 
     fn native_value_blocking(&mut self, value: &Value) -> NativeResponse {

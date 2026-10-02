@@ -29,10 +29,6 @@ registry = ["sqlite", "dep:rusqlite"]
 # Git HEAD evidence captured by running the git command-line tool.
 git = []
 
-[[example]]
-name = "native_exchange"
-required-features = ["sqlite"]
-
 [lints]
 workspace = true
 

@@ -42,6 +42,7 @@ members = [
     "crates/dpm-tui",
     "crates/dpm-app",
     "crates/dpm-mcp",
+    "crates/dpm-native",
     "crates/dpm-interchange",
 ]
 
