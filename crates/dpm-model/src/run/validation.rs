@@ -1,6 +1,6 @@
 //! Structural validation of caller-supplied run data, applied before anything is recorded.
 
-use super::{ActivityInput, RunSession, RunSource, RunStart, RunTransition};
+use super::{ActivityInput, RunProvenance, RunSession, RunSource, RunStart, RunTransition};
 use crate::{ValidationError, validation::invalid};
 
 /// Longest identifier, key or word a run record accepts.
@@ -11,6 +11,9 @@ pub const MAX_DETAIL_BYTES: usize = 2048;
 
 /// Most exact source references one run may carry.
 pub const MAX_SOURCES: usize = 8;
+
+/// Longest model or version a run's provenance accepts.
+pub const MAX_PROVENANCE_BYTES: usize = 128;
 
 fn identifier(
     entity: &'static str,
@@ -56,7 +59,50 @@ impl RunSession {
         if let Some(turn) = &self.turn {
             identifier("run session", &self.provider, "turn", turn)?;
         }
-        Ok(())
+        self.provenance
+            .as_ref()
+            .map_or(Ok(()), |provenance| provenance.validate(&self.provider))
+    }
+}
+
+impl RunProvenance {
+    /// Check the bounds of each attested fact.
+    pub fn validate(&self, provider: &str) -> Result<(), ValidationError> {
+        for (name, value) in [
+            ("requested_model", &self.requested_model),
+            ("observed_model", &self.observed_model),
+            ("runtime_version", &self.runtime_version),
+        ] {
+            if let Some(value) = value {
+                let bad = value.trim().is_empty()
+                    || value.len() > MAX_PROVENANCE_BYTES
+                    || value.chars().any(char::is_control);
+                if bad {
+                    return Err(invalid(
+                        "run provenance",
+                        provider,
+                        format!(
+                            "{name} must be 1..={MAX_PROVENANCE_BYTES} bytes, not blank, without control characters"
+                        ),
+                    ));
+                }
+            }
+        }
+        match &self.configuration_digest {
+            Some(digest)
+                if !(digest.len() == 64
+                    && digest
+                        .chars()
+                        .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))) =>
+            {
+                Err(invalid(
+                    "run provenance",
+                    provider,
+                    "configuration_digest must be 64 lowercase hexadecimal digits",
+                ))
+            }
+            _ => Ok(()),
+        }
     }
 }
 

@@ -43,6 +43,7 @@ members = [
     "crates/dpm-app",
     "crates/dpm-mcp",
     "crates/dpm-native",
+    "crates/dpm-claude",
     "crates/dpm-interchange",
 ]
 

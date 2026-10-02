@@ -22,6 +22,14 @@ extension Context {
         let database = try await newStore("parity")
         try await worker(database, ["claim", "TEST-A"])
         try await worker(database, ["start", "TEST-A"])
+        // A run with attested provenance, so the runs view below carries it through the bridge.
+        let digest = String(repeating: "ab", count: 32)
+        _ = try await cliJSON(database, [
+            "run", "start", "TEST-A", "--actor", "agent:worker", "--run-id", UUIDv7.make(),
+            "--provider", "claude", "--session", "parity-session", "--turn", "1",
+            "--requested-model", "model-a", "--observed-model", "model-b",
+            "--runtime-version", "1.2.3", "--configuration-digest", digest,
+        ])
         let connection = try await open(.database(database), clock: pinned)
         for (name, request, arguments) in queries {
             let view = try await connection.query(request)
@@ -32,6 +40,11 @@ extension Context {
         }
         let runs = try await connection.query(runsQuery)
         check(runs.basis.runs != nil, "a run query carries its run basis")
+        let attested = runs.envelope.data["runs"][0]["run"]["session"]["provenance"]
+        check(
+            attested["requested_model"].string == "model-a" && attested["observed_model"].string == "model-b"
+                && attested["configuration_digest"].string == digest,
+            "a run's attested provenance, requested and observed kept apart, crosses the bridge")
         try await connection.close()
 
         // A read-only preview through its locator.
