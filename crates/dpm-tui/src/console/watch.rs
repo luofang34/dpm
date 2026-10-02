@@ -10,6 +10,7 @@ use crate::{
     source::{SnapshotSource, SourceRevision},
     view::View,
 };
+use chrono::{DateTime, Utc};
 use std::time::{Duration, Instant};
 
 /// Time between probes; the event loop wakes at least this often, so a change appears within
@@ -68,12 +69,14 @@ impl Watch {
         self.shown
     }
 
-    /// Probe the source when due and follow a forward change; report anything else.
+    /// Probe the source when due and follow a forward change, evaluated at `clock`; report
+    /// anything else.
     pub(crate) fn poll_blocking<S: SnapshotSource>(
         &mut self,
         view: &mut View,
         source: &mut S,
         now: Instant,
+        clock: DateTime<Utc>,
     ) {
         if now < self.next_probe {
             return;
@@ -99,14 +102,19 @@ impl Watch {
                 }
             }
             _ if self.reported == Some(Reported::Source(found)) => {}
-            Change::Advanced => self.reload_blocking(view, source, Some(found)),
+            Change::Advanced => self.reload_blocking(view, source, Some(found), clock),
             Change::Diverged => self.report(view, found),
         }
     }
 
     /// The operator's explicit reload: display whatever the source holds now, whichever history.
-    pub(crate) fn accept_blocking<S: SnapshotSource>(&mut self, view: &mut View, source: &mut S) {
-        self.reload_blocking(view, source, None);
+    pub(crate) fn accept_blocking<S: SnapshotSource>(
+        &mut self,
+        view: &mut View,
+        source: &mut S,
+        clock: DateTime<Utc>,
+    ) {
+        self.reload_blocking(view, source, None, clock);
     }
 
     /// Load and display a snapshot. A reload the loop started (`probed`) displays only a forward
@@ -116,6 +124,7 @@ impl Watch {
         view: &mut View,
         source: &mut S,
         probed: Option<SourceRevision>,
+        clock: DateTime<Utc>,
     ) {
         let snapshot = match source.snapshot_blocking() {
             Ok(snapshot) => snapshot,
@@ -125,7 +134,7 @@ impl Watch {
         if probed.is_some() && classify(self.shown, loaded) == Change::Diverged {
             return self.report(view, loaded);
         }
-        match view.refresh(&snapshot.plan, chrono::Utc::now()) {
+        match view.refresh(&snapshot.plan, clock) {
             Ok(()) => {
                 self.shown = loaded;
                 self.reported = None;

@@ -54,9 +54,18 @@ impl Gantt {
             first_row: 0,
         })
     }
-    pub(crate) fn restore_navigation(&mut self, previous: &Self) {
+    /// Carry the operator's place over from the projection this one replaces. Hover is not kept:
+    /// it is temporary inspection that the next pointer event re-establishes.
+    pub(crate) fn restore_navigation(&mut self, previous: &mut Self) {
         self.viewport.restore(&previous.viewport);
         self.palette.enabled = previous.palette.enabled;
+        self.inspecting = previous.inspecting;
+        self.help = previous.help;
+        self.first_row = previous.first_row;
+        // The inspector scroll belongs to the inspected work, so the two move together.
+        self.inspected = previous.inspected;
+        self.inspector = std::mem::take(&mut previous.inspector);
+        self.help_panel = std::mem::take(&mut previous.help_panel);
     }
     #[cfg(test)]
     pub(crate) fn inspector_area(&self) -> Rect {

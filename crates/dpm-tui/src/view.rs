@@ -48,8 +48,9 @@ pub(crate) struct View {
     gantt: crate::gantt::Gantt,
     detail_cache: Option<(usize, String)>,
     text_panel: crate::text_panel::TextPanel,
-    /// Clock reading of the last (re)load; every projection in this snapshot uses it.
+    /// Clock reading of the last evaluation; every projection in this snapshot uses it.
     clock: DateTime<Utc>,
+    window: evaluation::Window,
 }
 
 impl View {
@@ -76,6 +77,7 @@ impl View {
             dependencies::LEGEND,
             dependencies::lines(plan, None).join("\n")
         );
+        let window = evaluation::Window::evaluated(plan, &timeline, clock);
         let mut state = ListState::default();
         if !work.is_empty() {
             state.select(Some(0));
@@ -95,6 +97,7 @@ impl View {
             detail_cache: None,
             text_panel: crate::text_panel::TextPanel::default(),
             clock,
+            window,
         })
     }
 
@@ -105,6 +108,12 @@ impl View {
                 reason: "workspace identity changed; reopen explicitly".into(),
             });
         }
+        self.rebuild(plan, clock)
+    }
+
+    /// Replace every projection with `plan` evaluated at `clock`, keeping page, selection, scroll
+    /// and Gantt navigation; on failure nothing changes. Any notice is cleared.
+    fn rebuild(&mut self, plan: &Plan, clock: DateTime<Utc>) -> Result<(), EngineError> {
         let selected = self
             .state
             .selected()
@@ -113,7 +122,7 @@ impl View {
         let mut next = Self::new(plan, clock)?;
         next.page = self.page;
         next.preview = self.preview;
-        next.gantt.restore_navigation(&self.gantt);
+        next.gantt.restore_navigation(&mut self.gantt);
         let kept = selected.and_then(|id| next.work.iter().position(|w| w.id == id));
         next.state
             .select(kept.or_else(|| (!next.work.is_empty()).then_some(0)));
@@ -227,7 +236,7 @@ impl View {
             Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).areas(inner);
         frame.render_widget(
             Paragraph::new(format!(
-                "DPM · {} · {} revision {}  [1–5] Pages [↑↓/jk] Navigate [r] Reload [q] Quit",
+                "DPM · {} · {} revision {} at {}  [1–5] Pages [↑↓/jk] Navigate [r] Reload [q] Quit",
                 self.page.title(),
                 match (self.preview, self.notice.as_ref().and_then(|n| n.label)) {
                     (true, None) => "PREVIEW read-only".into(),
@@ -236,6 +245,7 @@ impl View {
                     (false, Some(label)) => format!("{label} snapshot"),
                 },
                 self.plan.revision,
+                self.evaluated_at().format("%Y-%m-%d %H:%M:%SZ"),
             )),
             title,
         );
@@ -340,6 +350,8 @@ fn depth(plan: &Plan, work: &WorkItem) -> usize {
     }
     depth
 }
+
+mod evaluation;
 
 #[cfg(test)]
 mod tests;

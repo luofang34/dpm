@@ -582,6 +582,7 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "thiserror 2.0.21",
+ "tracing",
  "unicode-width",
 ]
 
