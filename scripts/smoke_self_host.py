@@ -17,6 +17,8 @@ def audit_contracts(database, actor, plan, expected):
     assert len(tasks) == expected['task_count']
     for task in tasks:
         key = task['key']
+        expected_status = 'Proposed' if key in expected['proposed_keys'] else 'Planned'
+        assert task['execution']['status'] == expected_status, key
         contract = task['contract']['instructions']
         assert len(contract['steps']) >= 3, key
         assert all(step['action'].strip() and step['expected_result'].strip() for step in contract['steps']), key
@@ -82,6 +84,10 @@ def smoke(directory):
         assert summary['ready'] == summary['in_flight'] == summary['awaiting_verification'] == 0
         assert summary['complete'] == expected['completed_work']
         assert summary['open_decisions'] == expected['open_decisions']
+        assert set(summary['unestimated']) == {
+            task['key'] for task in plan['work_items'].values()
+            if task['kind'] == 'Task' and task['schedule']['estimate'] is None
+        }
         assert summary['progress'] == {'percent_complete': 0.0, 'verified': False}
         assert [c['work']['key'] for c in run_cli(database, 'next', '--deterministic-only')['candidates']] == expected['ready_keys']
         detail = run_cli(database, 'explain', expected['first_contract'])
@@ -93,9 +99,20 @@ def smoke(directory):
         future = run_cli(database, 'explain', 'SERVER-10')
         assert {'DEC-EXECUTE', 'DEC-EXPAND', 'DEC-POST-MVP'} <= {gate['key'] for gate in future['context']['decisions']}
         for artifact in plan['artifacts'].values():
+            assert artifact['metadata']['role'] == 'planning_source', artifact['id']
             if artifact['uri'].startswith('repo:'):
                 path = (ROOT / artifact['uri'][5:]).resolve()
                 assert path.is_relative_to(ROOT) and path.is_file(), path
+            elif artifact['uri'].startswith('git:'):
+                revision, path = artifact['uri'][4:].split(':', 1)
+                assert len(revision) == 40 and all(c in '0123456789abcdef' for c in revision)
+                assert not Path(path).is_absolute() and '..' not in Path(path).parts
+                # Historical paths need not exist in the current tree or a source archive.
+                if source_path := artifact['metadata'].get('path'):
+                    assert source_path == path, artifact['uri']
+                source_revision = artifact['metadata'].get('source_revision', artifact['metadata'].get('commit'))
+                if source_revision:
+                    assert source_revision == revision, artifact['uri']
         run_cli(database, 'demo', error='storage_error')
         assert run_cli(database, 'export') == plan
         with sqlite3.connect(database) as connection:

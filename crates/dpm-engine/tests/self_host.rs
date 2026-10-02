@@ -18,6 +18,12 @@ fn prepared_contracts_have_no_owners_progress_or_implicit_authorization() {
         "../../../examples/self-host/dpm-alpha.expected.json"
     ))
     .expect("expected contract");
+    let proposed: BTreeSet<_> = expected["proposed_keys"]
+        .as_array()
+        .expect("proposed contracts")
+        .iter()
+        .map(|key| key.as_str().expect("key"))
+        .collect();
     let summary = status(&plan, false, chrono::Utc::now()).expect("summary");
     assert_eq!(
         summary.total_work as u64,
@@ -40,7 +46,12 @@ fn prepared_contracts_have_no_owners_progress_or_implicit_authorization() {
             .all(|d| d.status == DecisionStatus::Open && d.outcome.is_none())
     );
     for item in plan.work_items.values() {
-        assert_eq!(item.execution.status, WorkStatus::Planned);
+        let expected_status = if proposed.contains(item.key.0.as_str()) {
+            WorkStatus::Proposed
+        } else {
+            WorkStatus::Planned
+        };
+        assert_eq!(item.execution.status, expected_status, "{}", item.key);
         assert!(item.execution.owner.is_none());
         assert_eq!(item.execution.reported_progress_percent, 0);
         if item.is_executable() {
@@ -51,11 +62,9 @@ fn prepared_contracts_have_no_owners_progress_or_implicit_authorization() {
                     && !item.contract.requirement_ids.is_empty()
                     && !item.execution.artifact_ids.is_empty()
             );
-            item.schedule
-                .estimate
-                .expect("provisional O/M/P")
-                .validate()
-                .expect("estimate");
+            if let Some(estimate) = item.schedule.estimate {
+                estimate.validate().expect("estimate");
+            }
             assert!(
                 reaches_milestone(&plan, item.id),
                 "{} has no acceptance milestone",
@@ -121,7 +130,10 @@ fn recorded_design_choices_are_context_and_never_execution_approval() {
             }
         }
         assert!(!detail.ready);
-        assert_eq!(work.execution.status, WorkStatus::Planned);
+        assert!(matches!(
+            work.execution.status,
+            WorkStatus::Planned | WorkStatus::Proposed
+        ));
     }
     assert_eq!(plan.revision, 0);
 }
@@ -196,7 +208,7 @@ fn every_task_exposes_ordered_steps_boundaries_and_checks_without_mutation() {
     assert_eq!(plan, before);
 }
 
-/// Tasks whose verification the MVP requires; changing this set is a scope decision.
+/// Tasks whose verification the declared MVP requires; execution still requires approval.
 const MVP_SCOPE: [&str; 13] = [
     "MVP-10", "MVP-20", "MVP-30", "SELF-10", "CORE-20", "SCH-10", "SEM-10", "SEM-20", "SEM-30",
     "SEM-40", "RES-10", "EXT-10", "IO-10",
@@ -227,7 +239,7 @@ fn prerequisite_tasks(plan: &Plan, target: WorkItemId) -> BTreeSet<String> {
 }
 
 #[test]
-fn mvp_prerequisites_match_the_approved_scope_and_later_work_stays_gated() {
+fn mvp_prerequisites_match_the_declared_scope_and_later_work_stays_gated() {
     let plan = fixture();
     let mvp = plan.find_work_by_key("M0-MVP").expect("MVP condition").id;
     let expected: BTreeSet<String> = MVP_SCOPE.iter().map(|k| (*k).to_string()).collect();
@@ -248,6 +260,141 @@ fn mvp_prerequisites_match_the_approved_scope_and_later_work_stays_gated() {
         );
         assert!(reaches_milestone(&plan, work.id));
         assert!(!detail.ready);
+    }
+}
+
+#[test]
+fn local_observation_has_no_remote_control_configuration_or_layout_prerequisites() {
+    let plan = fixture();
+    let local = plan.find_work_by_key("M9-LOCAL").expect("local milestone");
+    let tasks = prerequisite_tasks(&plan, local.id);
+    for key in [
+        "UI-20", "UI-10", "UI-30", "UI-40", "UI-50", "RUN-10", "RUN-20", "QA-70", "SELF-30",
+    ] {
+        assert!(tasks.contains(key), "local observation needs {key}");
+    }
+    for key in [
+        "AUTH-10",
+        "AUTH-20",
+        "SERVER-10",
+        "SYNC-10",
+        "SYNC-20",
+        "COLLAB-10",
+        "RUN-30",
+        "UI-60",
+        "CFG-10",
+        "CFG-20",
+        "CFG-30",
+        "TUI-10",
+        "TUI-20",
+        "TUI-30",
+        "CORE-30",
+        "SCH-30",
+    ] {
+        assert!(
+            !tasks.contains(key),
+            "{key} must not delay local observation"
+        );
+    }
+    let control = prerequisite_tasks(
+        &plan,
+        plan.find_work_by_key("M11-CONTROL").expect("control").id,
+    );
+    assert!(tasks.is_subset(&control));
+    assert!(control.contains("AUTH-20") && control.contains("RUN-30"));
+    assert!(!control.contains("SERVER-10"));
+    let remote = prerequisite_tasks(
+        &plan,
+        plan.find_work_by_key("M12-REMOTE").expect("remote").id,
+    );
+    assert!(tasks.is_subset(&remote));
+    assert!(remote.contains("AUTH-10") && remote.contains("SYNC-20"));
+    assert!(!remote.contains("RUN-30"));
+}
+
+#[test]
+fn unestimated_scope_and_qualification_sources_are_visible_without_false_progress() {
+    let plan = fixture();
+    let now = chrono::Utc::now();
+    let summary = status(&plan, false, now).expect("summary");
+    let unestimated: BTreeSet<_> = summary.unestimated.iter().map(|k| &k.0).collect();
+    let reconciliation = plan
+        .requirements
+        .values()
+        .find(|r| r.key.0 == "REQ-RECONCILE-001")
+        .expect("reconciliation requirement")
+        .id;
+    for work in plan.work_items.values().filter(|w| w.is_executable()) {
+        let qualification = work.execution.status == WorkStatus::Planned
+            && work.contract.requirement_ids.contains(&reconciliation)
+            && work.title.starts_with("Qualify");
+        if work.execution.status == WorkStatus::Proposed || qualification {
+            assert!(
+                work.schedule.estimate.is_none(),
+                "{} needs assessment",
+                work.key
+            );
+            assert!(
+                unestimated.contains(&work.key.0),
+                "{} hidden uncertainty",
+                work.key
+            );
+        }
+        if qualification {
+            let detail = explain_work(&plan, work.id, now).expect("qualification");
+            assert!(
+                detail.context.artifacts.iter().any(|a| {
+                    a.uri.starts_with("git:")
+                        && a.metadata.get("role").map(String::as_str) == Some("planning_source")
+                }),
+                "{} needs immutable implementation context",
+                work.key
+            );
+            assert!(work.execution.events.is_empty());
+            assert!(work.execution.attempts.is_empty());
+            assert!(!detail.ready);
+        }
+    }
+    assert_eq!(summary.complete, 0);
+    assert_eq!(summary.progress.percent_complete, 0.0);
+}
+
+#[test]
+fn proposed_execution_choices_resolve_in_the_contract_that_they_gate() {
+    let plan = fixture();
+    for (key, decision) in [
+        ("RUN-20", "DEC-NATIVE-HOST"),
+        ("UI-30", "DEC-NATIVE-HOST"),
+        ("AUTH-20", "DEC-PRINCIPAL"),
+        ("RUN-30", "DEC-RUN-CONTROL"),
+        ("CFG-10", "DEC-CONFIG-MODEL"),
+    ] {
+        let work = plan.find_work_by_key(key).expect("contract");
+        let detail = explain_work(&plan, work.id, chrono::Utc::now()).expect("explain");
+        let choice = detail
+            .context
+            .decisions
+            .iter()
+            .find(|d| d.key.0 == decision)
+            .expect("resolved gate");
+        assert_eq!(choice.status, DecisionStatus::Open);
+        assert!(choice.blocks.contains(&work.id));
+        assert!(!detail.ready);
+    }
+    for key in ["RUN-10", "UI-10"] {
+        let work = plan.find_work_by_key(key).expect("design input");
+        let detail = explain_work(&plan, work.id, chrono::Utc::now()).expect("explain");
+        let choice = detail
+            .context
+            .decisions
+            .iter()
+            .find(|d| d.key.0 == "DEC-NATIVE-HOST")
+            .expect("design context");
+        assert!(!choice.blocks.contains(&work.id));
+        assert!(
+            !detail.ready,
+            "execution still needs its authorization gates"
+        );
     }
 }
 
