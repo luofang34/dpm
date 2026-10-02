@@ -327,6 +327,8 @@ pub enum StoredRecord {
     Genesis,
     /// The lineage row of the file.
     Lineage,
+    /// A record of the run store.
+    Run,
 }
 
 impl std::fmt::Display for StoredRecord {
@@ -336,6 +338,7 @@ impl std::fmt::Display for StoredRecord {
             Self::Operation { sequence } => write!(formatter, "operation sequence {sequence}"),
             Self::Genesis => formatter.write_str("genesis plan"),
             Self::Lineage => formatter.write_str("lineage"),
+            Self::Run => formatter.write_str("run store record"),
         }
     }
 }

@@ -39,6 +39,14 @@ pub(super) fn command(tool: &str) -> Option<&'static str> {
         "waive_dependency" => "waive-dependency",
         "restore_dependency" => "restore-dependency",
         "revalidate_basis" => "revalidate-basis",
+        "start_run" => "run start",
+        "report_run" => "run report",
+        "record_run_activity" => "run record",
+        "link_run_operation" => "run link",
+        "list_runs" => "run list",
+        "get_run" => "run show",
+        "run_lifecycle" => "run lifecycle",
+        "run_activity" => "run activity",
         _ => return None,
     })
 }

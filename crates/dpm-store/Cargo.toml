@@ -8,12 +8,14 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+chrono.workspace = true
 dpm-engine = { path = "../dpm-engine", version = "0.1.0" }
 dpm-model = { path = "../dpm-model", version = "0.1.0" }
 rusqlite = { workspace = true, optional = true }
 serde_json.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
 [features]
 default = ["sqlite"]
@@ -22,7 +24,6 @@ sqlite = ["dep:rusqlite"]
 
 [dev-dependencies]
 tempfile = "3.23"
-chrono.workspace = true
 
 [lints]
 workspace = true

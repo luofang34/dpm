@@ -47,9 +47,9 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | import FILE | CLI-only: bootstrap | Human/service initializes an absent store from a validated plan |
 | validate FILE | validate_plan | Decode and check every graph invariant without a workspace; `revision` is `null` |
 | tui | CLI-only: interactive terminal | Read-only operator console over the same queries |
-| backup --to PATH | CLI-only: store file administration | Operator copies the store file with its whole history |
-| restore --from PATH --to PATH | CLI-only: store file administration | Operator restores a backup into a new store file |
-| verify-store PATH | CLI-only: store file administration | Operator checks a store or backup file and replays its history |
+| backup --to PATH | CLI-only: store file administration | Operator copies the store file with its whole history, and the [run store](#runs-and-activity) beside it if there is one |
+| restore --from PATH --to PATH | CLI-only: store file administration | Operator restores a backup into a new store file, and its run store into a new lineage-bound run store |
+| verify-store PATH | CLI-only: store file administration | Operator checks a store or backup file, replays its history and verifies the run store beside it |
 | export | export_plan | Authoritative snapshot for proposals |
 | plan schema | plan_schema | JSON Schema of the plan used by export and proposals; the CLI needs no workspace |
 | plan template | plan_template | Minimal valid proposal for a workspace without projects or work |
@@ -59,6 +59,14 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | plan export-mspdi --project-key KEY | export_mspdi | One project's work as MSPDI with a report of omitted data |
 | revision | workspace_revision | Committed revision and lineage read without loading the plan; poll it before reloading other views |
 | history --after-sequence N --limit N | history | Chronological operation pages with actor, time, reason and command |
+| run start KEY --actor A --run-id ID | start_run | Record a [run](#runs-and-activity) on claimed or started work its executor owns, with the contract and plan revision it observed; no `base_revision` |
+| run report RUN STATE --event-id ID | report_run | Record a run's lifecycle transition (working, waiting, failed, interrupted, completed); ending a run submits, verifies and releases nothing |
+| run record RUN KIND --sequence N | record_run_activity | Record one bounded activity record; it changes no lifecycle state, plan or ownership, and resending a retained sequence is harmless |
+| run link RUN OPERATION | link_run_operation | Explicitly link a committed operation to the run that performed it, if it is provably the run's own |
+| run list --key KEY | list_runs | Runs newest first with lifecycle, derived freshness and attribution |
+| run show RUN | get_run | One run with its observed contract, source, freshness and linked operations |
+| run lifecycle --after-sequence N --limit N | run_lifecycle | Durable run lifecycle feed; never pruned |
+| run activity --after-sequence N --limit N | run_activity | Bounded run activity feed with its own cursor; reports a gap when retention outran the cursor |
 | status --calibrated | project_status | Counts and optional Monte Carlo forecast; `calibrated` applies [measured factors](#calibration-and-flow) to a copy of the plan |
 | calibration | get_calibration | [Estimate ratios, review and decision waits, and flow](#calibration-and-flow) measured from history |
 | next --project-key KEY --asset-key KEY --actor KIND:NAME | next_work | Full-graph ranking, then [scope](#scoped-next) and limit; outside-scope work stays visible; `actor` adds a holding-claims advisory |
@@ -392,6 +400,133 @@ relation or lag retains its ID. Unknown asset fields are rejected instead of bei
 The plan's `assets` registry and `contract.assets` describe repositories/folders/documents, not labor.
 CLI flags use `--asset` / `--asset-key`, and locator version 3 uses `asset`. API version 9 exposes
 these grouped values consistently in CLI and MCP. Execution commands and their arguments are unchanged.
+
+## Runs and activity
+
+A run is one attempt by one executor to perform one task. Runs are observations kept beside the plan,
+not project facts: a run never enters the operation log, never changes the plan revision, and cannot
+submit, verify, release or reassign the task it executes. Tool output, heartbeats and the end of a
+run change nothing about the work: a completed run leaves submitted work awaiting its separate
+independent verifier, and a failed or interrupted run leaves the owner and the started work as they
+were. The run commands take no `base_revision` and no `operation_id`; their envelope reports the
+unchanged project `revision`. `base_lineage` is still honoured and a store continuing another
+lineage refuses the write with `lineage_mismatch`. The read-only preview refuses run writes with
+`read_only_project` and answers run reads empty; a build without SQLite behaves the same. A backup
+archive is never a live workspace either: every run write, an exact retry included, is refused with
+`archived_store` before anything is opened, created or replayed, whether or not a run store sits
+beside the archive, while run reads stay available.
+
+**What a run records.** `start_run` / `run start` names the task, the `executor` (default: the acting
+principal), an optional parent run and provider session (`provider`, `session`, `turn`: opaque
+identifiers, never secrets), `observation` and exact `sources`. The task must be claimed or started
+and owned by the executor. The run keeps, as typed immutable content, the workspace, lineage and plan
+`revision` it observed, the work key, the number of earlier submissions and the whole authored
+`contract`; later reviewed plan changes edit the plan, not that record. A source is an exact
+reference, never a mutable name: a full lowercase 40 or 64 digit commit of a Git repository asset the
+task requires, or the id of `GitCommit` evidence attached to this task as `attach_git_head` records
+it, whose `commit` and `asset_id` metadata and `git:asset:ASSET@COMMIT` locator must agree on one
+exact commit of a required repository. A branch, an abbreviation, evidence with a different asset
+than its metadata, evidence attached to other work, and a kind tag with no commit are refused. The
+exact commits a run's sources resolved to are captured in its `exact_sources`. Only a service may record `observation: managed`; the default `reported_only` labels an
+executor that reports itself through the CLI or tools, whose silence proves nothing.
+
+**Lifecycle is not freshness.** The durable lifecycle is the last recorded transition: working and
+waiting alternate, and failed, interrupted and completed are final (`invalid_run_transition`).
+Observed status is derived each time a view is computed, never stored: `working` or `waiting` while
+DPM has received something from the run within 300 seconds of the query clock, `stale` after that
+(the lifecycle state is unchanged: silence is never completion), `unknown` for an unfinished run
+recorded under another lineage, and otherwise the recorded end. Freshness uses only the time DPM
+received a lifecycle fact or activity record, on its own clock; the `observed_at` an executor reports
+is kept as a claim and never consulted, so a dead run cannot stay fresh by reporting a future time.
+`stale_at` is the instant a fresh run turns stale, for views that refresh on a timer. `--clock` /
+`dpm-mcp --clock` pin the reading for run queries like every other query. An unfinished run whose
+task changed owner or is no longer claimed or started is reported with an `orphan` reason
+(`owner_changed`, `not_executing`, `work_missing`); runs never move ownership themselves. Only the
+run's executor, a human or a service may report on it, so an operator can record that a stale run was
+`interrupted`.
+
+**Identity and retries.** The run id, a transition's `event_id` and an activity's
+`source_sequence` are the idempotency identities; run ids and event ids are version 7 UUIDs and are
+minted when omitted, but only a supplied id makes a retry exact. Resending an identity with the same
+content returns the recorded fact (`replayed: true`, or `duplicate: true` per activity record) and
+writes nothing, even after the plan moved on; the same identity with different content is
+`duplicate_run_record` with the recorded fact in `details.recorded`. For activity, content means the
+whole request: text longer than 4096 bytes is stored cut (`truncated: true`) with a `text_digest`
+(SHA-256) of all of it, so a retry that differs only past the kept prefix is a conflict. A batch of
+activity is recorded whole or not at all.
+
+**Activity sequences and bounded retries.** An activity record carries the reporter's own
+`source_sequence` for the run: at least 1, strictly increasing, gaps allowed. The store keeps one
+`source_high_water` number per run, so a retry stays safe however much retention has removed: a
+record still held with the same content is answered as a duplicate, and a sequence at or below the
+high-water mark that is no longer held is refused as `activity_expired` (`details`: `run`,
+`source_sequence`, `high_water`) and writes nothing, so a transport replay can neither add a record
+nor refresh the run's receipt time. A late arrival below the mark is indistinguishable from such a
+retry and is refused the same way, so a reporter sends sequences in order. The receipt count wraps
+at `u64::MAX` and the largest sequence can be accepted once.
+
+**Feeds and retention.** `run_lifecycle` and `run_activity` are independent feeds, each with its own
+cursor (`after_sequence`, `next_after_sequence`, `head_sequence`, default limit 100, capped at 1000).
+Lifecycle facts are never pruned. Activity keeps the newest 10,000 records by default. A cursor
+older than what was kept is answered with a `gap` (`requested_after`, `resumes_at`, `lost`) and
+continues from the oldest record held, so a hole is never served silently; feed sequences are never
+reused, and a run's `activity` tally (`recorded`, `retained`, `source_high_water`, `latest`) still
+shows what retention removed.
+
+**Linking operations.** Attributing a project operation to a run is its own explicit step after the
+operation commits: `link_run_operation` / `run link` takes the run and the operation id the project
+command returned. It is refused (`run_link_refused`, with `details.reason`) unless the operation was
+committed in the run's workspace and lineage, by the run's executor, on the run's task, no earlier than
+the run started and, once the run ended, no later than that. An operation links to at most one run
+(`run_link_conflict`), repeating a link is safe, and a failed link changes nothing about the
+operation, which was already committed. The linked operations appear in the run's `operations`.
+
+**The run store.** Runs live in a sidecar SQLite file next to the project store (`<store>.runs`) with
+its own layout version (1, reported as `runs.schema_version` by `verify-store`), bound to the workspace and
+lineage it was created for. A read never creates it. A file that is corrupt, of another version, with
+foreign or altered schema objects, or bound to another workspace is refused unchanged
+(`corrupt_store`, `unsupported_schema_version`, `workspace_mismatch`) and the project store keeps
+working. Run writes take the run store's own lock, never the project store's. Run error codes beyond
+the usual ones are `duplicate_run_record`, `invalid_run_transition`, `run_link_refused`,
+`run_link_conflict`, `activity_expired` and `foreign_run`.
+
+**Runs from before a restore.** Each run records the lineage it was recorded under, and the store
+takes new facts only for runs of the lineage it continues. After a restore the earlier runs are
+historical observations: any new lifecycle, activity or link write for one, and a resend of its start
+or of a fact already recorded for it, is refused with `foreign_run` (`details`: `run`, `recorded`,
+`current`) and changes nothing, so a retry cannot reach across the lineage boundary. They stay
+readable with their attribution unchanged and are never reattached; start a new run to continue the
+work. New runs under the restored lineage work beside them.
+
+**Backup, restore and export.** The run store is not inside the project store file, so the
+store-file commands carry it explicitly. `backup` copies the run store first and the project store
+second, then verifies the two as a pair; it writes `<backup>.runs` beside the project backup (an
+archive, refused for writes) and its report names it under `runs`. A store with no run store beside
+it backs up its project history only, and reports no `runs`, which says only that none was found
+there. `restore` verifies the source pair, copies the run store to `<store>.runs` bound to the
+restored lineage, and records the fork (the new lineage, the lineage it continued and the project
+revision it started at) in the run store as evidence; runs recorded under the lineage before the
+restore keep their attribution, read as `lineage: foreign` and, if unfinished, `unknown`, and are
+never reattached. A restore target whose run store path already exists is refused with
+`target_exists`, and a failed copy removes both new files.
+
+**What a verified pair guarantees.** The two files are copied at different moments and cannot share
+one snapshot, so `verify-store`, `backup` and `restore` check the pair rather than each file alone.
+Besides each file's own checks (contiguous lifecycle and retained activity, legal transitions,
+rising source sequences, nothing removed outside retention), a pair must satisfy: the run store is
+bound to the project's workspace and current lineage; every run observed a plan revision the
+project history holds for that run's lineage, judged by membership (a result or starting revision of
+an operation of that lineage, the genesis revision, the snapshot of the lineage the store continues,
+or a recorded fork whose revision is itself held), never by numeric order, because revisions wrap;
+and every operation link names an operation present in the project history that still passes the
+link rules against it. A pair that fails (such as an older project copy with a newer run store) is
+`corrupt_store`, naming the run store. Because a link is made only after its operation commits,
+copying the run store first means a later project copy holds every operation an earlier run copy
+links, so a backup taken while commands arrive stays consistent; operations committed after the run
+copy are simply unlinked. The boundary: the pair is consistent as of the run copy, not a single
+instant, and a run that was never recorded in the run store before it was copied is not in the
+backup. A plan export does not contain runs; read them with `run list`, `run lifecycle` and
+`run activity`, or back up the store.
 
 ## Microsoft Project XML interchange
 

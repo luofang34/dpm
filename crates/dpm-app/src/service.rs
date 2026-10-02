@@ -39,6 +39,8 @@ pub struct Application {
     pub(crate) project_asset: Option<dpm_model::AssetId>,
     clock: QueryClock,
     watchers: watch::Watchers,
+    #[cfg_attr(not(feature = "sqlite"), allow(dead_code))]
+    runs: run::RunSlot,
 }
 enum Backing {
     #[cfg(feature = "sqlite")]
@@ -54,6 +56,7 @@ impl Application {
             project_asset: None,
             clock: QueryClock::System,
             watchers: watch::Watchers::default(),
+            runs: run::RunSlot::default(),
         }
     }
     /// Construct a validated read-only preview without opening a database.
@@ -210,6 +213,11 @@ mod query;
 mod typed;
 pub use typed::{NextRequest, Observed, StatusView, WorkDetail, WorkspaceRevision};
 mod refresh;
+mod run;
+pub use run::{
+    ActivityReceipt, ReceivedActivity, RunActivityRequest, RunCommand, RunLinkRequest, RunList,
+    RunQuery, RunReportRequest, RunStartRequest, RunWrite,
+};
 mod watch;
 
 #[cfg(feature = "sqlite")]

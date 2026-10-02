@@ -11,6 +11,8 @@ repository.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 serde.workspace = true
+# Fingerprints the whole of an activity text, so a retry is compared with everything that was sent.
+sha2 = { version = "0.10", default-features = false }
 uuid.workspace = true
 thiserror.workspace = true
 

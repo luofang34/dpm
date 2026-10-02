@@ -6,6 +6,7 @@
 
 mod error;
 mod record;
+mod run_error;
 #[cfg(feature = "sqlite")]
 mod schema;
 #[cfg(feature = "sqlite")]
@@ -13,10 +14,11 @@ mod sqlite;
 
 pub use error::{LineageError, StoreError, StoredRecord};
 pub use record::{HistoryEntry, HistoryPage, RecordedOperation, StoreLineage, StoreRevision};
+pub use run_error::RunStoreError;
 #[cfg(feature = "sqlite")]
 pub use schema::SCHEMA_VERSION;
 #[cfg(feature = "sqlite")]
 pub use sqlite::{
-    IntegrityReport, SqliteStore, restore_store_blocking, store_revision_blocking,
-    verify_store_blocking,
+    IntegrityReport, RUN_ACTIVITY_LIMIT, RUN_STORE_VERSION, RunBinding, RunStore, RunStoreReport,
+    SqliteStore, Written, restore_store_blocking, store_revision_blocking, verify_store_blocking,
 };

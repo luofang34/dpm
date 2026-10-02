@@ -55,14 +55,24 @@ uuid_id!(LineageId, now_v7);
 uuid_id!(AssetId);
 uuid_id!(ExternalReferenceId);
 uuid_id!(DependencyId);
+// A run and each of its lifecycle transitions are caller-supplied idempotency keys like operations.
+uuid_id!(RunId, now_v7);
+uuid_id!(RunEventId, now_v7);
 
-impl OperationId {
-    /// Whether this is a version 7 UUID, the only form a client may supply as an idempotency key.
-    #[must_use]
-    pub fn is_time_ordered(&self) -> bool {
-        self.0.get_version() == Some(uuid::Version::SortRand)
-    }
+macro_rules! time_ordered {
+    ($($name:ident),*) => {$(
+        impl $name {
+            /// Whether this is a version 7 UUID, the only form a client may supply as an
+            /// idempotency key.
+            #[must_use]
+            pub fn is_time_ordered(&self) -> bool {
+                self.0.get_version() == Some(uuid::Version::SortRand)
+            }
+        }
+    )*};
 }
+
+time_ordered!(OperationId, RunId, RunEventId);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 /// Human-readable identifier, unique within its entity category.

@@ -18,8 +18,12 @@ mod lineage;
 mod recovery;
 use recovery::files;
 mod replay;
+mod runs;
 pub(crate) use crate::{HistoryEntry, RecordedOperation};
 pub use recovery::{IntegrityReport, restore_store_blocking, verify_store_blocking};
+pub use runs::{
+    RUN_ACTIVITY_LIMIT, RUN_STORE_VERSION, RunBinding, RunStore, RunStoreReport, Written,
+};
 mod snapshot;
 mod snapshot_cache;
 use snapshot::load_blocking;

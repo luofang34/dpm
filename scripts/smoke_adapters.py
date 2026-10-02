@@ -9,6 +9,9 @@ from pathlib import Path
 from smoke_agent import CLI, MCP, ROOT, Agent, run_cli, run_cli_envelope
 
 FIXTURE = ROOT / 'tests/support/execution-plan.json'
+# Run tools record observations beside the plan: they take no base_revision and are never project
+# operations, so operation parity does not apply to them; smoke_runs.py compares them instead.
+RUN_WRITERS = {'start_run', 'report_run', 'record_run_activity', 'link_run_operation'}
 
 
 def validation_smoke(directory):
@@ -60,7 +63,8 @@ def bootstrap_smoke(directory):
     agent = Agent(database, 'agent:bootstrap')
     try:
         tools = agent.request('tools/list', {})['tools']
-        writers = [t for t in tools if not t['annotations']['readOnlyHint'] and t['name'] != 'workspace_register']
+        writers = [t for t in tools if not t['annotations']['readOnlyHint']
+                   and t['name'] not in RUN_WRITERS | {'workspace_register'}]
         assert all('base_revision' in t['inputSchema']['required'] for t in writers), writers
         template = agent.call('plan_template', {})['data']
         refused = agent.call('apply_change', {'plan': template, 'reason': 'self-bootstrap', 'base_revision': 0},
@@ -252,7 +256,7 @@ def operation_smoke(directory):
     finally:
         probe.close()
     # workspace_register binds a device-local path; it records no project operation.
-    mutations = {t['name'] for t in tools if not t['annotations']['readOnlyHint']} - {'workspace_register'}
+    mutations = {t['name'] for t in tools if not t['annotations']['readOnlyHint']} - {'workspace_register'} - RUN_WRITERS
     assert covered == mutations, ('mutation tools without operation parity', mutations - covered, covered - mutations)
 
 
@@ -279,8 +283,8 @@ def documentation_smoke(directory):
     """docs/mcp.md names every CLI command, every tool and every version number as the binaries do."""
     text = (ROOT / 'docs/mcp.md').read_text()
     rows = table(text, '| CLI | MCP tool |')
-    documented = [' '.join(row[0].split()[:2]) if row[0].split()[0] in {'plan', 'workspace'} else row[0].split()[0] for row in rows]
-    nested = {'plan', 'workspace'}
+    nested = {'plan', 'workspace', 'run'}
+    documented = [' '.join(row[0].split()[:2]) if row[0].split()[0] in nested else row[0].split()[0] for row in rows]
     commands = (subcommands() - nested) | {f'{group} {name}' for group in nested for name in subcommands(group)}
     assert len(documented) == len(set(documented)), 'a command is listed twice'
     assert set(documented) == commands, ('table differs from dpm --help', set(documented) ^ commands)

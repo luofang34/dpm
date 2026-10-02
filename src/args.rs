@@ -1,6 +1,9 @@
 use clap::{Parser, Subcommand};
 use dpm_model::{LineageId, OperationId};
 use std::path::PathBuf;
+
+mod runs;
+pub(crate) use runs::{RunCommand, StartArgs};
 #[derive(Debug, Parser)]
 #[command(name = "dpm", version, about = "Agent-first execution planning")]
 pub(crate) struct Cli {
@@ -261,9 +264,14 @@ pub(crate) enum Commands {
     },
 }
 
-/// Operation log and store-file commands, flattened into the top-level command list.
+/// Operation log, run and store-file commands, flattened into the top-level command list.
 #[derive(Debug, Subcommand)]
 pub(crate) enum StoreCommand {
+    /// Record and inspect agent runs: observations kept beside the plan, never project facts.
+    Run {
+        #[command(subcommand)]
+        command: RunCommand,
+    },
     /// Print the committed revision and lineage without loading the plan; cheap enough to poll.
     Revision,
     /// Read append-only semantic operations in chronological pages.
@@ -418,3 +426,6 @@ pub(crate) enum PlanCommand {
         output: Option<PathBuf>,
     },
 }
+
+#[cfg(test)]
+mod tests;

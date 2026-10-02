@@ -36,8 +36,10 @@ pub use dpm_store::{HistoryPage, RecordedOperation};
 pub use envelope::{Envelope, PlanValidation, validate_decoded, validate_plan};
 pub use error::{AppError, ErrorResponse};
 pub use service::{
-    API_VERSION, Application, CommandRequest, NextRequest, Observed, PlanChangeRequest, Query,
-    QueryClock, QueryResponse, StatusView, WorkDetail, WorkspaceRevision,
+    API_VERSION, ActivityReceipt, Application, CommandRequest, NextRequest, Observed,
+    PlanChangeRequest, Query, QueryClock, QueryResponse, ReceivedActivity, RunActivityRequest,
+    RunCommand, RunLinkRequest, RunList, RunQuery, RunReportRequest, RunStartRequest, RunWrite,
+    StatusView, WorkDetail, WorkspaceRevision,
 };
 #[cfg(feature = "sqlite")]
 pub use service::{restore_store_blocking, store_path_blocking, verify_store_blocking};

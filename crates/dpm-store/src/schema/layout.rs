@@ -50,7 +50,7 @@ pub(crate) struct SchemaObject {
 }
 
 impl SchemaObject {
-    fn new(kind: &str, name: &str, table: &str, sql: Option<&str>) -> Self {
+    pub(crate) fn new(kind: &str, name: &str, table: &str, sql: Option<&str>) -> Self {
         Self {
             kind: kind.into(),
             name: name.into(),

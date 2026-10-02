@@ -71,6 +71,15 @@ pub enum AppError {
         /// The operation recorded under this identity.
         recorded: Box<dpm_store::RecordedOperation>,
     },
+    /// A run request was refused by the run store or could not be recorded safely.
+    #[error(transparent)]
+    RunStore(Box<dpm_store::RunStoreError>),
+    /// A run request was refused by the engine.
+    #[error(transparent)]
+    Run(Box<dpm_engine::RunError>),
+    /// No committed operation has this identity.
+    #[error("unknown operation {0}")]
+    UnknownOperation(dpm_model::OperationId),
     /// Caller based a command on an outdated snapshot.
     #[error("revision conflict: expected {expected}, current {actual}")]
     Conflict {
@@ -107,6 +116,18 @@ pub enum AppError {
     /// Dependency identity is malformed or not in the current plan.
     #[error("unknown dependency {0}")]
     UnknownDependency(String),
+}
+
+impl From<dpm_store::RunStoreError> for AppError {
+    fn from(error: dpm_store::RunStoreError) -> Self {
+        Self::RunStore(Box::new(error))
+    }
+}
+
+impl From<dpm_engine::RunError> for AppError {
+    fn from(error: dpm_engine::RunError) -> Self {
+        Self::Run(Box::new(error))
+    }
 }
 
 /// Stable machine diagnostic shared by adapters.
@@ -165,6 +186,9 @@ impl AppError {
                 dpm_store::StoreError::UnsupportedSchemaVersion { .. }
                 | dpm_store::StoreError::RetiredSchemaVersion { .. },
             ) => "unsupported_schema_version",
+            Self::RunStore(error) => run_store_code(error),
+            Self::Run(error) => run_code(error),
+            Self::UnknownOperation(_) => "not_found",
             Self::Store(dpm_store::StoreError::TargetExists { .. }) => "target_exists",
             Self::Store(
                 dpm_store::StoreError::InvalidTarget { .. }
@@ -192,6 +216,13 @@ impl AppError {
                 expected,
                 actual,
             })) => Some(serde_json::json!({"expected": expected, "actual": actual})),
+            Self::RunStore(error) => run_store_details(error),
+            Self::Run(error) => match error.as_ref() {
+                dpm_engine::RunError::LinkRefused { reason, .. } => {
+                    Some(serde_json::json!({"reason": reason.to_string()}))
+                }
+                _ => None,
+            },
             _ => None,
         }
     }
@@ -203,5 +234,84 @@ impl AppError {
             message: self.to_string(),
             details: self.details(),
         }
+    }
+}
+
+/// Stable category of a run store refusal; the same words the project store's refusals use for the
+/// same causes, so one client handles busy, lineage and corruption alike.
+fn run_store_code(error: &dpm_store::RunStoreError) -> &'static str {
+    use dpm_store::RunStoreError as Refused;
+    match error {
+        Refused::Store(dpm_store::StoreError::Lineage(LineageError::Mismatch { .. })) => {
+            "lineage_mismatch"
+        }
+        Refused::Store(dpm_store::StoreError::Lineage(LineageError::Archived { .. })) => {
+            "archived_store"
+        }
+        _ if error.is_busy() => "store_busy",
+        Refused::Store(
+            dpm_store::StoreError::UnsupportedSchemaVersion { .. }
+            | dpm_store::StoreError::RetiredSchemaVersion { .. },
+        ) => "unsupported_schema_version",
+        _ if error.is_corruption() => "corrupt_store",
+        Refused::Store(_) => "storage_error",
+        Refused::Run(error) => run_code(error),
+        Refused::UnknownRun(_) | Refused::UnknownParent(_) => "not_found",
+        Refused::DuplicateRun { .. }
+        | Refused::DuplicateEvent { .. }
+        | Refused::DuplicateActivity { .. } => "duplicate_run_record",
+        Refused::LinkConflict { .. } => "run_link_conflict",
+        Refused::ActivityExpired { .. } => "activity_expired",
+        Refused::ForeignRun { .. } => "foreign_run",
+        Refused::WorkspaceMismatch { .. } => "workspace_mismatch",
+        Refused::Corrupt { .. } => "corrupt_store",
+    }
+}
+
+fn run_code(error: &dpm_engine::RunError) -> &'static str {
+    use dpm_engine::RunError as Refused;
+    match error {
+        Refused::Validation(_) => "invalid_request",
+        Refused::MissingWork(_) => "not_found",
+        Refused::InvalidTransition { .. } | Refused::Terminal { .. } => "invalid_run_transition",
+        Refused::LinkRefused { .. } => "run_link_refused",
+        Refused::NotATask(_)
+        | Refused::NotExecuting { .. }
+        | Refused::NotOwner { .. }
+        | Refused::ActorNotAllowed { .. }
+        | Refused::ManagedNeedsService(_)
+        | Refused::UnsupportedSource(_) => "invalid_command",
+    }
+}
+
+fn run_store_details(error: &dpm_store::RunStoreError) -> Option<serde_json::Value> {
+    use dpm_store::RunStoreError as Refused;
+    match error {
+        Refused::Store(dpm_store::StoreError::Lineage(LineageError::Mismatch {
+            expected,
+            actual,
+        })) => Some(serde_json::json!({"expected": expected, "actual": actual})),
+        Refused::DuplicateRun { recorded } => Some(serde_json::json!({"recorded": recorded})),
+        Refused::DuplicateEvent { recorded } => Some(serde_json::json!({"recorded": recorded})),
+        Refused::DuplicateActivity { recorded } => Some(serde_json::json!({"recorded": recorded})),
+        Refused::LinkConflict { operation, linked } => {
+            Some(serde_json::json!({"operation": operation, "linked": linked}))
+        }
+        Refused::ActivityExpired {
+            run,
+            source_sequence,
+            high_water,
+        } => Some(
+            serde_json::json!({"run": run, "source_sequence": source_sequence, "high_water": high_water}),
+        ),
+        Refused::ForeignRun {
+            run,
+            recorded,
+            current,
+        } => Some(serde_json::json!({"run": run, "recorded": recorded, "current": current})),
+        Refused::Run(dpm_engine::RunError::LinkRefused { reason, .. }) => {
+            Some(serde_json::json!({"reason": reason.to_string()}))
+        }
+        _ => None,
     }
 }

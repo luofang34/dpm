@@ -595,6 +595,17 @@ plan that must reproduce the snapshot). A divergence is reported, never repaired
 a backup, and copying a live WAL database file is unsafe;
 see [backup and restore](projects.md#backup-restore-and-verification).
 
+Agent runs are observations, not project facts, so they are not in the operation log, the snapshot or
+the replay. A run records the contract, plan revision and lineage it observed and exact source
+references; its durable lifecycle (working, waiting, failed, interrupted, completed) is kept apart from
+bounded activity telemetry and from derived freshness, which is computed from DPM's own receipt times
+and the query clock and is never stored, so silence reads as stale, never as completion. They live in
+a sidecar run store with its own layout version, lineage binding and writer lock (it is backed up, restored and verified as a consistent pair with the project store, and runs from before a restore take no new facts), so activity cannot
+contend with project commands and adding runs does not change the project layout. Domain types are in
+`dpm-model`, the state machine, link rules and projection in `dpm-engine`, persistence in `dpm-store`,
+and the shared commands and queries in `dpm-app`; no provider types enter the core.
+See [runs](mcp.md#runs-and-activity).
+
 SQLite is durable operational state, not a disposable cache of an exported plan. A workspace can
 span multiple repositories and non-code projects; Git roots affect discovery, not domain scope.
 Workspace assets have stable IDs and explicit task requirements. Device-local workspace bindings
