@@ -11,6 +11,8 @@ mod interchange;
 mod lifecycle;
 mod ownership;
 mod preconditions;
+mod runs;
+mod schemas;
 mod validation;
 
 const NAMES: &[(&str, &str)] = &[
@@ -137,7 +139,8 @@ const NAMES: &[(&str, &str)] = &[
 ];
 
 pub(crate) fn definitions() -> Vec<Value> {
-    NAMES.iter().chain(ownership::NAMES.iter()).chain(validation::NAMES.iter()).map(|(name,description)| {
+    NAMES.iter().chain(ownership::NAMES.iter()).chain(validation::NAMES.iter()).chain(runs::NAMES.iter()).map(|(name,description)| {
+        if runs::handles(name) { return runs::definition(name, description, cli::command(name)); }
         let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_revision" | "workspace_list" | "project_status" | "get_calibration" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
@@ -172,9 +175,9 @@ pub(crate) fn definitions() -> Vec<Value> {
             },
             "start_work"|"submit_work"|"verify_work" => lifecycle::schema(name, &mut properties),
             "attach_git_head" => { properties.insert("asset".into(),json!({"type":"string"})); },
-            "add_artifact" => { properties.insert("artifact".into(),artifact_schema()); required.push("artifact"); },
+            "add_artifact" => { properties.insert("artifact".into(),schemas::artifact()); required.push("artifact"); },
             "link_external"|"unlink_external" => {
-                properties.insert("identity".into(),identity_schema()); required.push("identity");
+                properties.insert("identity".into(),schemas::identity()); required.push("identity");
                 if *name == "link_external" {
                     properties.insert("label".into(),json!({"type":"string","minLength":1}));
                     properties.insert("url".into(),json!({"type":"string","description":"http(s) URL on the identity instance (www.github.com is github.com): no userinfo, a plain path, any query parameter the credential detector does not flag, and a plain fragment"}));
@@ -261,6 +264,9 @@ pub(crate) fn call_tool_blocking(
 ) -> Result<Value, AppError> {
     validate_argument_names(name, &value)?;
     let preconditions = preconditions::take(&mut value)?;
+    if runs::handles(name) {
+        return runs::call_blocking(app, actor, name, value, preconditions);
+    }
     if ownership::handles(name) {
         return ownership::call_blocking(app, actor, name, value, preconditions);
     }
@@ -314,6 +320,17 @@ pub(crate) fn call_tool_blocking(
             app.query_blocking(query)?,
         ))?);
     }
+    project_mutation_blocking(app, actor, name, args, preconditions)
+}
+
+/// A project mutation: it requires the observed `base_revision` and records one operation.
+fn project_mutation_blocking(
+    app: &mut Application,
+    actor: &ActorId,
+    name: &str,
+    args: Arguments,
+    preconditions: preconditions::Preconditions,
+) -> Result<Value, AppError> {
     let base_revision = required(args.base_revision, "base_revision")?;
     let operation = if name == "apply_change" {
         app.ensure_writable()?;
@@ -451,32 +468,6 @@ fn validate_argument_names(name: &str, value: &Value) -> Result<(), AppError> {
     }
     Ok(())
 }
-fn artifact_schema() -> Value {
-    json!({"type":"object","required":["id","kind","uri","label","metadata","created_by","created_at"],"additionalProperties":false,
-    "properties":{
-        "id":{"type":"string","format":"uuid"},
-        "kind":{"type":"string","enum":["GitCommit","PullRequest","File","Build","TestResult","Datasheet","Quote","PurchaseOrder","Cad","Photo","Other"]},
-        "uri":{"type":"string","minLength":1},"label":{"type":"string","minLength":1},
-        "metadata":{"type":"object","additionalProperties":{"type":"string"}},
-        "created_by":{"type":"object","required":["kind","name"],"additionalProperties":false,
-            "properties":{"kind":{"type":"string","enum":["Human","Agent","Service"]},"name":{"type":"string","minLength":1}}},
-        "created_at":{"type":"string","format":"date-time"}
-    }})
-}
-
-fn identity_schema() -> Value {
-    let other = json!({"type":"object","required":["Other"],"additionalProperties":false,"properties":{"Other":{"type":"string","minLength":1}}});
-    json!({"type":"object","required":["provider","instance","kind","external_id"],"additionalProperties":false,
-    "description":"Provider-scoped identity, separate from label and URL; equal IDs on other instances or namespaces are different objects",
-    "properties":{
-        "provider":{"oneOf":[{"type":"string","enum":["GitHub","GitLab","Forgejo","Gitea","Jira","Linear"]},other]},
-        "instance":{"type":"string","minLength":1,"description":"host[:port] of the hosted or self-hosted instance"},
-        "namespace":{"type":"string","description":"Tenant, owner/repository or project namespace; required for forges and Linear"},
-        "kind":{"oneOf":[{"type":"string","enum":["Issue","PullRequest"]},other],"description":"Kind from the provider table; kinds sharing a number space (GitHub issue/pull request/discussion, GitLab issue/incident/task, any Jira or Linear issue type) name one object"},
-        "external_id":{"type":"string","minLength":1,"description":"A number on GitHub, GitLab, Forgejo and Gitea; a PROJECT-N key on Jira and Linear"}
-    }})
-}
-
 fn registry_tool_blocking(name: &str, args: Arguments) -> Result<Value, AppError> {
     let registry = dpm_app::WorkspaceRegistry::from_environment()?;
     let data = if name == "workspace_list" {

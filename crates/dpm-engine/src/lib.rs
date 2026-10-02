@@ -15,6 +15,12 @@ pub use gates::{
 mod progress;
 mod query;
 mod readiness;
+mod run;
+pub use run::{
+    LinkRefusal, OperationFacts, RunError, STALE_AFTER, authorize as authorize_run, check_link,
+    check_transition as check_run_transition, observe_start as observe_run_start,
+    project as project_run, start_event as run_start_event,
+};
 mod scope;
 pub use scope::{
     NEXT_RESULT_VERSION, NextWorkResult, OutsideScope, ScopeError, ScopeMember, ScopedCandidate,

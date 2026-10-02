@@ -27,7 +27,7 @@ fn advertises_tools_and_preserves_revision_conflicts() {
     let list = server
         .handle_blocking(json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}))
         .expect("list");
-    assert_eq!(list["result"]["tools"].as_array().expect("tools").len(), 36);
+    assert_eq!(list["result"]["tools"].as_array().expect("tools").len(), 44);
     let request = json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"claim_work","arguments":{"key":"TEST-A","base_revision":0}}});
     assert_eq!(
         server.handle_blocking(request.clone()).expect("claim")["result"]["isError"],
@@ -84,6 +84,8 @@ fn call(server: &mut McpServer, name: &str, arguments: Value) -> Value {
     let request = json!({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":name,"arguments":arguments}});
     server.handle_blocking(request).expect("response")["result"].clone()
 }
+
+mod runs;
 
 #[test]
 fn validate_plan_reads_no_workspace_and_matches_the_shared_validation() {
@@ -143,8 +145,17 @@ fn no_tool_bootstraps_a_workspace() {
         let required = tool["inputSchema"]["required"]
             .as_array()
             .expect("required");
+        // Run tools record observations beside the plan and never edit it, so they need no
+        // revision; they are checked in their own test.
+        let run_tool = matches!(
+            name,
+            "start_run" | "report_run" | "record_run_activity" | "link_run_operation"
+        );
         assert!(
-            read_only || name == "workspace_register" || required.contains(&json!("base_revision")),
+            read_only
+                || run_tool
+                || name == "workspace_register"
+                || required.contains(&json!("base_revision")),
             "{name} writes without an observed revision"
         );
         assert!(

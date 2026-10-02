@@ -70,6 +70,18 @@ dpm verify-store            # the selected workspace's live store
   file as immutable; otherwise another process is using it or it holds committed pages in its WAL,
   and it reads through the side files that are already there.
 
+- **Runs.** [Agent runs](mcp.md#runs-and-activity) are kept in a sidecar `<store>.runs` file, not in
+  the project store, so a project backup file alone does not contain them. `backup` therefore copies
+  the run store first, then the project store, verifies the two as a pair, and writes
+  `<backup>.runs` (sealed as an archive of the same lineage) when the store has one; its report names
+  it under `runs`, and no `runs` means only that none was found beside the store. `restore` verifies
+  the source pair, copies the run store to `<new store>.runs` bound to the restored store's new
+  lineage and records the fork as evidence, so runs recorded earlier read as `foreign`, take no new
+  facts and are never reattached. Neither command overwrites or adopts an existing run store file, a
+  failed run store copy removes both new files, and `verify-store` verifies the run store beside the
+  file it checks as a pair with it, refusing a run store copied later than its project store. A plan
+  export holds no runs.
+
 All three report canonical absolute paths, the `lineage_id` and whether the file is `archived`.
 Copying the file by other means keeps its lineage, so such a copy is not a restore. Any destination that already exists, including a
 leftover `-wal`, `-shm` or `-journal` side file, fails with `target_exists`; a destination whose
@@ -107,6 +119,9 @@ snapshot together: records are not signed. Verification detects accidental damag
 tampering, not an adversary with write access to the file.
 
 ## Store schema version
+
+The run store beside a store has its own layout version (`run_store_version`, currently 1) and never
+changes the project store's `user_version`: adding runs retires no existing store.
 
 The store records its layout version in SQLite's `user_version` header. Every open checks it, and
 the exact layout it names, before writing anything:

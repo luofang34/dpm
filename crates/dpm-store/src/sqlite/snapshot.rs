@@ -107,9 +107,10 @@ fn load_plan_blocking(
     let stored_revision = revision_from_sql(column(row, 0, path, record, "revision")?);
     let field = match record {
         StoredRecord::Snapshot => "snapshot_json",
-        StoredRecord::Genesis | StoredRecord::Operation { .. } | StoredRecord::Lineage => {
-            "plan_json"
-        }
+        StoredRecord::Genesis
+        | StoredRecord::Operation { .. }
+        | StoredRecord::Lineage
+        | StoredRecord::Run => "plan_json",
     };
     let json: String = column(row, 1, path, record, field)?;
     let plan: Plan = match cache {

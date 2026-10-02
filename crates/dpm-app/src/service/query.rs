@@ -28,6 +28,20 @@ impl Application {
                     data: page,
                 })
             }
+            Query::Runs { key, limit } => {
+                respond(self.runs_blocking(&crate::RunQuery { key, limit })?)
+            }
+            Query::Run { id } => respond(self.run_blocking(id)?),
+            Query::RunLifecycle {
+                after_sequence,
+                limit,
+                run,
+            } => respond(self.run_lifecycle_blocking(after_sequence, limit, run)?),
+            Query::RunActivity {
+                after_sequence,
+                limit,
+                run,
+            } => respond(self.run_activity_blocking(after_sequence, limit, run)?),
             Query::ProposeChange { plan } => respond(self.propose_change_blocking(&plan)?),
             Query::Export => respond(self.export_blocking()?),
             Query::PlanSchema => respond(self.observe_blocking(|_, _, _| crate::plan_schema())?),

@@ -141,6 +141,9 @@ fn run_open_blocking(
         Commands::Store(StoreCommand::Backup { to }) => {
             crate::recovery::backup_blocking(app, &to, json)
         }
+        Commands::Store(StoreCommand::Run { command }) => {
+            crate::runs::command_blocking(app, command, json, preconditions)
+        }
         Commands::Tui => crate::console::run_blocking(app),
         mutation => mutate_blocking(app, mutation, json, preconditions),
     }

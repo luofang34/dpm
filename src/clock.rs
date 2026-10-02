@@ -1,7 +1,7 @@
 //! Which commands a pinned `--clock` applies to.
 
 use crate::{
-    args::{Commands, PlanCommand, StoreCommand},
+    args::{Commands, PlanCommand, RunCommand, StoreCommand},
     error::CliError,
 };
 use chrono::{DateTime, Utc};
@@ -35,7 +35,15 @@ fn is_query(command: &Commands) -> bool {
             | Commands::Explain { .. }
             | Commands::Export
             | Commands::Store(
-                StoreCommand::History { .. } | StoreCommand::Revision | StoreCommand::Calibration
+                StoreCommand::History { .. }
+                    | StoreCommand::Revision
+                    | StoreCommand::Calibration
+                    | StoreCommand::Run {
+                        command: RunCommand::List { .. }
+                            | RunCommand::Show { .. }
+                            | RunCommand::Lifecycle { .. }
+                            | RunCommand::Activity { .. },
+                    },
             )
             | Commands::Plan {
                 command: PlanCommand::Template

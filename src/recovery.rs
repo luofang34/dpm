@@ -55,5 +55,19 @@ fn present_blocking(label: &str, report: &IntegrityReport, json: bool) -> Result
         report.operation_count,
         report.genesis_revision,
         report.schema_version,
-    ))
+    ))?;
+    // A project store file never holds runs, so say what happened to the run store beside it.
+    output::text_blocking(&match &report.runs {
+        Some(runs) => format!(
+            "run store {}: {} run(s), {} lifecycle fact(s), {} activity record(s) held, schema version {}; runs are carried with the store",
+            runs.path.display(),
+            runs.runs,
+            runs.lifecycle_events,
+            runs.activity_retained,
+            runs.schema_version,
+        ),
+        None => {
+            "no run store was found beside this store: only the project history is present and carried, and this does not show that no run was ever recorded".to_string()
+        }
+    })
 }

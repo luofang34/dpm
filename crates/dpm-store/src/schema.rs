@@ -16,7 +16,7 @@ use crate::{StoreError, error::database_error};
 use rusqlite::Connection;
 use std::path::Path;
 
-mod layout;
+pub(crate) mod layout;
 
 /// Database layout version this binary reads and writes.
 pub const SCHEMA_VERSION: i64 = 4;
