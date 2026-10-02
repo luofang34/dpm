@@ -4,7 +4,8 @@ use super::super::{Application, Backing};
 use crate::AppError;
 use dpm_engine::OperationFacts;
 use dpm_model::{
-    ActivityPage, LifecyclePage, LineageId, OperationId, RunId, RunSnapshot, WorkItemId,
+    ActivityPage, LifecyclePage, LineageId, OperationId, RunFeedHeads, RunId, RunSnapshot,
+    WorkItemId,
 };
 use dpm_store::{RUN_ACTIVITY_LIMIT, RunStore, RunStoreError};
 use std::{
@@ -128,7 +129,7 @@ impl Application {
             .unwrap_or_default())
     }
 
-    pub(super) fn run_lifecycle_page_blocking(
+    pub(in crate::service) fn run_lifecycle_page_blocking(
         &self,
         after: u64,
         limit: u16,
@@ -143,7 +144,7 @@ impl Application {
             }))
     }
 
-    pub(super) fn run_activity_page_blocking(
+    pub(in crate::service) fn run_activity_page_blocking(
         &self,
         after: u64,
         limit: u16,
@@ -157,6 +158,14 @@ impl Application {
                 head_sequence: 0,
                 gap: None,
             }))
+    }
+
+    /// Where the run feeds and the link count stand, in one read transaction; all zero and without
+    /// an epoch while no run store exists.
+    pub(in crate::service) fn run_heads_blocking(&self) -> Result<RunFeedHeads, AppError> {
+        Ok(self
+            .with_runs_blocking(|store| store.heads_blocking())?
+            .unwrap_or_default())
     }
 
     /// What the project store recorded about a committed operation, for linking it to a run.

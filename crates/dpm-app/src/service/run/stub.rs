@@ -12,6 +12,12 @@ impl Application {
     /// Without a run store there is no retention to configure.
     pub fn set_run_retention(&mut self, _max_activity: u64) {}
 
+    pub(in crate::service) fn run_heads_blocking(
+        &self,
+    ) -> Result<dpm_model::RunFeedHeads, AppError> {
+        Ok(dpm_model::RunFeedHeads::default())
+    }
+
     pub(super) fn run_snapshot_blocking(&self, _: RunId) -> Result<Option<RunSnapshot>, AppError> {
         Ok(None)
     }
@@ -24,7 +30,7 @@ impl Application {
         Ok(Vec::new())
     }
 
-    pub(super) fn run_lifecycle_page_blocking(
+    pub(in crate::service) fn run_lifecycle_page_blocking(
         &self,
         after: u64,
         _: u16,
@@ -37,7 +43,7 @@ impl Application {
         })
     }
 
-    pub(super) fn run_activity_page_blocking(
+    pub(in crate::service) fn run_activity_page_blocking(
         &self,
         after: u64,
         _: u16,

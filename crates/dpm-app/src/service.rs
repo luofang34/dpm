@@ -36,11 +36,15 @@ pub struct QueryResponse {
 pub struct Application {
     backing: Backing,
     pub(crate) project_root: Option<PathBuf>,
+    /// What the locator declared when this connection was opened, so a later repoint or a changed
+    /// declaration is noticed.
+    pub(crate) opened_location: Option<crate::ProjectLocation>,
     pub(crate) project_asset: Option<dpm_model::AssetId>,
     clock: QueryClock,
     watchers: watch::Watchers,
     #[cfg_attr(not(feature = "sqlite"), allow(dead_code))]
     runs: run::RunSlot,
+    workspace: std::cell::OnceCell<dpm_model::WorkspaceId>,
 }
 enum Backing {
     #[cfg(feature = "sqlite")]
@@ -53,10 +57,12 @@ impl Application {
         Self {
             backing,
             project_root: None,
+            opened_location: None,
             project_asset: None,
             clock: QueryClock::System,
             watchers: watch::Watchers::default(),
             runs: run::RunSlot::default(),
+            workspace: std::cell::OnceCell::new(),
         }
     }
     /// Construct a validated read-only preview without opening a database.
@@ -91,6 +97,14 @@ impl Application {
             Backing::Database(store) => Ok(store.lineage_blocking()?.map(|l| l.lineage_id)),
             Backing::Preview(_) => Ok(None),
         }
+    }
+    /// The workspace identity of this source, read once: a connection never changes workspace.
+    pub(crate) fn workspace_identity_blocking(&self) -> Result<dpm_model::WorkspaceId, AppError> {
+        if let Some(id) = self.workspace.get() {
+            return Ok(*id);
+        }
+        let id = self.plan_blocking()?.workspace.id;
+        Ok(*self.workspace.get_or_init(|| id))
     }
     /// Resolve a work key to its stable UUID.
     pub fn work_id_blocking(&self, key: &str) -> Result<WorkItemId, AppError> {
@@ -212,6 +226,15 @@ mod calibration;
 mod query;
 mod typed;
 pub use typed::{NextRequest, Observed, StatusView, WorkDetail, WorkspaceRevision};
+mod native;
+pub use native::{
+    Attached, Attachment, Capabilities, ChangesResult, Committed, Cursors, FeedCursor, FeedDelta,
+    FeedStatus, HelloResult, Limits, LinkMark, LinkSignal, NATIVE_PROTOCOL_VERSION,
+    NATIVE_PROTOCOLS, NativeCall, NativeEnvelope, NativeError, NativeErrorBody, NativeRequest,
+    NativeResponse, NativeResult, ProjectCursor, ProjectWatermark, ResetReason, RunCapabilities,
+    SourceChange, SourceIdentity, SourceKind, UnsupportedControl, View, ViewBasis, ViewMapping,
+    Watermark, view_mappings,
+};
 mod refresh;
 mod run;
 pub use run::{

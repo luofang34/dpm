@@ -8,7 +8,7 @@
 
 use super::View;
 use chrono::{DateTime, TimeDelta, Utc};
-use dpm_model::{Plan, Release, Timeline};
+use dpm_model::{Plan, Timeline};
 
 /// Longest a projection stays displayed without re-evaluation, which bounds how often the
 /// probabilistic forecast reruns while nothing else changes.
@@ -27,7 +27,11 @@ impl Window {
     /// The window of projections evaluated at `clock` over `timeline`.
     pub(crate) fn evaluated(plan: &Plan, timeline: &Timeline, clock: DateTime<Utc>) -> Self {
         let aged = clock.checked_add_signed(MAX_AGE).unwrap_or(clock);
-        let until = next_release(plan, timeline).map_or(aged, |opens| opens.min(aged));
+        // A choice recorded with a future time is not reported as elapsing, so it is picked up by
+        // the `MAX_AGE` bound instead.
+        let until = timeline
+            .next_release(plan)
+            .map_or(aged, |opens| opens.min(aged));
         Self { from: clock, until }
     }
 
@@ -42,28 +46,6 @@ impl Window {
     fn holds_at(self, now: DateTime<Utc>) -> bool {
         self.from <= now && now < self.until
     }
-}
-
-/// Earliest instant a pending dependency lag or future-dated decision releases.
-///
-/// A choice recorded with a future time is not reported as elapsing, so it is picked up by the
-/// [`MAX_AGE`] bound instead.
-fn next_release(plan: &Plan, timeline: &Timeline) -> Option<DateTime<Utc>> {
-    let edges = plan
-        .dependencies
-        .iter()
-        .map(|edge| timeline.edge(plan, edge));
-    let decisions = plan
-        .work_items
-        .keys()
-        .flat_map(|id| timeline.decisions(plan, *id).into_iter().map(|(_, r)| r));
-    edges
-        .chain(decisions)
-        .filter_map(|release| match release {
-            Release::Elapsing { opens_at, .. } => Some(opens_at),
-            _ => None,
-        })
-        .min()
 }
 
 impl View {

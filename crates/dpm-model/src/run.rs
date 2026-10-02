@@ -6,6 +6,7 @@
 //! and source it observed when it started; later plan edits do not rewrite that record.
 
 mod activity;
+mod heads;
 mod lifecycle;
 mod record;
 mod validation;
@@ -16,6 +17,7 @@ pub use activity::{
     ActivityRecord, ActivityTally, LatestActivity, MAX_ACTIVITY_BATCH, MAX_ACTIVITY_TEXT_BYTES,
     NormalizedActivity,
 };
+pub use heads::RunFeedHeads;
 pub use lifecycle::{
     LifecycleEntry, LifecycleEvent, LifecyclePage, RunState, RunStateParseError, RunTransition,
 };
