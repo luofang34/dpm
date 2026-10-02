@@ -82,7 +82,12 @@ fn key(code: KeyCode, modifiers: KeyModifiers, kind: KeyEventKind) -> Event {
     })
 }
 
-fn press(code: KeyCode) -> Event {
+/// Deliver `event` read at the system clock, for tests whose outcome does not depend on time.
+fn handle_now(view: &mut View, watch: &mut Watch, source: &mut Scripted, event: Event) -> bool {
+    handle_event(view, watch, source, event, chrono::Utc::now())
+}
+
+pub(super) fn press(code: KeyCode) -> Event {
     key(code, KeyModifiers::NONE, KeyEventKind::Press)
 }
 
@@ -96,7 +101,12 @@ fn the_r_key_accepts_another_lineage_that_the_loop_only_reported() {
     let mut source = Scripted::at(shown);
     let restored = snapshot(&plan, 1, LineageId::new());
     source.commit(restored.clone());
-    watch.poll_blocking(&mut view, &mut source, start + watch::INTERVAL);
+    watch.poll_blocking(
+        &mut view,
+        &mut source,
+        start + watch::INTERVAL,
+        chrono::Utc::now(),
+    );
     assert_eq!((view.revision(), source.loads), (3, 0));
     assert!(screen(&mut view, 120, 30).contains("STALE snapshot revision 3"));
 
@@ -106,9 +116,9 @@ fn the_r_key_accepts_another_lineage_that_the_loop_only_reported() {
         KeyModifiers::NONE,
         KeyEventKind::Release,
     );
-    assert!(!handle_event(&mut view, &mut watch, &mut source, release));
+    assert!(!handle_now(&mut view, &mut watch, &mut source, release));
     assert_eq!(source.loads, 0);
-    assert!(!handle_event(
+    assert!(!handle_now(
         &mut view,
         &mut watch,
         &mut source,
@@ -130,14 +140,14 @@ fn keys_navigate_and_quit_without_reading_the_source() {
     let mut view = View::new(&shown.plan, chrono::Utc::now()).expect("view");
     let mut watch = Watch::new(shown.revision(), Instant::now());
     let mut source = Scripted::at(shown);
-    assert!(!handle_event(
+    assert!(!handle_now(
         &mut view,
         &mut watch,
         &mut source,
         press(KeyCode::Char('4'))
     ));
     assert!(matches!(view.page, Page::Detail));
-    assert!(!handle_event(
+    assert!(!handle_now(
         &mut view,
         &mut watch,
         &mut source,
@@ -148,8 +158,8 @@ fn keys_navigate_and_quit_without_reading_the_source() {
         KeyModifiers::CONTROL,
         KeyEventKind::Press,
     );
-    assert!(handle_event(&mut view, &mut watch, &mut source, interrupt));
-    assert!(handle_event(
+    assert!(handle_now(&mut view, &mut watch, &mut source, interrupt));
+    assert!(handle_now(
         &mut view,
         &mut watch,
         &mut source,
@@ -157,3 +167,5 @@ fn keys_navigate_and_quit_without_reading_the_source() {
     ));
     assert_eq!((source.probes, source.loads), (0, 0));
 }
+
+mod clock;

@@ -1,13 +1,13 @@
 {
   "workspace": "DPM Alpha — prepared roadmap",
   "revision": 0,
-  "task_count": 42,
-  "work_package_count": 10,
-  "milestone_count": 9,
-  "total_work": 61,
+  "task_count": 54,
+  "work_package_count": 12,
+  "milestone_count": 13,
+  "total_work": 79,
   "ready_keys": [],
   "completed_work": 0,
-  "open_decisions": 10,
+  "open_decisions": 14,
   "operations": 0,
   "first_contract": "MVP-10",
   "execution_gate": "DEC-EXECUTE",
@@ -20,7 +20,11 @@
     "M5-ALPHA",
     "M6-COLLAB",
     "M7-DESIGN",
-    "M8-SEMANTICS"
+    "M8-SEMANTICS",
+    "M9-LOCAL",
+    "M10-CONFIG",
+    "M11-CONTROL",
+    "M12-REMOTE"
   ],
   "context_decisions": {
     "DEC-WORKSPACE": [
@@ -58,5 +62,19 @@
       "SEM-40",
       "UI-10"
     ]
-  }
+  },
+  "proposed_keys": [
+    "AUTH-20",
+    "CFG-10",
+    "CFG-20",
+    "CFG-30",
+    "QA-70",
+    "RUN-10",
+    "RUN-20",
+    "RUN-30",
+    "UI-30",
+    "UI-40",
+    "UI-50",
+    "UI-60"
+  ]
 }

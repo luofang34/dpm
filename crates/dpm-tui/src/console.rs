@@ -105,7 +105,7 @@ fn event_loop_blocking<S: SnapshotSource>(
         if interrupts.received() {
             return Ok(());
         }
-        watch.poll_blocking(view, source, Instant::now());
+        tick_blocking(view, watch, source, Instant::now(), chrono::Utc::now());
         terminal.draw(|frame| view.render(frame))?;
         match event::poll(INPUT_WAIT) {
             Ok(true) => {}
@@ -113,18 +113,33 @@ fn event_loop_blocking<S: SnapshotSource>(
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(error.into()),
         }
-        if handle_event(view, watch, source, event::read()?) {
+        if handle_event(view, watch, source, event::read()?, chrono::Utc::now()) {
             return Ok(());
         }
     }
 }
 
-/// Apply one terminal event; `true` ends the console.
+/// Work due between input events at monotonic `now` and wall `clock`: follow the source first,
+/// then re-evaluate the displayed snapshot if the clock alone has made its projections stale. A
+/// reload just evaluated at `clock`, so the second step then has nothing to do.
+fn tick_blocking<S: SnapshotSource>(
+    view: &mut View,
+    watch: &mut Watch,
+    source: &mut S,
+    now: Instant,
+    clock: chrono::DateTime<chrono::Utc>,
+) {
+    watch.poll_blocking(view, source, now, clock);
+    view.reevaluate_if_due(clock);
+}
+
+/// Apply one terminal event read at `clock`; `true` ends the console.
 fn handle_event<S: SnapshotSource>(
     view: &mut View,
     watch: &mut Watch,
     source: &mut S,
     event: Event,
+    clock: chrono::DateTime<chrono::Utc>,
 ) -> bool {
     match event {
         Event::Key(key) if key.kind != KeyEventKind::Release => {
@@ -132,7 +147,7 @@ fn handle_event<S: SnapshotSource>(
                 return true;
             }
             if key.code == KeyCode::Char('r') {
-                watch.accept_blocking(view, source);
+                watch.accept_blocking(view, source, clock);
                 return false;
             }
             view.handle_key(key.code)
