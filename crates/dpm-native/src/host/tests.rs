@@ -4,6 +4,7 @@ use super::*;
 use crate::limits::{
     DEFAULT_MAX_REQUEST_BYTES, DEFAULT_MAX_RESPONSE_BYTES, MAX_ID_BYTES, MIN_FRAME_BYTES,
 };
+use dpm_app::QueryClock;
 use dpm_model::Plan;
 use serde_json::{Value, json};
 use std::{
@@ -62,6 +63,19 @@ fn run(
 fn memory() -> Application {
     Application::in_memory_blocking(&fixture()).expect("application")
 }
+
+/// An application whose query clock is pinned, so that two evaluations of one query encode to the
+/// same size. A view carries `evaluated_at`, and a system-clock reading prints a varying number of
+/// fractional digits depending on its trailing zeros, so the size of an answer is not a property
+/// of the answer alone unless the clock is fixed. Each in-memory store mints its own lineage, so
+/// the bytes of two answers still differ; only their encoded sizes are equal.
+fn pinned(instant: &str) -> Application {
+    memory().with_query_clock(QueryClock::Fixed(
+        instant.parse().expect("an RFC 3339 instant"),
+    ))
+}
+
+const NINE_DIGITS: &str = "2026-01-02T03:04:05.123456789Z";
 
 fn request(id: &str, call: &Value) -> Vec<u8> {
     let mut line = json!({"protocol": 1, "id": id, "call": call})
@@ -169,7 +183,7 @@ fn an_answer_over_the_limit_is_replaced_whole_by_a_refusal_with_its_identifier()
         "big",
         &json!({"type": "query", "query": {"query": "export"}}),
     );
-    let (_, whole, raw) = run(memory(), query.clone(), Limits::default());
+    let (_, whole, raw) = run(pinned(NINE_DIGITS), query.clone(), Limits::default());
     let size = raw - 1;
     assert_eq!(whole[0]["ok"], true, "the export itself succeeds");
 
@@ -178,7 +192,9 @@ fn an_answer_over_the_limit_is_replaced_whole_by_a_refusal_with_its_identifier()
         size > 2048,
         "the fixture's export must exceed the test limit, it is {size}"
     );
-    let (ending, answers, raw) = run(memory(), query, limits);
+    // The refusal reports the size of the answer it replaces, so the second evaluation must
+    // encode to the same size as the first; the pinned clock is what makes that so.
+    let (ending, answers, raw) = run(pinned(NINE_DIGITS), query, limits);
     assert_eq!(ending.expect("served"), Ending::Closed);
     assert_eq!(answers.len(), 1);
     let refusal = &answers[0];
@@ -198,6 +214,42 @@ fn an_answer_over_the_limit_is_replaced_whole_by_a_refusal_with_its_identifier()
         raw < size,
         "the refusal is far smaller than the answer it replaces"
     );
+}
+
+#[test]
+fn the_size_of_an_answer_follows_the_clock_text_so_size_comparisons_pin_the_clock() {
+    let query = request(
+        "same",
+        &json!({"type": "query", "query": {"query": "export"}}),
+    );
+    let (_, nine, nine_raw) = run(pinned(NINE_DIGITS), query.clone(), Limits::default());
+    let (_, again, again_raw) = run(pinned(NINE_DIGITS), query.clone(), Limits::default());
+    // Lineages differ between stores but print at the same width, so the sizes are equal.
+    assert_eq!(
+        nine_raw, again_raw,
+        "one pinned clock gives one encoded size"
+    );
+    assert_eq!(nine[0]["result"]["evaluated_at"], NINE_DIGITS);
+    assert_eq!(again[0]["result"]["evaluated_at"], NINE_DIGITS);
+
+    // The same export read at instants whose printed precision differs is shorter by exactly the
+    // digits (and the point) that precision drops, and by nothing else: the clock appears once.
+    // A system clock prints whichever precision its trailing zeros allow, so an answer's size
+    // is comparable between evaluations only when the clock is pinned.
+    for (printed, shorter_by) in [
+        ("2026-01-02T03:04:05.123456000Z", 3),
+        ("2026-01-02T03:04:05.123000000Z", 6),
+        ("2026-01-02T03:04:05.000000000Z", 10),
+    ] {
+        let (_, answer, raw) = run(pinned(printed), query.clone(), Limits::default());
+        let shown = answer[0]["result"]["evaluated_at"].as_str().expect("text");
+        assert_eq!(
+            shown.len() + shorter_by,
+            NINE_DIGITS.len(),
+            "{printed} prints as {shown}"
+        );
+        assert_eq!(nine_raw - raw, shorter_by, "{printed}");
+    }
 }
 
 #[test]
