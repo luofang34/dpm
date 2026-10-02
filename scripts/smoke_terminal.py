@@ -4,6 +4,7 @@ import errno
 import fcntl
 import json
 import os
+import platform
 import pty
 import re
 import select
@@ -68,7 +69,7 @@ def header_revision(rows):
 
 
 class Console:
-    def __init__(self, database=None, project=None):
+    def __init__(self, database=None, project=None, extra_env=None):
         self.master, self.slave = pty.openpty()
         self.original = termios.tcgetattr(self.slave)
         self.size(130, 42)
@@ -81,7 +82,7 @@ class Console:
         self.process = subprocess.Popen(
             [str(CLI), *selection, 'tui'], cwd=ROOT,
             stdin=self.slave, stdout=self.slave, stderr=self.slave,
-            env={**os.environ, 'TERM': 'xterm-256color', 'NO_COLOR': '1'},
+            env={**os.environ, 'TERM': 'xterm-256color', 'NO_COLOR': '1', **(extra_env or {})},
             preexec_fn=controlling_terminal,
         )
         os.close(self.slave)
@@ -265,7 +266,7 @@ def locate(project, workspace, database):
         f"version = 3\nworkspace = '{workspace}'\ndatabase = '{database}'\n")
 
 
-def restored_console(directory):
+def restored_console(directory, extra_env=None):
     """A console on a project whose locator now selects a restored older copy, reporting it as
     diverged while still showing the live history it was started on."""
     project = directory / 'restored-project'
@@ -278,7 +279,7 @@ def restored_console(directory):
     run_cli(live, 'backup', '--to', str(backup))
     run_cli(live, 'claim', 'TEST-A', '--actor', 'agent:terminal')
     run_cli(live, 'block', 'TEST-A', 'blocked-after-backup', '--actor', 'agent:terminal')
-    console = Console(project=project)
+    console = Console(project=project, extra_env=extra_env)
     try:
         console.read_until(b'blocked-after-backup')
         restored = project / '.dpm/restored.sqlite'
@@ -314,16 +315,20 @@ def restored_copy(directory):
     assert run_cli(live, 'export')['revision'] == 2
 
 
+def stop_with_frames_buffered(console):
+    """Stop the console once it has written frames that nobody has read yet."""
+    readable, _, _ = select.select([console.master], [], [], 15)
+    assert readable, 'the console wrote nothing to buffer, so this guard would prove nothing'
+    os.kill(console.process.pid, signal.SIGSTOP)
+    _, status = os.waitpid(console.process.pid, os.WUNTRACED)
+    assert os.WIFSTOPPED(status), 'the console must be stopped for this guard to mean anything'
+
+
 def acceptance_needs_the_key_handled(directory):
     """A stopped console cannot have handled `r`, however many frames are already buffered."""
     console, live, restored = restored_console(directory)
     try:
-        # Let the console write frames that nobody has read yet: readable means they are buffered.
-        readable, _, _ = select.select([console.master], [], [], 15)
-        assert readable, 'the console wrote nothing to buffer, so this guard would prove nothing'
-        os.kill(console.process.pid, signal.SIGSTOP)
-        _, status = os.waitpid(console.process.pid, os.WUNTRACED)
-        assert os.WIFSTOPPED(status), 'the console must be stopped for this guard to mean anything'
+        stop_with_frames_buffered(console)
         os.write(console.master, b'r')
         # What `accept` waits for cannot come from buffered frames: they predate the key.
         try:
@@ -342,12 +347,63 @@ def acceptance_needs_the_key_handled(directory):
         console.close()
 
 
+def readiness_library(directory):
+    """Build, within a bound, the library that fixes the order readiness is reported in."""
+    library = directory / 'terminal_readiness.dylib'
+    subprocess.run(
+        ['clang', '-Wall', '-Werror', '-dynamiclib', '-o', str(library),
+         str(ROOT / 'scripts/terminal_readiness.c')],
+        check=True, timeout=120, capture_output=True)
+    return library
+
+
+def key_beside_a_resize_is_handled(directory):
+    """One `r` and one resize reach a stopped console together, and the kernel reports the resize
+    first. The key must still be handled within the usual deadline: it is neither sent again nor
+    helped by more input, and the resize is not left out.
+
+    The library is loaded into this console only. The log proves it loaded and that the console was
+    really told of both at once; a console that uses a backend with no batch order to change is
+    only observed, and passes by handling the key.
+    """
+    log = directory / 'readiness.log'
+    library = readiness_library(directory)
+    console, live, restored = restored_console(directory, {
+        'DYLD_INSERT_LIBRARIES': str(library), 'DPM_KQ_LOG': str(log)})
+    try:
+        stop_with_frames_buffered(console)
+        before = log.read_bytes()
+        assert f'loaded pid={console.process.pid}\n' in before.decode(), 'the library never loaded'
+
+        def since_stop():
+            return log.read_bytes()[len(before):].decode().splitlines()
+
+        console.size(100, 42)
+        os.write(console.master, b'r')
+        os.kill(console.process.pid, signal.SIGCONT)
+        try:
+            console.shows_revision(0)
+        except NotAccepted as error:
+            raise NotAccepted((*error.args, 'readiness since the stop', since_stop()[:20])) from error
+        observed = since_stop()
+    finally:
+        console.close()
+    both = [line for line in observed if 'both=1' in line]
+    assert both, ('the console was never told of the key and the resize together', observed[:20])
+    assert all('applied=1' in line for line in both if line.startswith('kevent')), both
+
+
 if __name__ == '__main__':
+    reordered = platform.system() == 'Darwin'
     with tempfile.TemporaryDirectory(prefix='dpm-terminal-') as temporary:
         smoke(Path(temporary))
         restored_copy(Path(temporary))
         with tempfile.TemporaryDirectory(prefix='dpm-terminal-stopped-') as stopped:
             acceptance_needs_the_key_handled(Path(stopped))
+        if reordered:
+            with tempfile.TemporaryDirectory(prefix='dpm-terminal-ready-') as ready:
+                key_beside_a_resize_is_handled(Path(ready))
     print('PASS: real terminal Gantt keys, Detail, external agent changes followed without a key, '
           'a restored older copy reported until accepted, read-only navigation and '
-          'q/Ctrl-C/SIGINT/SIGTERM cleanup')
+          'q/Ctrl-C/SIGINT/SIGTERM cleanup'
+          + (', a key beside a resize handled in either readiness order' if reordered else ''))
