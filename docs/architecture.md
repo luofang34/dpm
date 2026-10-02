@@ -766,13 +766,53 @@ installed. A failed refresh or a dropped connection therefore leaves the stalene
 next poll. Because the producer keeps no per-client state, a slow or disconnected consumer costs it
 nothing and recovers from its own cursors; one request is in flight per connection.
 
-**Hosts.** The contract is line-delimited JSON and the producer keeps no state per client, so a host
-runs it over a pipe to a persistent helper process or through an in-process call; the request,
-response and error contract is the same for both. `native_exchange`, a Cargo example that is a test
-fixture and not a product binary, serves it over standard input and output, and a compiled Swift
-client in `tests/native/swift` drives it. `scripts/smoke_native.py` builds both, runs the sequences
-above against real CLI writes, and compares the decoded envelopes with real CLI and agent-tool
-output at one pinned clock. It needs a Swift compiler and says so when it has none.
+**The local bridge.** A macOS host reaches the contract through one persistent helper process,
+`dpm-native` (`crates/dpm-native`), over the same line-delimited JSON on standard input and output;
+there is no second, in-process path. The helper owns the application and its store for its whole
+life, serves one request at a time from a single loop, and writes only protocol frames to standard
+output (tracing goes to standard error). Its workspace is selected as the CLI selects it: an
+explicit `--project` or `--database`, or discovery from the working directory; it never initializes
+one. `--clock` pins the query clock for the session and is the only way to pin it; no request can.
+A workspace that cannot be opened is a structured refusal frame with an empty identifier, then exit
+status 2.
+
+Frames are bounded in both directions (`--max-request-bytes`, `--max-response-bytes`; at least 1024,
+4 MiB and 32 MiB by default). A request longer than its bound is discarded as it streams, never
+buffered, and is refused `frame_too_large`; invalid UTF-8, a truncated last line and a malformed
+line are each refused with a stable code, and the next request is still served. A correlation
+identifier is at most 128 characters of `[A-Za-z0-9._:-]` and is rejected before anything runs, so
+every refusal can echo it within the minimum bound. A response that would exceed its bound is
+replaced by `response_too_large`, which names the committed operation when the request was a
+command that committed: an answer that could not be delivered is never taken for a rollback.
+
+The Swift client (`native/swift/Sources/DPMNative`) keeps the rules a host would otherwise
+rediscover. One exchange is in flight per connection; up to four more wait, and one beyond that is
+refused as busy and never sent. A request is pinned to the helper it was admitted to and is refused,
+never moved, if that helper is gone. Cancellation takes effect at once on the caller: a request that
+had not left is removed and never sent; one that had is not stopped, its answer is read and
+discarded, and the error says it may have been processed. Closing, killing and reconnecting do not
+wait for an exchange blocked on the helper: they abort it, tell its caller, and end the process
+within bounds (input closed, then SIGTERM, then SIGKILL), reporting which step ended it. A helper
+that cannot be ended is an error that keeps it owned, never a success. The connection is published
+open only after negotiation, attach and the source check pass, and a frame fault (wrong correlation,
+invalid or truncated frame, oversized answer, a protocol or api version other than the negotiated
+one, a timeout) closes it before the caller hears of it, so nothing is ever sent on a stream that is
+out of step. A reconnect reaches the same source or is refused unless the caller adopts the new
+identity; the client's own cursors continue through the new helper.
+
+Commands are sent once. Each carries a client-minted version 7 `operation_id`, which the
+application treats as an idempotency key, so a command whose outcome is unknown
+(`commandOutcomeUnknown`) may have committed and is reconciled only by an explicit resend of the same
+request, which returns the recorded operation. The library never resends, never rolls back, and
+closing a window releases no ownership and makes no verification: a claim stays with its actor.
+
+The helper is packaged in `DPMHost.app` beside a minimal host (`dpm-host`), found from the host
+executable's own location and never from the working directory. `scripts/build_native.py` builds the
+bundle (ad-hoc signed; distribution signing is not part of it). `scripts/smoke_native.py` copies it
+away from the build tree and, from another directory, compares what the host prints with the real
+CLI and agent-tool output at one pinned clock and runs the Swift integration suite in
+`native/swift/Qualification` against the real helper, the real CLI and a fault-injecting relay. It
+needs macOS and a Swift compiler and says so when it has none.
 
 ## Execution progress
 

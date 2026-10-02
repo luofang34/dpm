@@ -535,6 +535,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "dpm-native"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dpm-app",
+ "dpm-engine",
+ "dpm-model",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "dpm-schedule"
 version = "0.1.0"
 dependencies = [

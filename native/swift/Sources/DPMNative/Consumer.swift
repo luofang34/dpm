@@ -15,6 +15,11 @@
 
 import Foundation
 
+public enum ConsumerError: Error {
+    /// Pages kept coming: the feeds are moving faster than a bounded drain can follow.
+    case didNotCatchUp
+}
+
 /// What a project position belongs to: the workspace and the history within it. Two read-only
 /// previews both lack a lineage, so the workspace tells them apart. The run store's epoch is a
 /// different thing, the identity of the sidecar's history, and is never mixed with this.
@@ -75,30 +80,46 @@ func earliestRuns(_ bases: [RunHeads]) -> Earliest<RunPositions> {
     return .value(earliest)
 }
 
-final class Consumer {
-    var cursors = Cursors()
-    private(set) var projectStale = false
-    private(set) var runsStale = false
-    private(set) var project: [UInt64] = []
-    private(set) var lifecycle: [UInt64] = []
-    private(set) var activity: [UInt64] = []
+public final class Consumer {
+    /// The most entries each retained list below keeps; see `retaining`.
+    public static let defaultRetained = 256
+
+    public var cursors = Cursors()
+    public private(set) var projectStale = false
+    public private(set) var runsStale = false
+    // What follows is diagnostics, bounded to the most recent `retaining` entries each. Nothing the
+    // consumer decides depends on it: duplicates are discarded by the last sequence applied, kept
+    // separately, and cursors move only with pages that were applied. The pages themselves are what
+    // `poll` returns to the caller, so an entry dropped from a list here was already handed over.
+    /// Sequences of the project operations applied, most recent last.
+    public private(set) var project: [UInt64] = []
+    public private(set) var lifecycle: [UInt64] = []
+    public private(set) var activity: [UInt64] = []
     /// The link count each time the token said the displayed runs must be read again.
-    private(set) var linkChanges: [UInt64] = []
+    public private(set) var linkChanges: [UInt64] = []
     /// Resets the boundary signalled for a cursor it could not follow.
-    private(set) var resets: [String] = []
+    public private(set) var resets: [String] = []
     /// Resets applied on seeing a page served under another feed identity.
-    private(set) var identityResets: [String] = []
+    public private(set) var identityResets: [String] = []
+    /// How many entries were applied in all, per feed, however few are retained.
+    public private(set) var applied = (project: 0, lifecycle: 0, activity: 0)
     /// Entries discarded because their feed identity and sequence were already applied.
-    private(set) var discarded = 0
+    public private(set) var discarded = 0
+    /// Entries that carried no readable sequence; each one made its store stale.
+    public private(set) var unreadable = 0
+    /// How many entries each retained list keeps.
+    public let retaining: Int
+    private var last = (project: UInt64?.none, lifecycle: UInt64?.none, activity: UInt64?.none)
     private var projectIdentity: ProjectIdentity?
     private var runIdentity: String??
     private var observedProject: (identity: ProjectIdentity, head: UInt64)?
     private var observedRuns: RunPositions?
 
-    var dirty: Bool { projectStale || runsStale }
+    public var dirty: Bool { projectStale || runsStale }
 
     /// Seed every feed from where an attach says it stands.
-    init(seed: Watermark) {
+    public init(seed: Watermark, retaining: Int = Consumer.defaultRetained) {
+        self.retaining = max(1, retaining)
         cursors = Cursors(
             project: ProjectCursor(lineageId: seed.project.lineageId, afterSequence: seed.project.historyHead),
             lifecycle: FeedCursor(epoch: seed.runs.epoch, afterSequence: seed.runs.lifecycleHead),
@@ -111,7 +132,8 @@ final class Consumer {
 
     /// Seed from the views the client holds, each store at the earliest basis among the views that
     /// carry it. A client with no run view follows no run feed.
-    init(views: [View]) {
+    public init(views: [View], retaining: Int = Consumer.defaultRetained) {
+        self.retaining = max(1, retaining)
         switch earliestProject(views.compactMap { $0.basis.project }) {
         case .value(let earliest):
             cursors.project = ProjectCursor(lineageId: earliest.lineageId, afterSequence: earliest.historyHead)
@@ -130,15 +152,29 @@ final class Consumer {
         }
     }
 
-    /// Append the sequences not yet applied; returns how many were new.
-    private static func absorb(_ delta: Delta, into list: inout [UInt64], discarded: inout Int) -> Int {
+    /// Keep the most recent `retaining` entries of a list.
+    private func keep<T>(_ list: inout [T], _ entry: T) {
+        list.append(entry)
+        if list.count > retaining { list.removeFirst(list.count - retaining) }
+    }
+
+    /// Apply the entries of a page whose sequence is beyond the last applied; returns how many were new.
+    private func absorb(_ delta: Delta, into list: inout [UInt64], last: inout UInt64?, applied: inout Int) -> Int {
         var fresh = 0
         for entry in delta.entries {
-            guard let sequence = entry["sequence"].uint else { continue }
-            if let last = list.last, sequence <= last {
-                discarded += 1
+            // An entry with no readable sequence cannot be placed or deduplicated. It is counted and
+            // makes the store stale, so it is never silently skipped.
+            guard let sequence = entry["sequence"].uint else {
+                unreadable &+= 1
+                fresh += 1
+                continue
+            }
+            if let seen = last, sequence <= seen {
+                discarded &+= 1
             } else {
-                list.append(sequence)
+                keep(&list, sequence)
+                last = sequence
+                applied &+= 1
                 fresh += 1
             }
         }
@@ -149,14 +185,17 @@ final class Consumer {
     private func checkIdentity(project identity: ProjectIdentity, epoch: String?) {
         if let known = projectIdentity, known != identity {
             project.removeAll()
-            identityResets.append("lineage_changed")
+            last.project = nil
+            keep(&identityResets, "lineage_changed")
             projectStale = true
         }
         projectIdentity = identity
         if let known = runIdentity, known != epoch, known != nil {
             lifecycle.removeAll()
             activity.removeAll()
-            identityResets.append("epoch_changed")
+            last.lifecycle = nil
+            last.activity = nil
+            keep(&identityResets, "epoch_changed")
             runsStale = true
         }
         runIdentity = .some(epoch)
@@ -183,37 +222,37 @@ final class Consumer {
     }
 
     /// Apply one answer. Applying the same answer again changes nothing.
-    func apply(_ changes: Changes) {
+    public func apply(_ changes: Changes) {
         let lineage = changes.watermark.project.lineageId
         let epoch = changes.watermark.runs.epoch
         checkIdentity(project: ProjectIdentity(changes.watermark.project), epoch: epoch)
         observe(changes.watermark)
         if let delta = changes.project {
             if delta.isReset {
-                resets.append(delta.reason ?? "unknown")
+                keep(&resets, delta.reason ?? "unknown")
                 projectStale = true
             } else {
-                projectStale = Consumer.absorb(delta, into: &project, discarded: &discarded) > 0 || projectStale
+                projectStale = absorb(delta, into: &project, last: &last.project, applied: &applied.project) > 0 || projectStale
                 let held = cursors.project.flatMap { $0.lineageId == lineage ? $0.afterSequence : nil } ?? 0
                 cursors.project = ProjectCursor(lineageId: lineage, afterSequence: max(held, delta.nextAfterSequence))
             }
         }
         if let delta = changes.lifecycle {
             if delta.isReset {
-                resets.append(delta.reason ?? "unknown")
+                keep(&resets, delta.reason ?? "unknown")
                 runsStale = true
             } else {
-                runsStale = Consumer.absorb(delta, into: &lifecycle, discarded: &discarded) > 0 || runsStale
+                runsStale = absorb(delta, into: &lifecycle, last: &last.lifecycle, applied: &applied.lifecycle) > 0 || runsStale
                 let held = cursors.lifecycle.flatMap { $0.epoch == epoch ? $0.afterSequence : nil } ?? 0
                 cursors.lifecycle = FeedCursor(epoch: epoch, afterSequence: max(held, delta.nextAfterSequence))
             }
         }
         if let delta = changes.activity {
             if delta.isReset {
-                resets.append(delta.reason ?? "unknown")
+                keep(&resets, delta.reason ?? "unknown")
                 runsStale = true
             } else {
-                let fresh = Consumer.absorb(delta, into: &activity, discarded: &discarded)
+                let fresh = absorb(delta, into: &activity, last: &last.activity, applied: &applied.activity)
                 runsStale = fresh > 0 || delta.gap != nil || runsStale
                 let held = cursors.activity.flatMap { $0.epoch == epoch ? $0.afterSequence : nil } ?? 0
                 cursors.activity = FeedCursor(epoch: epoch, afterSequence: max(held, delta.nextAfterSequence))
@@ -221,11 +260,11 @@ final class Consumer {
         }
         if let signal = changes.links {
             if signal.isReset {
-                resets.append(signal.reason ?? "unknown")
+                keep(&resets, signal.reason ?? "unknown")
                 runsStale = true
             } else if signal.changed {
                 // Stale until views are installed; the mark is deliberately not adopted here.
-                if linkChanges.last != signal.count { linkChanges.append(signal.count) }
+                if linkChanges.last != signal.count { keep(&linkChanges, signal.count) }
                 runsStale = true
             }
         }
@@ -233,21 +272,21 @@ final class Consumer {
 
     /// One poll, applied the way a client must.
     @discardableResult
-    func poll(_ client: NativeClient, limit: Int = 100) async throws -> Changes {
-        let changes = try await client.changes(cursors, limit: limit)
+    public func poll(_ connection: NativeConnection, limit: Int = 100) async throws -> Changes {
+        let changes = try await connection.changes(cursors, limit: limit)
         apply(changes)
         return changes
     }
 
     /// Poll until no feed reports more; returns the pages it took.
     @discardableResult
-    func drain(_ client: NativeClient, limit: Int = 100) async throws -> Int {
+    public func drain(_ connection: NativeConnection, limit: Int = 100) async throws -> Int {
         for pages in 1...64 {
-            let changes = try await poll(client, limit: limit)
+            let changes = try await poll(connection, limit: limit)
             let more = [changes.project?.more, changes.lifecycle?.more, changes.activity?.more].compactMap { $0 }
             if !more.contains(true) { return pages }
         }
-        throw TransportError.encoding("a consumer did not catch up")
+        throw ConsumerError.didNotCatchUp
     }
 
     /// Install a refreshed set of displayed views. A store is current only if every view in the set
@@ -255,7 +294,7 @@ final class Consumer {
     /// set is what is displayed now, so an old response that arrives after a fresh one makes the
     /// display stale again rather than leaving it clean. The link mark is adopted only when the run
     /// views are current, from the earliest run basis installed.
-    func install(_ views: [View]) {
+    public func install(_ views: [View]) {
         switch earliestProject(views.compactMap({ $0.basis.project })) {
         case .value(let earliest):
             let covered = observedProject.map { $0.identity == ProjectIdentity(earliest) && earliest.historyHead >= $0.head } ?? true
@@ -276,9 +315,9 @@ final class Consumer {
     /// Read the displayed views again, installing the set only if every call succeeded; a refusal
     /// is thrown and leaves the client exactly as stale as it was.
     @discardableResult
-    func refresh(_ client: NativeClient, queries: [JSON], attached: Attachment? = nil) async throws -> [View] {
+    public func refresh(_ connection: NativeConnection, queries: [JSON], attached: Attachment? = nil) async throws -> [View] {
         var views: [View] = []
-        for query in queries { views.append(try await client.query(query, attached: attached)) }
+        for query in queries { views.append(try await connection.query(query, attached: attached)) }
         install(views)
         return views
     }
