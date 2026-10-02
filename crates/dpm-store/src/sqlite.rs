@@ -277,10 +277,21 @@ fn read_revision_blocking(
         .map_err(database_error(path, "begin revision query"))?;
     let revision = snapshot::revision_blocking(&transaction, path)?;
     let lineage = lineage::read_blocking(&transaction, path)?;
+    let history_head: u64 = transaction
+        .query_row(
+            "SELECT COALESCE(MAX(sequence), 0) FROM operations",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(database_error(path, "read history head"))?;
     transaction
         .commit()
         .map_err(database_error(path, "finish revision query"))?;
-    Ok(revision.map(|revision| crate::StoreRevision { revision, lineage }))
+    Ok(revision.map(|revision| crate::StoreRevision {
+        revision,
+        lineage,
+        history_head,
+    }))
 }
 
 fn check_existing_read_only_blocking(path: &Path) -> Result<(), StoreError> {

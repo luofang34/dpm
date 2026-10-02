@@ -163,30 +163,47 @@ impl ProjectLocation {
 
     fn attach_blocking(&self, mut app: Application) -> Result<Application, AppError> {
         let plan = app.plan_blocking()?;
-        if plan.workspace.id != self.workspace {
+        self.expect_workspace(plan.workspace.id)?;
+        app.project_asset = self.resolve_asset(&plan)?;
+        app.project_root = Some(self.root.clone());
+        app.opened_location = Some(self.clone());
+        Ok(app)
+    }
+
+    /// The locator names the workspace it expects; a source holding another is refused.
+    ///
+    /// Every open and the native source guard use this one check, so a locator edited while a
+    /// connection is open is judged exactly as a fresh open would judge it.
+    pub(crate) fn expect_workspace(&self, found: WorkspaceId) -> Result<(), ProjectError> {
+        if found != self.workspace {
             return Err(ProjectError::Invalid {
                 path: self.root.clone(),
                 message: format!(
                     "locator expects workspace {}, store contains {}",
-                    self.workspace, plan.workspace.id
+                    self.workspace, found
                 ),
-            }
-            .into());
+            });
         }
-        if let Some(key) = &self.asset {
-            app.project_asset = Some(
-                plan.assets
-                    .values()
-                    .find(|r| r.key.0 == *key)
-                    .ok_or_else(|| ProjectError::Invalid {
-                        path: self.root.clone(),
-                        message: format!("unknown asset {key}"),
-                    })?
-                    .id,
-            );
-        }
-        app.project_root = Some(self.root.clone());
-        Ok(app)
+        Ok(())
+    }
+
+    /// The workspace asset the locator represents, which must exist in the plan; `None` when the
+    /// locator names none.
+    pub(crate) fn resolve_asset(
+        &self,
+        plan: &Plan,
+    ) -> Result<Option<dpm_model::AssetId>, ProjectError> {
+        let Some(key) = &self.asset else {
+            return Ok(None);
+        };
+        plan.assets
+            .values()
+            .find(|r| r.key.0 == *key)
+            .map(|r| Some(r.id))
+            .ok_or_else(|| ProjectError::Invalid {
+                path: self.root.clone(),
+                message: format!("unknown asset {key}"),
+            })
     }
 }
 

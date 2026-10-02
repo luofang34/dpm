@@ -36,10 +36,15 @@ pub use dpm_store::{HistoryPage, RecordedOperation};
 pub use envelope::{Envelope, PlanValidation, validate_decoded, validate_plan};
 pub use error::{AppError, ErrorResponse};
 pub use service::{
-    API_VERSION, ActivityReceipt, Application, CommandRequest, NextRequest, Observed,
-    PlanChangeRequest, Query, QueryClock, QueryResponse, ReceivedActivity, RunActivityRequest,
-    RunCommand, RunLinkRequest, RunList, RunQuery, RunReportRequest, RunStartRequest, RunWrite,
-    StatusView, WorkDetail, WorkspaceRevision,
+    API_VERSION, ActivityReceipt, Application, Attached, Attachment, Capabilities, ChangesResult,
+    CommandRequest, Committed, Cursors, FeedCursor, FeedDelta, FeedStatus, HelloResult, Limits,
+    LinkMark, LinkSignal, NATIVE_PROTOCOL_VERSION, NATIVE_PROTOCOLS, NativeCall, NativeEnvelope,
+    NativeError, NativeErrorBody, NativeRequest, NativeResponse, NativeResult, NextRequest,
+    Observed, PlanChangeRequest, ProjectCursor, ProjectWatermark, Query, QueryClock, QueryResponse,
+    ReceivedActivity, ResetReason, RunActivityRequest, RunCapabilities, RunCommand, RunLinkRequest,
+    RunList, RunQuery, RunReportRequest, RunStartRequest, RunWrite, SourceChange, SourceIdentity,
+    SourceKind, StatusView, UnsupportedControl, View, ViewBasis, ViewMapping, Watermark,
+    WorkDetail, WorkspaceRevision, view_mappings,
 };
 #[cfg(feature = "sqlite")]
 pub use service::{restore_store_blocking, store_path_blocking, verify_store_blocking};

@@ -217,6 +217,20 @@ fn missing_start(id: RunId) -> serde_json::Error {
 }
 
 impl RunStore {
+    /// Where the feeds and the link count stand and the epoch they belong to, in one read
+    /// transaction.
+    pub fn heads_blocking(&self) -> Result<dpm_model::RunFeedHeads, RunStoreError> {
+        let transaction = self.read_transaction()?;
+        let binding = super::read_binding(&transaction, &self.path)?;
+        Ok(dpm_model::RunFeedHeads {
+            epoch: Some(binding.lineage_id),
+            lifecycle_head: head(&transaction, &self.path, "run_lifecycle")?,
+            activity_head: head(&transaction, &self.path, "run_activity")?,
+            activity_pruned_through: pruned_through(&transaction, &self.path)?,
+            link_count: link_count_blocking(&transaction, &self.path)?,
+        })
+    }
+
     /// Everything recorded about one run, or `None` for an unknown identity.
     pub fn snapshot_blocking(&self, id: RunId) -> Result<Option<RunSnapshot>, RunStoreError> {
         let transaction = self.read_transaction()?;
@@ -357,6 +371,18 @@ pub(super) fn pruned_through(connection: &Connection, path: &Path) -> Result<u64
             |row| row.get(0),
         )
         .map_err(database_error(path, "read activity retention"))
+}
+
+/// How many operations were ever linked to a run; zero while none was.
+///
+/// `run_links` is append-only: a link is inserted once and never updated or removed, and a replayed
+/// link inserts nothing. The count is therefore a monotone invalidation token. It deliberately
+/// does not use the table's implicit `rowid`, which SQLite does not promise to keep stable and
+/// which can be reused at its maximum, so it offers no order and no resumable position.
+fn link_count_blocking(connection: &Connection, path: &Path) -> Result<u64, StoreError> {
+    connection
+        .query_row("SELECT COUNT(*) FROM run_links", [], |row| row.get(0))
+        .map_err(database_error(path, "count run links"))
 }
 
 /// The newest sequence ever assigned in an `AUTOINCREMENT` table, even if retention removed it.

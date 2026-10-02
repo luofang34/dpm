@@ -83,4 +83,8 @@ pub struct StoreRevision {
     pub revision: u64,
     /// Lineage within which the revision is meaningful.
     pub lineage: StoreLineage,
+    /// Local sequence of the newest committed operation, zero for a store with none. It is read in
+    /// the same transaction as `revision`, so it is the exact cursor from which a subscriber to
+    /// the operation history sees every change after that snapshot and no earlier one.
+    pub history_head: u64,
 }

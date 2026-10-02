@@ -687,6 +687,93 @@ preserve the last valid view and display an error. With an explicit `--database`
 connection is the source, so a file replaced underneath it is not seen; repoint a locator instead.
 Detail exposes the same execution contract and review context as `explain`.
 
+### The local native boundary
+
+A local native host (a macOS app) reaches the application through one versioned request/response
+contract, `Application::native_json_blocking`: one JSON line in, one out, transport-neutral and
+stateless per client. It adds no rule. Every answer is a shared query or the shared
+`CommandRequest`, in the same envelope the CLI `--json` output and MCP `structuredContent` carry,
+and every refusal keeps its shared code.
+
+Calls are `hello`, `attach`, `query`, `changes` and `command`. Every request names a `protocol`; an
+unsupported one is refused as `unsupported_protocol` with the versions supported, before the call is
+decoded and before any command runs, whether the caller is typed or JSON. Only `hello` is exempt,
+because it negotiates. A malformed line is `invalid_request`. The codes the boundary adds are
+`unsupported_protocol`, `invalid_request`, `workspace_mismatch`, `lineage_mismatch`,
+`source_changed` and `workspace_changing`; a client keeps a code it does not know as unknown.
+`hello` also states the capabilities: the four views and the queries and feeds each reads, the
+controls that do not exist (run steering and stopping, answering run input requests, provider
+session control, push events, remote access), what a `reported_only` run is, and the bounds.
+
+| View | Queries | Feeds |
+| --- | --- | --- |
+| Now | `next`, `status`, `runs` | project, lifecycle |
+| Live | `runs`, `run`, `run_lifecycle`, `run_activity` | lifecycle, activity, links, project |
+| Review | `status`, `explain`, `show`, `history` | project |
+| Detail | `explain`, `show`, `runs`, `run`, `history` | project, lifecycle, activity, links |
+
+Project operations are the semantic log. Run lifecycle, bounded activity and operation links are
+observations beside it and never change the plan. A completed run is the executor's report: work
+stays as it was until its owner submits it and an independent verifier accepts it. A `reported_only`
+run's silence proves nothing, so an unfinished run goes stale and is never taken for idle or done.
+
+`attach` names the workspace, the lineage and whether the source is a preview, a live store or an
+archive, and every later call is checked against it. A project locator may be repointed while a
+connection stays open, so each read and write re-resolves it: another file, another kind of source,
+another workspace in a preview file, another lineage, or a declared workspace or asset that a fresh
+open would refuse, is refused (`source_changed`, or the shared error a fresh open gives) and nothing
+is written to the source the connection holds. Two previews both have no lineage, so the file and
+the workspace tell them apart. The guard runs before the write, not inside its transaction.
+
+**Positions.** The project store and the run store are separate files read in separate
+transactions, so no answer claims one atomic snapshot of both. Revisions wrap and are never
+compared for order, only for equality; the positions that are followed are local append counters.
+A `query` carries a `basis`: where each store the query reads stood just before it was read. The
+basis is a lower bound, so a subscription from it misses nothing, and the answer may already hold
+some of what follows, so a poll may repeat it. A project-only query carries no run basis and a run
+query carries both, so a later project-only answer can never move a run cursor past a change a held
+run snapshot lacks. Reads never wait for writes to stop, so continuous run telemetry cannot starve
+them; `workspace_changing` means only that the project itself changed identity or revision under a
+read three times. `changes` takes independent cursors and returns one bounded page per feed:
+project operations (scoped to a lineage), run lifecycle (never pruned) and run activity (bounded;
+retention that outran a cursor is reported as a `gap`, and the feed goes on), the latter two scoped
+to the run store's epoch. A cursor that cannot be followed is a `reset` (`lineage_changed`,
+`epoch_changed` or `cursor_ahead`, the last for a source rolled back), never a silent continuation;
+a restore forks the lineage and the epoch. A client that attached before any run existed holds a
+cursor valid in any epoch. Operation links change a run's view with no transition and no activity,
+so they have a count of their own: `link_count`, the number of links in the epoch. It only grows, a
+replay does not move it, and it offers no order and no resumable position, so `changes` reports
+only whether it changed and the client reads its displayed runs again.
+
+**Time.** A result carries `evaluated_at`, the one clock reading every time-dependent value in it
+was evaluated at. `refresh_at` is the earliest instant the answer changes with no new revision: a
+run turning stale, or the shared gate evaluator's earliest elapsing dependency lag
+(`Timeline::next_release`, the rule the terminal also uses, which holds the exact boundary: one
+reading before it the gate waits, a reading at it the gate is open). A client re-queries at that
+instant and never derives readiness. Forecasts drift continuously and a fact dated in the future is
+not reported as elapsing, so a client also re-evaluates within `reevaluate_within_seconds`.
+
+**Consumer rules.** Nothing advances until it has been applied: a cursor moves after its page was
+applied, a page already applied is discarded by feed identity (lineage or epoch, with the
+workspace for the project) and sequence, and a changed identity is an explicit reset that clears
+what was held. The client remembers the furthest position it has seen of each store. A refreshed set
+of views makes a store current only if every view in the set that carries it was anchored at or
+beyond that position, and the installed set is what is displayed, so a response delayed past a
+change it lacks leaves the client stale, and an old response installed after a fresh one makes it
+stale again. A client seeded from several views is anchored at the earliest of them; views taken
+under different identities cannot be composed. The link mark is adopted only from a view that was
+installed. A failed refresh or a dropped connection therefore leaves the staleness visible to the
+next poll. Because the producer keeps no per-client state, a slow or disconnected consumer costs it
+nothing and recovers from its own cursors; one request is in flight per connection.
+
+**Hosts.** The contract is line-delimited JSON and the producer keeps no state per client, so a host
+runs it over a pipe to a persistent helper process or through an in-process call; the request,
+response and error contract is the same for both. `native_exchange`, a Cargo example that is a test
+fixture and not a product binary, serves it over standard input and output, and a compiled Swift
+client in `tests/native/swift` drives it. `scripts/smoke_native.py` builds both, runs the sequences
+above against real CLI writes, and compares the decoded envelopes with real CLI and agent-tool
+output at one pinned clock. It needs a Swift compiler and says so when it has none.
+
 ## Execution progress
 
 Task `reported_progress_percent` is an authoritative owner report defaulting to zero. `ReportProgress` validates ownership, range and lifecycle and persists a semantic operation.

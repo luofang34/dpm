@@ -262,6 +262,34 @@ impl Timeline {
             },
         }
     }
+
+    /// The earliest instant after this timeline's clock reading at which a pending gate opens with
+    /// no change to the plan: an elapsing dependency lag (including a provisional start lag) or a
+    /// decision gate released with elapsing lag.
+    ///
+    /// Time passing is the only change, so an adapter that evaluated at [`Timeline::now`] knows
+    /// when to evaluate again. The instant is the exact opening boundary: a reading strictly
+    /// before it still sees the gate elapsing, a reading at it sees it released. A fact recorded
+    /// with a future time is not reported as elapsing, so it is not included.
+    #[must_use]
+    pub fn next_release(&self, plan: &Plan) -> Option<DateTime<Utc>> {
+        let edges = plan
+            .dependencies
+            .iter()
+            .flat_map(|edge| [self.edge(plan, edge), self.start_edge(plan, edge).release]);
+        let decisions = plan.work_items.keys().flat_map(|id| {
+            self.decisions(plan, *id)
+                .into_iter()
+                .map(|(_, release)| release)
+        });
+        edges
+            .chain(decisions)
+            .filter_map(|release| match release {
+                Release::Elapsing { opens_at, .. } => Some(opens_at),
+                _ => None,
+            })
+            .min()
+    }
 }
 
 #[cfg(test)]
