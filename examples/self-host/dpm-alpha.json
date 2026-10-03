@@ -4943,6 +4943,135 @@
         700
       ]
     },
+    "632b41e5-ee88-5b71-b7df-68eae1d2cb39": {
+      "id": "632b41e5-ee88-5b71-b7df-68eae1d2cb39",
+      "key": "VIS-10",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Task",
+      "title": "Specify the interaction contract for the operational, editable native macOS app",
+      "contract": {
+        "objective": "Produce a design-only interaction contract for the final operational and editable native macOS application, written as five concrete journeys with ordered actions and observable pass/fail checks: (1) Gantt and dependency network with Detail, keyboard and accessibility; (2) task operations; (3) RUN-30 acknowledged run control; (4) reviewed plan editing; (5) a reviewable workload definition. Read-only views are an intermediate stage with stated phase boundaries; the final product is operational and editable. The shared application boundary owns all readiness and scheduling, with none in Swift. Implement nothing and claim no implemented behavior.",
+        "acceptance": [
+          {
+            "text": "The contract states that the final product is operational and editable, that read-only views are an intermediate stage, and names the phase boundaries between them. It states that the shared application boundary owns all readiness and scheduling, that no such logic lives in Swift, and that acceptance is never inferred from a run finishing."
+          },
+          {
+            "text": "Journey 1, Gantt and network, is specified as ordered actions with pass/fail checks: select a nested task in the Gantt; pan, zoom and collapse/expand the hierarchy while the selection persists; in the dependency network inspect that task's predecessors, successors, a decision gate and a blocker; open Detail showing the full objective and acceptance. The check fails if the selection is lost, if any of those four network items is not reachable, or if Detail truncates the objective or acceptance."
+          },
+          {
+            "text": "Journey 1 is completable by keyboard alone, and the contract specifies accessibility for it: full labels on every element, a defined focus order, and focus restored to the originating element after Detail or the network view closes. The check fails if any step needs a pointer, or if an element lacks a full label or focus does not return."
+          },
+          {
+            "text": "Journey 1 distinguishes milestones from tasks; shows all four temporal relation types (FS, SS, FF, SF) each with its lead/lag; shows elapsed hours separately from actual calendar dates, with dates never inferred and absent when the domain supplies none; and keeps human priority visibly distinct from criticality, float and uncertainty. The check fails if any two of these are conflated or a date appears that the boundary did not supply."
+          },
+          {
+            "text": "Journey 2, task operations, is specified as ordered actions with an explicit outcome each: local claim, start, progress, block, unblock and submit, then a distinct independent verify or reject. The check fails if any action lacks a visible outcome, or if verify/reject can be performed as part of submit rather than as its own independent action."
+          },
+          {
+            "text": "In Journey 2, 100% progress or a completed run never unlocks downstream work; only the boundary's accepted outcome does. A refusal or stale basis keeps the user's draft and requires re-reading the current state and viewing a diff before any resubmission, never a blind retry. Actor, request identity and lineage/revision conflict are shown. The check fails if downstream work appears unlocked from progress or run completion alone, if a draft is discarded, or if a retry is possible without re-read and diff."
+          },
+          {
+            "text": "Journey 3, RUN-30 acknowledged control, is specified with RUN-30 keeping run-control ownership: the UI distinguishes supported from unsupported controls and presents the outcomes received, applied, refused and indeterminate as separate states. A retry with the same request ID creates no duplicate action or task. The check fails if an unsupported control is offered as available, if two outcomes share one presentation, or if a same-ID retry yields a second action or task."
+          },
+          {
+            "text": "Journey 4, plan editing, is specified as ordered actions for changing a task, objective, acceptance, estimate, dependency or decision gate: candidate validation, a diff, an affected-work preview, then an explicit apply. Cycles, unsupported constraints and edits to protected active contracts are refused with a stated reason. Dragging a derived date in the Gantt never overwrites it and only proposes a domain-supported change that enters the same review path. The check fails if any change applies without validation, diff, preview and explicit apply, or if a drag writes a derived date."
+          },
+          {
+            "text": "Journey 5, workload, delivers a reviewable workload definition: numeric target budgets for response, frame and memory, together with the hardware, dataset sizes and exact measurement method, exercised with long titles, a dense graph, stale data and disconnect. Proposed targets are distinguished from actual measurements. An actual measurement is acceptable only with its source, configuration and method evidence; it is never fabricated and never implies implemented acceptance. This contract itself records no performance result. The check fails if a budget lacks a numeric target, hardware, dataset sizes or method; if targets and measurements are not distinguished; or if a measurement lacks source, configuration and method evidence or is fabricated."
+          },
+          {
+            "text": "UI-60 keeps its remote-observer meaning, and nothing in this contract changes it."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Define the phase boundaries from the read-only observer to the operational, editable application, and the shared application boundary each phase depends on.",
+              "expected_result": "Each phase lists the capabilities it may expose, read-only views are marked intermediate, and the boundary is stated to own all readiness and scheduling with none in Swift."
+            },
+            {
+              "action": "Write Journey 1: select a nested task in the Gantt; pan, zoom, then collapse and expand the hierarchy; in the dependency network inspect predecessors, successors, a decision gate and a blocker; open Detail. Then write the keyboard-only path with labels, focus order and focus restoration.",
+              "expected_result": "Selection persists through pan, zoom and collapse/expand; Detail shows the full objective and acceptance; every step is keyboard-reachable and focus returns to the origin."
+            },
+            {
+              "action": "Specify in Journey 1 the presentation of milestones, FS/SS/FF/SF relations with lead/lag, elapsed hours versus actual calendar dates, and priority versus criticality, float and uncertainty.",
+              "expected_result": "Each concept has its own distinct presentation, and dates appear only when the boundary supplies them."
+            },
+            {
+              "action": "Write Journey 2: local claim, start, progress, block, unblock, submit, then independent verify or reject, plus the refusal and stale-basis path.",
+              "expected_result": "Each action has an explicit outcome; progress or run completion never unlocks downstream work; a refusal keeps the draft and requires re-read and diff; actor, request identity and revision conflict are shown."
+            },
+            {
+              "action": "Write Journey 3: supported and unsupported RUN-30 controls, the four outcomes received, applied, refused and indeterminate, and a same-request-ID retry.",
+              "expected_result": "RUN-30 keeps ownership; the four outcomes are distinguishable; a same-ID retry creates no duplicate action or task."
+            },
+            {
+              "action": "Write Journey 4: edit a task, objective, acceptance, estimate, dependency or decision gate through candidate validation, diff, affected-work preview and explicit apply; list the refusals and the Gantt date-drag behavior.",
+              "expected_result": "Cycles, unsupported constraints and protected active contracts are refused; a derived-date drag only proposes a domain-supported change."
+            },
+            {
+              "action": "Write Journey 5: the workload definition with hardware, dataset sizes, response, frame and memory budgets, the exact measurement method, and the long-title, dense-graph, stale-data and disconnect cases.",
+              "expected_result": "A reviewer can follow the definition to run a measurement; each budget has a numeric target, hardware, dataset sizes and method, targets are distinguished from measurements, and any measurement cited carries source, configuration and method evidence."
+            }
+          ],
+          "in_scope": [
+            "Interaction-design requirements for the five journeys (Gantt and network with Detail, keyboard and accessibility; task operations; RUN-30 acknowledged control; reviewed plan editing; workload definition), the phase boundaries from read-only to editable, and the pass/fail checks for each."
+          ],
+          "out_of_scope": [
+            "Implementing any view, control or editing feature, changing scheduling or readiness logic, changing run-control ownership or the UI-60 remote-observer meaning, recording any performance result in this contract, fabricating measurements, and inferring acceptance from a run finishing."
+          ],
+          "verification": [
+            "Journey 1: a reviewer confirms the steps name the nested-task selection, pan, zoom, collapse/expand, predecessors, successors, decision gate, blocker and full Detail, and that the keyboard-only path, labels, focus order and focus restoration each have a pass/fail check, plus separate treatment of milestones, FS/SS/FF/SF with lead/lag, hours versus calendar dates, and priority versus criticality, float and uncertainty.",
+            "Journey 2: a reviewer confirms each of claim, start, progress, block, unblock, submit and independent verify/reject has an explicit outcome, that 100% progress or a finished run does not unlock downstream work, and that the refusal path keeps the draft and requires re-read and diff.",
+            "Journey 3: a reviewer confirms RUN-30 keeps ownership, supported and unsupported controls differ, received, applied, refused and indeterminate are separate, and a same-request-ID retry creates no duplicate action or task.",
+            "Journey 4: a reviewer confirms every edit type passes validation, diff, affected-work preview and explicit apply, that cycles, unsupported constraints and protected active contracts are refused, and that a derived-date drag only proposes a change.",
+            "Journey 5: a reviewer confirms the workload definition gives numeric response, frame and memory targets with hardware, dataset sizes, the exact method and the four stress cases, distinguishes proposed targets from actual measurements, and accepts a measurement only with source, configuration and method evidence, never fabricated and never implying implemented acceptance.",
+            "Whole contract: a reviewer confirms it describes requirements only and no implemented behavior, that no readiness or scheduling is assigned to Swift, and that UI-60 and RUN-30 meanings are unchanged."
+          ]
+        },
+        "capabilities": [
+          "architecture",
+          "ui"
+        ],
+        "requirement_ids": [
+          "087248db-f9e4-5c27-968d-c2b539178037",
+          "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+          "59030fe0-202e-551c-a7ab-480c74796f55",
+          "7d087933-d116-5cc5-9551-119fe84a81e0",
+          "89632adf-2f8c-558f-ade5-bef91823ac14",
+          "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+          "bf2a0e85-cd71-5fff-87ad-f66a8591a269",
+          "e1682222-b5c1-5fef-9ccd-81d9e40abde8",
+          "ee044f38-e9bc-59d0-818b-ddccf6ce69be",
+          "f334b834-595d-5136-af46-0b308c643c81"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "status": "Proposed",
+        "reported_progress_percent": 0,
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P2",
+        "estimate": null
+      },
+      "order": [
+        750
+      ]
+    },
     "68903b55-1fbe-5212-8df0-4329326fa501": {
       "id": "68903b55-1fbe-5212-8df0-4329326fa501",
       "key": "AUTH-20",
@@ -7396,6 +7525,14 @@
     {
       "id": "c2ca6884-c243-86c0-93f5-4f7aec87af1f",
       "predecessor": "46190a5d-e9f7-5102-be21-40f587988e97",
+      "successor": "17391553-5a97-5278-a8b7-472eca8a3992",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "27de4c08-c36b-51ef-ab9b-84f0d181e497",
+      "predecessor": "632b41e5-ee88-5b71-b7df-68eae1d2cb39",
       "successor": "17391553-5a97-5278-a8b7-472eca8a3992",
       "kind": "FinishStart",
       "lag_hours": 0.0,
