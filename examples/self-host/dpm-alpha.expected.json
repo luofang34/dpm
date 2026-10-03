@@ -1,10 +1,10 @@
 {
   "workspace": "DPM Alpha — prepared roadmap",
   "revision": 0,
-  "task_count": 55,
+  "task_count": 59,
   "work_package_count": 12,
-  "milestone_count": 13,
-  "total_work": 80,
+  "milestone_count": 14,
+  "total_work": 85,
   "ready_keys": [],
   "completed_work": 0,
   "open_decisions": 14,
@@ -24,7 +24,8 @@
     "M9-LOCAL",
     "M10-CONFIG",
     "M11-CONTROL",
-    "M12-REMOTE"
+    "M12-REMOTE",
+    "M13-NATIVE-PRODUCT"
   ],
   "context_decisions": {
     "DEC-WORKSPACE": [
@@ -76,6 +77,10 @@
     "UI-40",
     "UI-50",
     "UI-60",
-    "VIS-10"
+    "UI-70",
+    "UI-80",
+    "VIS-10",
+    "VIS-20",
+    "VIS-30"
   ]
 }

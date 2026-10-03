@@ -5072,6 +5072,443 @@
         750
       ]
     },
+    "cc42106a-0b2a-523b-b3f4-46b36e0f021f": {
+      "id": "cc42106a-0b2a-523b-b3f4-46b36e0f021f",
+      "key": "VIS-20",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Task",
+      "title": "Implement the read-only native Gantt",
+      "contract": {
+        "objective": "Deliver the read-only native Gantt as an intermediate phase toward the operational, editable native app. It renders only existing authoritative query and projection results from the shared application boundary, which owns all readiness, scheduling and validation with none in Swift. Selection and Detail are shared with the other views, the whole flow is keyboard-operable and accessible, and every performance budget is a numeric proposed target that is kept apart from actual measurements. Implement nothing beyond this view and claim no implemented or measured behavior until evidence exists.",
+        "acceptance": [
+          {
+            "text": "Rows follow the plan hierarchy. Collapse/expand, zoom, pan and filters change only the view: the plan revision, history and files read before and after each of those actions are identical. The check fails if any of them changes."
+          },
+          {
+            "text": "Bars are sized from application elapsed hours. Actual calendar dates appear only where the application supplies them and are labeled as such; none is inferred. FS, SS, FF and SF relations with lead/lag, and milestones, are visibly distinct and are also listed as text in Detail. The check fails if a date appears that the application did not supply or if any two of these are conflated."
+          },
+          {
+            "text": "Human priority is shown distinct from criticality, float and uncertainty, and criticality and float are displayed as the application reports them, never recomputed in Swift. Selection and Detail are shared with the other views and persist through pan, zoom and collapse/expand. The check fails if a value differs from the application result or if the selection is lost."
+          },
+          {
+            "text": "A nested task can be selected, collapsed, expanded and opened in Detail by keyboard alone, with full accessibility labels, a defined focus order and focus restored to the originating element after Detail closes. The check fails if any step needs a pointer, a label is truncated or focus does not return."
+          },
+          {
+            "text": "Stale and disconnected data are marked as such without discarding the last view, and long titles and dense graphs remain readable and operable. A reviewable workload states numeric TARGET budgets for response, frame and memory with hardware, dataset sizes and the exact method; targets are distinguished from measurements, and a measurement is accepted only with source, configuration and method evidence and is never fabricated. This contract records no performance result."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Read the plan through the existing authoritative query and projection results and render the hierarchy as rows with application elapsed-hour bars and milestones.",
+              "expected_result": "Every row, bar, milestone and relation traces to an application result; no readiness, scheduling or validation logic exists in Swift."
+            },
+            {
+              "action": "Record the plan revision, history and files, then collapse, expand, zoom, pan and filter, and record them again.",
+              "expected_result": "The before and after records are identical, so the view operations are shown to be read-only."
+            },
+            {
+              "action": "Select a nested task and open Detail, which lists FS/SS/FF/SF relations with lead/lag, milestones, criticality, float, priority and any supplied calendar dates as text.",
+              "expected_result": "Detail shows the full objective and acceptance, labels supplied dates, shows no date where none is supplied, and keeps priority distinct from criticality, float and uncertainty."
+            },
+            {
+              "action": "Repeat selection, collapse/expand, zoom, pan and Detail using the keyboard only, with the accessibility inspector active.",
+              "expected_result": "Every element has a full label, the focus order is defined, and focus returns to the originating element when Detail closes."
+            },
+            {
+              "action": "Present stale and disconnected data, a very long title and a dense graph, then run the workload definition on the stated hardware and method.",
+              "expected_result": "Stale and disconnected states are marked; titles and the graph stay usable; any measurement cited carries source, configuration and method evidence and is kept apart from the proposed targets."
+            }
+          ],
+          "in_scope": [
+            "A read-only native Gantt over existing authoritative query and projection results, with shared selection and Detail, keyboard and accessibility paths, stale and disconnected states, and a reviewable workload definition."
+          ],
+          "out_of_scope": [
+            "Editing or dragging bars, task operations, run control, remote authentication, computing readiness, scheduling, criticality or float in Swift, inferring calendar dates, recording any performance result in this contract, fabricating measurements, and inferring acceptance from a run finishing."
+          ],
+          "verification": [
+            "Read-only: a reviewer reads the plan revision, history and files before and after collapse/expand, zoom, pan and filter and confirms they are identical.",
+            "Presentation: a reviewer confirms bars follow application elapsed hours, dates appear only where supplied and labeled, FS/SS/FF/SF with lead/lag and milestones are distinct and listed in Detail text, and criticality and float match the application result.",
+            "Keyboard and accessibility: a reviewer completes select, collapse/expand and Detail without a pointer and confirms full labels, focus order and focus restoration.",
+            "Workload: a reviewer confirms numeric response, frame and memory targets with hardware, dataset sizes and method, exercised with long titles, a dense graph, stale data and disconnect, and that targets are distinguished from measurements that carry source, configuration and method evidence."
+          ]
+        },
+        "capabilities": [
+          "swift",
+          "ui"
+        ],
+        "requirement_ids": [
+          "087248db-f9e4-5c27-968d-c2b539178037",
+          "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+          "59030fe0-202e-551c-a7ab-480c74796f55",
+          "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+          "bf2a0e85-cd71-5fff-87ad-f66a8591a269",
+          "e1682222-b5c1-5fef-9ccd-81d9e40abde8",
+          "ee044f38-e9bc-59d0-818b-ddccf6ce69be"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "status": "Proposed",
+        "reported_progress_percent": 0,
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P2",
+        "estimate": null
+      },
+      "order": [
+        760
+      ]
+    },
+    "deb30dda-5b57-5640-907d-8aa94ae47fed": {
+      "id": "deb30dda-5b57-5640-907d-8aa94ae47fed",
+      "key": "VIS-30",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Task",
+      "title": "Implement the read-only dependency network",
+      "contract": {
+        "objective": "Deliver the read-only precedence (PERT-style) dependency network as an intermediate phase toward the operational, editable native app. It shows tasks, milestones and decision gates as nodes and directed edges for kind, lag and policy, exactly as the shared application boundary reports them; that boundary owns all readiness, scheduling and validation with none in Swift. Selection and Detail are shared with the other views, a text alternative exists, and performance budgets are numeric proposed targets kept apart from measurements. Implement nothing beyond this view and claim no implemented or measured behavior until evidence exists.",
+        "acceptance": [
+          {
+            "text": "Nodes are tasks, milestones and decision gates, visibly distinct; directed edges show kind (FS, SS, FF, SF), lag and policy. Blockers, unmet gates, predecessors and successors are shown exactly as the application reports them. The check fails if a node type or edge attribute is missing or differs from the application result."
+          },
+          {
+            "text": "No critical path is invented or computed in Swift; criticality and float appear only as the application supplies them, and human priority stays distinct from criticality, float and uncertainty. Elapsed hours are shown apart from actual calendar dates, which appear only where supplied and labeled. The check fails if any domain schedule critical path, calendar date, float, readiness or other semantic value originates in Swift; graph layout, geometry and view state may of course be computed in the view."
+          },
+          {
+            "text": "Three kinds of connection are distinguished, each with distinct text and a non-colour cue (for example line style, marker and a written kind label): (a) temporal dependency edges FS, SS, FF and SF showing lag and Hard or Soft policy; (b) decision-blocking edges, where only an actual decision 'blocks' relation gates readiness; (c) context-only related-work links, shown as context and visibly labeled NOT blocking, so a contextual association alone never looks like a gate. The check fails if any kind lacks its text or non-colour cue, if two kinds are conflated, or if a context-only link is shown as blocking."
+          },
+          {
+            "text": "A text/list alternative of the graph exposes every node with its predecessors, successors, blockers and edge attributes, and the network does not depend on the Gantt being open. Node and edge filters, zoom and pan change only the view: plan revision, history and files read before and after are identical."
+          },
+          {
+            "text": "Full-text keyboard check: the text/list alternative and the keyboard walk each reach a temporal dependency edge, a decision-blocking edge and a context-only link, and each is read aloud with its kind (including 'not blocking' for context-only links). The check fails if any kind is unreachable by keyboard or list, or its kind is not read aloud."
+          },
+          {
+            "text": "Selection and Detail are shared with the other views. From a selected task a user can reach its predecessors, successors, a decision gate and a blocker, and open Detail with the full objective and acceptance, by keyboard alone, with full accessibility labels, a defined focus order and focus restored to the originating element. The check fails if any step needs a pointer or focus does not return."
+          },
+          {
+            "text": "Stale and disconnected data are marked, and long titles and dense graphs remain readable and navigable. A reviewable workload states numeric TARGET budgets for response, frame and memory with hardware, dataset sizes and the exact method; targets are distinguished from measurements, and a measurement is accepted only with source, configuration and method evidence and is never fabricated. This contract records no performance result."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Read the dependency graph through the existing authoritative query and projection results and draw tasks, milestones and decision gates as nodes with directed edges labeled by kind, lag and policy.",
+              "expected_result": "Every node and edge traces to an application result; no readiness, scheduling, validation or critical-path logic exists in Swift."
+            },
+            {
+              "action": "Select a task and walk to its predecessors, successors, a decision gate and a blocker, then open Detail.",
+              "expected_result": "All four items are reachable, unmet gates and blockers match the application report, and Detail shows the full objective and acceptance."
+            },
+            {
+              "action": "Inspect a temporal dependency edge, a decision-blocking edge and a context-only related-work link in the graph and in the text/list alternative, by keyboard with the accessibility inspector active.",
+              "expected_result": "Each kind has distinct text and a non-colour cue, only an actual decision 'blocks' relation shows as gating readiness, the context-only link is labeled as not blocking, and each kind is reached and read aloud with its kind."
+            },
+            {
+              "action": "Record the plan revision, history and files, apply node and edge filters, zoom and pan, and record them again; then open the text/list alternative.",
+              "expected_result": "The records are identical, and the list gives the same nodes, edges and attributes as the graph."
+            },
+            {
+              "action": "Repeat the selection, walk, filter and Detail steps with the keyboard only and the accessibility inspector active.",
+              "expected_result": "Every element has a full label, the focus order is defined, and focus returns to the originating element."
+            },
+            {
+              "action": "Present stale and disconnected data, long titles and a dense graph, then run the workload definition on the stated hardware and method.",
+              "expected_result": "Stale and disconnected states are marked; the graph stays navigable; any measurement cited carries source, configuration and method evidence and is kept apart from the proposed targets."
+            }
+          ],
+          "in_scope": [
+            "A read-only native dependency network over existing authoritative query and projection results, with a text alternative, shared selection and Detail, keyboard and accessibility paths, stale and disconnected states, and a reviewable workload definition."
+          ],
+          "out_of_scope": [
+            "Editing nodes or edges, task operations, run control, remote authentication, computing a critical path, readiness or scheduling in Swift, inferring calendar dates, recording any performance result in this contract, fabricating measurements, and inferring acceptance from a run finishing."
+          ],
+          "verification": [
+            "Content: a reviewer compares nodes, edge kind, lag, policy, blockers, unmet gates, predecessors and successors with the application result and confirms none is added or computed in Swift.",
+            "Read-only: a reviewer reads the plan revision, history and files before and after filtering, zoom and pan and confirms they are identical.",
+            "Connection kinds: a reviewer confirms temporal dependency edges (FS/SS/FF/SF with lag and Hard or Soft policy), decision-blocking edges and context-only related-work links have distinct text and non-colour cues, that only an actual decision 'blocks' relation gates readiness, and that a context-only link is visibly not blocking and is reached and read aloud with its kind in both the list and the keyboard walk.",
+            "Text alternative and keyboard: a reviewer confirms the list matches the graph and completes the selection walk and Detail without a pointer, checking full labels, focus order and focus restoration.",
+            "Workload: a reviewer confirms numeric response, frame and memory targets with hardware, dataset sizes and method, exercised with long titles, a dense graph, stale data and disconnect, and that targets are distinguished from measurements that carry source, configuration and method evidence."
+          ]
+        },
+        "capabilities": [
+          "swift",
+          "ui"
+        ],
+        "requirement_ids": [
+          "087248db-f9e4-5c27-968d-c2b539178037",
+          "2202b173-92fd-52d8-a2a2-d94275a7a48f",
+          "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+          "59030fe0-202e-551c-a7ab-480c74796f55",
+          "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+          "bf2a0e85-cd71-5fff-87ad-f66a8591a269",
+          "e1682222-b5c1-5fef-9ccd-81d9e40abde8",
+          "ee044f38-e9bc-59d0-818b-ddccf6ce69be"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "status": "Proposed",
+        "reported_progress_percent": 0,
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P2",
+        "estimate": null
+      },
+      "order": [
+        770
+      ]
+    },
+    "866c0690-d0ee-55ab-a748-316244378a4c": {
+      "id": "866c0690-d0ee-55ab-a748-316244378a4c",
+      "key": "UI-70",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Task",
+      "title": "Add local semantic task operations to the native app",
+      "contract": {
+        "objective": "Let a local user perform claim, start, progress, block, unblock and submit, and a distinct authorized independent verify or reject, from the native app, each through the shared application command boundary, which owns all readiness, scheduling and validation with none in Swift. Every command carries actor, request identity, observed revision and lineage. Local actor names are attribution, not authentication, and nothing here depends on remote authentication. Implement nothing beyond this and claim no implemented or measured behavior until evidence exists.",
+        "acceptance": [
+          {
+            "text": "Each of claim, start, progress, block, unblock and submit, then a separate independent verify or reject, is issued through the application command boundary with actor, request identity and observed revision plus lineage, and ends in a visible outcome: accepted (new revision), refused with the reason, or indeterminate (reconcile required). The check fails if any action lacks a visible outcome or if verify/reject can happen as part of submit."
+          },
+          {
+            "text": "A retry with the same request identity returns the recorded operation and creates no second operation. An indeterminate outcome requires reconcile before any further command. The check fails if a same-identity retry produces a second operation or if an indeterminate outcome allows a new command."
+          },
+          {
+            "text": "A stale basis or a refusal preserves the user's draft and requires re-reading the current state and viewing a diff before resubmission; no blind retry is offered. The check fails if a draft is discarded or a retry is possible without re-read and diff."
+          },
+          {
+            "text": "Reaching 100% progress or a finished run never accepts the task or unlocks downstream work; only the boundary's accepted verify outcome does. Self-verification is refused with a reason. Acknowledged run controls stay with RUN-30 and are not offered here. The check fails if downstream work unlocks from progress or run completion alone or if the submitting actor can verify."
+          },
+          {
+            "text": "Selection and Detail are shared with the other views; the operations are reachable by keyboard alone with full accessibility labels, a defined focus order and focus restored after each operation and its outcome. Stale and disconnected data disable operations and are marked, long titles remain usable, and elapsed hours stay apart from actual calendar dates, which are never inferred. Human priority stays distinct from criticality, float and uncertainty. Any performance budget is a numeric proposed target with hardware, dataset sizes and exact method, kept apart from measurements that carry source, configuration and method evidence; none is fabricated and this contract records no result."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "For a selected task, issue claim, start, progress, block, unblock and submit in order, each through the application command boundary with actor, request identity and observed revision plus lineage.",
+              "expected_result": "Each command shows its outcome (accepted with the new revision, refused with the reason, or indeterminate) and the app performs no readiness or validation logic in Swift."
+            },
+            {
+              "action": "Repeat one accepted command with the same request identity, and force an indeterminate outcome.",
+              "expected_result": "The retry returns the recorded operation with no duplicate; the indeterminate outcome blocks further commands until reconcile."
+            },
+            {
+              "action": "Submit from a stale basis and trigger a refusal.",
+              "expected_result": "The draft is preserved, the current state is re-read and a diff is shown before resubmission is possible, and no blind retry is offered."
+            },
+            {
+              "action": "Set progress to 100% and finish a run, then attempt verify as the submitting actor and as a distinct authorized actor.",
+              "expected_result": "Downstream work stays locked after 100% progress and a finished run; self-verification is refused; the distinct actor's verify or reject is its own action and only an accepted verify unlocks downstream work."
+            },
+            {
+              "action": "Perform the operations by keyboard only with the accessibility inspector active, with stale and disconnected data and a very long title.",
+              "expected_result": "Every element has a full label, the focus order is defined, focus is restored after each outcome, and stale or disconnected data disable operations and are marked."
+            }
+          ],
+          "in_scope": [
+            "Local semantic task operations through the application command boundary, their outcomes, draft preservation, independent verify/reject, keyboard and accessibility paths, and stale and disconnected states."
+          ],
+          "out_of_scope": [
+            "Acknowledged run controls (owned by RUN-30), remote authentication or the remote observer (UI-60), plan editing (UI-80), computing readiness or scheduling in Swift, treating local actor names as authentication, inferring acceptance from progress or a finished run, recording any performance result in this contract, and fabricating measurements."
+          ],
+          "verification": [
+            "Operations: a reviewer confirms each of claim, start, progress, block, unblock, submit and independent verify/reject has a visible outcome and carries actor, request identity, observed revision and lineage.",
+            "Retry and reconcile: a reviewer confirms a same-identity retry returns the recorded operation with no duplicate and that an indeterminate outcome requires reconcile.",
+            "Stale and refusal: a reviewer confirms the draft is kept and that re-read and a diff are required before resubmission.",
+            "Acceptance: a reviewer confirms 100% progress and a finished run leave downstream work locked, self-verification is refused, and RUN-30 keeps run control.",
+            "Keyboard and accessibility: a reviewer completes the operations without a pointer and checks labels, focus order and focus restoration."
+          ]
+        },
+        "capabilities": [
+          "api",
+          "swift",
+          "ui"
+        ],
+        "requirement_ids": [
+          "087248db-f9e4-5c27-968d-c2b539178037",
+          "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+          "59030fe0-202e-551c-a7ab-480c74796f55",
+          "7d087933-d116-5cc5-9551-119fe84a81e0",
+          "89632adf-2f8c-558f-ade5-bef91823ac14",
+          "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+          "ee044f38-e9bc-59d0-818b-ddccf6ce69be"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "status": "Proposed",
+        "reported_progress_percent": 0,
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P2",
+        "estimate": null
+      },
+      "order": [
+        780
+      ]
+    },
+    "54bf2d29-553e-5dbd-b116-113d26a7e888": {
+      "id": "54bf2d29-553e-5dbd-b116-113d26a7e888",
+      "key": "UI-80",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Task",
+      "title": "Add reviewed local plan editing to the native app",
+      "contract": {
+        "objective": "Let a local user edit a task, objective, acceptance, estimate, dependency or decision gate from the native app only through candidate validation, a diff, an affected-work preview and an explicit apply via the shared application change boundary, which owns all readiness, scheduling and validation with none in Swift. Local actor names are attribution, not authentication. Implement nothing beyond this and claim no implemented or measured behavior until evidence exists.",
+        "acceptance": [
+          {
+            "text": "Every edit of a task, objective, acceptance, estimate, dependency or decision gate passes in order through candidate validation, a diff, an affected-work preview and an explicit apply via the application change boundary. The check fails if any change applies without all four steps."
+          },
+          {
+            "text": "Cycles, unsupported scheduling constraints and edits that would silently rewrite a protected active (claimed, started or submitted) contract are refused with a stated reason and leave the plan revision unchanged. The check fails if any of the three is applied or refused without a reason."
+          },
+          {
+            "text": "Candidate validation is a read-only query: it observes and pins the revision and lineage it validated against, reports the result and the diff and affected-work preview computed from that pinned basis, creates no operation, has no durable request identity, and changes neither the revision nor the history. Repeating a validation is not an operation and nothing is recorded. Apply is the mutation and carries the actor, a durable request identity and the observed revision and lineage. A retry of an apply with the same request identity returns the same recorded apply operation and applies nothing twice. A lost or indeterminate apply outcome is reconciled, by looking up the recorded operation for that request identity, before any new apply or submission. The check fails if the revision or history read before and after a validation differ, if a read-only validation creates an operation or creates or carries a durable mutation or operation identity (a persisted mutation request); an ordinary transient transport or correlation ID of the query channel is allowed, is not an operation, is not recorded in history and does not change the revision; if an apply lacks actor, request identity, observed revision or lineage, if a same-identity retry yields a different operation or a second revision, or if a new apply or submission is accepted while an outcome is unreconciled."
+          },
+          {
+            "text": "A stale revision or lineage refusal on apply, including an apply whose validation was pinned to an older basis, preserves the draft and forces a re-read of the current state and a reviewed diff before resubmission, never a blind retry. The check fails if a draft is discarded or if resubmission is possible without re-read and a reviewed diff."
+          },
+          {
+            "text": "The Gantt drag is exercised on the VIS-20 Gantt and only proposes a domain-supported change that enters the same review path; it never overwrites a derived date. Actor attribution and audit evidence for each applied change are testable. The check fails if a drag writes a derived date, or if an applied change lacks actor and audit evidence."
+          },
+          {
+            "text": "Selection and Detail are shared with the other views; editing is reachable by keyboard alone with full accessibility labels, a defined focus order and focus restored after apply or cancel. Stale and disconnected data disable apply and are marked, long titles and dense graphs remain usable, and elapsed hours stay apart from actual calendar dates, which are never inferred. Human priority stays distinct from criticality, float and uncertainty."
+          },
+          {
+            "text": "Any performance budget is a numeric proposed target with hardware, dataset sizes and exact method, kept apart from actual measurements; a measurement is accepted only with source, configuration and method evidence and is never fabricated. This contract records no performance result."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Edit each of a task, objective, acceptance, estimate, dependency and decision gate, producing a candidate for each.",
+              "expected_result": "Each candidate is validated by the application change boundary, with no validation or scheduling logic in Swift, and the result is shown."
+            },
+            {
+              "action": "Review the diff and the affected-work preview for each candidate, then apply explicitly.",
+              "expected_result": "Nothing applies before the explicit apply; the applied change records actor attribution and audit evidence and creates a new plan revision."
+            },
+            {
+              "action": "Submit a dependency cycle, an unsupported scheduling constraint and an edit that would rewrite a claimed, started or submitted contract.",
+              "expected_result": "Each is refused with a stated reason and the plan revision is unchanged."
+            },
+            {
+              "action": "Read the revision and history, run a candidate validation and repeat it, then read them again; inspect each apply, repeat one apply with the same request identity, and force a lost or indeterminate apply outcome and then attempt a new apply or submission.",
+              "expected_result": "The validation pins the revision and lineage it observed and creates no operation or request identity, and the revision and history are identical before and after; each apply carries the actor, a durable request identity and the observed revision and lineage; the same-identity retry returns the same recorded apply operation and no second revision; the new apply or submission is refused until the outcome is reconciled by looking up the recorded operation for that request identity."
+            },
+            {
+              "action": "Edit from a stale revision and from a stale lineage, and attempt to resubmit.",
+              "expected_result": "The draft is preserved; a re-read of the current state and a reviewed diff are required before resubmission and no blind retry is offered."
+            },
+            {
+              "action": "Drag a bar on the VIS-20 Gantt.",
+              "expected_result": "The drag only proposes a domain-supported change that goes through the same review path and never overwrites a derived date."
+            },
+            {
+              "action": "Perform the edits by keyboard only with the accessibility inspector active, with stale and disconnected data and long titles.",
+              "expected_result": "Every element has a full label, the focus order is defined, focus is restored after apply or cancel, and stale or disconnected data disable apply and are marked."
+            }
+          ],
+          "in_scope": [
+            "Reviewed local plan editing through candidate validation, diff, affected-work preview and explicit apply via the application change boundary, refusals, draft preservation, Gantt drag as a proposal, audit evidence, and keyboard and accessibility paths."
+          ],
+          "out_of_scope": [
+            "Task operations (UI-70), acknowledged run controls (RUN-30), remote authentication or the remote observer (UI-60), computing readiness or scheduling in Swift, treating local actor names as authentication, recording any performance result in this contract, and fabricating measurements."
+          ],
+          "verification": [
+            "Review path: a reviewer confirms each edit type passes validation, diff, affected-work preview and explicit apply, and that nothing applies earlier.",
+            "Refusals: a reviewer confirms a cycle, an unsupported scheduling constraint and a protected active contract edit are each refused with a reason and leave the revision unchanged.",
+            "Validation is read-only: a reviewer confirms a candidate validation pins the revision and lineage it observed, creates no operation and creates or carries no durable mutation or operation identity (a persisted mutation request), that any ordinary transient transport or correlation ID of the query channel is not an operation, is not recorded in history and does not change the revision, and that the revision and history are identical before and after it, including when repeated.",
+            "Identity and reconcile: a reviewer confirms every apply carries actor, durable request identity and observed revision and lineage, that a same-identity retry returns the same recorded apply operation and applies nothing twice, and that a lost or indeterminate apply outcome is reconciled before any new apply or submission.",
+            "Stale: a reviewer confirms a stale revision or lineage refusal on apply, including one whose validation was pinned to an older basis, keeps the draft and forces a re-read and a reviewed diff before resubmission, never a blind retry.",
+            "Drag: a reviewer confirms a drag on the VIS-20 Gantt only proposes a domain-supported change through the review path and never writes a derived date.",
+            "Audit: a reviewer confirms each applied change carries testable actor attribution and audit evidence.",
+            "Keyboard and accessibility: a reviewer completes the edits without a pointer and checks labels, focus order and focus restoration."
+          ]
+        },
+        "capabilities": [
+          "api",
+          "swift",
+          "ui"
+        ],
+        "requirement_ids": [
+          "087248db-f9e4-5c27-968d-c2b539178037",
+          "2202b173-92fd-52d8-a2a2-d94275a7a48f",
+          "4d0b0655-1b34-5b15-b7c7-eb4748c998f7",
+          "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+          "e1682222-b5c1-5fef-9ccd-81d9e40abde8",
+          "ee044f38-e9bc-59d0-818b-ddccf6ce69be",
+          "f334b834-595d-5136-af46-0b308c643c81"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "status": "Proposed",
+        "reported_progress_percent": 0,
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P2",
+        "estimate": null
+      },
+      "order": [
+        790
+      ]
+    },
     "68903b55-1fbe-5212-8df0-4329326fa501": {
       "id": "68903b55-1fbe-5212-8df0-4329326fa501",
       "key": "AUTH-20",
@@ -5694,6 +6131,39 @@
       },
       "order": [
         1600
+      ]
+    },
+    "9c6a76e3-86e7-5d2d-9f87-3ba32cd439c0": {
+      "id": "9c6a76e3-86e7-5d2d-9f87-3ba32cd439c0",
+      "key": "M13-NATIVE-PRODUCT",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Milestone",
+      "title": "Native views and local editing accepted",
+      "contract": {
+        "objective": "Reach only when the incoming work is independently verified and applicable gates permit completion.",
+        "acceptance": [],
+        "capabilities": [],
+        "requirement_ids": [
+          "bd186e65-ccd7-5720-abd2-1c75c67da7f6"
+        ],
+        "assets": []
+      },
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [
+          "fcdcae00-adad-5569-b4fb-926602835c87"
+        ],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P2",
+        "estimate": null
+      },
+      "order": [
+        1700
       ]
     }
   },
@@ -7534,6 +8004,118 @@
       "id": "27de4c08-c36b-51ef-ab9b-84f0d181e497",
       "predecessor": "632b41e5-ee88-5b71-b7df-68eae1d2cb39",
       "successor": "17391553-5a97-5278-a8b7-472eca8a3992",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "b8926266-81e6-525e-abb2-ef3f2bc1e540",
+      "predecessor": "632b41e5-ee88-5b71-b7df-68eae1d2cb39",
+      "successor": "cc42106a-0b2a-523b-b3f4-46b36e0f021f",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "7b3d9475-d70e-5a03-803e-0b877d37a224",
+      "predecessor": "632b41e5-ee88-5b71-b7df-68eae1d2cb39",
+      "successor": "deb30dda-5b57-5640-907d-8aa94ae47fed",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "27547057-8131-5be7-a43c-9868dbc67ff3",
+      "predecessor": "632b41e5-ee88-5b71-b7df-68eae1d2cb39",
+      "successor": "866c0690-d0ee-55ab-a748-316244378a4c",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "1a1907fc-ed09-5862-9c90-a44d8c19456a",
+      "predecessor": "632b41e5-ee88-5b71-b7df-68eae1d2cb39",
+      "successor": "54bf2d29-553e-5dbd-b116-113d26a7e888",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "225a9a79-35d4-5347-baf3-c676d53b2f9e",
+      "predecessor": "24c9cece-f53f-569e-b653-0d3e583fd858",
+      "successor": "54bf2d29-553e-5dbd-b116-113d26a7e888",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "12fc23b2-55ea-5be7-8265-a18e9ef6e7fb",
+      "predecessor": "94790464-fd07-5093-ad30-c23288f6b897",
+      "successor": "cc42106a-0b2a-523b-b3f4-46b36e0f021f",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "10439a41-63ce-5a28-b5f2-5b7e7a42aaf1",
+      "predecessor": "94790464-fd07-5093-ad30-c23288f6b897",
+      "successor": "deb30dda-5b57-5640-907d-8aa94ae47fed",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "73c4012c-8904-5823-956e-7bd67e0851af",
+      "predecessor": "94790464-fd07-5093-ad30-c23288f6b897",
+      "successor": "866c0690-d0ee-55ab-a748-316244378a4c",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "bf4a28aa-0d9e-5898-8a40-22ff63d05c85",
+      "predecessor": "94790464-fd07-5093-ad30-c23288f6b897",
+      "successor": "54bf2d29-553e-5dbd-b116-113d26a7e888",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "4d3dacc2-2b40-5667-846c-2d3c78ac4701",
+      "predecessor": "cc42106a-0b2a-523b-b3f4-46b36e0f021f",
+      "successor": "54bf2d29-553e-5dbd-b116-113d26a7e888",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "9f81d0f5-8511-58ec-8f92-12fc4f427bef",
+      "predecessor": "cc42106a-0b2a-523b-b3f4-46b36e0f021f",
+      "successor": "9c6a76e3-86e7-5d2d-9f87-3ba32cd439c0",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "c3ac89a0-13f2-5b73-80a6-71a7bf8583d2",
+      "predecessor": "deb30dda-5b57-5640-907d-8aa94ae47fed",
+      "successor": "9c6a76e3-86e7-5d2d-9f87-3ba32cd439c0",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "68fcde96-1992-5c17-a621-c026e1b82425",
+      "predecessor": "866c0690-d0ee-55ab-a748-316244378a4c",
+      "successor": "9c6a76e3-86e7-5d2d-9f87-3ba32cd439c0",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "58295e3f-a80c-5004-bc53-98e462ab548b",
+      "predecessor": "54bf2d29-553e-5dbd-b116-113d26a7e888",
+      "successor": "9c6a76e3-86e7-5d2d-9f87-3ba32cd439c0",
       "kind": "FinishStart",
       "lag_hours": 0.0,
       "policy": "Hard"
