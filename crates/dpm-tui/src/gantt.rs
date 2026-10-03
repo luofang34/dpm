@@ -1,5 +1,5 @@
 use crate::text_panel::TextPanel;
-use dpm_engine::{EngineError, ProgressSummary, progress};
+use dpm_engine::{EngineError, ProgressSummary, progress, schedule_span};
 use dpm_model::{Plan, Timeline, WorkItem, WorkItemId, WorkKind};
 use dpm_schedule::{Schedule, deterministic_remaining};
 use ratatui::{layout::Rect, text::Span};
@@ -101,29 +101,8 @@ impl Gantt {
     /// Scheduled range of work, or `None` for work the timeline places outside the active graph;
     /// packages span their applicable descendants.
     fn bounds(&self, plan: &Plan, item: &WorkItem) -> Option<(f64, f64, bool)> {
-        if !self.timeline.applicability(item.id).is_applicable() {
-            return None;
-        }
-        if item.kind != WorkKind::WorkPackage {
-            let activity = self.schedule.activities.get(&item.id)?;
-            return Some((
-                activity.earliest_start_hours,
-                activity.earliest_finish_hours,
-                activity.critical,
-            ));
-        }
-        let children: Vec<_> = plan
-            .work_items
-            .values()
-            .filter(|child| child.parent == Some(item.id))
-            .collect();
-        if children.is_empty() {
-            return Some((0.0, 0.0, false));
-        }
-        children
-            .into_iter()
-            .filter_map(|child| self.bounds(plan, child))
-            .reduce(|(a, b, c), (x, y, z)| (a.min(x), b.max(y), c || z))
+        schedule_span(plan, &self.timeline, &self.schedule, item)
+            .map(|span| (span.start_hours, span.finish_hours, span.critical))
     }
 }
 

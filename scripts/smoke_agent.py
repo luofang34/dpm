@@ -140,7 +140,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_calibration', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'validate_plan', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register', 'workspace_revision', 'start_run', 'report_run', 'record_run_activity', 'link_run_operation', 'list_runs', 'get_run', 'run_lifecycle', 'run_activity'} == names
+        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_calibration', 'get_schedule', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'validate_plan', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register', 'workspace_revision', 'start_run', 'report_run', 'record_run_activity', 'link_run_operation', 'list_runs', 'get_run', 'run_lifecycle', 'run_activity'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),
@@ -148,6 +148,8 @@ def smoke(database):
             ('get_work', {'key': 'TEST-A'}, ('show', 'TEST-A')),
             ('explain_work', {'key': 'TEST-B'}, ('explain', 'TEST-B')),
             ('workspace_revision', {}, ('revision',)),
+            ('get_schedule', {}, ('schedule',)),
+            ('get_schedule', {'probabilistic': False}, ('schedule', '--no-simulation')),
         ]
         for tool, arguments, command in pairs:
             # The whole result is shared: version, observed revision and data.
@@ -225,9 +227,11 @@ def smoke(database):
         observer = Agent(database, 'agent:parity', clock=at)
         try:
             summary = observer.call('project_status', {})['data']
+            scheduled = observer.call('get_schedule', {'probabilistic': False})
         finally:
             observer.close()
         assert summary == run_cli(database, '--clock', at, 'status') and summary['progress']['percent_complete'] > 0
+        assert scheduled == run_cli_envelope(database, '--clock', at, 'schedule', '--no-simulation')
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
         worker.call('attach_git_head', {'key': 'TEST-A', 'asset': 'TEST-REPO', 'base_revision': 4})
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')

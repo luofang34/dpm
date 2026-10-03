@@ -274,6 +274,13 @@ pub(crate) enum StoreCommand {
     },
     /// Print the committed revision and lineage without loading the plan; cheap enough to poll.
     Revision,
+    /// Show the remaining-work schedule: elapsed-hour times, float, package spans, and sampled
+    /// criticality and finish percentiles.
+    Schedule {
+        /// Project the deterministic schedule only; criticality and percentiles are then null.
+        #[arg(long)]
+        no_simulation: bool,
+    },
     /// Read append-only semantic operations in chronological pages.
     History {
         #[arg(long, default_value_t = 0)]

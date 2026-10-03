@@ -1,0 +1,107 @@
+//! Where the schedule places each work item: its own range, or a package's descendants.
+
+use dpm_model::{Plan, Timeline, WorkItem, WorkItemId, WorkKind};
+use dpm_schedule::Schedule;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+/// Scheduled range of one work item in elapsed hours, with whether the critical path touches it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ScheduleSpan {
+    /// Earliest start of the work, or of the earliest descendant of a package.
+    pub start_hours: f64,
+    /// Earliest finish of the work, or of the latest descendant of a package.
+    pub finish_hours: f64,
+    /// Whether the work, or any descendant of a package, is critical.
+    pub critical: bool,
+}
+
+type Children<'a> = BTreeMap<WorkItemId, Vec<&'a WorkItem>>;
+
+/// Scheduled range of `item`, or `None` for work the timeline places outside the active graph;
+/// packages span their applicable descendants. This is the rule the terminal Gantt draws.
+#[must_use]
+pub fn schedule_span(
+    plan: &Plan,
+    timeline: &Timeline,
+    schedule: &Schedule,
+    item: &WorkItem,
+) -> Option<ScheduleSpan> {
+    if item.kind != WorkKind::WorkPackage {
+        return leaf(timeline, schedule, item);
+    }
+    package(timeline, schedule, &children(plan), item)
+}
+
+/// Spans of every work item the active graph places.
+pub(super) fn spans(
+    plan: &Plan,
+    timeline: &Timeline,
+    schedule: &Schedule,
+) -> BTreeMap<WorkItemId, ScheduleSpan> {
+    let children = children(plan);
+    plan.work_items
+        .values()
+        .filter_map(|item| {
+            let span = if item.kind == WorkKind::WorkPackage {
+                package(timeline, schedule, &children, item)
+            } else {
+                leaf(timeline, schedule, item)
+            };
+            span.map(|span| (item.id, span))
+        })
+        .collect()
+}
+
+fn children(plan: &Plan) -> Children<'_> {
+    let mut children = Children::new();
+    for item in plan.work_items.values() {
+        if let Some(parent) = item.parent {
+            children.entry(parent).or_default().push(item);
+        }
+    }
+    children
+}
+
+fn leaf(timeline: &Timeline, schedule: &Schedule, item: &WorkItem) -> Option<ScheduleSpan> {
+    if !timeline.applicability(item.id).is_applicable() {
+        return None;
+    }
+    let activity = schedule.activities.get(&item.id)?;
+    Some(ScheduleSpan {
+        start_hours: activity.earliest_start_hours,
+        finish_hours: activity.earliest_finish_hours,
+        critical: activity.critical,
+    })
+}
+
+fn package(
+    timeline: &Timeline,
+    schedule: &Schedule,
+    children: &Children<'_>,
+    item: &WorkItem,
+) -> Option<ScheduleSpan> {
+    if !timeline.applicability(item.id).is_applicable() {
+        return None;
+    }
+    let Some(own) = children.get(&item.id) else {
+        return Some(ScheduleSpan {
+            start_hours: 0.0,
+            finish_hours: 0.0,
+            critical: false,
+        });
+    };
+    own.iter()
+        .filter_map(|child| {
+            if child.kind == WorkKind::WorkPackage {
+                package(timeline, schedule, children, child)
+            } else {
+                leaf(timeline, schedule, child)
+            }
+        })
+        .reduce(|a, b| ScheduleSpan {
+            start_hours: a.start_hours.min(b.start_hours),
+            finish_hours: a.finish_hours.max(b.finish_hours),
+            critical: a.critical || b.critical,
+        })
+}

@@ -69,6 +69,10 @@ const NAMES: &[(&str, &str)] = &[
         "Compare estimates with recorded working time per executor kind, measure review and decision waits, and report cycle time, throughput, aging work and claim reliability; bulk-recorded work is excluded and counted",
     ),
     (
+        "get_schedule",
+        "Get the remaining-work schedule: elapsed-hour earliest/latest times, float, critical flag, package spans, human priority and calendar placement per work item, plus project finish hours; probabilistic adds seeded criticality and p50/p80/p95 finish hours, which are null when withheld",
+    ),
+    (
         "next_work",
         "Rank executable leaf tasks on the full graph, then apply capability eligibility, optional project/asset scope and limit; eligible work outside scope stays listed",
     ),
@@ -141,7 +145,7 @@ const NAMES: &[(&str, &str)] = &[
 pub(crate) fn definitions() -> Vec<Value> {
     NAMES.iter().chain(ownership::NAMES.iter()).chain(validation::NAMES.iter()).chain(runs::NAMES.iter()).map(|(name,description)| {
         if runs::handles(name) { return runs::definition(name, description, cli::command(name)); }
-        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_revision" | "workspace_list" | "project_status" | "get_calibration" | "next_work" | "get_work" | "explain_work");
+        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_revision" | "workspace_list" | "project_status" | "get_calibration" | "get_schedule" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
         if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"start_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external"|"revalidate_basis") {
@@ -163,6 +167,7 @@ pub(crate) fn definitions() -> Vec<Value> {
             "history" => { properties.insert("after_sequence".into(),json!({"type":"integer","minimum":0,"default":0})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"maximum":1000,"default":100})); },
             "workspace_register" => { properties.insert("database".into(),json!({"type":"string"})); properties.insert("replace".into(),json!({"type":"boolean","default":false})); required.push("database"); },
             "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); properties.insert("calibrated".into(),json!({"type":"boolean","default":false,"description":"Apply measured factors with enough samples to a copy of the plan and report them under calibration"})); },
+            "get_schedule" => { properties.insert("probabilistic".into(),json!({"type":"boolean","default":true,"description":"Add seeded criticality and finish percentiles; false projects the deterministic schedule only"})); },
             "next_work" => { properties.insert("capabilities".into(),json!({"type":"array","items":{"type":"string"}})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"default":5})); properties.insert("probabilistic".into(),json!({"type":"boolean","default":true}));
                 properties.insert("project_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"Project keys whose subtrees form a query-only scope; not a directory"}));
                 properties.insert("asset_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"WorkspaceAsset keys returned work must fit: at least one named, every write listed"}));
@@ -299,6 +304,9 @@ pub(crate) fn call_tool_blocking(
             calibrated: args.calibrated,
         }),
         "get_calibration" => Some(Query::Calibration),
+        "get_schedule" => Some(Query::Schedule {
+            probabilistic: args.probabilistic,
+        }),
         "next_work" => Some(Query::Next {
             capabilities: args.capabilities.clone(),
             probabilistic: args.probabilistic,

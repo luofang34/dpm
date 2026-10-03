@@ -4,8 +4,8 @@ use super::Application;
 use crate::AppError;
 use chrono::{DateTime, Utc};
 use dpm_engine::{
-    ChangePreview, NextWorkQuery, NextWorkResult, ProgressSummary, StatusSummary, WorkExplanation,
-    WorkScope,
+    ChangePreview, NextWorkQuery, NextWorkResult, ProgressSummary, ScheduleProjection,
+    StatusSummary, WorkExplanation, WorkScope,
 };
 use dpm_model::{LineageId, Plan, WorkItem};
 use serde::{Deserialize, Serialize};
@@ -93,6 +93,15 @@ impl Application {
                 summary: dpm_engine::status(plan, probabilistic, now)?,
                 lineage_id,
             })
+        })
+    }
+    /// The remaining-work schedule projection and, when `probabilistic`, its seeded uncertainty.
+    pub fn schedule_blocking(
+        &self,
+        probabilistic: bool,
+    ) -> Result<Observed<ScheduleProjection>, AppError> {
+        self.observe_blocking(|plan, now, _| {
+            Ok(dpm_engine::schedule_projection(plan, probabilistic, now)?)
         })
     }
     /// Globally ranked executable leaf tasks, narrowed to the requested scope.

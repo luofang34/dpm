@@ -68,6 +68,7 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | run lifecycle --after-sequence N --limit N | run_lifecycle | Durable run lifecycle feed; never pruned |
 | run activity --after-sequence N --limit N | run_activity | Bounded run activity feed with its own cursor; reports a gap when retention outran the cursor |
 | status --calibrated | project_status | Counts and optional Monte Carlo forecast; `calibrated` applies [measured factors](#calibration-and-flow) to a copy of the plan |
+| schedule --no-simulation | get_schedule | The [schedule projection](#schedule-projection) of every work item at one clock reading; `probabilistic` (default true) adds sampled criticality and p50/p80/p95 finish hours, which are null otherwise |
 | calibration | get_calibration | [Estimate ratios, review and decision waits, and flow](#calibration-and-flow) measured from history |
 | next --project-key KEY --asset-key KEY --actor KIND:NAME | next_work | Full-graph ranking, then [scope](#scoped-next) and limit; outside-scope work stays visible; `actor` adds a holding-claims advisory |
 | show KEY | get_work | Objective, steps/results, scope, acceptance/checks and derived status |
@@ -928,6 +929,27 @@ Schedule hours in `project_status`, `explain_work.schedule` and the Gantt stay e
 the clock reading; with calendars, `explain_work.schedule.calendar` names the calendar, executor,
 the rule that chose them (`task`, `actor` or `kind`) and `review_wait_hours`, the time verification
 waits for the verifier's calendar after the work ends.
+
+### Schedule projection
+
+`schedule` / `get_schedule` is the one read-only projection a Gantt or network draws, so no client
+computes scheduling. `data.work` lists every work item in key order with `id`, `key`, `kind`,
+`parent`, `title`, `status`, `applicability`, `priority` (the human priority, never criticality),
+`span` (`start_hours`, `finish_hours`, `critical`: the activity itself, or a package's applicable
+descendants), `times` (`earliest_start_hours`, `earliest_finish_hours`, `latest_start_hours`,
+`latest_finish_hours`, `total_float_hours`, `free_float_hours`, `critical`), `criticality` and
+`calendar`; `data.project_finish_hours` is the deterministic remaining duration. All hours are
+elapsed hours from the clock reading. `calendar` (calendar, executor, `source`, `review_wait_hours`)
+is placement only, present when the plan has calendars, and no calendar date is ever inferred.
+
+`criticality` is the fraction of the seeded simulations in which the work is critical, and
+`data.uncertainty` holds `iterations`, `seed`, `p50_finish_hours`, `p80_finish_hours` and
+`p95_finish_hours`: the simulation `status` and `next` use, with the same configuration. They are
+`null`, never zero, when `probabilistic` is false (`schedule --no-simulation`), while open choices
+make a percentile meaningless, when no work has an estimate, and (for `criticality` and `times`) for
+work outside the active graph. A task's own three-point estimate stays in `export_plan`. The
+deterministic projection alone is the fast path on large plans. The query writes nothing, in a
+store, a read-only preview or an archive, and the native `query` call returns the same `data`.
 
 A task without an estimate enters the remaining CPM and Monte Carlo at 0 h; the forecast does not
 guess a duration, so it is optimistic by that task's real duration. `project_status.unestimated`

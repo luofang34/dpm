@@ -21,6 +21,11 @@ pub use run::{
     check_transition as check_run_transition, observe_start as observe_run_start,
     project as project_run, start_event as run_start_event,
 };
+mod schedule_view;
+pub use schedule_view::{
+    ScheduleProjection, ScheduleSpan, ScheduleUncertainty, ScheduledTimes, ScheduledWork,
+    schedule_projection, schedule_span,
+};
 mod scope;
 pub use scope::{
     NEXT_RESULT_VERSION, NextWorkResult, OutsideScope, ScopeError, ScopeMember, ScopedCandidate,
