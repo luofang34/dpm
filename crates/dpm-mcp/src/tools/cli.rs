@@ -15,6 +15,7 @@ pub(super) fn command(tool: &str) -> Option<&'static str> {
         "workspace_revision" => "revision",
         "project_status" => "status",
         "get_calibration" => "calibration",
+        "get_schedule" => "schedule",
         "next_work" => "next",
         "get_work" => "show",
         "explain_work" => "explain",

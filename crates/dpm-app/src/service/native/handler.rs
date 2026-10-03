@@ -355,7 +355,11 @@ fn reads_runs(query: &Query) -> bool {
 fn reads_gates(query: &Query) -> bool {
     matches!(
         query,
-        Query::Status { .. } | Query::Next { .. } | Query::Explain { .. } | Query::Show { .. }
+        Query::Status { .. }
+            | Query::Schedule { .. }
+            | Query::Next { .. }
+            | Query::Explain { .. }
+            | Query::Show { .. }
     )
 }
 

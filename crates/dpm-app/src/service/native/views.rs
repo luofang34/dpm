@@ -46,9 +46,9 @@ pub fn view_mappings() -> Vec<ViewMapping> {
         view(
             "now",
             "What to do now and why: ranked ready work, counts, and runs that are executing.",
-            &["next", "status", "runs", "explain", "export"],
+            &["next", "status", "schedule", "runs", "explain", "export"],
             &["project", "lifecycle", "activity", "links"],
-            "Readiness comes from next and explain; the client never derives it. A working run is an executor's report and does not make work ready, submitted or done.",
+            "Readiness comes from next and explain, and elapsed-hour times, float, package spans, criticality and finish percentiles from schedule; the client never derives them. A working run is an executor's report and does not make work ready, submitted or done.",
         ),
         view(
             "live",

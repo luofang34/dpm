@@ -90,6 +90,11 @@ fn open_decisions(plan: &Plan) -> Vec<(DecisionId, Key, Vec<String>)> {
     open
 }
 
+/// Whether an open decision conditions work, which is when `open_choices` forecasts scenarios.
+pub(crate) fn has_open_choices(plan: &Plan) -> bool {
+    !open_decisions(plan).is_empty()
+}
+
 /// Forecast each combination of open choices, or `None` when no open choice conditions work.
 pub(crate) fn open_choices(
     plan: &Plan,

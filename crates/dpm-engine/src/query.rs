@@ -11,7 +11,7 @@ use dpm_schedule::{
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-mod choices;
+pub(crate) mod choices;
 pub use choices::{InapplicableWork, MAX_SCENARIOS, OpenChoices, ScenarioForecast};
 mod estimates;
 pub use estimates::{is_unestimated, unestimated};

@@ -707,7 +707,7 @@ session control, push events, remote access), what a `reported_only` run is, and
 
 | View | Queries | Feeds |
 | --- | --- | --- |
-| Now | `next`, `status`, `runs`, `explain`, `export` | project, lifecycle, activity, links |
+| Now | `next`, `status`, `schedule`, `runs`, `explain`, `export` | project, lifecycle, activity, links |
 | Live | `runs`, `run`, `run_lifecycle`, `run_activity`, `history`, `export` | lifecycle, activity, links, project |
 | Review | `status`, `explain`, `show`, `history`, `export`, `runs` | project, lifecycle, activity, links |
 | Detail | `explain`, `show`, `runs`, `run`, `run_lifecycle`, `run_activity`, `history`, `export` | project, lifecycle, activity, links |

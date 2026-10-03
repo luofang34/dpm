@@ -101,6 +101,12 @@ pub enum Query {
         #[serde(default)]
         calibrated: bool,
     },
+    /// The remaining-work schedule projection: elapsed-hour times, float, package spans and, when
+    /// requested, the seeded simulation's criticality and finish percentiles.
+    Schedule {
+        /// Add the seeded uncertainty projections `status` and `next` use.
+        probabilistic: bool,
+    },
     /// Calibration of estimates, review and decision waits, and flow metrics from history.
     Calibration,
     /// Globally ranked executable leaf tasks, narrowed to a visible query-only scope.

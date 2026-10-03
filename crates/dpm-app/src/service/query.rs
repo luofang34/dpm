@@ -59,6 +59,7 @@ impl Application {
                 probabilistic,
                 calibrated: true,
             } => respond(self.status_calibrated_blocking(probabilistic)?),
+            Query::Schedule { probabilistic } => respond(self.schedule_blocking(probabilistic)?),
             Query::Calibration => respond(self.calibration_blocking()?),
             Query::Next {
                 capabilities,

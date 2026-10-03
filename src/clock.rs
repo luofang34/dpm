@@ -37,6 +37,7 @@ fn is_query(command: &Commands) -> bool {
             | Commands::Store(
                 StoreCommand::History { .. }
                     | StoreCommand::Revision
+                    | StoreCommand::Schedule { .. }
                     | StoreCommand::Calibration
                     | StoreCommand::Run {
                         command: RunCommand::List { .. }

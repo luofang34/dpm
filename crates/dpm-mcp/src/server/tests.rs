@@ -27,7 +27,7 @@ fn advertises_tools_and_preserves_revision_conflicts() {
     let list = server
         .handle_blocking(json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}))
         .expect("list");
-    assert_eq!(list["result"]["tools"].as_array().expect("tools").len(), 44);
+    assert_eq!(list["result"]["tools"].as_array().expect("tools").len(), 45);
     let request = json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"claim_work","arguments":{"key":"TEST-A","base_revision":0}}});
     assert_eq!(
         server.handle_blocking(request.clone()).expect("claim")["result"]["isError"],
@@ -131,6 +131,58 @@ fn successes_share_the_cli_envelope() {
     assert_eq!(
         claimed["structuredContent"]["data"]["resulting_revision"],
         1
+    );
+}
+
+/// The tool returns the shared query's envelope at the pinned clock, defaults to the sampled
+/// projection like the CLI, and reads without writing.
+#[test]
+fn get_schedule_is_the_shared_schedule_query_and_writes_nothing() {
+    let at = chrono::DateTime::parse_from_rfc3339("2030-01-02T03:04:05Z")
+        .expect("time")
+        .with_timezone(&chrono::Utc);
+    let plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("plan");
+    let app = Application::in_memory_blocking(&plan)
+        .expect("app")
+        .with_query_clock(dpm_app::QueryClock::Fixed(at));
+    let mut server = McpServer::new(app, ActorId::agent("mcp-worker"));
+    initialize(&mut server);
+    let listed = server
+        .handle_blocking(json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}))
+        .expect("list");
+    let tool = listed["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .find(|tool| tool["name"] == "get_schedule")
+        .expect("tool")
+        .clone();
+    assert_eq!(tool["annotations"]["readOnlyHint"], true);
+    assert_eq!(tool["_meta"]["dpm/cli"], "schedule");
+    assert_eq!(tool["inputSchema"]["required"], json!([]));
+    for (arguments, probabilistic) in [(json!({}), true), (json!({"probabilistic": false}), false)]
+    {
+        let result = call(&mut server, "get_schedule", arguments);
+        assert_eq!(result["isError"], false);
+        let expected = server
+            .application
+            .query_blocking(dpm_app::Query::Schedule { probabilistic })
+            .expect("shared");
+        let content = &result["structuredContent"];
+        assert_eq!(content["data"], expected.data);
+        assert_eq!(content["revision"], 0);
+        assert_eq!(content["data"]["uncertainty"].is_null(), !probabilistic);
+    }
+    assert_eq!(
+        server
+            .application
+            .revision_blocking()
+            .expect("revision")
+            .revision,
+        0
     );
 }
 

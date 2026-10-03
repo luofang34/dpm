@@ -24,7 +24,7 @@ pub struct ActivitySchedule {
     pub calendar: Option<ActivityCalendar>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// How calendars place one task in a remaining projection.
 pub struct ActivityCalendar {
     /// Calendar, executor kind and the rule that chose them.
