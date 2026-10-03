@@ -1,10 +1,10 @@
 {
   "workspace": "DPM Alpha — prepared roadmap",
   "revision": 0,
-  "task_count": 54,
+  "task_count": 55,
   "work_package_count": 12,
   "milestone_count": 13,
-  "total_work": 79,
+  "total_work": 80,
   "ready_keys": [],
   "completed_work": 0,
   "open_decisions": 14,
@@ -75,6 +75,7 @@
     "UI-30",
     "UI-40",
     "UI-50",
-    "UI-60"
+    "UI-60",
+    "VIS-10"
   ]
 }
