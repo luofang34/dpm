@@ -181,9 +181,11 @@ duration estimates and does not apply separate risk-event distributions or resou
 
 ## What v0.1 intentionally does not do
 
-No Gantt editor, web app, SwiftUI/Android app, CloudKit, hosted server, passkeys/OIDC, live CRDT
-collaboration, resource leveling, earned value, timesheets, or cost accounting yet. Those features
-must build on the core command/query and operation semantics rather than bypass them.
+No Gantt editor, web app, Android app, CloudKit, hosted server, passkeys/OIDC, live CRDT
+collaboration, resource leveling, earned value, timesheets, or cost accounting yet. The only native
+app is a local, read-only macOS observer ([architecture](docs/architecture.md#the-macos-observer));
+it cannot steer, approve or verify. Those features must build on the core command/query and
+operation semantics rather than bypass them.
 
 ## Development
 
@@ -210,6 +212,11 @@ manifest. An adjacent SHA-256 file verifies the archive. The smoke check runs ex
 outside the checkout with isolated local state, tests CLI/MCP parity, exercises Gantt navigation
 and terminal cleanup, and verifies history recovery.
 Use a new output directory for each build. Package-manager publication and signing remain separate.
+
+On macOS 14 or later with a Swift compiler, `python3 scripts/build_native.py` builds
+`target/native/DPMObserver.app` (ad-hoc signed, unpublished). Open it with
+`open target/native/DPMObserver.app --args --project DIR` (or `--database FILE`), or with no arguments
+and ⌘O; ⌘F finds any task or decision. `python3 scripts/smoke_native.py` qualifies it with the bridge.
 
 The self-host integration checks are read-only and require revision 0 with an empty operation log.
 The internal synthetic graph exercises the agent/human mutation loop, gates and downstream work.

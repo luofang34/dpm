@@ -148,7 +148,7 @@ struct SuiteError: Error, CustomStringConvertible {
 // MARK: - The shared context
 
 struct Tools {
-    var dpm = "", helper = "", host = "", plan = "", laggedPlan = "", proxy = "", scratch = "", clock = ""
+    var dpm = "", helper = "", host = "", plan = "", laggedPlan = "", proxy = "", scratch = "", clock = "", writer = ""
 }
 
 final class Context {

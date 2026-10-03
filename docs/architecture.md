@@ -707,10 +707,10 @@ session control, push events, remote access), what a `reported_only` run is, and
 
 | View | Queries | Feeds |
 | --- | --- | --- |
-| Now | `next`, `status`, `runs` | project, lifecycle |
-| Live | `runs`, `run`, `run_lifecycle`, `run_activity` | lifecycle, activity, links, project |
-| Review | `status`, `explain`, `show`, `history` | project |
-| Detail | `explain`, `show`, `runs`, `run`, `history` | project, lifecycle, activity, links |
+| Now | `next`, `status`, `runs`, `explain`, `export` | project, lifecycle, activity, links |
+| Live | `runs`, `run`, `run_lifecycle`, `run_activity`, `history`, `export` | lifecycle, activity, links, project |
+| Review | `status`, `explain`, `show`, `history`, `export`, `runs` | project, lifecycle, activity, links |
+| Detail | `explain`, `show`, `runs`, `run`, `run_lifecycle`, `run_activity`, `history`, `export` | project, lifecycle, activity, links |
 
 Project operations are the semantic log. Run lifecycle, bounded activity and operation links are
 observations beside it and never change the plan. A completed run is the executor's report: work
@@ -813,6 +813,67 @@ away from the build tree and, from another directory, compares what the host pri
 CLI and agent-tool output at one pinned clock and runs the Swift integration suite in
 `native/swift/Qualification` against the real helper, the real CLI and a fault-injecting relay. It
 needs macOS and a Swift compiler and says so when it has none.
+
+### The macOS observer
+
+`DPMObserver.app` (`native/swift/Sources/DPMObserver`) is built by `scripts/build_native.py` beside
+`DPMHost.app`, with its own copy of the helper, ad-hoc signed and not an installer. Both bundles are
+built for, and declare, macOS 14 or later. It is a local, read-only SwiftUI window onto one workspace:
+**Now** (ranked work with the application's own reasons, the runs in progress and, when `next` is
+empty, what holds work back, each thing openable), **Live** (managed and reported-only runs, public
+activity, input requests, lifecycle and freshness), **Review** (submitted work with its acceptance
+criteria and evidence, verification kept apart from anything a run reported) and **Detail** (one
+task, decision or run in full as wrapped, scrollable text, beside a search over every task and
+decision). It reads the queries and feeds of the table above. `status` counts the work awaiting
+verification and names tasks only by identity, so Review, the search and the decisions come from the
+shared snapshot (`export`); the runs of one task come from the per-task `runs` query. It has no
+command call, so it cannot steer a run, answer its requests, verify or release work; what it does not
+do is said in plain words.
+
+Its engine (`DPMObserverCore`, no UI) polls the feeds from the consumer's cursors. Run activity is
+appended to the selected run's bounded window and reads nothing else; a project change reads the
+project views once; the runs are read at most once per interval; and the time-dependent views are read
+again, at an unchanged revision, only when the application's `refresh_at` or re-evaluation bound
+passes. What a change obliges stays owed until its read was installed, and staleness is published
+before a read is awaited, so a newer answer is never shown beside older ones marked current. Every
+connection has a generation taken before the open or close suspends, a helper still in its handshake
+is cancelled and ended before the next open starts, and a late answer is dropped rather than attached
+to a new source. A selection is a task's, decision's or run's persistent identity. A lost helper is
+replaced and shown as lost; a repointed locator is reported and never followed until the operator
+reads again; closing or quitting ends the helper and nothing else. Every blocking step runs on the
+bridge's own queues.
+
+Lists say how much they read. The newest runs are read, up to a bound, and a list that reached it says
+older ones were not read instead of claiming none exist; a task's own runs are read for it. A run is
+opened by its identity, so one that leaves the newest list stays inspectable, and its detail shows the
+contract it observed when it started (workspace, lineage, revision, objective, acceptance), its source
+references and provider, apart from the task as it is now. A retention gap the feed reports, and a run
+whose lifecycle or activity exceeds what one reading takes in, are named. "Observation basis" in the
+sidebar lists the basis and evaluation time of every displayed view and the feed cursors.
+
+Start it with a workspace the operator names, `open target/native/DPMObserver.app --args --project DIR`
+or `--database FILE`, or with no arguments and choose one with ⌘O. This repository's directory opens
+its read-only preview. A missing or invalid project is an error on screen and nothing is created.
+⌘1 to ⌘4 switch views, ⌘F opens the search in Detail with the cursor in it, ⌘R reads again, ⇧⌘W
+closes the workspace. `--state-file PATH` writes what the window shows (including whether the search
+field has focus), and `--page`, `--select-key`, `--select-run`, `--select-decision` and `--clock` set
+the starting view, selection and query clock; `scripts/smoke_observer.py` uses them to read the real
+app.
+
+A repeatable operator scenario, with the keyboard or VoiceOver:
+`python3 scripts/smoke_observer.py --prepare DIR` writes disposable stores and prints the launch
+command. In `review.sqlite`, TEST-A awaits review after a managed run that asked a question, beside a
+reported-only run, and an open decision holds the rest back. From Now, with nothing ready, choose the
+decision under "What holds work back": its question and the work it gates are listed, and each can be
+opened. Press ⌘F, type `TEST-B`, and open it: its readiness says what is in the way. In Review, TEST-A
+shows its acceptance criteria, its evidence and that only an independent verifier accepts it, whatever
+the run reported. In Live, each run shows its public activity, its input request and, in Detail, the
+contract it observed. Then, in another terminal,
+`dpm --database DIR/review.sqlite verify TEST-A --actor human:reviewer` leaves the Review queue empty
+as the project feed delivers it, and the selection stays; TEST-B is then held back by the decision
+alone. `unrun.sqlite` holds started work that no run has touched, found with ⌘F. The update budget
+the contract proposes is two seconds under a stated workload; measured timings belong to the
+qualification output. Whether this is usable is for a person to judge.
 
 ### The Claude Code adapter
 
