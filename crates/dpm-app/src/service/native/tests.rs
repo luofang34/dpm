@@ -17,6 +17,7 @@ mod harness;
 mod links;
 mod recovery;
 mod sources;
+mod views;
 
 pub(super) fn fixture_plan() -> Plan {
     let mut plan: Plan = serde_json::from_str(include_str!(
@@ -432,6 +433,7 @@ fn query_name(query: &Query) -> &'static str {
 fn every_view_names_only_shared_queries_and_known_feeds() {
     let known: Vec<&str> = [
         Query::Revision,
+        Query::Export,
         Query::History {
             after_sequence: 0,
             limit: 1,
@@ -493,8 +495,6 @@ fn every_view_names_only_shared_queries_and_known_feeds() {
         .into_iter()
         .find(|v| v.view == "live")
         .expect("live");
-    assert!(
-        live.feeds.contains(&"lifecycle".to_string())
-            && live.feeds.contains(&"activity".to_string())
-    );
+    let has = |feed: &str| live.feeds.iter().any(|f| f == feed);
+    assert!(has("lifecycle") && has("activity"));
 }

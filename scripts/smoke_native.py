@@ -2,7 +2,7 @@
 """The packaged native bridge, qualified as shipped: the app bundle is copied away from the build
 tree and every client runs from another directory, so nothing depends on where it was built.
 
-Two things are proven here:
+Three things are proven here:
 
 * Payload parity. The packaged host (`dpm-host`, which finds the bundled helper by its own location)
   prints each view, and those envelopes are compared, at one pinned clock, with the CLI `--json`
@@ -10,7 +10,10 @@ Two things are proven here:
 * The Swift integration suite (native/swift/Qualification), linked against the same client library,
   which drives the real helper, the real CLI and a fault-injecting relay: typed refusals with no
   partial writes, source identity, cancellation, close, early exit, crash, reconnect, window
-  cleanup, bounded admission, frame faults and main-thread responsiveness.
+  cleanup, bounded admission, frame faults and main-thread responsiveness, and the observer's engine
+  and model against external CLI writes and run activity.
+* The packaged SwiftUI observer (scripts/smoke_observer.py), launched from a copy of its bundle, its own
+  state file read back while the CLI writes the stores it follows.
 
 Writes go only to disposable synthetic stores. Skipped loudly, not passed, off macOS or where there is
 no Swift compiler.
@@ -24,10 +27,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import build_native
+import smoke_observer
 from smoke_agent import CLI, ROOT, Agent, run_cli, run_cli_envelope
 
 FIXTURE = ROOT / 'tests/support/execution-plan.json'
 PROXY = ROOT / 'native/swift/Qualification/Fixtures/fault_proxy.py'
+WRITER = ROOT / 'scripts/native_activity_writer.py'
 WORKER = 'agent:worker'
 
 # The host's command for each payload, and the CLI and agent-tool call that must equal it.
@@ -90,6 +95,22 @@ def payload_parity(host, directory, at):
     return len(HOST_COMMANDS)
 
 
+def negative_controls(suite, arguments, directory):
+    """The suite must be able to fail. Two runs that cannot succeed are required to exit nonzero with
+    the reason on standard output: a wait for an event that never happens, and a scenario whose helper
+    never connects, which an earlier suite passed with a single unrelated check."""
+    controls = {
+        'a wait for an event that never happens': (['--only', 'observer-negative-control', '--helper', str(directory / 'DPMHost.app/Contents/Helpers/dpm-native')], 'timed out'),
+        'a helper that cannot be started': (['--only', 'observer-duplicates', '--helper', str(directory / 'no-such-helper')], 'stopped early'),
+    }
+    for name, (selection, expected) in controls.items():
+        work = directory / f"control-{len(list(directory.glob('control-*')))}"
+        work.mkdir()
+        replaced = [work if argument == str(directory / 'suite') else argument for argument in arguments]
+        result = subprocess.run([str(suite), *selection, *replaced], cwd='/', capture_output=True, text=True, timeout=300)
+        assert result.returncode != 0 and expected in result.stdout, f'the negative control for {name} did not fail as required (exit {result.returncode}):\n{result.stdout[-1500:]}'
+
+
 def main():
     if sys.platform != 'darwin':
         print(f'SKIPPED: the native bridge is a macOS client and this is {sys.platform}; nothing was built or qualified and nothing is claimed.')
@@ -109,10 +130,14 @@ def main():
         compared = payload_parity(host, directory, at)
         work = directory / 'suite'
         work.mkdir()
-        result = subprocess.run([str(suite), '--dpm', str(CLI), '--helper', str(helper), '--host', str(host), '--plan', str(FIXTURE),
-                                 '--lagged-plan', str(lagged_plan(directory)), '--proxy', str(PROXY), '--scratch', str(work), '--clock', at], cwd='/', timeout=900)
+        arguments = ['--dpm', str(CLI), '--host', str(host), '--plan', str(FIXTURE), '--lagged-plan', str(lagged_plan(directory)),
+                     '--proxy', str(PROXY), '--scratch', str(work), '--clock', at, '--writer', str(WRITER)]
+        result = subprocess.run([str(suite), '--helper', str(helper), *arguments], cwd='/', timeout=1800)
         assert result.returncode == 0, f'the Swift integration suite failed (exit {result.returncode})'
-    print(f'PASS: packaged host and Swift suite against the shipped helper; {compared} host envelopes equal the CLI and agent-tool payloads')
+        negative_controls(suite, arguments, directory)
+    print(f'PASS: packaged host and Swift suite against the shipped helper; {compared} host envelopes equal the CLI and agent-tool payloads; both negative controls fail with nonzero exit')
+    for line in smoke_observer.main(built['observer']):
+        print(f'PASS: observer app: {line}')
     return 0
 
 

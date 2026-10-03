@@ -7,6 +7,7 @@
 // Exit status: 0 when every check held, 1 when one did not, 2 for usage.
 
 import DPMNative
+import DPMObserverCore
 import Foundation
 
 @main
@@ -26,6 +27,7 @@ struct Qualify {
             case "--proxy": tools.proxy = value
             case "--scratch": tools.scratch = value
             case "--clock": tools.clock = value
+            case "--writer": tools.writer = value
             case "--only": only = value
             default: usage("unknown option \(flag)")
             }
@@ -56,8 +58,35 @@ struct Qualify {
             ("validation", context.configurationAndSizes),
             ("consistency", context.negotiatedConsistency),
             ("responsive", context.mainThreadStaysResponsive),
+            ("observer-startup", context.observerStartup),
+            ("observer-completion", context.observerCompletionIsNotVerification),
+            ("observer-latency", context.observerExternalCommitLatency),
+            ("observer-race", context.observerStartupRace),
+            ("observer-clock", context.observerClockOnlyGate),
+            ("observer-stale", context.observerReportedOnlyAndStale),
+            ("observer-rename", context.observerFollowsRenamedKeys),
+            ("observer-refused", context.observerRefusedRefreshIsRetried),
+            ("observer-duplicates", context.observerDuplicates),
+            ("observer-reconnect", context.observerLostHelperReconnects),
+            ("observer-source", context.observerSourceChange),
+            ("observer-helper-fault", context.observerHelperFailure),
+            ("observer-burst", context.observerBurst),
+            ("observer-model", context.observerModelRules),
+            ("observer-decisions", context.observerReachesBlockedAndUnrunWork),
+            ("observer-coverage", context.observerBoundedCoverage),
+            ("observer-gap-startup", context.observerRetentionGapAtStartup),
+            ("observer-gap-reconnect", context.observerRetentionGapAfterReconnect),
+            ("observer-pending-open", context.observerPendingOpenIsEnded),
+            ("observer-state-writer", context.observerStateWriterIsBounded),
+            ("observer-slots", context.observerSelectionOwnedViewsLeave),
+            ("observer-page-caps", context.observerPageCapsAreSaid),
+            ("observer-window-race", context.observerWindowTotalAfterRacingWrite),
         ]
-        for (name, run) in scenarios where only == nil || only == name {
+        // A control that must fail: it waits for something that never happens. It runs only when asked
+        // for by name, and the packaged qualification requires it to exit nonzero.
+        let controls: [(String, () async throws -> Void)] = [("observer-negative-control", context.observerNegativeControl)]
+        let runnable = only == nil ? scenarios : (scenarios + controls).filter { $0.0 == only }
+        for (name, run) in runnable {
             do { try await run() } catch { context.checks.check(false, "\(name) stopped early: \(error)") }
         }
         let offMain = context.audit.mainThreadSteps.isEmpty
