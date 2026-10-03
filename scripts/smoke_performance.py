@@ -3,6 +3,7 @@
 import argparse
 import copy
 import json
+import resource
 import subprocess
 import tempfile
 import time
@@ -32,11 +33,20 @@ def generated(count, shape):
     return plan
 
 
-def timed_cli(binary, database, args):
+def timed_cli_usage(binary, database, args):
+    """Output, elapsed wall seconds and the child's user and system CPU seconds for one query."""
+    used = resource.getrusage(resource.RUSAGE_CHILDREN)
     start = time.perf_counter()
     result = subprocess.run([str(binary), '--json', '--database', str(database), *args],
                             capture_output=True, check=True, timeout=60, cwd=ROOT)
-    return result.stdout, time.perf_counter() - start
+    elapsed = time.perf_counter() - start
+    done = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return result.stdout, elapsed, done.ru_utime - used.ru_utime, done.ru_stime - used.ru_stime
+
+
+def timed_cli(binary, database, args):
+    output, elapsed, _, _ = timed_cli_usage(binary, database, args)
+    return output, elapsed
 
 
 # Calendar forecasts place every simulated activity on working time, which measures about 1.6x
@@ -58,8 +68,10 @@ def smoke(directory, count=5000, budget=5., baseline=None):
             queries = [(('status',), 'project_status', {}), (('next',), 'next_work', {}),
                        (('explain', 'PERF-1'), 'explain_work', {'key': 'PERF-1'})]
             for command, tool, arguments in queries:
-                output, elapsed = timed_cli(CLI, database, ('--clock', clock, *command))
+                output, elapsed, user, system = timed_cli_usage(CLI, database, ('--clock', clock, *command))
                 allowed = budget * (CALENDAR_ALLOWANCE if shape == 'calendar' else 1.)
+                # Printed before the assertion so a failing sample and the earlier shapes survive in the log.
+                print(f"  timing {shape} {command[0]}: wall {elapsed:.3f}s user {user:.3f}s sys {system:.3f}s (allowed {allowed:g}s)", flush=True)
                 assert elapsed < allowed, (shape, command, elapsed, allowed)
                 # A baseline binary predating calendars cannot read the calendar plan.
                 if baseline and shape != 'calendar':
