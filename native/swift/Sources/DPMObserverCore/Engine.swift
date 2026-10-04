@@ -69,6 +69,8 @@ public actor ObserverEngine {
         var workRuns = false
         /// The selected run's window is read again, not only its view.
         var window = false
+        /// The schedule projection is read again; owed only while the Gantt is shown.
+        var schedule = false
         var cause = Cause.time
 
         static var project: Owed { Owed(status: true, inventory: true, runs: true, subject: true, cause: .project) }
@@ -76,7 +78,7 @@ public actor ObserverEngine {
         static var clock: Owed { Owed(status: true, runs: true, subject: true, cause: .time) }
         static var everything: Owed { Owed(status: true, inventory: true, runs: true, subject: true, window: true, cause: .project) }
 
-        var any: Bool { status || inventory || runs || subject || workRuns }
+        var any: Bool { status || inventory || runs || subject || workRuns || schedule }
 
         mutating func merge(_ other: Owed) {
             status = status || other.status
@@ -85,6 +87,7 @@ public actor ObserverEngine {
             subject = subject || other.subject
             workRuns = workRuns || other.workRuns
             window = window || other.window
+            schedule = schedule || other.schedule
             if other.cause == .project && (other.status || other.inventory) { cause = .project }
         }
     }
@@ -108,6 +111,8 @@ public actor ObserverEngine {
     /// The views on display, by slot: the set the consumer judges freshness against.
     var displayed: [String: View] = [:]
     var subject: Subject?
+    /// Whether the Gantt is the page shown: only then is the schedule projection read and displayed.
+    var wantsSchedule = false
     var owed = Owed()
     /// Consecutive failed attempts to keep a working helper, across episodes: the delay between
     /// replacements grows with it, and only a pass that completes resets it.
@@ -238,6 +243,27 @@ public actor ObserverEngine {
         wake()
     }
 
+    /// Say whether the Gantt is shown. Shown, its schedule projection is read and displayed like the
+    /// other views, so it is judged for freshness and re-read with them; not shown, it leaves the
+    /// displayed set at once, so a view nobody sees can neither hold the client stale nor schedule a read.
+    public func showSchedule(_ shown: Bool) {
+        guard shown != wantsSchedule else { return }
+        wantsSchedule = shown
+        if shown {
+            owed.schedule = connection != nil
+            wake()
+        } else {
+            displayed["schedule"] = nil
+            snapshot.gantt = nil
+            owed.schedule = false
+            if let consumer = consumer {
+                consumer.install(Array(displayed.values))
+                syncFreshness()
+            }
+            publish()
+        }
+    }
+
     // MARK: Following
 
     func followLoop(_ mine: Int) async {
@@ -306,7 +332,7 @@ public actor ObserverEngine {
 
     /// Where every displayed view was anchored and where each feed stands.
     func refreshInspection() {
-        let names = ["status": "Status", "next": "Next work", "runs": "Runs, newest", "inventory": "Plan snapshot", "subject": "Selected detail", "workRuns": "Selected task's runs"]
+        let names = ["status": "Status", "next": "Next work", "runs": "Runs, newest", "inventory": "Plan snapshot", "subject": "Selected detail", "workRuns": "Selected task's runs", "schedule": "Schedule (Gantt)"]
         var rows: [ViewBasisRow] = []
         for (slot, view) in displayed.sorted(by: { $0.key < $1.key }) {
             let project = view.basis.project.map { "revision \($0.revision), history head \($0.historyHead), lineage \($0.lineageId ?? "none")" }
@@ -420,6 +446,7 @@ public actor ObserverEngine {
 
     func publish() {
         snapshot.sequence &+= 1
+        snapshot.helperProcess = connection?.helperProcessIdentifier
         publisher(snapshot)
     }
 

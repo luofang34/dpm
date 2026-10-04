@@ -1,5 +1,5 @@
 // The window: the status bar that always says what is shown and how current it is, a sidebar of
-// the four views, and the view itself. Before a workspace is chosen it shows how to choose one.
+// the five views, and the view itself. Before a workspace is chosen it shows how to choose one.
 
 import DPMObserverCore
 import SwiftUI
@@ -10,18 +10,19 @@ struct RootView: View {
     var body: some View {
         VStack(spacing: 0) {
             if model.hasWorkspace {
-                StatusBar(model: model)
+                StatusBar(model: model).reportFrame("status")
                 Divider()
                 NavigationSplitView {
                     Sidebar(model: model)
                         .navigationSplitViewColumnWidth(min: 150, ideal: 170, max: 220)
                 } detail: {
-                    PageView(model: model)
+                    PageView(model: model).reportFrame("page")
                 }
             } else {
                 WelcomeView(model: model)
             }
         }
+        .reportFrame("root")
         .toolbar { toolbar }
     }
 
@@ -46,6 +47,7 @@ struct Sidebar: View {
             Divider()
             InspectionView(model: model)
         }
+        .reportFrame("sidebar")
     }
 
     private var pages: some View {
@@ -99,6 +101,7 @@ struct PageView: View {
         case .live: LiveView(model: model)
         case .review: ReviewView(model: model)
         case .detail: DetailView(model: model)
+        case .gantt: GanttView(model: model)
         }
     }
 }

@@ -13,6 +13,95 @@ import Foundation
 /// A value, or JSON null.
 func orNull<T>(_ value: T?) -> Any { value.map { $0 as Any } ?? NSNull() }
 
+/// Where one window put its parts, as that window's own probes measured them. It belongs to the window
+/// whose content holds the probes (and to the one reporter that follows it); nothing is shared between
+/// windows, and a window with no registry has no probes at work. Every rect is [x, y, width, height]:
+/// `frames` and `usableContent` are in points from the top left of the window's content view,
+/// `contentBounds` is that view's own bounds, and `windowFrame` is the outer `NSWindow.frame` on the
+/// screen (origin at the screen's bottom left). Nothing here changes what is drawn.
+@MainActor
+public final class LayoutRegistry {
+    /// One measurement of a part, with the window facts it was taken against.
+    public typealias Measure = (frame: [Double], usableContent: [Double], contentBounds: [Double], windowFrame: [Double])
+    private var probes: [String: () -> Measure?] = [:]
+    private var last: [String: [Double]] = [:]
+    private var revision = 0
+    public var onChange: (() -> Void)?
+
+    public init() {}
+
+    /// A part says how to measure itself now; the measurement is taken when a state is written, so it is
+    /// never older than the write. A change since the last report asks for a write.
+    public func register(_ name: String, measure: @escaping () -> Measure?) {
+        probes[name] = measure
+        guard let now = measure() else { return }
+        let key = now.frame + now.usableContent + now.contentBounds + now.windowFrame
+        guard last[name] != key else { return }
+        last[name] = key
+        revision &+= 1
+        onChange?()
+    }
+
+    /// Something the report carries beside the frames changed (the viewport's row count): write again.
+    public func noteChange() {
+        revision &+= 1
+        onChange?()
+    }
+
+    /// A part that is gone no longer reports.
+    public func remove(_ name: String) {
+        probes[name] = nil
+        last[name] = nil
+    }
+
+    func described() -> [String: Any] {
+        var frames: [String: Any] = [:]
+        var sample: Measure?
+        for (name, measure) in probes {
+            guard let now = measure() else { remove(name); continue }
+            frames[name] = now.frame
+            sample = now
+        }
+        return [
+            "window_frame": orNull(sample?.windowFrame), "content_bounds": orNull(sample?.contentBounds), "usable_content": orNull(sample?.usableContent),
+            "frames": frames, "revision": revision, "measured_at_ms": Int(Date().timeIntervalSince1970 * 1000),
+        ]
+    }
+}
+
+/// What the real hosted views of one window report about themselves (the actual first responder, the
+/// accessibility attributes of an element, a scroll offset), sampled by the view layer when a state is
+/// written. A part registers a sampler holding only a weak reference to its view; with no registry there
+/// is no registration and no sampling. A value that cannot be read from the host is reported as null or
+/// as an explicit error by its sampler, never inferred from the model.
+@MainActor
+public final class HostObservation {
+    public typealias Sample = () -> [String: Any]?
+    private var samplers: [String: Sample] = [:]
+    public var onChange: (() -> Void)?
+
+    public init() {}
+
+    public func register(_ name: String, sample: @escaping Sample) {
+        samplers[name] = sample
+        onChange?()
+    }
+
+    /// Something a sampler would report changed (focus, scroll offset, content): write again.
+    public func noteChange() { onChange?() }
+
+    public func remove(_ name: String) { samplers[name] = nil }
+
+    func described() -> [String: Any] {
+        var out: [String: Any] = [:]
+        for (name, sample) in samplers {
+            guard let now = sample() else { remove(name); continue }
+            out[name] = now
+        }
+        return out
+    }
+}
+
 @MainActor
 public final class StateReporter {
     /// Where an encoded state goes. The default writes the file atomically; a test supplies its own.
@@ -32,6 +121,8 @@ public final class StateReporter {
     private let sink: Sink
     private let encode: Encoder
     private weak var model: ObserverModel?
+    private var layout: LayoutRegistry?
+    private var host: HostObservation?
     private var lastWrite = Date.distantPast
     private var trailing = false
     private var inFlight = false
@@ -63,9 +154,13 @@ public final class StateReporter {
 
     /// Start following `model`. The main-thread monitor ticks every few milliseconds; a long gap
     /// between ticks is the main thread having been blocked.
-    public func attach(_ model: ObserverModel) {
+    public func attach(_ model: ObserverModel, layout: LayoutRegistry? = nil, host: HostObservation? = nil) {
         self.model = model
+        self.layout = layout
+        self.host = host
         model.onInstalled = { [weak self] in self?.changed() }
+        layout?.onChange = { [weak self] in self?.changed() }
+        host?.onChange = { [weak self] in self?.changed() }
         monitor.schedule(deadline: .now(), repeating: .milliseconds(5))
         monitor.setEventHandler { [weak self] in
             MainActor.assumeIsolated { self?.tick() }
@@ -108,7 +203,7 @@ public final class StateReporter {
             steady = true
             steadyGap = 0
         }
-        let state = Self.describe(model, started: started, gaps: (maxGap, windowGap, steady ? steadyGap : nil), ticks: ticks)
+        let state = Self.describe(model, started: started, gaps: (maxGap, windowGap, steady ? steadyGap : nil), ticks: ticks, layout: layout, host: host)
         windowGap = 0
         if inFlight {
             waiting = state
@@ -149,7 +244,38 @@ public final class StateReporter {
         }
     }
 
-    static func describe(_ model: ObserverModel, started: Date, gaps: (max: Double, window: Double, steady: Double?), ticks: Int) -> [String: Any] {
+    /// What the Gantt shows, read from the model the view draws: how many rows, which is selected, where
+    /// the keyboard cursor is, and the focus the view itself reports (as `search_focused` is).
+    static func gantt(_ model: ObserverModel, layout: LayoutRegistry?) -> [String: Any] {
+        let rows = model.outline
+        var selected: Any = NSNull()
+        if case .work(let identity)? = model.selection { selected = model.snapshot.inventory.key(of: identity) ?? identity }
+        let view = model.gantt
+        let cursor = model.focusedRow?.row.key
+        return [
+            "loaded": model.snapshot.gantt != nil,
+            "total_rows": model.snapshot.gantt?.rows.count ?? 0,
+            "rows": rows.count,
+            "selected_key": selected,
+            "cursor_key": orNull(cursor),
+            "focus_target": orNull(model.focusTarget),
+            "focus_reported": orNull(model.focusReported),
+            "detail_return": orNull(model.detailReturn?.element),
+            "collapsed": view.collapsed.count,
+            "filter": ["text": view.filter.text, "status": orNull(view.filter.status), "critical_only": view.filter.criticalOnly, "editing": view.editingFilter] as [String: Any],
+            "zoom_level": view.zoomLevel,
+            "pan": [view.panX, view.panY],
+            "view_sequence": view.sequence,
+            "revision": orNull(model.snapshot.gantt?.revision.map { Int($0) }),
+            "relations": model.snapshot.inventory.relations.count,
+            "keys": rows.prefix(60).map { $0.row.key },
+            "viewport_rows": view.viewportRows,
+            "row_height": GanttLayout.rowHeight,
+            "layout": orNull(layout?.described()),
+        ]
+    }
+
+    static func describe(_ model: ObserverModel, started: Date, gaps: (max: Double, window: Double, steady: Double?), ticks: Int, layout: LayoutRegistry? = nil, host: HostObservation? = nil) -> [String: Any] {
         let snapshot = model.snapshot
         let millis = { (date: Date) in Int(date.timeIntervalSince1970 * 1000) }
         var connection = "idle"
@@ -178,6 +304,9 @@ public final class StateReporter {
             "started_at_ms": millis(started),
             "page": model.page.rawValue.lowercased(),
             "search_focused": model.searchFocused,
+            "helper_pid": orNull(snapshot.helperProcess.map { Int($0) }),
+            "gantt": gantt(model, layout: layout),
+            "host": orNull(host?.described()),
             "selection": selection,
             "setup_error": orNull(model.setupError),
             "connection": connection,

@@ -133,4 +133,14 @@ fn views_name_the_feeds_and_queries_the_observer_reads_through_them() {
         &["run", "run_lifecycle", "run_activity", "export"],
         &["activity", "lifecycle", "links"]
     ));
+    // The Gantt draws the shared schedule projection and reads relations from the snapshot; it owns
+    // no scheduling, and the catalog lists every view once, in the order the interface shows them,
+    // with the Gantt last.
+    assert!(has(
+        "gantt",
+        &["schedule", "explain", "export"],
+        &["project"]
+    ));
+    let order: Vec<String> = view_mappings().into_iter().map(|m| m.view).collect();
+    assert_eq!(order, ["now", "live", "review", "detail", "gantt"]);
 }

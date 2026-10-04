@@ -16,6 +16,25 @@ struct LaunchOptions {
     var selectKey: String?
     var selectRun: String?
     var selectDecision: String?
+    /// Measurement, all inert unless `--measure-log` is given: the log, its identity, the surfaces whose
+    /// draws are withheld (the negative control), and the scripted driver with its arguments.
+    var measureLog: String?
+    var measureId: String?
+    var measureFreeze: Set<String> = []
+    var measureScript: String?
+    var measureKeys: [String] = []
+    var measureSeconds = 5.0
+    var measureDelay = 0.0
+    /// The negative control of the coordinate check: points added to where a scripted scroll is drawn.
+    var measureDisplace = 0.0
+    /// Rendering of the Gantt window's own contents to PNG files, only when asked: where, under which
+    /// name, and when ("loaded", "disconnected" or "stale"). Nothing else is written there.
+    var renderTo: URL?
+    var renderPrefix = "gantt"
+    var renderWhen = "loaded"
+    /// The window's content size at launch, for the suite's layout check at another size; the window's
+    /// own minimum still applies. Without it the window opens at its default size.
+    var windowSize: CGSize?
     var problems: [String] = []
 
     init(_ arguments: [String]) {
@@ -41,8 +60,33 @@ struct LaunchOptions {
                 }
             case "--page":
                 if let text = value() {
-                    if let found = ObserverModel.Page.allCases.first(where: { $0.rawValue.lowercased() == text.lowercased() }) { page = found } else { problems.append("--page \(text) is not now, live, review or detail") }
+                    if let found = ObserverModel.Page.allCases.first(where: { $0.rawValue.lowercased() == text.lowercased() }) { page = found } else { problems.append("--page \(text) is not now, live, review, detail or gantt") }
                 }
+            case "--measure-log": measureLog = value()
+            case "--measure-id": measureId = value()
+            case "--measure-freeze": value().map { measureFreeze = Set($0.split(separator: ",").map(String.init)) }
+            case "--measure-script": measureScript = value()
+            case "--measure-keys": value().map { measureKeys = $0.split(separator: ",").map(String.init) }
+            case "--measure-seconds":
+                if let text = value() {
+                    if let seconds = Double(text), seconds > 0 { measureSeconds = seconds } else { problems.append("--measure-seconds \(text) is not a positive number") }
+                }
+            case "--measure-delay":
+                if let text = value() {
+                    if let seconds = Double(text), seconds >= 0 { measureDelay = seconds } else { problems.append("--measure-delay \(text) is not a number of seconds") }
+                }
+            case "--measure-displace":
+                if let text = value() {
+                    if let points = Double(text), points.isFinite { measureDisplace = points } else { problems.append("--measure-displace \(text) is not a number of points") }
+                }
+            case "--window-size":
+                if let text = value() {
+                    let parts = text.split(separator: "x").compactMap { Double($0) }
+                    if parts.count == 2, parts.allSatisfy({ $0 >= 100 }) { windowSize = CGSize(width: parts[0], height: parts[1]) } else { problems.append("--window-size \(text) is not WIDTHxHEIGHT") }
+                }
+            case "--render-to": value().map { renderTo = URL(fileURLWithPath: $0) }
+            case "--render-prefix": value().map { renderPrefix = $0 }
+            case "--render-when": value().map { renderWhen = $0 }
             default: break
             }
         }
@@ -57,10 +101,23 @@ final class Launch {
     let options = LaunchOptions(CommandLine.arguments)
     let model = ObserverModel()
     private(set) var reporter: StateReporter?
+    /// The main window's layout measurements, kept only when a state is being reported.
+    private(set) var layout: LayoutRegistry?
+    /// What the main window's real views report about themselves, kept only when a state is being reported.
+    private(set) var host: HostObservation?
     private var started = false
     private var signals: [DispatchSourceSignal] = []
 
     private init() {
+        // The measurement log, if one was asked for, opens before anything else so that its first event
+        // is the process's own entry.
+        if let path = options.measureLog {
+            let id = options.measureId ?? UUID().uuidString
+            MeasureLog.shared = MeasureLog(path: path, id: id, freeze: options.measureFreeze, header: Self.measurementHeader())
+            MeasureLog.shared?.expect("first", facts: ["connected": "true", "model_rows_positive": "true", "viewport_rows_drawn": "true"])
+            Measure.coordinateFault = options.measureDisplace
+            Measure.event("process_entry", gen: id, detail: ["arguments": Array(CommandLine.arguments.dropFirst())])
+        }
         var problem: String? = options.problems.isEmpty ? nil : options.problems.joined(separator: "\n")
         var settings: ObserverEngine.Settings?
         if problem == nil {
@@ -73,7 +130,10 @@ final class Launch {
             }
         }
         model.configure(settings: settings, problem: problem, page: options.page, selectKey: options.selectKey, selectRun: options.selectRun, selectDecision: options.selectDecision)
-        reporter = options.stateFile.map { StateReporter(file: $0) }
+        let reporter = options.stateFile.map { StateReporter(file: $0) }
+        self.reporter = reporter
+        layout = reporter == nil ? nil : LayoutRegistry()
+        host = reporter == nil ? nil : HostObservation()
     }
 
     /// Once, when the window first appears: report, and open the workspace the arguments named.
@@ -88,8 +148,30 @@ final class Launch {
             source.resume()
             signals.append(source)
         }
-        reporter?.attach(model)
+        if let size = options.windowSize {
+            DispatchQueue.main.async { NSApp.windows.first(where: { $0.isVisible })?.setContentSize(size) }
+        }
+        reporter?.attach(model, layout: layout, host: host)
+        GanttKeyboard.shared.install(model)
+        MeasureDriver.shared.start(model: model, options: options)
+        GanttRenderer.shared.start(model: model, options: options)
         if let selection = options.selection { model.open(selection) }
+    }
+
+    /// The hardware line and the display's refresh rate, as the measurement log's header records them.
+    private static func measurementHeader() -> [String: Any] {
+        func text(_ name: String) -> String {
+            var size = 0
+            sysctlbyname(name, nil, &size, nil, 0)
+            var bytes = [CChar](repeating: 0, count: max(size, 1))
+            sysctlbyname(name, &bytes, &size, nil, 0)
+            return String(cString: bytes)
+        }
+        return [
+            "hardware_model": text("hw.model"), "cpu": text("machdep.cpu.brand_string"),
+            "os": ProcessInfo.processInfo.operatingSystemVersionString,
+            "display_max_fps": NSScreen.main?.maximumFramesPerSecond ?? 0,
+        ]
     }
 }
 

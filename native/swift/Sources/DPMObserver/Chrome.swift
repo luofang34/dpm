@@ -11,6 +11,7 @@ extension ObserverModel.Page {
         case .live: return "waveform.path.ecg"
         case .review: return "checkmark.seal"
         case .detail: return "doc.text.magnifyingglass"
+        case .gantt: return "chart.bar.xaxis"
         }
     }
 
@@ -20,6 +21,7 @@ extension ObserverModel.Page {
         case .live: return "2"
         case .review: return "3"
         case .detail: return "4"
+        case .gantt: return "5"
         }
     }
 
@@ -29,6 +31,7 @@ extension ObserverModel.Page {
         case .live: return "Runs and their public activity"
         case .review: return "Work awaiting independent verification"
         case .detail: return "One task or run in full"
+        case .gantt: return "The plan on a timeline: hierarchy, bars, float and relations"
         }
     }
 }
@@ -230,13 +233,14 @@ struct SectionsView: View {
                     Text(section.title).font(.headline).accessibilityAddTraits(.isHeader)
                     ForEach(section.rows) { row in
                         if let label = row.label {
+                            // The caption and the body are two real text elements, read one after the other,
+                            // each exposing its own complete text through the standard accessibility attributes.
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(label).font(.caption).foregroundStyle(.secondary)
                                 Prose(text: row.text)
                             }
-                            .spoken(label, value: row.text)
                         } else {
-                            Prose(text: row.text).spoken(row.text)
+                            Prose(text: row.text)
                         }
                     }
                 }

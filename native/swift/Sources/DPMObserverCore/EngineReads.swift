@@ -22,6 +22,11 @@ extension ObserverEngine {
         guard generation == mine else { return }
         let inventory = try await read(Queries.inventory, connection)
         guard generation == mine else { return }
+        var schedule: View?
+        if wantsSchedule {
+            schedule = try await read(Queries.schedule, connection)
+            guard generation == mine else { return }
+        }
         let head = status.basis.project?.historyHead ?? 0
         let from = head > UInt64(settings.operationLimit) ? head - UInt64(settings.operationLimit) : 0
         let history = try await read(Queries.history(after: from, limit: settings.operationLimit), connection)
@@ -30,6 +35,7 @@ extension ObserverEngine {
         install(next: next)
         install(runs: runs)
         install(inventory: inventory)
+        if let schedule = schedule { install(schedule: schedule) }
         snapshot.operations = history.envelope.data["entries"].items.compactMap(OperationEntry.init)
         lastRunsRead = Date()
         lastTimeRead = Date()
@@ -82,11 +88,23 @@ extension ObserverEngine {
         snapshot.inventory = Inventory(view)
     }
 
+    /// The Gantt's projection, kept only while the Gantt is shown.
+    func install(schedule view: View) {
+        guard wantsSchedule else { return }
+        remember("schedule", view)
+        snapshot.gantt = GanttSchedule(view)
+        owed.schedule = false
+    }
+
     // MARK: Refreshing
 
     /// Read what is owed. Each read clears its own debt only after it was installed, so a failure
     /// leaves the rest owed for the next pass.
     func refresh(_ mine: Int, connection: NativeConnection, consumer: Consumer) async throws {
+        // The schedule follows the status read: both depend on the revision and on the clock. Its debt is
+        // registered here, before any read is awaited, and `install(schedule:)` or hiding the Gantt is
+        // what clears it: a status read that succeeds and a schedule read that then fails leaves it owed.
+        if wantsSchedule, owed.status { owed.schedule = true }
         if owed.status {
             let status = try await read(Queries.status, connection)
             guard generation == mine else { return }
@@ -98,6 +116,12 @@ extension ObserverEngine {
             if owed.cause == .project { snapshot.counters.projectReads &+= 1 } else { snapshot.counters.timeReads &+= 1 }
             lastTimeRead = Date()
             owed.status = false
+            publish()
+        }
+        if wantsSchedule, owed.schedule {
+            let schedule = try await read(Queries.schedule, connection)
+            guard generation == mine else { return }
+            install(schedule: schedule)
             publish()
         }
         if owed.inventory {

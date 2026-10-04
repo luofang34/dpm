@@ -13,6 +13,8 @@ enum Queries {
     static let status = query("status", ["probabilistic": .bool(true)])
     static let next = query("next", ["capabilities": .array([]), "probabilistic": .bool(true), "limit": .integer(10)])
     static let inventory = query("export")
+    /// The shared schedule projection the Gantt draws, with the forecast on as `status` and `next` have it.
+    static let schedule = query("schedule", ["probabilistic": .bool(true)])
 
     /// The newest runs, or those of one task when `key` names it.
     static func runs(limit: Int, key: String? = nil) -> JSON {

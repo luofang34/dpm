@@ -701,7 +701,7 @@ decoded and before any command runs, whether the caller is typed or JSON. Only `
 because it negotiates. A malformed line is `invalid_request`. The codes the boundary adds are
 `unsupported_protocol`, `invalid_request`, `workspace_mismatch`, `lineage_mismatch`,
 `source_changed` and `workspace_changing`; a client keeps a code it does not know as unknown.
-`hello` also states the capabilities: the four views and the queries and feeds each reads, the
+`hello` also states the capabilities: the five views and the queries and feeds each reads, the
 controls that do not exist (run steering and stopping, answering run input requests, provider
 session control, push events, remote access), what a `reported_only` run is, and the bounds.
 
@@ -711,6 +711,42 @@ session control, push events, remote access), what a `reported_only` run is, and
 | Live | `runs`, `run`, `run_lifecycle`, `run_activity`, `history`, `export` | lifecycle, activity, links, project |
 | Review | `status`, `explain`, `show`, `history`, `export`, `runs` | project, lifecycle, activity, links |
 | Detail | `explain`, `show`, `runs`, `run`, `run_lifecycle`, `run_activity`, `history`, `export` | project, lifecycle, activity, links |
+| Gantt | `schedule`, `explain`, `export` | project |
+
+The Gantt page of the macOS observer (`--page gantt`, Cmd-5) is read-only. Rows follow the plan
+hierarchy (`parent`) in the key order the `schedule` projection lists them; a bar is the row's
+`span` in elapsed hours from the evaluation time, a milestone is a diamond with its own text, and
+float, criticality (a fraction of seeded simulations, never the human priority) and the project's
+p50/p80/p95 finish hours are the projection's values. Relations (FS, SS, FF, SF with lead or lag and
+the Hard or Soft policy) come from the `export` snapshot the observer already reads and from
+`explain` in Detail. The client lays these out and derives nothing: no scheduling, no readiness, and
+no calendar date, which appears only where a query supplies one (the projection supplies none, so
+hours are labelled elapsed). Collapse and expand, zoom, pan and filters change only what is drawn,
+never the selection (`ObserverModel.selection`, shared with Detail) and never the project. The
+page's `schedule` read is displayed, and judged for staleness, only while the page is shown. A
+schedule read that is owed because the status changed stays owed, and the view stays marked stale,
+until a schedule is installed or the page is hidden: a status read that succeeds followed by a
+schedule read that fails once is retried, not forgotten. A row's text, its accessibility words and
+Detail also give the item's own optimistic, likely and pessimistic hours exactly as the plan
+supplies them (`schedule.estimate` of the `export` and `explain` payloads), or say that none is
+recorded, apart from priority, float and criticality and from the project's p50/p80/p95; no
+estimate is computed.
+
+The measurement of the Gantt (`scripts/measure_gantt.py`) judges every run, a measurement, a control
+or a replayed log, with one analyzer before any statistic is eligible: every planned generation, a
+timed-out or late draw, completeness, content facts and the integrity of the log. A view operation's
+call is logged on entry to its handler and the draw must carry its row count and its applied view
+state (zoom, pan, filter, collapsed count); an external commit's draw must carry the task that was
+selected before it. The content is finite, so a scroll request carries a logical distance (40 points
+per request in its window) and the content wraps over its scroll range; the driver works out the
+expected effective offset apart from the draw, and the draw stamps the offset its geometry actually
+placed the content at. A frame counts only for a unique (window, axis, number) request, only when the
+offset moved and the expected and drawn offsets are equal; an axis whose content fits its viewport has
+no scroll FPS and yields no number. This is a FEAT-20 measurement clarification; the FEAT-05 record
+is unchanged, and a frame is a completed draw pass, not a presented one. Resident memory counts a
+sample only with a successful size for both the app and its helper. An INVALID run keeps its raw
+observations and contributes no number, a failed control withholds every aggregate, and each launch
+keeps its exact command, raw log, state, output, outcome and hashes next to the report.
 
 Project operations are the semantic log. Run lifecycle, bounded activity and operation links are
 observations beside it and never change the plan. A completed run is the executor's report: work

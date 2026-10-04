@@ -28,6 +28,10 @@ struct Qualify {
             case "--scratch": tools.scratch = value
             case "--clock": tools.clock = value
             case "--writer": tools.writer = value
+            case "--gantt-plan": tools.ganttPlan = value
+            case "--calendar-plan": tools.calendarPlan = value
+            case "--dense-plan": tools.densePlan = value
+            case "--long-plan": tools.longPlan = value
             case "--only": only = value
             default: usage("unknown option \(flag)")
             }
@@ -81,10 +85,29 @@ struct Qualify {
             ("observer-slots", context.observerSelectionOwnedViewsLeave),
             ("observer-page-caps", context.observerPageCapsAreSaid),
             ("observer-window-race", context.observerWindowTotalAfterRacingWrite),
+            ("gantt-rows", context.ganttRowsEqualTheQuery),
+            ("gantt-relations", context.ganttRelationsAndMilestonesAreText),
+            ("gantt-dates", context.ganttDatesOnlyWhereSupplied),
+            ("gantt-keys", context.ganttKeysFlow),
+            ("gantt-selection", context.ganttSelectionPersists),
+            ("gantt-slots", context.ganttScheduleLeavesTheDisplayedSet),
+            ("gantt-stale", context.ganttKeepsItsViewWhenStaleOrLost),
+            ("gantt-dense", context.ganttDenseAndLargePlans),
+            ("gantt-filter-focus-model-path", context.ganttFilterFocusLossDoesNotRequestTheRows),
+            ("gantt-long-titles", context.ganttLongTitlesStayWhole),
+            ("gantt-preview", context.ganttPreviewIsReadOnly),
+            ("gantt-measurement-control", context.ganttMeasurementNegativeControl),
+            ("gantt-schedule-debt", context.ganttScheduleDebtSurvivesATransientFailure),
+            ("gantt-view-op-entry", context.ganttViewOperationIsLoggedOnEntry),
+            ("gantt-estimates", context.ganttEstimatesArePresented),
+            ("gantt-scroll-identity", context.ganttScrollTrajectoryAndIdentity),
+            ("gantt-content-facts", context.ganttContentFactsAreCompared),
+            ("gantt-pan-model-path", context.ganttPanSurvivesAnOffscreenCursor),
+            ("gantt-axis-labels", context.ganttAxisLabelsDoNotCollide),
         ]
         // A control that must fail: it waits for something that never happens. It runs only when asked
         // for by name, and the packaged qualification requires it to exit nonzero.
-        let controls: [(String, () async throws -> Void)] = [("observer-negative-control", context.observerNegativeControl)]
+        let controls: [(String, () async throws -> Void)] = [("observer-negative-control", context.observerNegativeControl), ("gantt-negative-control", context.ganttNegativeControl)]
         let runnable = only == nil ? scenarios : (scenarios + controls).filter { $0.0 == only }
         for (name, run) in runnable {
             do { try await run() } catch { context.checks.check(false, "\(name) stopped early: \(error)") }

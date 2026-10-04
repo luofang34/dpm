@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// One macOS view and what feeds it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ViewMapping {
-    /// Stable view name: `now`, `live`, `review` or `detail`.
+    /// Stable view name: `now`, `live`, `review`, `detail` or `gantt`.
     pub view: String,
     /// What the view answers.
     pub purpose: String,
@@ -26,7 +26,7 @@ fn words(items: &[&str]) -> Vec<String> {
     items.iter().map(ToString::to_string).collect()
 }
 
-/// The four views and their sources.
+/// The five views and their sources.
 ///
 /// Every view names the identity of what it shows: the workspace, lineage and revision of the
 /// project data, the `evaluated_at` of its time-dependent values, and the cursor of each feed it
@@ -86,6 +86,13 @@ pub fn view_mappings() -> Vec<ViewMapping> {
             ],
             &["project", "lifecycle", "activity", "links"],
             "Operations linked to a run are attributions recorded after the fact; the operation log itself does not know runs.",
+        ),
+        view(
+            "gantt",
+            "The plan as a hierarchy on a timeline: elapsed-hour bars, milestones, float, criticality, finish percentiles and the relations between tasks.",
+            &["schedule", "explain", "export"],
+            &["project"],
+            "Every hour, float, criticality and percentile is read from schedule and every relation, with its kind, lag and policy, from export and explain; the client only lays them out and never derives scheduling, a date or readiness. Hours are elapsed from the evaluation time, and a calendar date is shown only where the query supplies one. Human priority is shown apart from criticality.",
         ),
     ]
 }
