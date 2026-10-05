@@ -3,7 +3,7 @@
 use dpm_model::{Plan, Timeline, WorkItem, WorkItemId, WorkKind};
 use dpm_schedule::{ActivitySchedule, Schedule};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Scheduled range of one work item in elapsed hours, with whether the critical path touches it.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -53,43 +53,62 @@ pub(super) fn spans(
         .collect()
 }
 
-/// Applicable leaf work below each applicable package, through applicable nested packages; a
-/// package's own activity is an isolated zero-duration node whose float spans the whole project,
-/// so its rolled-up times and criticality come from these instead.
+/// Outstanding leaf work below each applicable package that has applicable leaf work, through
+/// applicable nested packages. A package's own activity is an isolated zero-duration node whose
+/// float spans the whole project, so its rolled-up times and criticality come from these instead.
+/// Completed work stays in the remaining schedule as a zero-duration node at the origin whose
+/// latest finish is the project finish, so it is left out; a package whose work is all complete
+/// maps to no leaves and reports no times.
 pub(super) fn package_leaves(
     plan: &Plan,
     timeline: &Timeline,
     schedule: &Schedule,
 ) -> BTreeMap<WorkItemId, Vec<WorkItemId>> {
     let children = children(plan);
+    let completed = timeline.completed();
     plan.work_items
         .values()
         .filter(|item| item.kind == WorkKind::WorkPackage)
         .filter(|item| timeline.applicability(item.id).is_applicable())
         .filter_map(|item| {
             let mut leaves = Vec::new();
-            descendant_leaves(timeline, schedule, &children, item.id, &mut leaves);
-            (!leaves.is_empty()).then_some((item.id, leaves))
+            let found = Leaves {
+                timeline,
+                schedule,
+                children: &children,
+                completed: &completed,
+            }
+            .collect(item.id, &mut leaves);
+            found.then_some((item.id, leaves))
         })
         .collect()
 }
 
-fn descendant_leaves(
-    timeline: &Timeline,
-    schedule: &Schedule,
-    children: &Children<'_>,
-    package: WorkItemId,
-    out: &mut Vec<WorkItemId>,
-) {
-    for child in children.get(&package).into_iter().flatten() {
-        if !timeline.applicability(child.id).is_applicable() {
-            continue;
+struct Leaves<'a> {
+    timeline: &'a Timeline,
+    schedule: &'a Schedule,
+    children: &'a Children<'a>,
+    completed: &'a BTreeSet<WorkItemId>,
+}
+
+impl Leaves<'_> {
+    /// Push the outstanding leaves below `package`; whether it has any applicable leaf at all.
+    fn collect(&self, package: WorkItemId, out: &mut Vec<WorkItemId>) -> bool {
+        let mut found = false;
+        for child in self.children.get(&package).into_iter().flatten() {
+            if !self.timeline.applicability(child.id).is_applicable() {
+                continue;
+            }
+            if child.kind == WorkKind::WorkPackage {
+                found |= self.collect(child.id, out);
+            } else if self.schedule.activities.contains_key(&child.id) {
+                found = true;
+                if !self.completed.contains(&child.id) {
+                    out.push(child.id);
+                }
+            }
         }
-        if child.kind == WorkKind::WorkPackage {
-            descendant_leaves(timeline, schedule, children, child.id, out);
-        } else if schedule.activities.contains_key(&child.id) {
-            out.push(child.id);
-        }
+        found
     }
 }
 

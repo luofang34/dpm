@@ -54,7 +54,8 @@ pub struct Schedule {
 pub struct RelationSchedule {
     /// How far the successor's constrained event lies past the bound this constraint puts on it.
     pub slack_hours: f64,
-    /// The constraint sets its successor's earliest time: its slack is within tolerance of zero.
+    /// The constraint sets its successor's earliest start, or on calendars holds its finish: its
+    /// slack is within tolerance of zero.
     pub driving: bool,
     /// A driving constraint between two critical activities, so it lies on a critical path.
     pub critical: bool,

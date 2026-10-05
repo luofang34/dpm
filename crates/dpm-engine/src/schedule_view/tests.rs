@@ -365,3 +365,37 @@ fn relations_mark_the_constraint_that_drives_each_successor() {
     assert!(!relation(short, join).driving);
     assert_eq!(relation(short, join).slack_hours, 5.0);
 }
+
+/// Mark `id` verified hours before `now()`, as the shared timeline reads completion.
+fn verify(plan: &mut Plan, id: WorkItemId) {
+    let work = plan.work_items.get_mut(&id).expect("work");
+    work.execution.status = WorkStatus::Verified;
+    work.execution.owner = Some(dpm_model::ActorId::human("ada"));
+    work.execution.events.started_at = Some(now() - chrono::Duration::hours(10));
+    work.execution.events.submitted_at = Some(now() - chrono::Duration::hours(5));
+    work.execution.events.verified_at = Some(now() - chrono::Duration::hours(4));
+}
+
+#[test]
+fn completed_work_neither_widens_nor_floats_its_package() {
+    let mut plan = generated(1, false);
+    let package = add_package(&mut plan, "PKG", None);
+    let done = add_task(&mut plan, "DONE", 3.0, Some(package), None);
+    let open = add_task(&mut plan, "OPEN", 6.0, Some(package), None);
+    add_task(&mut plan, "AFTER", 10.0, None, Some(open));
+    let finished = add_package(&mut plan, "FINISHED", None);
+    let only = add_task(&mut plan, "ONLY", 2.0, Some(finished), None);
+    verify(&mut plan, done);
+    verify(&mut plan, only);
+    let projection = schedule_projection(&plan, false, now()).expect("projection");
+    let row = |id| projection.work.iter().find(|w| w.id == id).expect("row");
+    // The verified task sits at the origin with the project finish as its latest finish; the
+    // package's bounds are the outstanding task's alone.
+    assert_eq!(row(package).times, row(open).times);
+    assert_eq!(
+        row(package).times.as_ref().map(|t| t.latest_finish_hours),
+        Some(6.0)
+    );
+    assert_eq!(row(finished).times, None);
+    assert_eq!(row(finished).criticality, None);
+}

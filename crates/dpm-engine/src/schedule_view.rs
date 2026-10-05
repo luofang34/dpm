@@ -62,8 +62,9 @@ pub struct ScheduledWork {
     /// What the Gantt draws: the activity's own range, or a package's applicable descendants;
     /// absent for work outside the active graph.
     pub span: Option<ScheduleSpan>,
-    /// Critical-path times; a package with applicable descendants reports their enclosing bounds
-    /// and least float. Absent for work outside the active graph.
+    /// Critical-path times; a package with applicable descendants reports the enclosing bounds and
+    /// least float of those still outstanding. Absent for work outside the active graph and for a
+    /// package whose work is all complete.
     pub times: Option<ScheduledTimes>,
     /// Fraction of simulated schedules in which the work is critical, or for a package the
     /// largest fraction among its descendants; absent (never zero) when
@@ -115,9 +116,10 @@ pub struct ScheduledRelation {
     pub successor: WorkItemId,
     /// FS, SS, FF or SF.
     pub kind: DependencyKind,
-    /// How far the successor's start lies past what this constraint alone requires.
+    /// How far the successor's start lies past what this constraint alone requires; zero when it
+    /// drives.
     pub slack_hours: f64,
-    /// This constraint sets its successor's earliest start.
+    /// This constraint sets its successor's earliest start, or on calendars holds its finish.
     pub driving: bool,
     /// Driving between two critical activities, so it lies on a critical path.
     pub critical: bool,
