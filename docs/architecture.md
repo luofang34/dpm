@@ -718,7 +718,7 @@ Chart colours are named roles in `DPMObserver/Palette.swift`: status roles for b
 relation roles for lines. A client drawing these charts uses the same role names and values, so the
 views read alike across clients. No role is the only cue; each is paired with a shape, a dash or words.
 
-The Gantt page of the macOS observer (`--page gantt`, Cmd-5) is read-only. Rows follow the plan
+The Gantt page of the macOS observer (`--page gantt`, Cmd-5) only reads unless editing is on (below). Rows follow the plan
 hierarchy (`parent`) in the key order the `schedule` projection lists them; a bar is the row's
 `span` in elapsed hours from the evaluation time, a work package is a summary bar over its
 descendants, a milestone is a diamond with its own text, verified work is a "done" mark with no bar,
@@ -748,7 +748,7 @@ supplies them (`schedule.estimate` of the `export` and `explain` payloads), or s
 recorded, apart from priority, float and criticality and from the project's p50/p80/p95; no estimate
 is computed.
 
-The Network page (`--page network`, Cmd-6) is read-only too. Its nodes are the `export` snapshot's
+The Network page (`--page network`, Cmd-6) also only reads unless editing is on. Its nodes are the `export` snapshot's
 work items (tasks, milestones and work packages, each a distinct shape with its kind in words) and
 decisions (decision gates). It has three edge kinds, each with its own text and a non-colour cue:
 temporal dependencies (FS, SS, FF, SF with lead or lag and the Hard or Soft policy), decision
@@ -763,6 +763,25 @@ task's predecessors, successors and unmet gates are those `explain` reports. A t
 node with its edges and attributes is always present and comes first; the graph beside it is laid
 out in columns by the chain of gating edges, which is geometry only. Filters, zoom and pan change
 only what is drawn; selection and the Detail return are shared with the other views.
+
+Editing (the Edit toggle, ⌘E, on the Gantt and Network pages) proposes plan changes; it never writes
+a derived value. Edits gather in a draft pinned to the revision and lineage of the export it started
+from: a drag between bars proposes a dependency whose kind follows the ends joined (finish to start
+FS, start to start SS, finish to finish FF, start to finish SF), a drag of the finish of a task not
+yet started scales its own three-point estimate by the ratio of the new bar length to the old (the
+review shows the exact hours), a drag between network nodes proposes FS, and the inspector edits
+title, objective, acceptance, estimate, kind, nesting (⌘] and ⌘[), dependencies, decision gates and
+new tasks by keyboard. A bar never moves: dates are derived. Reviewing the draft is the read-only
+`propose_change` query against the pinned basis, which returns the entity changes, the affected work
+and applicability changes and records nothing; applying sends those changes as one `ApplyChange`
+command with the actor (`kind:name`, attribution rather than authentication), a reason, a request
+identity and the observed revision and lineage. The application refuses cycles, protected execution
+and stale bases with its reason; a stale refusal keeps the draft, reads the plan again and reviews
+the draft against it, and while an apply is in flight or its outcome is unknown nothing else changes
+the draft or applies: the same request is resent, and only the application's own answer settles it.
+Applying needs a live, connected and current workspace. The engine compares a returned change with
+the current state by value, so a client that re-encodes `2.0` as `2` applies the change it reviewed,
+and the log records the canonical difference `plan diff` shows.
 
 The measurement of the Gantt (`scripts/measure_gantt.py`) judges every run, a measurement, a control
 or a replayed log, with one analyzer before any statistic is eligible: every planned generation, a

@@ -48,6 +48,8 @@ struct GanttView: View {
             .accessibilityIdentifier("gantt.body")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .inspector(isPresented: Binding(get: { model.editing.enabled }, set: { model.setEditing($0) })) { EditPanel(model: model) }
+        .sheet(isPresented: Binding(get: { model.editing.reviewing }, set: { if !$0 { model.closeReview() } })) { ReviewSheet(model: model) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("gantt")
         .onAppear { report() }
@@ -118,6 +120,7 @@ struct GanttToolbar: View {
                     .disabled(!state.filter.isActive)
                     .accessibilityIdentifier("gantt.clear")
                 Spacer(minLength: 0)
+                EditToggle(model: model)
             }
             HStack(spacing: 6) {
                 tool("Collapse all", "rectangle.compress.vertical", "gantt.collapse-all", help: "Collapse all work packages (,)") { model.perform(.collapseAll) }

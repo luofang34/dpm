@@ -35,6 +35,7 @@ struct NetworkView: View {
                     VStack(spacing: 0) {
                         NetworkCanvas(model: model, graph: graph, nodes: nodes)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .overlay { if let link = model.network.linking { NetworkLinkView(link: link, model: model) } }
                             .reportFrame("network_canvas")
                         Divider()
                         NetworkInspector(model: model, graph: graph)
@@ -47,6 +48,8 @@ struct NetworkView: View {
             .frame(width: size.width, height: size.height, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .inspector(isPresented: Binding(get: { model.editing.enabled }, set: { model.setEditing($0) })) { EditPanel(model: model) }
+        .sheet(isPresented: Binding(get: { model.editing.reviewing }, set: { if !$0 { model.closeReview() } })) { ReviewSheet(model: model) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("network")
         .onAppear { model.reconcileNetworkFocus() }
@@ -91,6 +94,7 @@ struct NetworkView: View {
                 Button { model.performNetwork(.zoomIn) } label: { Image(systemName: "plus.magnifyingglass") }
                     .help("Zoom in (=)").accessibilityLabel("Zoom in").accessibilityIdentifier("network.zoom-in")
                 Spacer(minLength: 0)
+                EditToggle(model: model)
             }
             HStack(spacing: 6) {
                 ForEach(NetworkEdgeKind.allCases, id: \.self) { kind in
@@ -619,6 +623,8 @@ final class NetworkRegionView: NSView {
     private var dragged = false
     /// The node a press landed on; it is selected on release, and only when the press did not become a drag.
     private var pressed: (identity: String, clicks: Int)?
+    /// Where the press landed, in canvas coordinates: a link drawn while editing starts there.
+    private var pressPoint: (x: Double, y: Double)?
     private var tracking: NSTrackingArea?
 
     /// One bounded receipt of what this region really received and did, with its window's actual first responder.
@@ -724,6 +730,7 @@ final class NetworkRegionView: NSView {
         let point = canvasPoint(event)
         dragOrigin = event.locationInWindow
         dragged = false
+        pressPoint = point
         MainActor.assumeIsolated {
             let hit = node(at: point)
             pressed = hit.map { ($0.identity, event.clickCount) }
@@ -738,13 +745,28 @@ final class NetworkRegionView: NSView {
         guard dragged || abs(dx) + abs(dy) > 3 else { return }
         dragged = true
         dragOrigin = now
-        // The content follows the pointer: the pan grows as the pointer moves left or up (window y grows upwards).
-        MainActor.assumeIsolated { model?.panNetwork(dx: -dx, dy: dy) }
+        let point = canvasPoint(event)
+        MainActor.assumeIsolated {
+            // While editing, a drag from a work item draws a finish-to-start link instead of panning; nothing moves.
+            if let model, model.editing.enabled, let press = pressed, let start = pressPoint, model.networkGraph.node(press.identity)?.isDecision == false {
+                model.setNetworkLink(NetworkLinkDrag(from: press.identity, origin: NetworkPoint(x: start.x, y: start.y), point: NetworkPoint(x: point.x, y: point.y)))
+                return
+            }
+            // The content follows the pointer: the pan grows as the pointer moves left or up (window y grows upwards).
+            model?.panNetwork(dx: -dx, dy: dy)
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
+        let point = canvasPoint(event)
         MainActor.assumeIsolated {
-            if dragged {
+            if let model, let link = model.network.linking {
+                model.setNetworkLink(nil)
+                if let target = node(at: point), target.identity != link.from, !target.isDecision {
+                    model.edit(.link(id: UUID().uuidString.lowercased(), from: link.from, fromEnd: .finish, to: target.identity, toEnd: .start, lagHours: 0))
+                    note("edit_link", ["from": model.editName(link.from), "to": target.key])
+                }
+            } else if dragged {
                 note("drag_end", ["pan": model.map { [$0.network.panX, $0.network.panY] } ?? []])
             } else if let press = pressed, let model {
                 // A click, not a drag: only now does it select, so panning from a node leaves the selection alone.
@@ -754,6 +776,7 @@ final class NetworkRegionView: NSView {
             }
         }
         pressed = nil
+        pressPoint = nil
         dragOrigin = nil
         dragged = false
     }
@@ -832,4 +855,25 @@ final class NetworkRegionView: NSView {
 /// The model the pointer's scroll pans; set once at launch, as the key monitor's is.
 @MainActor enum NetworkPointer {
     static weak var model: ObserverModel?
+}
+
+/// The link being drawn on the network while editing, with what a drop does.
+struct NetworkLinkView: View {
+    let link: NetworkLinkDrag
+    @ObservedObject var model: ObserverModel
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Canvas { context, _ in
+                var path = Path()
+                path.move(to: CGPoint(x: link.origin.x, y: link.origin.y))
+                path.addLine(to: CGPoint(x: link.point.x, y: link.point.y))
+                context.stroke(path, with: .color(Palette.relationEmphasis), style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+            }
+            Text("FS link from \(model.editName(link.from)): drop on another task or milestone").font(.caption).padding(5)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
+                .offset(x: link.point.x + 12, y: link.point.y + 12)
+        }
+        .allowsHitTesting(false)
+    }
 }
