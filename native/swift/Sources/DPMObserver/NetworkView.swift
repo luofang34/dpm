@@ -410,19 +410,23 @@ struct NetworkCanvas: View {
         switch edge.kind {
         case .temporal:
             let soft = edge.relation?.policy == "Soft"
-            context.stroke(path, with: .color(.primary.opacity(0.7)), style: StrokeStyle(lineWidth: 1.2, dash: soft ? [5, 3] : []))
+            // A link of the critical path is heavier as well as coloured; its words say so too.
+            let color = edge.critical ? Palette.relationCritical : Color.primary.opacity(0.55)
+            context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: edge.critical ? 2.2 : 1.1, dash: soft ? [5, 3] : []))
             var head = Path()
             head.move(to: end)
             head.addLine(to: CGPoint(x: end.x - 7, y: end.y - 4))
             head.addLine(to: CGPoint(x: end.x - 7, y: end.y + 4))
             head.closeSubpath()
-            context.fill(head, with: .color(.primary.opacity(0.7)))
+            context.fill(head, with: .color(color))
         case .decisionBlock:
-            context.stroke(path, with: .color(.red.opacity(0.8)), style: StrokeStyle(lineWidth: 2.5))
+            // A decision that is no longer open gates nothing: a thin dashed line, and its words say so.
+            let color = edge.released ? Palette.gate.opacity(0.45) : Palette.gate
+            context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: edge.released ? 1 : 2.5, dash: edge.released ? [4, 3] : []))
             var bar = Path()
             bar.move(to: CGPoint(x: end.x - 3, y: end.y - 7))
             bar.addLine(to: CGPoint(x: end.x - 3, y: end.y + 7))
-            context.stroke(bar, with: .color(.red.opacity(0.8)), lineWidth: 3)
+            context.stroke(bar, with: .color(color), lineWidth: edge.released ? 1.5 : 3)
         case .context:
             context.stroke(path, with: .color(.secondary), style: StrokeStyle(lineWidth: 1, dash: [1, 3]))
         }
@@ -454,7 +458,7 @@ struct NetworkCanvas: View {
             shape = Path(roundedRect: rect, cornerRadius: node.kind == .package ? 0 : 5)
         }
         context.fill(shape, with: .color(Color(nsColor: .controlBackgroundColor)))
-        context.stroke(shape, with: .color(node.critical == true ? .orange : .secondary), lineWidth: node.critical == true ? 2.5 : 1)
+        context.stroke(shape, with: .color(node.critical == true ? Palette.critical : .secondary), lineWidth: node.critical == true ? 2.5 : 1)
         if node.kind == .package { context.stroke(Path(rect.insetBy(dx: 3, dy: 3)), with: .color(.secondary), lineWidth: 1) }
         if focused { context.stroke(Path(rect.insetBy(dx: -4, dy: -4)), with: .color(keyboard ? .accentColor : .secondary), style: StrokeStyle(lineWidth: 2, dash: keyboard ? [] : [3, 2])) }
         if node.kind == .milestone || node.kind == .decision {
@@ -470,8 +474,24 @@ struct NetworkCanvas: View {
             return
         }
         let title = node.title.count > 26 ? String(node.title.prefix(25)) + "…" : node.title
-        context.draw(Text(node.key).font(.system(size: 10, weight: .semibold)), at: CGPoint(x: rect.midX, y: rect.minY + 13))
-        context.draw(Text(title).font(.system(size: 9)), at: CGPoint(x: rect.midX, y: rect.minY + 29))
+        guard let times = timesLine(node) else {
+            context.draw(Text(node.key).font(.system(size: 10, weight: .semibold)), at: CGPoint(x: rect.midX, y: rect.minY + 13))
+            context.draw(Text(title).font(.system(size: 9)), at: CGPoint(x: rect.midX, y: rect.minY + 29))
+            return
+        }
+        // An activity-on-node box: key, title, then earliest start, latest start and total float.
+        context.draw(Text(node.key).font(.system(size: 10, weight: .semibold)), at: CGPoint(x: rect.midX, y: rect.minY + 10))
+        context.draw(Text(title).font(.system(size: 9)), at: CGPoint(x: rect.midX, y: rect.minY + 23))
+        context.draw(Text(times).font(.system(size: 8).monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: rect.midX, y: rect.minY + 35))
+    }
+
+    /// "ES 9.8 h · LS 12.0 h · TF 2.2 h" for scheduled work, or "critical · ES 9.8 h · TF 0.0 h" on the critical
+    /// path (where LS equals ES), so a critical node says so in words and not by its outline alone; nil when the
+    /// projection gave no times.
+    static func timesLine(_ node: NetworkNode) -> String? {
+        guard let early = node.earliestStart, let late = node.latestStart, let float = node.totalFloat else { return nil }
+        if node.critical == true { return "critical · ES \(hoursText(early)) · TF \(hoursText(float))" }
+        return "ES \(hoursText(early)) · LS \(hoursText(late)) · TF \(hoursText(float))"
     }
 }
 

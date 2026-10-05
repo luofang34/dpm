@@ -75,6 +75,11 @@ extension Context {
         check(words.filter { $0.0 == .context }.allSatisfy { $0.1.contains("not blocking") && !$0.1.contains("blocks") && $0.1.hasPrefix(NetworkEdgeKind.context.cue) },
               "every context link reads 'not blocking' with its own cue, never as a gate")
         check(words.filter { $0.0 == .decisionBlock }.allSatisfy { $0.1.contains("blocks") && $0.1.hasPrefix(NetworkEdgeKind.decisionBlock.cue) }, "every decision-blocking edge reads that it blocks, with its own cue")
+        // A decision gates only while it is open, as execution reads it; the edge's words follow the decision's status.
+        let open = Set(decisionsJSON.filter { $0["status"].string == "Open" }.compactMap { $0["id"].string })
+        check(graph.edges.filter { $0.kind == .decisionBlock }.allSatisfy { edge in
+            edge.released == !open.contains(edge.from) && edge.words(names: { graph.name($0) }).contains("no longer blocks") == edge.released
+        }, "each decision-blocking edge reads as blocking exactly while its decision is open")
         check(Set(NetworkEdgeKind.allCases.map(\.cue)).count == 3 && Set(NetworkEdgeKind.allCases.map(\.words)).count == 3, "the three kinds have distinct words and distinct non-colour cues")
         let kinds = Set(graph.nodes.map(\.kindText))
         check(kinds.contains("milestone (diamond)") && kinds.contains("decision gate (hexagon)") && kinds.contains("task (rectangle)") && kinds.contains("work package (double outline)"), "task, milestone, package and decision nodes read their distinct shapes: \(kinds.sorted())")
@@ -87,11 +92,31 @@ extension Context {
             if node.totalFloat != float { differences.append("\(node.key) float") }
         }
         check(differences.isEmpty, "each node's float is the schedule query's: \(differences)")
+        // Which temporal edges are links of the critical path is the query's `relations`, never derived here.
+        let relations = try await cliJSON(database, ["--clock", tools.clock, "schedule"])["data"]["relations"].array ?? []
+        let reported = Set(relations.filter { $0["critical"].bool == true }.compactMap { $0["id"].string })
+        let drawnCritical = Set(temporal.filter(\.critical).compactMap { $0.relation?.id })
+        check(!relations.isEmpty && drawnCritical == reported, "the critical-path edges are exactly the relations the schedule query marks critical: \(reported.count)")
+        // A critical link is never told by colour alone: the network edge and the Gantt row both say it in words.
+        let gantt = await MainActor.run { model.snapshot.gantt }
+        let critical = temporal.filter(\.critical)
+        check(!critical.isEmpty && critical.allSatisfy { edge in
+            edge.words(names: names).hasSuffix("on the critical path") && (edge.relation.map { gantt?.words($0, names: names).hasSuffix("on the critical path") ?? false } ?? false)
+        }, "every critical-path link says so in its network and Gantt words: \(critical.count)")
         // A context link places no node and gates nothing: no walk reaches a node through it.
         let contextTargets = Set(graph.edges.filter { $0.kind == .context }.map(\.to))
         check(contextTargets.allSatisfy { target in graph.edges(into: target, kinds: [.decisionBlock]).allSatisfy { edge in !graph.edges.contains { $0.kind == .context && $0.from == edge.from && $0.to == target } } },
               "no context link is also listed as a block of the same target")
         await closeGantt(model)
+        // Once decided, a decision gates nothing: its edges read as no longer blocking.
+        let decided = try await networkStore("network-decided")
+        _ = try await cliJSON(decided, ["decide", "TEST-GATE", "accepted", "--actor", "human:reviewer"])
+        let after = try await openGanttModel(.database(decided), page: .network)
+        _ = try await modelExpect(after, "the schedule to be read after the decision", 60) { $0.gantt != nil }
+        let gates = await MainActor.run { after.networkGraph.edges.filter { $0.kind == .decisionBlock && after.networkGraph.name($0.from).contains("TEST-GATE") } }
+        check(!gates.isEmpty && gates.allSatisfy { $0.released && $0.words(names: { _ in "?" }).contains("no longer blocks") },
+              "a decided decision's \(gates.count) gate edges read as no longer blocking")
+        await closeGantt(after)
     }
 
     // MARK: One projection for the list and the canvas (N2), and J1.11 counts

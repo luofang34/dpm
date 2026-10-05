@@ -272,14 +272,14 @@ struct GanttStrip: View {
                     Badge(text: kindWords(row), symbol: row.isMilestone ? "diamond.fill" : (row.isPackage ? "folder" : "circle"))
                     Badge(text: row.status, symbol: "flag.checkered")
                     if !row.priority.isEmpty { Badge(text: "Priority \(row.priority)", symbol: "person.fill.questionmark") }
-                    if row.span?.critical == true { Badge(text: "On the critical path", symbol: "flame", tint: .orange) }
+                    if row.span?.critical == true { Badge(text: "On the critical path", symbol: "flame", tint: Palette.critical) }
                     Text(row.key).font(.system(.callout, design: .monospaced))
                     if frame.selected == row.id { Badge(text: "Selected", symbol: "checkmark.circle", tint: .blue) }
                 }
                 Prose(text: facts(row), font: .caption)
                 ForEach(Array(frame.inventory.relations(of: row.id).prefix(8)), id: \.id) { edge in
                     let names = { (identity: String) in schedule.row(identity)?.key ?? frame.inventory.key(of: identity) ?? String(identity.prefix(8)) }
-                    Prose(text: "• " + edge.words(names: names), font: .caption)
+                    Prose(text: "• " + schedule.words(edge, names: names), font: .caption)
                 }
                 if frame.inventory.relations(of: row.id).count > 8 {
                     Text("and \(frame.inventory.relations(of: row.id).count - 8) more relations are listed in Detail").font(.caption).foregroundStyle(.secondary)

@@ -51,6 +51,9 @@ public struct NetworkNode: Identifiable, Equatable, Sendable {
     public let critical: Bool?
     public let totalFloat: Double?
     public let criticality: Double?
+    /// Earliest and latest start, in the projection's elapsed hours; nil when it gave none.
+    public var earliestStart: Double? = nil
+    public var latestStart: Double? = nil
 
     public var isDecision: Bool { kind == .decision }
 
@@ -72,14 +75,19 @@ public struct NetworkEdge: Identifiable, Hashable, Sendable {
     public let to: String
     /// The plan dependency, for a temporal edge.
     public let relation: GanttRelation?
+    /// A driving dependency between critical items, as the schedule projection reports it.
+    public var critical = false
+    /// For a decision gate: the decision is no longer Open, so, as execution reads it, it gates nothing now.
+    public var released = false
 
     /// The edge in full words: its kind, its ends, and for a temporal edge its relation, lag and policy.
     public func words(names: (String) -> String) -> String {
         switch kind {
         case .temporal:
             guard let relation = relation else { return "\(kind.cue) temporal dependency \(names(from)) → \(names(to))" }
-            return "\(kind.cue) temporal dependency: \(relation.words(names: names))"
+            return "\(kind.cue) temporal dependency: \(relation.words(names: names))\(critical ? "; on the critical path" : "")"
         case .decisionBlock:
+            if released { return "\(kind.cue) decision gate: \(names(from)) is no longer open, so it no longer blocks \(names(to))" }
             return "\(kind.cue) decision gate: \(names(from)) blocks \(names(to)) until it is decided"
         case .context:
             return "\(kind.cue) related work: \(names(from)) mentions \(names(to)) as context; not blocking"
@@ -115,9 +123,12 @@ public struct NetworkGraph: Equatable, Sendable {
         var nodes: [NetworkNode] = inventory.items.map { item in
             let row = schedule?.row(item.identity)
             let kind = NetworkNode.Kind(rawValue: item.kind) ?? .task
-            return NetworkNode(identity: item.identity, key: item.key, title: item.title, kind: kind, kindWord: item.kind, status: item.status,
-                               blockReason: item.blockReason, critical: row?.times?.critical ?? row?.span?.critical, totalFloat: row?.times?.totalFloat,
-                               criticality: row?.criticality)
+            var node = NetworkNode(identity: item.identity, key: item.key, title: item.title, kind: kind, kindWord: item.kind, status: item.status,
+                                   blockReason: item.blockReason, critical: row?.times?.critical ?? row?.span?.critical, totalFloat: row?.times?.totalFloat,
+                                   criticality: row?.criticality)
+            node.earliestStart = row?.times?.earliestStart
+            node.latestStart = row?.times?.latestStart
+            return node
         }
         nodes += inventory.decisions.map { decision in
             NetworkNode(identity: decision.identity, key: decision.key, title: decision.question.isEmpty ? decision.key : decision.question, kind: .decision,
@@ -125,10 +136,16 @@ public struct NetworkGraph: Equatable, Sendable {
         }
         let index = Dictionary(nodes.enumerated().map { ($0.element.identity, $0.offset) }, uniquingKeysWith: { first, _ in first })
         var edges: [NetworkEdge] = inventory.relations.map { relation in
-            NetworkEdge(id: "dependency:\(relation.id)", kind: .temporal, from: relation.predecessor, to: relation.successor, relation: relation)
+            var edge = NetworkEdge(id: "dependency:\(relation.id)", kind: .temporal, from: relation.predecessor, to: relation.successor, relation: relation)
+            edge.critical = schedule?.criticalRelations.contains(relation.id) ?? false
+            return edge
         }
         for decision in inventory.decisions {
-            edges += decision.blocks.map { NetworkEdge(id: "blocks:\(decision.identity)>\($0)", kind: .decisionBlock, from: decision.identity, to: $0, relation: nil) }
+            edges += decision.blocks.map {
+                var edge = NetworkEdge(id: "blocks:\(decision.identity)>\($0)", kind: .decisionBlock, from: decision.identity, to: $0, relation: nil)
+                edge.released = decision.status != "Open"
+                return edge
+            }
             edges += decision.related.map { NetworkEdge(id: "related:\(decision.identity)>\($0)", kind: .context, from: decision.identity, to: $0, relation: nil) }
         }
         var incoming: [String: [Int]] = [:], outgoing: [String: [Int]] = [:]

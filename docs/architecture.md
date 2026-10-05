@@ -714,15 +714,21 @@ session control, push events, remote access), what a `reported_only` run is, and
 | Gantt | `schedule`, `explain`, `export` | project |
 | Network | `schedule`, `explain`, `export` | project |
 
+Chart colours are named roles in `DPMObserver/Palette.swift`: status roles for bars and nodes, and
+relation roles for lines. A client drawing these charts uses the same role names and values, so the
+views read alike across clients. No role is the only cue; each is paired with a shape, a dash or words.
+
 The Gantt page of the macOS observer (`--page gantt`, Cmd-5) is read-only. Rows follow the plan
 hierarchy (`parent`) in the key order the `schedule` projection lists them; a bar is the row's
 `span` in elapsed hours from the evaluation time, a milestone is a diamond with its own text, and
 float, criticality (a fraction of seeded simulations, never the human priority) and the project's
 p50/p80/p95 finish hours are the projection's values. Relations (FS, SS, FF, SF with lead or lag and
 the Hard or Soft policy) come from the `export` snapshot the observer already reads and from
-`explain` in Detail. The client lays these out and derives nothing: no scheduling, no readiness, and
-no calendar date, which appears only where a query supplies one (the projection supplies none, so
-hours are labelled elapsed). Collapse and expand, zoom, pan and filters change only what is drawn,
+`explain` in Detail; whether a relation is a link of the critical path is the projection's
+`relations` entry, drawn in the critical colour and said in the relation's label and row words.
+Float is drawn in its own lane under a bar, so the bar's label stays readable. The client lays
+these out and derives nothing: no scheduling, no readiness, and no calendar date, which appears
+only where a query supplies one (the projection supplies none, so hours are labelled elapsed). Collapse and expand, zoom, pan and filters change only what is drawn,
 never the selection (`ObserverModel.selection`, shared with Detail) and never the project. The
 page's `schedule` read is displayed, and judged for staleness, only while the page is shown. A
 schedule read that is owed because the status changed stays owed, and the view stays marked stale,
@@ -737,9 +743,13 @@ The Network page (`--page network`, Cmd-6) is read-only too. Its nodes are the `
 work items (tasks, milestones and work packages, each a distinct shape with its kind in words) and
 decisions (decision gates). It has three edge kinds, each with its own text and a non-colour cue:
 temporal dependencies (FS, SS, FF, SF with lead or lag and the Hard or Soft policy), decision
-blocks (a decision's `blocks`, the only edge that gates readiness) and context-only related work
-(a decision's `related_work`, drawn dotted and read as "not blocking"). Float and criticality come
-from the same `schedule` read the Gantt uses, read only while the page is shown; the selected
+blocks (a decision's `blocks`, gating while the decision is open and read as no longer blocking once
+it is not) and context-only related work (a decision's `related_work`, drawn dotted and read as
+"not blocking"). Float and criticality come
+from the same `schedule` read the Gantt uses, read only while the page is shown, and a scheduled
+node also shows its earliest start, latest start and total float, as an activity-on-node chart does,
+and a critical node says "critical" in that line;
+critical-path links are drawn heavier and named in the edge's words; the selected
 task's predecessors, successors and unmet gates are those `explain` reports. A text list of every
 node with its edges and attributes is always present and comes first; the graph beside it is laid
 out in columns by the chain of gating edges, which is geometry only. Filters, zoom and pan change
