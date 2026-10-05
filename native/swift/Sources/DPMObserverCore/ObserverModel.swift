@@ -13,13 +13,42 @@ import Foundation
 @MainActor
 public final class ObserverModel: ObservableObject {
     public enum Page: String, CaseIterable, Identifiable, Sendable {
-        case now = "Now", live = "Live", review = "Review", detail = "Detail"
+        case now = "Now", live = "Live", review = "Review", detail = "Detail", gantt = "Gantt"
         public var id: String { rawValue }
     }
 
+    /// Where Detail was opened from, so closing it goes back there: the page, and the element that
+    /// held keyboard focus on it (for the Gantt, a row, kept by its persistent identity).
+    public struct DetailReturn: Equatable, Sendable {
+        public let page: Page
+        public let element: String?
+        public let row: String?
+    }
+
     @Published public private(set) var snapshot = ObserverSnapshot()
-    @Published public var page = Page.now
+    @Published public var page = Page.now {
+        didSet { if page != oldValue { pageChanged(from: oldValue) } }
+    }
     @Published public private(set) var selection: Subject?
+    /// How the Gantt is drawn: collapse, filter, zoom, pan and the keyboard cursor. Never the project,
+    /// and never the selection, which stays one value shared with Detail.
+    @Published public internal(set) var gantt = GanttViewState()
+    /// The element the shared key handler decided has keyboard focus, as `gantt.row.<key>`,
+    /// `gantt.filter` or `detail.back`; what the views are asked to focus.
+    @Published public internal(set) var focusTarget: String?
+    /// The element that says it has focus, as the view itself reports it (like `searchFocused`).
+    @Published public internal(set) var focusReported: String?
+    /// The Gantt filter field lost focus without Escape or a commit: the rows are not asked to take it.
+    var focusLeftFilter = false
+    public internal(set) var detailReturn: DetailReturn?
+    /// Counts selections: the generation a Detail draw must carry to complete one.
+    public internal(set) var selectionCount = 0
+    /// The newest selection whose detail was assigned to the model, so `state_set` is logged once.
+    var detailAssignedFor = 0
+    var measuredRevision: UInt64?
+    var measuredSchedule: UUID?
+    /// The outline last computed, kept until the schedule reading or the collapse or filter changes.
+    var outlineCache: (token: UUID, collapsed: Set<String>, filter: GanttFilter, rows: [GanttOutlineRow], positions: [String: Int])?
     @Published public private(set) var setupError: String?
     /// When the displayed snapshot was installed, for the freshness line and for measurement.
     @Published public private(set) var installedAt = Date()
@@ -61,6 +90,19 @@ public final class ObserverModel: ObservableObject {
         engine = ObserverEngine(settings: settings) { [weak self] snapshot in
             Task { @MainActor in self?.receive(snapshot) }
         }
+        // The page named at launch was set before there was an engine to tell.
+        syncSchedule()
+    }
+
+    /// The Gantt's projection is read, and displayed, only while the Gantt is the page shown.
+    func syncSchedule() {
+        guard let engine = engine else { return }
+        let shown = page == .gantt
+        Task { await engine.showSchedule(shown) }
+    }
+
+    private func pageChanged(from old: Page) {
+        if page == .gantt || old == .gantt { syncSchedule() }
     }
 
     public var hasWorkspace: Bool {
@@ -95,16 +137,35 @@ public final class ObserverModel: ObservableObject {
     public func select(_ subject: Subject?) {
         guard subject != selection else { return }
         selection = subject
+        selectionCount &+= 1
+        if let log = MeasureLog.shared, let subject = subject {
+            let named = Self.name(subject, in: snapshot)
+            log.expect("select:\(selectionCount)", facts: ["subject": named, "loading": "false"])
+            log.emit("select_call", gen: selectionCount, detail: ["subject": named])
+        }
         guard let engine = engine else { return }
         Task { await engine.select(subject) }
     }
 
-    public func show(_ page: Page) { self.page = page }
+    /// What a measurement calls a subject: a task by its key, anything else by its identity.
+    public static func name(_ subject: Subject, in snapshot: ObserverSnapshot) -> String {
+        switch subject {
+        case .work(let identity): return snapshot.inventory.key(of: identity) ?? identity
+        case .run(let id): return id
+        case .decision(let id): return snapshot.inventory.decisionByIdentity[id]?.key ?? id
+        }
+    }
+
+    public func show(_ page: Page) {
+        detailReturn = nil
+        self.page = page
+    }
 
     /// Go to the search over every task and decision, with the cursor in it. The request is kept
     /// until the search field takes it, so it is not lost when the field is created by this very
     /// change of page.
     public func findWork() {
+        detailReturn = nil
         page = .detail
         searchFocusPending = true
         searchRequest &+= 1
@@ -119,10 +180,17 @@ public final class ObserverModel: ObservableObject {
     /// The search field reports when it gains or loses keyboard focus.
     public func searchFocus(_ focused: Bool) { searchFocused = focused }
 
-    public func openDetail(for subject: Subject) {
+    /// Show a subject in Detail and remember where it was opened from, so closing Detail goes back to
+    /// that page and, when `element` names one, to that element. From the Gantt the element is the row.
+    public func openDetail(for subject: Subject, from element: String? = nil, row: String? = nil) {
+        if page != .detail { detailReturn = DetailReturn(page: page, element: element, row: row) }
         select(subject)
         page = .detail
+        focusTarget = nil
     }
+
+    /// Whether closing Detail has somewhere to go back to.
+    public var canReturn: Bool { page == .detail && detailReturn != nil }
 
     static func same(_ left: WorkspaceSelection, _ right: WorkspaceSelection?) -> Bool {
         guard let right = right else { return false }
@@ -177,6 +245,7 @@ public final class ObserverModel: ObservableObject {
             selectRunPending = nil
             select(.run(run))
         }
+        installed(new)
         onInstalled?()
     }
 

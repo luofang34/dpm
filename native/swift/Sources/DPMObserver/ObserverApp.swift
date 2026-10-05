@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// because the main queue is not served while AppKit waits for a deferred termination.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let engine = MainActor.assumeIsolated { Launch.shared.model.engine }
+        // Everything handed to the measurement log is written, and its dropped count recorded, before exit.
+        MeasureLog.shared?.close()
         Task.detached {
             await engine?.close()
             CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue) {
@@ -35,6 +37,8 @@ struct ObserverApp: App {
     var body: some Scene {
         Window("DPM Observer", id: "main") {
             RootView(model: model)
+                .environment(\.layoutRegistry, Launch.shared.layout)
+                .environment(\.hostObservation, Launch.shared.host)
                 .frame(minWidth: 900, minHeight: 560)
                 .onAppear { Launch.shared.start() }
         }

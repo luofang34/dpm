@@ -27,6 +27,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import build_native
+import measure_gantt
 import smoke_observer
 from smoke_agent import CLI, ROOT, Agent, run_cli, run_cli_envelope
 
@@ -67,6 +68,17 @@ def lagged_plan(directory):
     return path
 
 
+def gantt_plans(directory):
+    """The plans of the Gantt scenarios: the nested fixture (a package, a nested task, a milestone, the four
+    relation kinds with lead and lag, Hard and Soft, one long title), the same with calendars, a
+    1000-task plan with the dense overlay under 100 packages, and one with 500-character titles."""
+    write = measure_gantt.write_plan
+    return ['--gantt-plan', str(write(directory / 'gantt-plan.json', measure_gantt.fx_gantt())),
+            '--calendar-plan', str(write(directory / 'calendar-plan.json', measure_gantt.fx_gantt(calendars=True))),
+            '--dense-plan', str(write(directory / 'dense-plan.json', measure_gantt.dataset(1000, 'dense'))),
+            '--long-plan', str(write(directory / 'long-plan.json', measure_gantt.dataset(100, 'branch', long_titles=True)))]
+
+
 def compare(name, native, other, source):
     assert native == other, f'{name}: the host envelope differs from {source}:\n host  {json.dumps(native, sort_keys=True)}\n other {json.dumps(other, sort_keys=True)}'
 
@@ -102,6 +114,8 @@ def negative_controls(suite, arguments, directory):
     controls = {
         'a wait for an event that never happens': (['--only', 'observer-negative-control', '--helper', str(directory / 'DPMHost.app/Contents/Helpers/dpm-native')], 'timed out'),
         'a helper that cannot be started': (['--only', 'observer-duplicates', '--helper', str(directory / 'no-such-helper')], 'stopped early'),
+        # The Gantt's key flow with key handling disabled: every assertion about the keys must fail.
+        'the Gantt key flow with key handling disabled': (['--only', 'gantt-negative-control', '--helper', str(directory / 'DPMHost.app/Contents/Helpers/dpm-native')], 'FAIL:'),
     }
     for name, (selection, expected) in controls.items():
         work = directory / f"control-{len(list(directory.glob('control-*')))}"
@@ -118,6 +132,10 @@ def main():
     if shutil.which('swiftc') is None:
         print('SKIPPED: no swiftc on this machine; the native bridge was not built or qualified and nothing is claimed.')
         return 0
+    # The measurement's analyzer and evidence capture, on frozen (synthetic) logs: able to say INVALID, to give a valid log its
+    # numbers and an invalid one none. The real controls and the real draws are judged by the same functions later.
+    analyzer_checks = measure_gantt.self_test()
+    print(f'PASS: measurement analyzer and evidence capture on frozen synthetic logs: {len(analyzer_checks)} checks')
     built = build_native.build(rust='--no-rust' not in sys.argv)
     suite = build_native.compile_suite(built)
     with tempfile.TemporaryDirectory() as scratch:
@@ -131,11 +149,11 @@ def main():
         work = directory / 'suite'
         work.mkdir()
         arguments = ['--dpm', str(CLI), '--host', str(host), '--plan', str(FIXTURE), '--lagged-plan', str(lagged_plan(directory)),
-                     '--proxy', str(PROXY), '--scratch', str(work), '--clock', at, '--writer', str(WRITER)]
+                     '--proxy', str(PROXY), '--scratch', str(work), '--clock', at, '--writer', str(WRITER), *gantt_plans(directory)]
         result = subprocess.run([str(suite), '--helper', str(helper), *arguments], cwd='/', timeout=1800)
         assert result.returncode == 0, f'the Swift integration suite failed (exit {result.returncode})'
         negative_controls(suite, arguments, directory)
-    print(f'PASS: packaged host and Swift suite against the shipped helper; {compared} host envelopes equal the CLI and agent-tool payloads; both negative controls fail with nonzero exit')
+    print(f'PASS: packaged host and Swift suite against the shipped helper; {compared} host envelopes equal the CLI and agent-tool payloads; the three negative controls fail with nonzero exit')
     for line in smoke_observer.main(built['observer']):
         print(f'PASS: observer app: {line}')
     return 0

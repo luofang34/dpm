@@ -195,6 +195,10 @@ public struct ObserverSnapshot: Equatable, Sendable {
     /// The selected run, read by identity: it stays inspectable when it leaves the global list.
     public var runDetail: RunSummary?
     public var inspection = Inspection()
+    /// The shared schedule projection, held only while the Gantt is the page shown.
+    public var gantt: GanttSchedule?
+    /// The helper's process identifier, for measurement and fault injection; never decided from.
+    public var helperProcess: Int32?
     public var counters = Counters()
     /// Strictly increasing with every published change, so a consumer can tell a repeat from news.
     public var sequence: UInt64 = 0

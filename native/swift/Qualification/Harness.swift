@@ -149,6 +149,9 @@ struct SuiteError: Error, CustomStringConvertible {
 
 struct Tools {
     var dpm = "", helper = "", host = "", plan = "", laggedPlan = "", proxy = "", scratch = "", clock = "", writer = ""
+    /// The plans of the Gantt scenarios, written by scripts/measure_gantt.py: the nested fixture, the same
+    /// with calendars, a 1000-task plan with the dense overlay, and one with 500-character titles.
+    var ganttPlan = "", calendarPlan = "", densePlan = "", longPlan = ""
 }
 
 final class Context {

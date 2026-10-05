@@ -194,6 +194,27 @@ public struct WorkItem: Identifiable, Hashable, Sendable {
     public let startedAt: Instant?
     public let submittedAt: Instant?
     public let verifiedAt: Instant?
+    /// The task's own three-point duration, exactly as the exported plan supplies it; nil when it has none.
+    public let estimate: Estimate?
+
+    /// Optimistic, likely and pessimistic elapsed hours, as written in the plan. Nothing is computed from them.
+    public struct Estimate: Hashable, Sendable {
+        public let optimisticHours: Double
+        public let likelyHours: Double
+        public let pessimisticHours: Double
+
+        public init(optimisticHours: Double, likelyHours: Double, pessimisticHours: Double) {
+            self.optimisticHours = optimisticHours
+            self.likelyHours = likelyHours
+            self.pessimisticHours = pessimisticHours
+        }
+
+        /// Read from `schedule.estimate` of a work item; nil when it is absent or not all three are numbers.
+        init?(_ json: JSON) {
+            guard let optimistic = json["optimistic_hours"].double, let likely = json["likely_hours"].double, let pessimistic = json["pessimistic_hours"].double else { return nil }
+            self.init(optimisticHours: optimistic, likelyHours: likely, pessimisticHours: pessimistic)
+        }
+    }
 
     public struct Attempt: Hashable, Sendable {
         public let number: Int
@@ -211,6 +232,7 @@ public struct WorkItem: Identifiable, Hashable, Sendable {
         status = execution["status"].string ?? "Unknown"
         owner = execution["owner"].actorName
         priority = json["schedule"]["priority"].string ?? ""
+        estimate = Estimate(json["schedule"]["estimate"])
         objective = json["contract"]["objective"].string ?? ""
         acceptance = json["contract"]["acceptance"].items.compactMap { $0["text"].string }
         artifactIds = execution["artifact_ids"].items.compactMap { $0.string }
@@ -265,14 +287,24 @@ public struct Inventory: Sendable, Equatable {
     public let decisions: [DecisionInfo]
     public let byIdentity: [String: WorkItem]
     public let decisionByIdentity: [String: DecisionInfo]
+    /// Every edge of the plan, as the snapshot lists it, with the edges at each end of a work item.
+    public let relations: [GanttRelation]
+    private let relationsAt: [String: [Int]]
 
     public static let empty = Inventory(items: [], artifacts: [:], decisions: [], projectTitle: "")
 
-    init(items: [WorkItem], artifacts: [String: Artifact], decisions: [DecisionInfo], projectTitle: String) {
+    init(items: [WorkItem], artifacts: [String: Artifact], decisions: [DecisionInfo], projectTitle: String, relations: [GanttRelation] = []) {
         self.items = items
         self.artifacts = artifacts
         self.decisions = decisions
         self.projectTitle = projectTitle
+        self.relations = relations
+        var at: [String: [Int]] = [:]
+        for (position, relation) in relations.enumerated() {
+            at[relation.predecessor, default: []].append(position)
+            if relation.successor != relation.predecessor { at[relation.successor, default: []].append(position) }
+        }
+        relationsAt = at
         byIdentity = Dictionary(items.map { ($0.identity, $0) }, uniquingKeysWith: { first, _ in first })
         decisionByIdentity = Dictionary(decisions.map { ($0.identity, $0) }, uniquingKeysWith: { first, _ in first })
     }
@@ -323,8 +355,12 @@ public struct Inventory: Sendable, Equatable {
         var decisions: [DecisionInfo] = []
         if case .object(let found) = data["decisions"] { decisions = found.values.compactMap(DecisionInfo.init) }
         decisions.sort { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
-        self.init(items: items, artifacts: artifacts, decisions: decisions, projectTitle: data["project"]["title"].string ?? data["projects"].items.first?["title"].string ?? "")
+        self.init(items: items, artifacts: artifacts, decisions: decisions, projectTitle: data["project"]["title"].string ?? data["projects"].items.first?["title"].string ?? "",
+                  relations: data["dependencies"].items.compactMap(GanttRelation.init))
     }
+
+    /// The relations that end or start at this work item: the plan's edges, not a derivation.
+    public func relations(of identity: String) -> [GanttRelation] { (relationsAt[identity] ?? []).map { relations[$0] } }
 
     /// Work awaiting independent acceptance: its recorded lifecycle word is `Submitted`.
     public var submitted: [WorkItem] { items.filter { $0.status == "Submitted" } }

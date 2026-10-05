@@ -61,6 +61,10 @@ public enum DetailBuilder {
         out.add("Readiness", ["claim", "start", "submit", "verify"].compactMap { step in
             transitions[step] == .null ? nil : (step.capitalized, gate(transitions[step]))
         })
+        // The item's own estimate, as `explain` supplies it, apart from priority, float and criticality.
+        out.add("Estimate (this item's own, elapsed hours)", [
+            ("Three-point estimate", GanttWords.estimate(WorkItem.Estimate(work["schedule"]["estimate"]))),
+        ])
         let schedule = data["schedule"]
         if schedule != .null {
             out.add("Schedule (elapsed hours, not calendar dates)", [
@@ -73,10 +77,10 @@ public enum DetailBuilder {
         }
         let context = data["context"]
         out.add("Predecessors", data["predecessors"].items.map { ($0["key"].string, "\($0["title"].string ?? "") — \($0["execution"]["status"].string ?? "")") })
-        out.add("Dependencies", context["dependencies"].items.map {
-            let kind = $0["kind"].string ?? "dependency"
-            let lag = $0["lag_hours"].double.map { $0 == 0 ? "" : String(format: ", lag %.1f h", $0) } ?? ""
-            return (kind, "\(name($0["predecessor"].string ?? "")) → \(name($0["successor"].string ?? "")) (\($0["policy"].string ?? "Hard")\(lag))")
+        // Each relation in words: its kind (FS, SS, FF or SF), lead or lag, and Hard or Soft policy.
+        out.add("Dependencies", context["dependencies"].items.compactMap { json in
+            guard let relation = GanttRelation(json) else { return nil }
+            return (relation.abbreviation, relation.words(names: name))
         })
         out.add("Successors", context["successors"].items.map { ($0["key"].string, "\($0["title"].string ?? "") — \($0["execution"]["status"].string ?? "")") })
         out.add("Parents", context["parents"].items.map { ($0["key"].string, $0["title"].string ?? "") })
