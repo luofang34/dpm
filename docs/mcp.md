@@ -938,7 +938,15 @@ computes scheduling. `data.work` lists every work item in key order with `id`, `
 `span` (`start_hours`, `finish_hours`, `critical`: the activity itself, or a package's applicable
 descendants), `times` (`earliest_start_hours`, `earliest_finish_hours`, `latest_start_hours`,
 `latest_finish_hours`, `total_float_hours`, `free_float_hours`, `critical`), `criticality` and
-`calendar`; `data.project_finish_hours` is the deterministic remaining duration. All hours are
+`calendar`; `data.project_finish_hours` is the deterministic remaining duration. A work package's
+`times` enclose its outstanding applicable descendants (earliest and latest bounds, their least
+float; `null` once all its work is complete) and its `criticality` is its most critical outstanding
+descendant's, never the float of the package itself.
+`data.relations` lists, in plan order, every dependency that still bounds outstanding work with
+`id`, `predecessor`, `successor`, `kind`, `slack_hours` (how far the successor's start lies past what
+this dependency alone requires; a gap in the successor's calendar is not slack), `driving` (it sets
+the successor's earliest start, or on calendars holds its finish) and `critical` (driving between two critical items: a link of the
+critical path); satisfied, waived and inapplicable dependencies are absent. All hours are
 elapsed hours from the clock reading. `calendar` (calendar, executor, `source`, `review_wait_hours`)
 is placement only, present when the plan has calendars, and no calendar date is ever inferred.
 

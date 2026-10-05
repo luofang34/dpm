@@ -207,7 +207,10 @@ fn a_resolved_choice_forecasts_and_places_only_the_selected_branch() {
                 assert!(work.times.is_some(), "{option}: {} times", work.key);
                 assert!(work.span.is_some(), "{option}: {} span", work.key);
                 assert!(expected.is_some(), "{option}: {} simulated", work.key);
-                assert_eq!(work.criticality, expected, "{option}: {}", work.key);
+                // A package reports its most critical descendant, not its own isolated node.
+                if work.kind != dpm_model::WorkKind::WorkPackage {
+                    assert_eq!(work.criticality, expected, "{option}: {}", work.key);
+                }
             } else {
                 if matches!(work.applicability, Applicability::NotSelected { .. }) {
                     not_selected += 1;

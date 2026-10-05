@@ -5,6 +5,8 @@
 mod examples;
 #[path = "temporal_contract/properties.rs"]
 mod properties;
+#[path = "temporal_contract/textbook.rs"]
+mod textbook;
 
 use dpm_model::{
     AcceptanceCriterion, Dependency, DependencyKind, Key, Plan, Priority, Project, ProjectId,
@@ -108,6 +110,19 @@ impl Network {
     /// Add a task with a point estimate, so its expected duration equals `hours`.
     pub fn task(&mut self, id: WorkItemId, hours: f64) -> WorkItemId {
         self.insert(id, WorkKind::Task, hours)
+    }
+
+    /// Add a task with a three-point estimate; the projection uses its PERT mean.
+    pub fn pert_task(&mut self, id: WorkItemId, o: f64, m: f64, p: f64) -> WorkItemId {
+        self.insert(id, WorkKind::Task, (o + 4.0 * m + p) / 6.0);
+        if let Some(work) = self.plan.work_items.get_mut(&id) {
+            work.schedule.estimate = Some(ThreePointEstimate {
+                optimistic_hours: o,
+                likely_hours: m,
+                pessimistic_hours: p,
+            });
+        }
+        id
     }
 
     /// Add a zero-duration milestone.

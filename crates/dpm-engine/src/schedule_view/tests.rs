@@ -298,3 +298,104 @@ fn nested_packages_union_their_descendants_and_critical_is_an_or() {
         assert_eq!(row.span, Some(expected), "row {}", item.key);
     }
 }
+
+#[test]
+fn a_package_reports_its_descendants_bounds_and_least_float() {
+    let mut plan = generated(1, false);
+    let package = add_package(&mut plan, "PKG", None);
+    let first = add_task(&mut plan, "FIRST", 4.0, Some(package), None);
+    let long = add_task(&mut plan, "LONG", 6.0, Some(package), Some(first));
+    let short = add_task(&mut plan, "SHORT", 1.0, Some(package), Some(first));
+    let quiet = add_package(&mut plan, "QUIET", None);
+    let floating = add_task(&mut plan, "FLOAT", 1.0, Some(quiet), None);
+    let projection = schedule_projection(&plan, true, now()).expect("projection");
+    let row = |id| projection.work.iter().find(|w| w.id == id).expect("row");
+    let times = |id| row(id).times.clone().expect("times");
+    let rolled = times(package);
+    assert_eq!(
+        rolled.earliest_start_hours,
+        times(first).earliest_start_hours
+    );
+    assert_eq!(
+        rolled.earliest_finish_hours,
+        times(long).earliest_finish_hours
+    );
+    assert_eq!(rolled.latest_start_hours, times(first).latest_start_hours);
+    assert_eq!(rolled.latest_finish_hours, times(long).latest_finish_hours);
+    assert_eq!(rolled.total_float_hours, 0.0);
+    assert!(rolled.critical && times(short).total_float_hours > 0.0);
+    assert_eq!(row(package).criticality, Some(1.0));
+
+    // A package whose only work floats keeps that float, not the whole project's duration.
+    let quiet_times = times(quiet);
+    assert_eq!(
+        quiet_times.total_float_hours,
+        times(floating).total_float_hours
+    );
+    assert!(quiet_times.total_float_hours < projection.project_finish_hours);
+    assert!(!quiet_times.critical);
+    assert_eq!(row(quiet).criticality, row(floating).criticality);
+    assert_eq!(row(quiet).span.map(|s| s.critical), Some(false));
+}
+
+#[test]
+fn relations_mark_the_constraint_that_drives_each_successor() {
+    let mut plan = generated(1, false);
+    let first = add_task(&mut plan, "FIRST", 4.0, None, None);
+    let long = add_task(&mut plan, "LONG", 6.0, None, Some(first));
+    let short = add_task(&mut plan, "SHORT", 1.0, None, Some(first));
+    let join = add_task(&mut plan, "JOIN", 1.0, None, Some(long));
+    plan.dependencies.push(dpm_model::Dependency::new(
+        short,
+        join,
+        dpm_model::DependencyKind::FinishStart,
+        0.0,
+    ));
+    let projection = schedule_projection(&plan, false, now()).expect("projection");
+    let relation = |from, to| {
+        projection
+            .relations
+            .iter()
+            .find(|r| r.predecessor == from && r.successor == to)
+            .expect("relation")
+    };
+    assert_eq!(projection.relations.len(), plan.dependencies.len());
+    assert!(relation(first, long).critical && relation(long, join).critical);
+    assert!(relation(first, short).driving && !relation(first, short).critical);
+    assert!(!relation(short, join).driving);
+    assert_eq!(relation(short, join).slack_hours, 5.0);
+}
+
+/// Mark `id` verified hours before `now()`, as the shared timeline reads completion.
+fn verify(plan: &mut Plan, id: WorkItemId) {
+    let work = plan.work_items.get_mut(&id).expect("work");
+    work.execution.status = WorkStatus::Verified;
+    work.execution.owner = Some(dpm_model::ActorId::human("ada"));
+    work.execution.events.started_at = Some(now() - chrono::Duration::hours(10));
+    work.execution.events.submitted_at = Some(now() - chrono::Duration::hours(5));
+    work.execution.events.verified_at = Some(now() - chrono::Duration::hours(4));
+}
+
+#[test]
+fn completed_work_neither_widens_nor_floats_its_package() {
+    let mut plan = generated(1, false);
+    let package = add_package(&mut plan, "PKG", None);
+    let done = add_task(&mut plan, "DONE", 3.0, Some(package), None);
+    let open = add_task(&mut plan, "OPEN", 6.0, Some(package), None);
+    add_task(&mut plan, "AFTER", 10.0, None, Some(open));
+    let finished = add_package(&mut plan, "FINISHED", None);
+    let only = add_task(&mut plan, "ONLY", 2.0, Some(finished), None);
+    verify(&mut plan, done);
+    verify(&mut plan, only);
+    let projection = schedule_projection(&plan, false, now()).expect("projection");
+    let row = |id| projection.work.iter().find(|w| w.id == id).expect("row");
+    // The verified task sits at the origin with the project finish as its latest finish; the
+    // package's bounds are the outstanding task's alone.
+    assert_eq!(row(package).times, row(open).times);
+    assert_eq!(
+        row(package).times.as_ref().map(|t| t.latest_finish_hours),
+        Some(6.0)
+    );
+    assert_eq!(row(finished).times, None);
+    assert_eq!(row(finished).criticality, None);
+}
