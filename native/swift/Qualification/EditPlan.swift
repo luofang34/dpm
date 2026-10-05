@@ -173,6 +173,30 @@ extension Context {
         await closeGantt(model)
     }
 
+    /// A progress report from the app is the owner's execution report: refused for anyone else with the plan unchanged,
+    /// recorded for the owner, and never a plan edit or an acceptance.
+    func editProgressIsTheOwnersReport() async throws {
+        print("edit: a progress report is sent as the acting actor, refused unless it owns the started work, recorded for the owner")
+        let database = try await newStore("edit-progress")
+        _ = try await cliJSON(database, ["claim", "TEST-A", "--actor", "agent:pilot"])
+        _ = try await cliJSON(database, ["start", "TEST-A", "--actor", "agent:pilot"])
+        let model = try await openGanttModel(.database(database))
+        _ = try await modelExpect(model, "the started work to be read", 60) { $0.inventory.basis != nil && $0.freshness.current }
+        let found = await MainActor.run { model.snapshot.inventory.items.first { $0.key == "TEST-A" }?.identity }
+        guard let a = found else { check(false, "the fixture is readable"); return }
+        let before = try await historyCount(database)
+        await MainActor.run { model.setEditing(true); model.setEditActor("human:planner"); model.reportProgress(work: a, percent: 40) }
+        try await waitEdit(model, "the non-owner's report to be refused") { $0.notice?.hasPrefix("Progress for TEST-A was refused") == true }
+        check(try await historyCount(database) == before, "a report by someone other than the owner recorded nothing")
+        await MainActor.run { model.setEditActor("agent:pilot"); model.reportProgress(work: a, percent: 40) }
+        try await waitEdit(model, "the owner's report to be recorded") { $0.notice?.hasPrefix("Reported 40% for TEST-A") == true }
+        let shown = try await cliJSON(database, ["show", "TEST-A"])["data"]["execution"]
+        check(shown["reported_progress_percent"] == .integer(40) && shown["status"].string == "InProgress",
+              "the owner's report is recorded as 40% and the work stays in progress: \(shown["reported_progress_percent"]) \(shown["status"])")
+        check(try await historyCount(database) == before + 1, "the report is one operation")
+        await closeGantt(model)
+    }
+
     /// Wait on the main actor for a published edit state that satisfies `predicate`, or fail; driven by the model's
     /// own publications, never by polling.
     @MainActor

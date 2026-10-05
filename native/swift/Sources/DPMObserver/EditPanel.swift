@@ -87,6 +87,7 @@ struct ItemEditor: View {
                     model.edit(.acceptance(work: item.identity, criteria: acceptance.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }))
                 }
             }
+            if item.status == "InProgress" || item.status == "Blocked" { ProgressEditor(model: model, item: item) }
             if item.kind == "Task" {
                 HStack {
                     hours("Optimistic", $optimistic)
@@ -375,5 +376,31 @@ struct ReviewSheet: View {
                 .disabled(model.applyBlocker != nil)
                 .accessibilityIdentifier("edit.apply")
         }
+    }
+}
+
+/// The owner's progress report for started work: a slider in steps of 5% and an explicit report. It is sent at once as
+/// the acting actor, never through the draft, and the application refuses it unless that actor owns the work.
+struct ProgressEditor: View {
+    @ObservedObject var model: ObserverModel
+    let item: WorkItem
+    @State private var percent = 0.0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Reported progress \(Int(percent))%\(item.owner.map { " · owner \($0)" } ?? "")").font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Slider(value: $percent, in: 0...100, step: 5)
+                    .accessibilityLabel("Reported progress of \(item.key)")
+                    .accessibilityValue("\(Int(percent)) percent")
+                    .accessibilityIdentifier("edit.progress")
+                Button("Report") { model.reportProgress(work: item.identity, percent: Int(percent)) }
+                    .disabled(Int(percent) == item.reportedProgress)
+                    .accessibilityIdentifier("edit.progress-report")
+                    .help("Report this share as \(model.editing.actor); a report of 100% is not acceptance")
+            }
+        }
+        .onAppear { percent = Double(item.reportedProgress) }
+        .onChange(of: item.reportedProgress) { _, now in percent = Double(now) }
     }
 }

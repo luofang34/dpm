@@ -391,27 +391,33 @@ enum GanttDrawing {
                 context.stroke(slack, with: .color(Palette.float), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
             }
         }
+        let reported = frame.inventory.byIdentity[row.identity]?.reportedProgress ?? 0
         if row.isPackage {
-            // A work package spans its descendants: a thin summary bar whose ends point down at the work it holds.
-            let bar = top + 9, right = left + max(width, 1)
-            var summary = Path(CGRect(x: left, y: bar, width: right - left, height: 5))
-            summary.move(to: CGPoint(x: left, y: bar + 5))
-            summary.addLine(to: CGPoint(x: left + 6, y: bar + 5))
-            summary.addLine(to: CGPoint(x: left, y: bar + 11))
-            summary.closeSubpath()
-            summary.move(to: CGPoint(x: right, y: bar + 5))
-            summary.addLine(to: CGPoint(x: right - 6, y: bar + 5))
-            summary.addLine(to: CGPoint(x: right, y: bar + 11))
-            summary.closeSubpath()
-            context.fill(summary, with: .color(Palette.structure))
+            // A work package spans its descendants: a bracket in the colour of the work it holds, whose ends point down
+            // at that work, so it reads as a span and never as a task of its own.
+            let bar = top + 8, right = left + max(width, 1)
+            var summary = Path(roundedRect: CGRect(x: left, y: bar, width: right - left, height: 6), cornerRadius: 1.5)
+            for (end, inward) in [(left, 7.0), (right, -7.0)] {
+                summary.move(to: CGPoint(x: end, y: bar + 5))
+                summary.addLine(to: CGPoint(x: end + inward, y: bar + 5))
+                summary.addLine(to: CGPoint(x: end, y: bar + 13))
+                summary.closeSubpath()
+            }
+            context.fill(summary, with: .color(fill.opacity(0.9)))
         } else {
             // A zero-hour task is still a visible mark; its hours are in its label.
             let bar = CGRect(x: left, y: top + 7, width: max(width, 3), height: rowHeight - 14)
             context.fill(Path(roundedRect: bar, cornerRadius: 4), with: .color(fill))
+            if reported > 0, row.status == "InProgress" || row.status == "Blocked" || row.status == "Submitted" {
+                // The owner's reported share, darker from the bar's start; a report, never acceptance or a rescaled estimate.
+                var done = context
+                done.clip(to: Path(roundedRect: bar, cornerRadius: 4))
+                done.fill(Path(CGRect(x: bar.minX, y: bar.minY, width: bar.width * CGFloat(min(reported, 100)) / 100, height: bar.height)), with: .color(.black.opacity(0.32)))
+            }
         }
         let state: String
         switch row.status {
-        case "InProgress": state = " · in progress"
+        case "InProgress": state = reported > 0 ? " · \(reported)% reported" : " · in progress"
         case "Submitted": state = " · awaiting review"
         case "Blocked": state = " · blocked"
         default: state = ""

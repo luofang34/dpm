@@ -107,6 +107,7 @@ struct Qualify {
             ("gantt-fold-keeps-rows-above", context.ganttFoldKeepsRowsAbove),
             ("edit-review-apply", context.editsGoThroughReviewAndApply),
             ("edit-unknown-reconciled", context.editUnknownOutcomeIsReconciled),
+            ("edit-progress-owner", context.editProgressIsTheOwnersReport),
             ("gantt-axis-labels", context.ganttAxisLabelsDoNotCollide),
             ("network-content", context.networkContentIsTheApplications),
             ("network-projection", context.networkListAndCanvasShareOneProjection),

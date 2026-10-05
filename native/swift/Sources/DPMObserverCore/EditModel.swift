@@ -186,6 +186,38 @@ extension ObserverModel {
         return nil
     }
 
+    /// Report how far an owned, started task has come, as the acting actor. This is an execution report sent at once
+    /// through the application's command, never a plan edit: the application refuses it unless the actor owns the
+    /// started task, and a report of 100% is not acceptance.
+    public func reportProgress(work: String, percent: Int) {
+        if let unavailable = editUnavailable { editing.notice = unavailable; return }
+        guard let engine, let actor = EditCommands.actor(editing.actor), let basis = snapshot.inventory.basis else {
+            editing.notice = "Give the actor as kind:name, such as human:ada."
+            return
+        }
+        let clamped = min(100, max(0, percent))
+        let key = editName(work)
+        let request = CommandRequest(actor: actor, baseRevision: basis.revision, baseLineage: basis.lineage, operationId: UUIDv7.make(),
+                                     command: .object(["ReportProgress": .object(["work": .string(work), "percent": .integer(Int64(clamped)), "note": .null])]))
+        editing.notice = "Reporting \(clamped)% for \(key)…"
+        Task { [weak self] in
+            let outcome = await engine.apply(request)
+            await MainActor.run {
+                guard let self else { return }
+                switch outcome {
+                case .applied(_, let revision):
+                    self.editing.notice = "Reported \(clamped)% for \(key)\(revision.map { " at revision \($0)" } ?? ""); a report is not acceptance."
+                    self.reload()
+                case .refused(let refusal):
+                    self.editing.notice = "Progress for \(key) was refused: \(refusal.message)"
+                case .unknown(let id, let cause):
+                    self.editing.notice = "Whether the \(clamped)% report for \(key) was recorded is unknown (\(cause)); request \(id). Reload to see it."
+                    self.reload()
+                }
+            }
+        }
+    }
+
     /// Resend the apply whose outcome is unknown, to learn what became of it.
     public func reconcileApply() {
         guard let sent = editing.unresolved, let engine else { return }
