@@ -238,9 +238,9 @@ struct GanttStrip: View {
                     Text(row.key).font(.system(.callout, design: .monospaced).weight(.semibold))
                     Text(row.title).font(.callout.weight(.semibold)).lineLimit(1).help(row.title)
                     Spacer(minLength: 4)
-                    if frame.selected == row.id { Badge(text: "Selected", symbol: "checkmark.circle", tint: .blue) }
                 }
-                Text("\(kindWords(row)) · \(row.status)\(row.priority.isEmpty ? "" : " · priority \(row.priority)")\(row.span?.critical == true ? " · on the critical path" : "") · \(when)\(float) · \(finish)")
+                // The strip follows the cursor, which keys move without selecting; it says which it is.
+                Text("\(frame.selected == row.id ? "Selected" : "Cursor, not selected") · \(kindWords(row)) · \(row.status)\(row.priority.isEmpty ? "" : " · priority \(row.priority)")\(row.span?.critical == true ? " · on the critical path" : "") · \(when)\(float) · \(finish)")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     .help(spread)
             }
@@ -274,7 +274,6 @@ struct GanttStrip: View {
                     if !row.priority.isEmpty { Badge(text: "Priority \(row.priority)", symbol: "person.fill.questionmark") }
                     if row.span?.critical == true { Badge(text: "On the critical path", symbol: "flame", tint: Palette.critical) }
                     Text(row.key).font(.system(.callout, design: .monospaced))
-                    if frame.selected == row.id { Badge(text: "Selected", symbol: "checkmark.circle", tint: .blue) }
                 }
                 Prose(text: facts(row), font: .caption)
                 ForEach(Array(frame.inventory.relations(of: row.id).prefix(8)), id: \.id) { edge in
@@ -293,7 +292,7 @@ struct GanttStrip: View {
 
     /// The row's own numbers in one line each way: nothing here is computed from other values.
     private func facts(_ row: GanttRow) -> String {
-        var parts: [String] = []
+        var parts: [String] = [frame.selected == row.id ? "Selected" : "Cursor, not selected"]
         if let span = row.span {
             parts.append(row.isMilestone ? "Milestone at \(hoursText(span.start)) elapsed" : "Elapsed hours \(hoursText(span.start)) to \(hoursText(span.finish)) (\(hoursText(span.hours)))")
         } else {
