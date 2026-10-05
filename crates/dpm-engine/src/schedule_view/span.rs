@@ -1,7 +1,7 @@
 //! Where the schedule places each work item: its own range, or a package's descendants.
 
 use dpm_model::{Plan, Timeline, WorkItem, WorkItemId, WorkKind};
-use dpm_schedule::Schedule;
+use dpm_schedule::{ActivitySchedule, Schedule};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -51,6 +51,67 @@ pub(super) fn spans(
             span.map(|span| (item.id, span))
         })
         .collect()
+}
+
+/// Applicable leaf work below each applicable package, through applicable nested packages; a
+/// package's own activity is an isolated zero-duration node whose float spans the whole project,
+/// so its rolled-up times and criticality come from these instead.
+pub(super) fn package_leaves(
+    plan: &Plan,
+    timeline: &Timeline,
+    schedule: &Schedule,
+) -> BTreeMap<WorkItemId, Vec<WorkItemId>> {
+    let children = children(plan);
+    plan.work_items
+        .values()
+        .filter(|item| item.kind == WorkKind::WorkPackage)
+        .filter(|item| timeline.applicability(item.id).is_applicable())
+        .filter_map(|item| {
+            let mut leaves = Vec::new();
+            descendant_leaves(timeline, schedule, &children, item.id, &mut leaves);
+            (!leaves.is_empty()).then_some((item.id, leaves))
+        })
+        .collect()
+}
+
+fn descendant_leaves(
+    timeline: &Timeline,
+    schedule: &Schedule,
+    children: &Children<'_>,
+    package: WorkItemId,
+    out: &mut Vec<WorkItemId>,
+) {
+    for child in children.get(&package).into_iter().flatten() {
+        if !timeline.applicability(child.id).is_applicable() {
+            continue;
+        }
+        if child.kind == WorkKind::WorkPackage {
+            descendant_leaves(timeline, schedule, children, child.id, out);
+        } else if schedule.activities.contains_key(&child.id) {
+            out.push(child.id);
+        }
+    }
+}
+
+/// Earliest and latest bounds enclosing `leaves`, with their least float.
+pub(super) fn rolled_up(schedule: &Schedule, leaves: &[WorkItemId]) -> Option<ActivitySchedule> {
+    leaves
+        .iter()
+        .filter_map(|id| schedule.activities.get(id))
+        .map(|a| ActivitySchedule {
+            calendar: None,
+            ..a.clone()
+        })
+        .reduce(|a, b| ActivitySchedule {
+            earliest_start_hours: a.earliest_start_hours.min(b.earliest_start_hours),
+            earliest_finish_hours: a.earliest_finish_hours.max(b.earliest_finish_hours),
+            latest_start_hours: a.latest_start_hours.min(b.latest_start_hours),
+            latest_finish_hours: a.latest_finish_hours.max(b.latest_finish_hours),
+            total_float_hours: a.total_float_hours.min(b.total_float_hours),
+            free_float_hours: a.free_float_hours.min(b.free_float_hours),
+            critical: a.critical || b.critical,
+            calendar: None,
+        })
 }
 
 fn children(plan: &Plan) -> Children<'_> {

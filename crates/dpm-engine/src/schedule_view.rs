@@ -7,7 +7,7 @@ use dpm_model::{
     Applicability, Key, Plan, Priority, Timeline, WorkItem, WorkItemId, WorkKind, WorkStatus,
 };
 use dpm_schedule::{
-    ActivityCalendar, Schedule, SimulationSummary, deterministic_remaining_at,
+    ActivityCalendar, ActivitySchedule, Schedule, SimulationSummary, deterministic_remaining_at,
     simulate_remaining_at,
 };
 use serde::{Deserialize, Serialize};
@@ -61,9 +61,11 @@ pub struct ScheduledWork {
     /// What the Gantt draws: the activity's own range, or a package's applicable descendants;
     /// absent for work outside the active graph.
     pub span: Option<ScheduleSpan>,
-    /// Critical-path times; absent for work outside the active graph.
+    /// Critical-path times; a package with applicable descendants reports their enclosing bounds
+    /// and least float. Absent for work outside the active graph.
     pub times: Option<ScheduledTimes>,
-    /// Fraction of simulated schedules in which the work is critical; absent (never zero) when
+    /// Fraction of simulated schedules in which the work is critical, or for a package the
+    /// largest fraction among its descendants; absent (never zero) when
     /// the projection is deterministic only, while open choices make it meaningless, or for work
     /// outside the active graph.
     pub criticality: Option<f64>,
@@ -120,10 +122,17 @@ pub fn schedule_projection(
         None
     };
     let spans = span::spans(plan, &timeline, &schedule);
+    let leaves = span::package_leaves(plan, &timeline, &schedule);
     let mut work: Vec<ScheduledWork> = plan
         .work_items
         .values()
-        .map(|item| row(&timeline, &schedule, simulation.as_ref(), &spans, item))
+        .map(|item| {
+            let mut scheduled = row(&timeline, &schedule, simulation.as_ref(), &spans, item);
+            if let Some(leaves) = leaves.get(&item.id) {
+                roll_up(&mut scheduled, &schedule, simulation.as_ref(), leaves);
+            }
+            scheduled
+        })
         .collect();
     work.sort_by(|a, b| a.key.natural_cmp(&b.key));
     Ok(ScheduleProjection {
@@ -137,6 +146,35 @@ pub fn schedule_projection(
         }),
         work,
     })
+}
+
+/// A package reports its descendants' bounds, least float, and the criticality of its most
+/// critical descendant, never the meaningless float of its own isolated node.
+fn roll_up(
+    scheduled: &mut ScheduledWork,
+    schedule: &Schedule,
+    simulation: Option<&SimulationSummary>,
+    leaves: &[WorkItemId],
+) {
+    scheduled.times = span::rolled_up(schedule, leaves).map(|a| times(&a));
+    scheduled.criticality = simulation.and_then(|s| {
+        leaves
+            .iter()
+            .filter_map(|id| s.criticality.get(id).copied())
+            .reduce(f64::max)
+    });
+}
+
+fn times(a: &ActivitySchedule) -> ScheduledTimes {
+    ScheduledTimes {
+        earliest_start_hours: a.earliest_start_hours,
+        earliest_finish_hours: a.earliest_finish_hours,
+        latest_start_hours: a.latest_start_hours,
+        latest_finish_hours: a.latest_finish_hours,
+        total_float_hours: a.total_float_hours,
+        free_float_hours: a.free_float_hours,
+        critical: a.critical,
+    }
 }
 
 fn row(
@@ -165,15 +203,7 @@ fn row(
         applicability: applicability.clone(),
         priority: item.schedule.priority,
         span: spans.get(&item.id).copied(),
-        times: activity.map(|a| ScheduledTimes {
-            earliest_start_hours: a.earliest_start_hours,
-            earliest_finish_hours: a.earliest_finish_hours,
-            latest_start_hours: a.latest_start_hours,
-            latest_finish_hours: a.latest_finish_hours,
-            total_float_hours: a.total_float_hours,
-            free_float_hours: a.free_float_hours,
-            critical: a.critical,
-        }),
+        times: activity.map(times),
         criticality: simulation.and_then(|s| s.criticality.get(&item.id).copied()),
         calendar: activity.and_then(|a| a.calendar.clone()),
     }

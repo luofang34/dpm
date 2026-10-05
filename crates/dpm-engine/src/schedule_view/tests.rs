@@ -298,3 +298,42 @@ fn nested_packages_union_their_descendants_and_critical_is_an_or() {
         assert_eq!(row.span, Some(expected), "row {}", item.key);
     }
 }
+
+#[test]
+fn a_package_reports_its_descendants_bounds_and_least_float() {
+    let mut plan = generated(1, false);
+    let package = add_package(&mut plan, "PKG", None);
+    let first = add_task(&mut plan, "FIRST", 4.0, Some(package), None);
+    let long = add_task(&mut plan, "LONG", 6.0, Some(package), Some(first));
+    let short = add_task(&mut plan, "SHORT", 1.0, Some(package), Some(first));
+    let quiet = add_package(&mut plan, "QUIET", None);
+    let floating = add_task(&mut plan, "FLOAT", 1.0, Some(quiet), None);
+    let projection = schedule_projection(&plan, true, now()).expect("projection");
+    let row = |id| projection.work.iter().find(|w| w.id == id).expect("row");
+    let times = |id| row(id).times.clone().expect("times");
+    let rolled = times(package);
+    assert_eq!(
+        rolled.earliest_start_hours,
+        times(first).earliest_start_hours
+    );
+    assert_eq!(
+        rolled.earliest_finish_hours,
+        times(long).earliest_finish_hours
+    );
+    assert_eq!(rolled.latest_start_hours, times(first).latest_start_hours);
+    assert_eq!(rolled.latest_finish_hours, times(long).latest_finish_hours);
+    assert_eq!(rolled.total_float_hours, 0.0);
+    assert!(rolled.critical && times(short).total_float_hours > 0.0);
+    assert_eq!(row(package).criticality, Some(1.0));
+
+    // A package whose only work floats keeps that float, not the whole project's duration.
+    let quiet_times = times(quiet);
+    assert_eq!(
+        quiet_times.total_float_hours,
+        times(floating).total_float_hours
+    );
+    assert!(quiet_times.total_float_hours < projection.project_finish_hours);
+    assert!(!quiet_times.critical);
+    assert_eq!(row(quiet).criticality, row(floating).criticality);
+    assert_eq!(row(quiet).span.map(|s| s.critical), Some(false));
+}
