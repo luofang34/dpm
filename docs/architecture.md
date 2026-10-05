@@ -766,10 +766,12 @@ only what is drawn; selection and the Detail return are shared with the other vi
 
 Editing (the Edit toggle, ⌘E, on the Gantt and Network pages) proposes plan changes; it never writes
 a derived value. Edits gather in a draft pinned to the revision and lineage of the export it started
-from: a drag between bars proposes a dependency whose kind follows the ends joined (finish to start
-FS, start to start SS, finish to finish FF, start to finish SF), a drag of the finish of a task not
-yet started scales its own three-point estimate by the ratio of the new bar length to the old (the
-review shows the exact hours), a drag between network nodes proposes FS, and the inspector edits
+from: a drag from either end of a bar draws an elbow connector, and its drop on another bar proposes a
+dependency whose kind follows the ends joined (finish to start FS, start to start SS, finish to finish
+FF, start to finish SF); the draft's links are drawn on the chart until applied or discarded. An
+Option-drag of the finish of a task not yet started scales its own three-point estimate by the ratio
+of the new bar length to the old (the review shows the exact hours), a drag between network nodes
+proposes FS, and the inspector edits
 title, objective, acceptance, estimate, kind, nesting (⌘] and ⌘[), dependencies, decision gates and
 new tasks by keyboard. A bar never moves: dates are derived. Reviewing the draft is the read-only
 `propose_change` query against the pinned basis, which returns the entity changes, the affected work
@@ -782,6 +784,14 @@ the draft or applies: the same request is resent, and only the application's own
 Applying needs a live, connected and current workspace. The engine compares a returned change with
 the current state by value, so a client that re-encodes `2.0` as `2` applies the change it reviewed,
 and the log records the canonical difference `plan diff` shows.
+
+Progress is not a plan edit. For started work, the inspector's progress slider, or a drag along the
+bar's body, sends the acting actor's `ReportProgress` at once through the same command boundary; the
+application refuses it unless that actor owns the started work. The bar shows the reported share
+darker from its start. A report never accepts work, unlocks a successor or rescales an estimate.
+
+Folding a package leaves every row above it in place. Its rows stay where they are and are hidden
+or revealed through a band under the package, whose edge moves with the rows below it.
 
 The measurement of the Gantt (`scripts/measure_gantt.py`) judges every run, a measurement, a control
 or a replayed log, with one analyzer before any statistic is eligible: every planned generation, a

@@ -31,9 +31,16 @@ struct GanttFrame {
     /// The top of a row drawn at `position`: during a fold or unfold, between where it was and where it is now; a row
     /// that just appeared comes out of the nearest package that was already shown.
     func top(of id: String, at position: Int, _ geometry: GanttGeometry) -> Double {
-        guard let motion, progress < 1 else { return geometry.y(of: position) }
-        let from = motion.before[id] ?? motion.origin(of: id, schedule: schedule) ?? position
+        // A row being revealed is already where it ends up; the band it is seen through opens over it.
+        guard let motion, progress < 1, !motion.entering.contains(id) else { return geometry.y(of: position) }
+        let from = motion.before[id] ?? position
         return GanttGeometry.axis + (Double(from) + (Double(position) - Double(from)) * progress) * GanttLayout.rowHeight - geometry.offsetY
+    }
+
+    /// The band under the folding package through which its rows are seen while they are hidden or revealed, or nil at rest.
+    func band(_ geometry: GanttGeometry) -> (top: Double, height: Double)? {
+        guard let motion, progress < 1 else { return nil }
+        return motion.band(geometry, progress: progress)
     }
 
     @MainActor
@@ -75,44 +82,46 @@ struct GanttFrame {
     }
 }
 
-/// A fold or unfold of packages in progress: where each row was before it, and the rows it removed with the position
-/// of the package each folds into.
+/// One package folding or unfolding: its rows stay where they are and are hidden or revealed through a band under the
+/// package whose bottom edge moves with the rows below it, so nothing above the package moves and no row is squeezed.
 struct GanttMotion {
     static let duration = 0.22
     let start: Date
     let before: [String: Int]
-    let leaving: [(GanttOutlineRow, Int, Int)]
+    /// The rows a fold removes, each at the position it had.
+    let leaving: [(GanttOutlineRow, Int)]
+    /// The rows an unfold reveals.
+    let entering: Set<String>
+    /// The position of the package folded or unfolded; the band starts under it.
+    let package: Int
+    let folding: Bool
 
-    /// The rows before and after a change of the collapsed set, or nil when nothing moves.
-    init?(from old: [GanttOutlineRow], to new: [GanttOutlineRow], schedule: GanttSchedule?, at start: Date) {
+    /// The motion of `toggled` folding or unfolding between two outlines, or nil when nothing moves.
+    init?(from old: [GanttOutlineRow], to new: [GanttOutlineRow], toggled: String, at start: Date) {
         let now = Dictionary(new.map { ($0.id, $0.position) }, uniquingKeysWith: { first, _ in first })
-        before = Dictionary(old.map { ($0.id, $0.position) }, uniquingKeysWith: { first, _ in first })
-        guard before != now else { return nil }
+        let was = Dictionary(old.map { ($0.id, $0.position) }, uniquingKeysWith: { first, _ in first })
+        guard was != now, let at = now[toggled], was[toggled] == at else { return nil }
+        before = was
         self.start = start
-        leaving = old.filter { now[$0.id] == nil }.map { item in
-            var parent = schedule?.row(item.id)?.parent
-            while let up = parent, now[up] == nil { parent = schedule?.row(up)?.parent }
-            return (item, item.position, parent.flatMap { now[$0] } ?? item.position)
-        }
+        package = at
+        leaving = old.filter { now[$0.id] == nil }.map { ($0, $0.position) }
+        entering = Set(new.filter { was[$0.id] == nil }.map(\.id))
+        folding = !leaving.isEmpty
+        guard leaving.isEmpty != entering.isEmpty else { return nil }
     }
 
-    /// Where a row that just appeared starts: the old position of its nearest ancestor that was shown.
-    func origin(of id: String, schedule: GanttSchedule?) -> Int? {
-        var parent = schedule?.row(id)?.parent
-        while let up = parent {
-            if let at = before[up] { return at }
-            parent = schedule?.row(up)?.parent
-        }
-        return nil
+    /// The band's top and height now: it closes over the rows a fold removes and opens over the rows an unfold reveals.
+    func band(_ geometry: GanttGeometry, progress: Double) -> (top: Double, height: Double) {
+        let rows = Double(folding ? leaving.count : entering.count)
+        return (geometry.y(of: package + 1), rows * GanttLayout.rowHeight * (folding ? 1 - progress : progress))
     }
 
-    /// The leaving rows drawn now, with their tops: only those inside the rows the geometry shows.
+    /// The leaving rows drawn now, at the tops they had: only those inside the rows the geometry shows.
     func visibleLeaving(_ geometry: GanttGeometry, progress: Double) -> [(item: GanttOutlineRow, top: Double)] {
-        let low = Double(geometry.firstRow - 1), high = Double(geometry.firstRow + geometry.rowsDrawn + 1)
-        return leaving.compactMap { item, from, into in
-            let at = Double(from) + (Double(into) - Double(from)) * progress
-            guard at >= low, at <= high else { return nil }
-            return (item, GanttGeometry.axis + at * GanttLayout.rowHeight - geometry.offsetY)
+        let low = geometry.firstRow - 1, high = geometry.firstRow + geometry.rowsDrawn + 1
+        return leaving.compactMap { item, from in
+            guard from >= low, from <= high else { return nil }
+            return (item, GanttGeometry.axis + Double(from) * GanttLayout.rowHeight - geometry.offsetY)
         }
     }
 
@@ -304,14 +313,22 @@ enum GanttDrawing {
         }
 
         // The bars, milestones and float; rows folding into a package slide into it and fade.
+        // Rows being hidden or revealed are drawn only inside the band under their package.
+        var banded = context
+        if let band = frame.band(geometry) { banded.clip(to: Path(CGRect(x: -1, y: band.top, width: size.width + 2, height: band.height))) }
         for position in geometry.firstRow..<max(geometry.firstRow, last) {
-            drawRow(rows[position], top: frame.top(of: rows[position].id, at: position, geometry), frame: frame, geometry: geometry, size: size, in: &context)
+            let id = rows[position].id
+            let entering = frame.motion?.entering.contains(id) == true && frame.progress < 1
+            let top = frame.top(of: id, at: position, geometry)
+            if entering {
+                drawRow(rows[position], top: top, frame: frame, geometry: geometry, size: size, in: &banded)
+            } else {
+                drawRow(rows[position], top: top, frame: frame, geometry: geometry, size: size, in: &context)
+            }
         }
-        if let motion = frame.motion {
-            var fading = context
-            fading.opacity = 1 - frame.progress
+        if let motion = frame.motion, frame.progress < 1 {
             for leaving in motion.visibleLeaving(geometry, progress: frame.progress) {
-                drawRow(leaving.item, top: leaving.top, frame: frame, geometry: geometry, size: size, in: &fading)
+                drawRow(leaving.item, top: leaving.top, frame: frame, geometry: geometry, size: size, in: &banded)
             }
         }
 
@@ -374,27 +391,33 @@ enum GanttDrawing {
                 context.stroke(slack, with: .color(Palette.float), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
             }
         }
+        let reported = frame.inventory.byIdentity[row.identity]?.reportedProgress ?? 0
         if row.isPackage {
-            // A work package spans its descendants: a thin summary bar whose ends point down at the work it holds.
-            let bar = top + 9, right = left + max(width, 1)
-            var summary = Path(CGRect(x: left, y: bar, width: right - left, height: 5))
-            summary.move(to: CGPoint(x: left, y: bar + 5))
-            summary.addLine(to: CGPoint(x: left + 6, y: bar + 5))
-            summary.addLine(to: CGPoint(x: left, y: bar + 11))
-            summary.closeSubpath()
-            summary.move(to: CGPoint(x: right, y: bar + 5))
-            summary.addLine(to: CGPoint(x: right - 6, y: bar + 5))
-            summary.addLine(to: CGPoint(x: right, y: bar + 11))
-            summary.closeSubpath()
-            context.fill(summary, with: .color(Palette.structure))
+            // A work package spans its descendants: a bracket in the colour of the work it holds, whose ends point down
+            // at that work, so it reads as a span and never as a task of its own.
+            let bar = top + 8, right = left + max(width, 1)
+            var summary = Path(roundedRect: CGRect(x: left, y: bar, width: right - left, height: 6), cornerRadius: 1.5)
+            for (end, inward) in [(left, 7.0), (right, -7.0)] {
+                summary.move(to: CGPoint(x: end, y: bar + 5))
+                summary.addLine(to: CGPoint(x: end + inward, y: bar + 5))
+                summary.addLine(to: CGPoint(x: end, y: bar + 13))
+                summary.closeSubpath()
+            }
+            context.fill(summary, with: .color(fill.opacity(0.9)))
         } else {
             // A zero-hour task is still a visible mark; its hours are in its label.
             let bar = CGRect(x: left, y: top + 7, width: max(width, 3), height: rowHeight - 14)
             context.fill(Path(roundedRect: bar, cornerRadius: 4), with: .color(fill))
+            if reported > 0, row.status == "InProgress" || row.status == "Blocked" || row.status == "Submitted" {
+                // The owner's reported share, darker from the bar's start; a report, never acceptance or a rescaled estimate.
+                var done = context
+                done.clip(to: Path(roundedRect: bar, cornerRadius: 4))
+                done.fill(Path(CGRect(x: bar.minX, y: bar.minY, width: bar.width * CGFloat(min(reported, 100)) / 100, height: bar.height)), with: .color(.black.opacity(0.32)))
+            }
         }
         let state: String
         switch row.status {
-        case "InProgress": state = " · in progress"
+        case "InProgress": state = reported > 0 ? " · \(reported)% reported" : " · in progress"
         case "Submitted": state = " · awaiting review"
         case "Blocked": state = " · blocked"
         default: state = ""

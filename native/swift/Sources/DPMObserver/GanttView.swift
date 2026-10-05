@@ -335,14 +335,16 @@ struct GanttBody: View {
         .onChange(of: frame.state.collapsed) { old, _ in animateFold(from: old) }
     }
 
-    /// Fold or unfold rows over a short animation, so the rows below the package visibly close up or open out. A
-    /// person who asked for reduced motion, and a scripted measurement, see the result at once.
+    /// Fold or unfold rows over a short animation: the rows below the package close up over the folded rows, or open
+    /// out to reveal them, while nothing above the package moves. A person who asked for reduced motion, and a
+    /// scripted measurement, see the result at once.
     private func animateFold(from old: Set<String>) {
         // One package folding or unfolding is animated; collapse-all, expand-all and a reveal of several are not.
-        guard old.symmetricDifference(frame.state.collapsed).count == 1, MeasureLog.shared == nil,
+        let toggled = old.symmetricDifference(frame.state.collapsed)
+        guard toggled.count == 1, let package = toggled.first, MeasureLog.shared == nil,
               !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, let schedule = frame.schedule else { return }
         let before = GanttLayout.outline(schedule, collapsed: old, filter: frame.state.filter)
-        guard let started = GanttMotion(from: before, to: model.outline, schedule: schedule, at: Date()) else { return }
+        guard let started = GanttMotion(from: before, to: model.outline, toggled: package, at: Date()) else { return }
         motion = started
         DispatchQueue.main.asyncAfter(deadline: .now() + GanttMotion.duration) {
             if motion?.start == started.start { motion = nil }
@@ -406,22 +408,35 @@ struct GanttLabels: View {
             .padding(.horizontal, 8)
             .frame(height: GanttGeometry.axis)
             .reportFrame("axis")
+            let band = frame.band(geometry)
+            let shown = Array(frame.outline[geometry.firstRow..<(geometry.firstRow + geometry.rowsDrawn)])
+            let revealing = band == nil ? [] : shown.filter { frame.motion?.entering.contains($0.id) == true }
             ZStack(alignment: .topLeading) {
-                ForEach(Array(frame.outline[geometry.firstRow..<(geometry.firstRow + geometry.rowsDrawn)])) { item in
+                ForEach(band == nil ? shown : shown.filter { frame.motion?.entering.contains($0.id) != true }) { item in
                     GanttLabel(item: item, frame: frame, model: model)
                         .frame(height: GanttLayout.rowHeight)
                         .offset(y: frame.top(of: item.id, at: item.position, geometry) - GanttGeometry.axis)
                         .background { if item.position == geometry.firstRow { ObservedProbe(name: "first_row") } }
                 }
-                // Rows folding into a package slide into it and fade; they take no clicks.
-                if let motion = frame.motion {
-                    ForEach(motion.visibleLeaving(geometry, progress: frame.progress), id: \.item.id) { leaving in
-                        GanttLabel(item: leaving.item, frame: frame, model: nil)
-                            .frame(height: GanttLayout.rowHeight)
-                            .offset(y: leaving.top - GanttGeometry.axis)
-                            .opacity(1 - frame.progress)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
+                // Rows being hidden or revealed stay in place and are seen only through the band under their package.
+                if let band, let motion = frame.motion {
+                    ZStack(alignment: .topLeading) {
+                        ForEach(revealing) { item in
+                            GanttLabel(item: item, frame: frame, model: model)
+                                .frame(height: GanttLayout.rowHeight)
+                                .offset(y: frame.top(of: item.id, at: item.position, geometry) - GanttGeometry.axis)
+                        }
+                        ForEach(motion.visibleLeaving(geometry, progress: frame.progress), id: \.item.id) { leaving in
+                            GanttLabel(item: leaving.item, frame: frame, model: nil)
+                                .frame(height: GanttLayout.rowHeight)
+                                .offset(y: leaving.top - GanttGeometry.axis)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .mask(alignment: .topLeading) {
+                        Rectangle().frame(height: max(band.height, 0)).offset(y: band.top - GanttGeometry.axis)
                     }
                 }
             }
