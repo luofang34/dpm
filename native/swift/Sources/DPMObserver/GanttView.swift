@@ -415,20 +415,22 @@ struct GanttLabel: View {
             } else {
                 Color.clear.frame(width: 12)
             }
-            Image(systemName: row.isMilestone ? "diamond.fill" : (row.isPackage ? "folder" : "circle")).font(.system(size: 10)).accessibilityHidden(true)
+            Image(systemName: GanttGlyph.symbol(row)).font(.system(size: 10)).foregroundStyle(row.status == "Verified" ? .secondary : .primary)
+                .help(row.status).accessibilityHidden(true)
             Text(row.key).font(.system(size: 11, design: .monospaced))
             Text(row.title).font(.system(size: 12, weight: row.isPackage ? .semibold : .regular)).lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 2)
             Text(row.priority).font(.system(size: 10)).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 6)
+        // The row's band and selection continue across the name, as on the timeline beside it.
+        .background(frame.selected == row.id ? Color.accentColor.opacity(0.16) : (item.position % 2 == 0 ? Palette.band : Color.clear))
         .contentShape(Rectangle())
         .help("\(row.key): \(row.title)")
-        .onTapGesture(count: 2) {
+        .onTapGesture {
             model?.focusRow(item.id)
-            model?.perform(.openDetail)
+            if GanttClicks.isDouble { model?.perform(.openDetail) }
         }
-        .onTapGesture { model?.focusRow(item.id) }
         .spoken(said.label, value: said.value)
         .accessibilityAddTraits(frame.selected == row.id ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction(named: "Open in Detail") {
@@ -702,5 +704,23 @@ final class GanttRegionView: NSView {
             current = Self.reading(editor, by, in: window)
         }
         return ["window": window.windowNumber, "current": current, "readings": readings, "sequence": readingSequence, "limit": Self.limit]
+    }
+}
+
+/// A row's symbol: its kind by shape and, for a task or milestone, its lifecycle state by fill, so the outline says
+/// what is done or under way without colour.
+enum GanttGlyph {
+    static func symbol(_ row: GanttRow) -> String {
+        if row.isPackage { return "folder" }
+        if row.isMilestone { return row.status == "Verified" ? "diamond.fill" : "diamond" }
+        switch row.status {
+        case "Verified": return "checkmark.circle.fill"
+        case "Submitted": return "hourglass.circle"
+        case "InProgress": return "circle.lefthalf.filled"
+        case "Claimed": return "circle.dotted"
+        case "Blocked": return "exclamationmark.circle"
+        case "Proposed": return "circle.dashed"
+        default: return "circle"
+        }
     }
 }

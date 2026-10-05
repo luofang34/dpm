@@ -20,10 +20,7 @@ struct GanttTimelinePointer: ViewModifier {
         let hover = resting.flatMap { row(at: $0) }
         content
             .contentShape(Rectangle())
-            .gesture(
-                SpatialTapGesture(count: 2).onEnded { tap($0.location, open: true) }
-                    .exclusively(before: SpatialTapGesture(count: 1).onEnded { tap($0.location, open: false) })
-            )
+            .gesture(SpatialTapGesture(count: 1).onEnded { tap($0.location, open: GanttClicks.isDouble) })
             .simultaneousGesture(
                 DragGesture(minimumDistance: 4)
                     .onChanged { value in
@@ -110,5 +107,17 @@ struct GanttTimelinePointer: ViewModifier {
     func traced() -> [String: Any]? {
         guard let window = region?.window else { return nil }
         return ["window": window.windowNumber, "events": events, "sequence": sequence, "limit": Self.limit]
+    }
+}
+
+/// A click selects at once; the second click of a double click also opens Detail. A double-click gesture
+/// given priority over the single click would hold every single click for the system's double-click
+/// interval before selecting.
+enum GanttClicks {
+    @MainActor static var isDouble: Bool {
+        // Only a mouse event has a click count (reading it from any other event raises); a press made by keyboard or
+        // assistive technology is a single selection.
+        guard let event = NSApp.currentEvent, [.leftMouseDown, .leftMouseUp].contains(event.type) else { return false }
+        return event.clickCount >= 2
     }
 }

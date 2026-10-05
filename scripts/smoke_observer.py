@@ -2427,14 +2427,16 @@ def pointer_guard(app, front, step):
 def post_mouse(app, front, kind, point, clicks=1, step='a pointer event'):
     """One real mouse event at a global top-left screen point, posted to the HID event tap only after the guard holds.
     kind: down, up, moved, dragged. Events are delivered in the order posted; the caller waits on the receiving
-    view's receipt, never on a delay."""
+    view's receipt, never on a delay. Returns the uptime at which the event was posted."""
     pointer_guard(app, front, f'{kind} of {step}')
     quartz, core, Point = _quartz()
     code = {'down': 1, 'up': 2, 'moved': 5, 'dragged': 6}[kind]
     event = quartz.CGEventCreateMouseEvent(None, code, Point(*point), 0)
     quartz.CGEventSetIntegerValueField(event, 1, clicks)  # kCGMouseEventClickState
+    posted = time.clock_gettime(time.CLOCK_UPTIME_RAW)
     quartz.CGEventPost(0, event)
     core.CFRelease(event)
+    return posted
 
 
 def post_click(app, front, point, clicks=1, step='a click'):
@@ -2779,10 +2781,20 @@ def network_layout_and_pointer(bundle, directory):
         point = (ox + timeline[0] + 12, row_frame[1] + row_frame[3] / 2)
         pointer_log.append({'step': 'a click in the TEST-D row of the timeline', 'posted': [round(v, 2) for v in point], 'row_frame': row_frame,
                             'timeline': timeline, 'content_origin': [ox, oy]})
-        post_click(app, front, point, step='a click in the TEST-D row of the timeline')
+        step = 'a click in the TEST-D row of the timeline'
+        post_mouse(app, front, 'moved', point, step=step)
+        post_mouse(app, front, 'down', point, 1, step=step)
+        # Timed from the posting of the release that completes the click, after the guard's checks, to the app's receipt.
+        posted_at = post_mouse(app, front, 'up', point, 1, step=step)
         chosen = guarded_wait(app, front, lambda t: t['gantt']['selected_key'] == 'TEST-D' and any(
             e.get('event') == 'click' and e.get('hit') == 'TEST-D' for e in ((t.get('host') or {}).get('gantt_pointer') or {}).get('events', [])), 10,
             'a real click in the TEST-D bar row of the timeline to select TEST-D')
+        # A single click selects at once: a double-click gesture holding it would delay the receipt by the system's
+        # double-click interval (0.5 s by default, often set shorter). The receipt's uptime is the app's own clock, the one posted_at reads.
+        receipt = next(e for e in chosen['host']['gantt_pointer']['events'] if e.get('event') == 'click' and e.get('hit') == 'TEST-D')
+        click_delay = receipt['uptime'] - posted_at
+        assert click_delay < 0.15, f'the click on TEST-D was handled {click_delay:.3f} s after it was posted; a single click must select at once'
+        pointer_log.append({'step': 'click latency', 'seconds': round(click_delay, 3)})
         uninterrupted(front, 'the Gantt pointer step is complete')
         assert app.quit() == 0
         return ('real network layout and pointer: ' + '; '.join(summary + pixel_notes) +
@@ -2790,7 +2802,7 @@ def network_layout_and_pointer(bundle, directory):
                 f"with the selection unchanged; a real wheel panned to {pan_scroll} within {scrolled['network']['max_pan']}; f fitted the whole extent {[round(v, 1) for v in extent]} "
                 f"inside the canvas {viewport} at scale {round(net['scale'], 3)} ({'capture ' + Path(fit_shot).name if fit_shot else 'no capture'}); {hover_line}; "
                 f"nothing written; the Gantt opened fitted ({round(whole, 1)} of {fitted_gantt['gantt']['viewport_width']} pt, {'capture ' + Path(gantt_shot).name if gantt_shot else 'no capture'}); "
-                f"a real timeline click at {[round(v) for v in point]} selected TEST-D (receipt in gantt_pointer, cursor {chosen['gantt'].get('cursor_key')})")
+                f"a real timeline click at {[round(v) for v in point]} selected TEST-D {click_delay * 1000:.0f} ms after it was posted (receipt in gantt_pointer, cursor {chosen['gantt'].get('cursor_key')})")
     except NotAssessed as interruption:
         not_assessed(case, interruption_or_death(app.process, interruption) if app else str(interruption))
         return None
