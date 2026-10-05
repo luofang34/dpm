@@ -2,10 +2,16 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
+
+# A newer push to the same branch or pull request supersedes the run in progress.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
@@ -13,8 +19,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest, macos-15-intel]
-        toolchain: [msrv, stable]
+        # The MSRV is checked once, on Linux; macOS runs the stable toolchain, which also packages
+        # and smoke-tests the native release archive.
+        include:
+          - { os: ubuntu-24.04, toolchain: msrv }
+          - { os: ubuntu-24.04, toolchain: stable }
+          - { os: macos-latest, toolchain: stable }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
