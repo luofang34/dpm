@@ -353,7 +353,9 @@ extension ObserverModel {
         if kind != "pan", kind != "zoom" {
             reconcileFocus()
             // A change of row membership can leave the cursor outside the viewport: bring it back, as a key does.
-            if let id = gantt.focus, let at = outline.firstIndex(where: { $0.id == id }) {
+            // A fold or unfold does not: the person acted on a package in view, and the rows above it stay put
+            // even when a wheel pan left the cursor off screen.
+            if kind != "collapse", kind != "expand", let id = gantt.focus, let at = outline.firstIndex(where: { $0.id == id }) {
                 var kept = gantt
                 Self.keepVisible(at, in: &kept)
                 if kept.panY != gantt.panY { gantt.panY = kept.panY }

@@ -104,6 +104,7 @@ struct Qualify {
             ("gantt-scroll-identity", context.ganttScrollTrajectoryAndIdentity),
             ("gantt-content-facts", context.ganttContentFactsAreCompared),
             ("gantt-pan-model-path", context.ganttPanSurvivesAnOffscreenCursor),
+            ("gantt-fold-keeps-rows-above", context.ganttFoldKeepsRowsAbove),
             ("gantt-axis-labels", context.ganttAxisLabelsDoNotCollide),
             ("network-content", context.networkContentIsTheApplications),
             ("network-projection", context.networkListAndCanvasShareOneProjection),
