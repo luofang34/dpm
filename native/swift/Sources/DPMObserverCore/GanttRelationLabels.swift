@@ -51,9 +51,10 @@ public enum GanttRelationLabels {
         }
     }
 
-    /// The label of one relation, from the relation's own words: kind, lead or lag, policy and where it comes from.
-    public static func text(_ relation: GanttRelation, from key: String) -> String {
-        "\(relation.abbreviation) \(GanttRelation.lagWords(relation.lagHours, basis: relation.lagBasis)) · \(relation.policy) · from \(key)"
+    /// The label of one relation, from the relation's own words: kind, lead or lag, policy, whether it is a link of
+    /// the critical path, and where it comes from.
+    public static func text(_ relation: GanttRelation, from key: String, critical: Bool = false) -> String {
+        "\(relation.abbreviation) \(GanttRelation.lagWords(relation.lagHours, basis: relation.lagBasis)) · \(relation.policy)\(critical ? " · critical path" : "") · from \(key)"
     }
 
     /// The line of a target whose incoming relations do not all get a label.

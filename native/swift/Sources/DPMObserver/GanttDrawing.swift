@@ -134,7 +134,7 @@ enum GanttDrawing {
         for position in geometry.firstRow..<max(geometry.firstRow, last) {
             let item = rows[position]
             let rect = CGRect(x: 0, y: geometry.y(of: position), width: size.width, height: rowHeight)
-            if position % 2 == 0 { context.fill(Path(rect), with: .color(.gray.opacity(0.07))) }
+            if position % 2 == 0 { context.fill(Path(rect), with: .color(Palette.band)) }
             if frame.selected == item.id { context.fill(Path(rect), with: .color(accent.opacity(0.16))) }
             if frame.state.focus == item.id {
                 context.stroke(Path(rect.insetBy(dx: 1, dy: 1)), with: .color(accent), style: StrokeStyle(lineWidth: frame.keyboard ? 2 : 1, dash: frame.keyboard ? [] : [3, 2]))
@@ -152,14 +152,14 @@ enum GanttDrawing {
                 var line = Path()
                 line.move(to: CGPoint(x: x, y: GanttGeometry.axis - 6))
                 line.addLine(to: CGPoint(x: x, y: size.height))
-                context.stroke(line, with: .color(.gray.opacity(0.25)), lineWidth: 0.5)
+                context.stroke(line, with: .color(Palette.grid), lineWidth: 0.5)
                 context.draw(Text(tick == tick.rounded() ? "\(Int(tick)) h" : hoursText(tick)).font(.system(size: 9)).foregroundColor(.secondary), at: CGPoint(x: x + 3, y: 8), anchor: .leading)
             }
             tick += step
         }
         var origin = Path()
         origin.addRect(CGRect(x: 0, y: GanttGeometry.axis - 1, width: size.width, height: 1))
-        context.fill(origin, with: .color(.gray.opacity(0.5)))
+        context.fill(origin, with: .color(Palette.grid))
 
         // The finish forecast, as the query gives it: the deterministic finish and p50, p80, p95.
         // The markers are lines; their texts share one line under the time axis labels, and a text that would
@@ -174,10 +174,10 @@ enum GanttDrawing {
             var line = Path()
             line.move(to: CGPoint(x: x, y: GanttGeometry.axis - 14))
             line.addLine(to: CGPoint(x: x, y: size.height))
-            context.stroke(line, with: .color(.orange.opacity(0.8)), style: StrokeStyle(lineWidth: 1, dash: marker.dash))
+            context.stroke(line, with: .color(Palette.marker), style: StrokeStyle(lineWidth: 1, dash: marker.dash))
         }
         for label in GanttAxisLabels.place(markers.map { (x: $0.hours * scale - geometry.offsetX, text: $0.text) }, width: size.width) {
-            context.draw(Text(label.text).font(.system(size: 9, weight: .medium)).foregroundColor(.orange), at: CGPoint(x: label.x, y: GanttAxisLabels.lineY), anchor: .leading)
+            context.draw(Text(label.text).font(.system(size: 9, weight: .medium)).foregroundColor(.secondary), at: CGPoint(x: label.x, y: GanttAxisLabels.lineY), anchor: .leading)
         }
 
         // Relations, under the bars. Every drawn row's incoming relations are drawn lightly; those of
@@ -193,7 +193,10 @@ enum GanttDrawing {
             let atFinish = edge.kind == "FinishFinish" || edge.kind == "StartFinish"
             let to = CGPoint(x: (atFinish ? target.finish : target.start) * scale - geometry.offsetX, y: geometry.y(of: successorAt) + rowHeight / 2)
             let dash: [CGFloat] = edge.policy == "Soft" ? [4, 3] : []
-            let color: Color = strong ? .indigo : .gray
+            // A link of the critical path keeps its colour when emphasised; its label and row words name it too.
+            let onCriticalPath = schedule.criticalRelations.contains(edge.id)
+            let color: Color = onCriticalPath ? Palette.relationCritical : strong ? Palette.relationEmphasis : Palette.relation
+            let width: CGFloat = strong ? 1.6 : onCriticalPath ? 1.2 : 0.8
             var path = Path()
             if let predecessorAt = frame.positions[edge.predecessor], let source = rows[predecessorAt].row.span {
                 let fromFinish = edge.kind == "FinishStart" || edge.kind == "FinishFinish"
@@ -208,16 +211,16 @@ enum GanttDrawing {
                 path.move(to: CGPoint(x: to.x - 18, y: to.y))
                 path.addLine(to: to)
             }
-            context.stroke(path, with: .color(color.opacity(strong ? 0.95 : 0.4)), style: StrokeStyle(lineWidth: strong ? 1.6 : 0.8, dash: dash))
+            context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, dash: dash))
             var head = Path()
             head.move(to: to)
             head.addLine(to: CGPoint(x: to.x + (atFinish ? 6 : -6), y: to.y - 3.5))
             head.addLine(to: CGPoint(x: to.x + (atFinish ? 6 : -6), y: to.y + 3.5))
             head.closeSubpath()
-            context.fill(head, with: .color(color.opacity(strong ? 0.95 : 0.4)))
+            context.fill(head, with: .color(color))
             if strong {
                 let names = frame.schedule?.row(edge.predecessor)?.key ?? "?"
-                labels.append(GanttRelationLabels.Request(id: edge.id, target: edge.successor, text: GanttRelationLabels.text(edge, from: names),
+                labels.append(GanttRelationLabels.Request(id: edge.id, target: edge.successor, text: GanttRelationLabels.text(edge, from: names, critical: onCriticalPath),
                                                           x: to.x + (atFinish ? 10 : -10), y: to.y, leading: atFinish))
             }
         }
@@ -243,7 +246,7 @@ enum GanttDrawing {
             let left = x - geometry.offsetX
             guard left + width > -400, left < size.width + 40 else { continue }
             let critical = span.critical
-            let fill: Color = critical ? .red : accent
+            let fill: Color = critical ? Palette.critical : Palette.planned
             if row.isMilestone {
                 var diamond = Path()
                 diamond.move(to: CGPoint(x: left, y: mid - 8))
@@ -251,16 +254,22 @@ enum GanttDrawing {
                 diamond.addLine(to: CGPoint(x: left, y: mid + 8))
                 diamond.addLine(to: CGPoint(x: left - 8, y: mid))
                 diamond.closeSubpath()
-                context.fill(diamond, with: .color(fill.opacity(0.9)))
-                context.stroke(diamond, with: .color(.primary), lineWidth: 1.5)
+                context.fill(diamond, with: .color(fill))
+                context.stroke(diamond, with: .color(Palette.structure), lineWidth: 1)
                 context.draw(Text("◆ \(row.key) milestone, \(hoursText(span.start))").font(.system(size: 10, weight: .semibold)).foregroundColor(.primary), at: CGPoint(x: left + 12, y: mid), anchor: .leading)
                 continue
             }
             if let times = row.times, times.totalFloat > 0 {
+                // Float runs in its own lane under the bar, so the bar's label beside it stays clear.
                 let reach = times.latestFinish * scale - geometry.offsetX
                 if reach > left + width {
-                    let slack = CGRect(x: left + width, y: mid - 3, width: reach - left - width, height: 6)
-                    context.stroke(Path(slack), with: .color(.gray), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+                    let lane = top + rowHeight - 4
+                    var slack = Path()
+                    slack.move(to: CGPoint(x: left + width, y: lane))
+                    slack.addLine(to: CGPoint(x: reach, y: lane))
+                    slack.move(to: CGPoint(x: reach, y: lane - 3))
+                    slack.addLine(to: CGPoint(x: reach, y: lane + 1))
+                    context.stroke(slack, with: .color(Palette.float), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
                 }
             }
             if row.isPackage {
@@ -270,11 +279,11 @@ enum GanttDrawing {
                 bracket.addLine(to: CGPoint(x: left, y: mid - 5))
                 bracket.addLine(to: CGPoint(x: left + width, y: mid - 5))
                 bracket.addLine(to: CGPoint(x: left + width, y: mid + 6))
-                context.stroke(bracket, with: .color(fill), style: StrokeStyle(lineWidth: critical ? 3 : 2, lineCap: .butt))
+                context.stroke(bracket, with: .color(Palette.structure), style: StrokeStyle(lineWidth: 2, lineCap: .butt))
             } else {
-                let bar = CGRect(x: left, y: top + 6, width: width, height: rowHeight - 12)
-                context.fill(Path(roundedRect: bar, cornerRadius: 3), with: .color(fill.opacity(critical ? 0.8 : 0.5)))
-                context.stroke(Path(roundedRect: bar, cornerRadius: 3), with: .color(fill), lineWidth: critical ? 2.5 : 1)
+                // A zero-hour task is still a visible mark; its hours are in its label.
+                let bar = CGRect(x: left, y: top + 7, width: max(width, 3), height: rowHeight - 14)
+                context.fill(Path(roundedRect: bar, cornerRadius: 4), with: .color(fill))
             }
             let tag = "\(row.key)\(critical ? " · critical path" : "") · \(hoursText(span.hours))"
             context.draw(Text(tag).font(.system(size: 10)).foregroundColor(.primary), at: CGPoint(x: left + width + 6, y: mid), anchor: .leading)
@@ -284,11 +293,11 @@ enum GanttDrawing {
         for label in GanttRelationLabels.place(labels) {
             let plate = CGRect(x: label.minX - 2, y: label.minY, width: label.maxX - label.minX + 4, height: label.maxY - label.minY)
             context.fill(Path(roundedRect: plate, cornerRadius: 3), with: .style(.background.opacity(0.88)))
-            context.draw(Text(label.text).font(.system(size: 9, weight: .semibold)).foregroundColor(.indigo), at: CGPoint(x: label.x, y: label.y), anchor: label.leading ? .leading : .trailing)
+            context.draw(Text(label.text).font(.system(size: 9, weight: .semibold)).foregroundColor(.primary), at: CGPoint(x: label.x, y: label.y), anchor: label.leading ? .leading : .trailing)
         }
 
         if let mark = frame.marked {
-            context.draw(Text(mark).font(.system(size: 11, weight: .bold)).foregroundColor(.red), at: CGPoint(x: size.width - 8, y: 8), anchor: .trailing)
+            context.draw(Text(mark).font(.system(size: 11, weight: .bold)).foregroundColor(Palette.critical), at: CGPoint(x: size.width - 8, y: 8), anchor: .trailing)
         }
 
         stamp(frame, geometry: geometry, schedule: schedule)

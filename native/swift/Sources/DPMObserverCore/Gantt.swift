@@ -125,6 +125,8 @@ public struct GanttSchedule: Equatable, Sendable {
     public let revision: UInt64?
     /// The distinct lifecycle words of the rows, for the status filter.
     public let statuses: [String]
+    /// Dependency ids the projection marks as links of the critical path.
+    public let criticalRelations: Set<String>
 
     public static func == (left: GanttSchedule, right: GanttSchedule) -> Bool { left.token == right.token }
 
@@ -143,6 +145,12 @@ public struct GanttSchedule: Equatable, Sendable {
         evaluatedAt = view.evaluatedAt
         revision = view.envelope.revision
         statuses = Array(Set(found.map(\.status))).sorted()
+        criticalRelations = Set(data["relations"].items.filter { $0["critical"].bool == true }.compactMap { $0["id"].string })
+    }
+
+    /// A relation in full words, saying when the projection marks it a link of the critical path.
+    public func words(_ relation: GanttRelation, names: (String) -> String) -> String {
+        relation.words(names: names) + (criticalRelations.contains(relation.id) ? "; on the critical path" : "")
     }
 
     public func row(_ identity: String) -> GanttRow? { index[identity].map { rows[$0] } }

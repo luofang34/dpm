@@ -56,7 +56,7 @@ public enum GanttWords {
         let relations = inventory.relations(of: row.id)
         if !relations.isEmpty {
             let names = namer(schedule: schedule, inventory: inventory)
-            parts.append("relations: " + relations.prefix(8).map { $0.words(names: names) }.joined(separator: "; ") + (relations.count > 8 ? "; and \(relations.count - 8) more in Detail" : ""))
+            parts.append("relations: " + relations.prefix(8).map { schedule?.words($0, names: names) ?? $0.words(names: names) }.joined(separator: "; ") + (relations.count > 8 ? "; and \(relations.count - 8) more in Detail" : ""))
         }
         return ("\(kind(row)) \(row.key): \(row.title)", parts.joined(separator: ". "))
     }
