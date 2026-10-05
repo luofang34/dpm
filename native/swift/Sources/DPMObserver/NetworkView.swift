@@ -597,6 +597,8 @@ final class NetworkRegionView: NSView {
     private static let limit = 40
     private var dragOrigin: NSPoint?
     private var dragged = false
+    /// The node a press landed on; it is selected on release, and only when the press did not become a drag.
+    private var pressed: (identity: String, clicks: Int)?
     private var tracking: NSTrackingArea?
 
     /// One bounded receipt of what this region really received and did, with its window's actual first responder.
@@ -703,14 +705,9 @@ final class NetworkRegionView: NSView {
         dragOrigin = event.locationInWindow
         dragged = false
         MainActor.assumeIsolated {
-            guard let model else { return }
             let hit = node(at: point)
-            if let hit {
-                model.focusNode(hit.identity, selecting: true)
-                if event.clickCount >= 2 { model.performNetwork(.openDetail) }
-            }
-            note("mouse_down", ["point": [point.x, point.y], "clicks": event.clickCount, "hit": hit?.key ?? NSNull(),
-                                "selected": hit != nil, "opened_detail": hit != nil && event.clickCount >= 2])
+            pressed = hit.map { ($0.identity, event.clickCount) }
+            note("mouse_down", ["point": [point.x, point.y], "clicks": event.clickCount, "hit": hit?.key ?? NSNull()])
         }
     }
 
@@ -726,7 +723,17 @@ final class NetworkRegionView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        if dragged { MainActor.assumeIsolated { note("drag_end", ["pan": model.map { [$0.network.panX, $0.network.panY] } ?? []]) } }
+        MainActor.assumeIsolated {
+            if dragged {
+                note("drag_end", ["pan": model.map { [$0.network.panX, $0.network.panY] } ?? []])
+            } else if let press = pressed, let model {
+                // A click, not a drag: only now does it select, so panning from a node leaves the selection alone.
+                model.focusNode(press.identity, selecting: true)
+                if press.clicks >= 2 { model.performNetwork(.openDetail) }
+                note("click", ["selected": press.identity, "opened_detail": press.clicks >= 2])
+            }
+        }
+        pressed = nil
         dragOrigin = nil
         dragged = false
     }

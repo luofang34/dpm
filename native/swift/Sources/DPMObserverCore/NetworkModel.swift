@@ -383,8 +383,15 @@ extension ObserverModel {
 
     /// Where the pointer rests on the canvas, or nil when it left: a temporary inspection that changes neither the
     /// cursor nor the selection.
+    ///
+    /// Publishing the network state redraws every view of the model, so the point is stored only when the node under
+    /// it changes (or the pointer leaves every node), not on every pointer move within one node.
     public func hoverNetwork(at point: NetworkPoint?) {
-        if network.hoverPoint != point { network.hoverPoint = point }
+        let state = network
+        let hit = point.flatMap { NetworkLayout.hit(networkGraph, shown: networkNodes, at: ($0.x, $0.y), pan: (state.panX, state.panY), scale: state.scale) }
+        let kept = hit == nil ? nil : point
+        guard hit?.identity != networkHover?.identity || (kept == nil) != (state.hoverPoint == nil) else { return }
+        network.hoverPoint = kept
     }
 
     private func toggleKind(_ kind: NetworkEdgeKind) {
