@@ -78,6 +78,8 @@ public struct SubjectDetail: Equatable, Sendable {
     public var revision: UInt64?
     public var loading: Bool
     public var error: String?
+    /// For a task: its predecessors, successors and unmet gates as `explain` reported them, for the network.
+    public var network: NetworkReport? = nil
 }
 
 /// A selected run's bounded activity window and lifecycle.

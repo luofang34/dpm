@@ -60,7 +60,7 @@ struct LaunchOptions {
                 }
             case "--page":
                 if let text = value() {
-                    if let found = ObserverModel.Page.allCases.first(where: { $0.rawValue.lowercased() == text.lowercased() }) { page = found } else { problems.append("--page \(text) is not now, live, review, detail or gantt") }
+                    if let found = ObserverModel.Page.allCases.first(where: { $0.rawValue.lowercased() == text.lowercased() }) { page = found } else { problems.append("--page \(text) is not now, live, review, detail, gantt or network") }
                 }
             case "--measure-log": measureLog = value()
             case "--measure-id": measureId = value()
@@ -153,6 +153,7 @@ final class Launch {
         }
         reporter?.attach(model, layout: layout, host: host)
         GanttKeyboard.shared.install(model)
+        NetworkPointer.model = model
         MeasureDriver.shared.start(model: model, options: options)
         GanttRenderer.shared.start(model: model, options: options)
         if let selection = options.selection { model.open(selection) }

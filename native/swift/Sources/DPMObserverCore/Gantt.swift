@@ -281,8 +281,19 @@ public struct GanttViewState: Equatable, Sendable {
     public var editingFilter = false
     /// A scripted scroll request, in points, that overrides the pan on one axis while a measurement runs.
     public var drive: GanttDrive?
+    /// Points per elapsed hour that Fit timeline derived from the measured width and the whole plan; while set it
+    /// replaces the zoom step's scale. A zoom step, Reset or a new zoom clears it.
+    public var fitScale: Double?
+    /// Whether the initial fit of the first valid schedule was applied, or the person chose a viewport first.
+    public var viewportChosen = false
+    /// Why the last Locate selected could not show the selected row (the filter hides it); nil otherwise. The next view
+    /// operation clears it.
+    public var locateNote: String?
 
     public init() {}
+
+    /// Points per elapsed hour as drawn now.
+    public var scale: Double { fitScale ?? GanttLayout.pointsPerHour(zoomLevel) }
 }
 
 /// One scripted scroll request of a measurement. Its identity is its window, its axis and its number in the
@@ -399,23 +410,51 @@ public enum GanttLayout {
 
     /// Where a bar sits on the timeline, in points from the timeline's origin.
     public static func bar(_ span: GanttSpan, level: Int) -> (x: Double, width: Double) {
-        let scale = pointsPerHour(level)
-        return (span.start * scale, max(span.hours * scale, minimumBar))
+        bar(span, scale: pointsPerHour(level))
+    }
+
+    public static func bar(_ span: GanttSpan, scale: Double) -> (x: Double, width: Double) {
+        (span.start * scale, max(span.hours * scale, minimumBar))
     }
 
     /// The content extent along an axis and the viewport it is seen through, in points: the timeline's width
     /// and the window's width, or the rows' height and the rows' viewport.
     public static func scrollExtent(_ axis: GanttDrive.Axis, schedule: GanttSchedule?, rows: Int, state: GanttViewState) -> (extent: Double, viewport: Double) {
         switch axis {
-        case .horizontal: return (schedule.map { timelineWidth($0, level: state.zoomLevel) } ?? 1, state.viewportWidth)
+        case .horizontal: return (schedule.map { timelineWidth($0, scale: state.scale) } ?? 1, state.viewportWidth)
         case .vertical: return (max(rowHeight, Double(rows) * rowHeight), Double(state.viewportRows) * rowHeight)
         }
     }
 
     /// The width of the whole timeline: the projection's own finish, or the latest p95 beyond it.
     public static func timelineWidth(_ schedule: GanttSchedule, level: Int) -> Double {
-        let hours = max(schedule.projectFinishHours, schedule.uncertainty?.p95 ?? 0, schedule.rows.compactMap { $0.span?.finish }.max() ?? 0)
-        return hours * pointsPerHour(level) + 80
+        timelineWidth(schedule, scale: pointsPerHour(level))
+    }
+
+    public static func timelineWidth(_ schedule: GanttSchedule, scale: Double) -> Double {
+        planHours(schedule) * scale + timelineMargin
+    }
+
+    /// The trailing room after the last hour, for the last bar's text.
+    public static let timelineMargin = 80.0
+
+    /// The hours the whole timeline spans: the projection's own finish, or the latest p95 or bar finish beyond it.
+    public static func planHours(_ schedule: GanttSchedule) -> Double {
+        max(schedule.projectFinishHours, schedule.uncertainty?.p95 ?? 0, schedule.rows.compactMap { $0.span?.finish }.max() ?? 0)
+    }
+
+    /// The scale at which the whole timeline, its trailing room included, is exactly as wide as `width`: geometry only.
+    /// Nil when there is no width or no hour to fit.
+    public static func fitScale(_ schedule: GanttSchedule, width: Double) -> Double? {
+        let hours = planHours(schedule)
+        guard width > timelineMargin + 1, hours > 0 else { return nil }
+        return (width - timelineMargin) / hours
+    }
+
+    /// The width of the row-label column for a body this wide: room for keys and titles, never more than a third of
+    /// the body once it is narrow, so the timeline keeps most of the width. Full titles stay in the rows' text.
+    public static func labelWidth(body: Double) -> Double {
+        max(220, min(400, body * 0.34))
     }
 }
 

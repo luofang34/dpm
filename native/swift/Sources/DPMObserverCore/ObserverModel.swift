@@ -13,7 +13,7 @@ import Foundation
 @MainActor
 public final class ObserverModel: ObservableObject {
     public enum Page: String, CaseIterable, Identifiable, Sendable {
-        case now = "Now", live = "Live", review = "Review", detail = "Detail", gantt = "Gantt"
+        case now = "Now", live = "Live", review = "Review", detail = "Detail", gantt = "Gantt", network = "Network"
         public var id: String { rawValue }
     }
 
@@ -33,6 +33,10 @@ public final class ObserverModel: ObservableObject {
     /// How the Gantt is drawn: collapse, filter, zoom, pan and the keyboard cursor. Never the project,
     /// and never the selection, which stays one value shared with Detail.
     @Published public internal(set) var gantt = GanttViewState()
+    /// How the dependency network is drawn: filter, zoom, pan and the keyboard cursor; never the project.
+    @Published public internal(set) var network = NetworkViewState()
+    /// The graph last built, kept until the snapshot's inventory or schedule reading changes.
+    var networkCache: (inventory: Inventory, schedule: UUID?, graph: NetworkGraph)?
     /// The element the shared key handler decided has keyboard focus, as `gantt.row.<key>`,
     /// `gantt.filter` or `detail.back`; what the views are asked to focus.
     @Published public internal(set) var focusTarget: String?
@@ -94,15 +98,16 @@ public final class ObserverModel: ObservableObject {
         syncSchedule()
     }
 
-    /// The Gantt's projection is read, and displayed, only while the Gantt is the page shown.
+    /// The schedule projection is read, and displayed, only while the Gantt or the network is the page shown.
     func syncSchedule() {
         guard let engine = engine else { return }
-        let shown = page == .gantt
+        let shown = page == .gantt || page == .network
         Task { await engine.showSchedule(shown) }
     }
 
     private func pageChanged(from old: Page) {
-        if page == .gantt || old == .gantt { syncSchedule() }
+        if [.gantt, .network].contains(page) || [.gantt, .network].contains(old) { syncSchedule() }
+        if page == .network { reconcileNetworkFocus() }
     }
 
     public var hasWorkspace: Bool {

@@ -53,6 +53,10 @@ final class GanttKeyboard {
             // Escape then cancels the composition, and the field keeps the keyboard.
             guard let region = region(in: event.window), region.holdsKeyboard || model.gantt.editingFilter else { return false }
             if let editor = event.window?.firstResponder as? NSTextView, editor.hasMarkedText(), GanttRegionView.filterField(of: editor) != nil { return false }
+        case .network:
+            // The network's own region decides, in the same way: its window's actual first responder, or its filter
+            // field being typed in; an input method's marked text keeps every key, Escape included.
+            return NetworkRegionView.takes(event, input: input, model: model)
         case .detail:
             // Detail's own search field keeps its keys; Back is reached by Escape or ⌘[ elsewhere.
             guard model.canReturn, !(event.window?.firstResponder is NSText) else { return false }

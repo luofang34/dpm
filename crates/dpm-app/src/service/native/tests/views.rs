@@ -135,12 +135,26 @@ fn views_name_the_feeds_and_queries_the_observer_reads_through_them() {
     ));
     // The Gantt draws the shared schedule projection and reads relations from the snapshot; it owns
     // no scheduling, and the catalog lists every view once, in the order the interface shows them,
-    // with the Gantt last.
+    // with the Gantt and then the network last.
     assert!(has(
         "gantt",
         &["schedule", "explain", "export"],
         &["project"]
     ));
+    // The network reads the same shared queries and lays the graph out; it says so, and says that
+    // related work never blocks.
+    assert!(has(
+        "network",
+        &["schedule", "explain", "export"],
+        &["project"]
+    ));
+    let network = mapping("network");
+    assert_eq!(network.queries, ["schedule", "explain", "export"]);
+    assert!(network.note.contains("never blocks"));
+    assert!(network.note.contains("derives no scheduling"));
     let order: Vec<String> = view_mappings().into_iter().map(|m| m.view).collect();
-    assert_eq!(order, ["now", "live", "review", "detail", "gantt"]);
+    assert_eq!(
+        order,
+        ["now", "live", "review", "detail", "gantt", "network"]
+    );
 }

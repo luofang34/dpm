@@ -79,6 +79,11 @@ def gantt_plans(directory):
             '--long-plan', str(write(directory / 'long-plan.json', measure_gantt.dataset(100, 'branch', long_titles=True)))]
 
 
+def network_plan(directory):
+    """The network scenarios' plan, FX-J1 with decisions (`smoke_observer.network_plan_data`)."""
+    return ['--network-plan', str(measure_gantt.write_plan(directory / 'network-plan.json', smoke_observer.network_plan_data()))]
+
+
 def compare(name, native, other, source):
     assert native == other, f'{name}: the host envelope differs from {source}:\n host  {json.dumps(native, sort_keys=True)}\n other {json.dumps(other, sort_keys=True)}'
 
@@ -149,7 +154,7 @@ def main():
         work = directory / 'suite'
         work.mkdir()
         arguments = ['--dpm', str(CLI), '--host', str(host), '--plan', str(FIXTURE), '--lagged-plan', str(lagged_plan(directory)),
-                     '--proxy', str(PROXY), '--scratch', str(work), '--clock', at, '--writer', str(WRITER), *gantt_plans(directory)]
+                     '--proxy', str(PROXY), '--scratch', str(work), '--clock', at, '--writer', str(WRITER), *gantt_plans(directory), *network_plan(directory)]
         result = subprocess.run([str(suite), '--helper', str(helper), *arguments], cwd='/', timeout=1800)
         assert result.returncode == 0, f'the Swift integration suite failed (exit {result.returncode})'
         negative_controls(suite, arguments, directory)

@@ -995,6 +995,15 @@ def detail_scroll_route(bundle, directory):
     """The long-text Detail in the real window: the full 500-character title, the objective, the 12 criteria, the own
     estimate and all twelve direct relations (type, lag or lead, policy, ids) are complete in the accessibility tree and
     no other relation is; the Detail overflows its scroll area; and its content can be a key view. Keys: detail_keyboard_route."""
+    # Pure controls of the title verdict, on supplied values, before the app is launched.
+    window = {'role': 'AXWindow', 'identifier': Foreground.TARGET_WINDOW, 'frame': [96, 47, 1180, 760]}
+    assert _title_verdict(window, [], False, [7]) == 'held', 'a valid full reading is not held'
+    assert (_title_verdict(None, [], False, [7]) == 'invalid' and _title_verdict(window, [{'role': 'AXApplication'}], False, [7]) == 'invalid'
+            and _title_verdict(window, [], True, [7]) == 'invalid' and _title_verdict(None, [{}], True, [7]) == 'invalid'), 'a text found in an invalid tree was judged held'
+    assert _title_verdict(window, [], False, []) == 'absent', 'a valid, complete, uncapped reading without the text is not absent'
+    assert _title_verdict(None, [], False, []) == 'invalid', 'a reading without the owned window is judged'
+    assert _title_verdict(window, [{'role': 'AXApplication'}], False, []) == 'invalid', 'a cyclic reading is judged'
+    assert _title_verdict(window, [], True, []) == 'invalid', 'a capped reading is judged'
     database = directory / 'detail-long.sqlite'
     run_cli(database, 'import', str(measure_gantt.write_plan(directory / 'detail-long.json', long_detail_plan())))
     app = App(bundle, directory, ['--database', str(database), '--page', 'detail', '--select-key', 'TEST-A'])
@@ -1013,8 +1022,25 @@ def detail_scroll_route(bundle, directory):
             reader = None
             try:
                 reader = Foreground(app.process.pid)
-                found = reader.until(lambda: app.process.poll() is not None or reader.holds_text(LONG_TITLE), 15)
+                readings = [None]
+
+                def held():
+                    readings[0] = reader.title_reading(LONG_TITLE)
+                    return readings[0]['verdict'] == 'held'
+                found = reader.until(lambda: app.process.poll() is not None or held(), 15)
                 assert app.process.poll() is None, f'the app exited ({app.process.returncode}) while its long title was read'
+                if not found:
+                    # The complete bounded external reading of the failure (the same tree the verdict judged), kept before
+                    # the scratch directory is removed.
+                    kept = keep_title_failure(app, reader, LONG_TITLE)
+                    print(f'detail_scroll_route: the failing external accessibility reading was kept at {kept}' if kept else
+                          'detail_scroll_route: DPM_RENDER_OUT is not set, so the failing accessibility reading was not kept', file=sys.stderr)
+                    reading = readings[0]
+                    if reading['verdict'] == 'invalid':
+                        raise AssertionError(
+                            f'the owned target window\'s accessibility tree could not be read validly, so the full {len(LONG_TITLE)}-character title is NOT judged missing: '
+                            f"owned window {reading['owned_window']} ({reading['owned_window_reason']}), {reading['cycles']} cycles (first {reading['first_cycles']}), "
+                            f"capped {reading['capped']} ({reading['bounds']}), AXFrontmost {reading['frontmost']} (tree notifications observed: {reader.tree_observed})")
                 assert found, f'the full {len(LONG_TITLE)}-character title is in no AXTitle, AXDescription or AXValue of the app\'s accessibility tree (tree notifications observed: {reader.tree_observed})'
                 title = f'its full {len(LONG_TITLE)}-character title (read as a client reads it), '
             except NotAssessed as interruption:
@@ -1057,6 +1083,18 @@ class NotAssessed(Exception):
 def not_assessed(case, reason):
     NOT_ASSESSED.append(f'{case}: {reason}')
     print(f'NOT ASSESSED (not a pass, not a product failure): {case}: {reason}', flush=True)
+
+
+def _title_verdict(window, cycles, capped, found):
+    """The judgment of one external reading of a text, over supplied values. First the tree must be valid: 'invalid' when the
+    owned target window was not read, a cycle was met or the walk was capped, whatever else was read (a text found in such a
+    tree is not a valid positive judgment, and its absence cannot be shown). Only a valid tree is judged: 'held' when the full
+    text was read in an AXTitle, AXDescription or AXValue, otherwise 'absent'."""
+    if window is None or cycles or capped:
+        return 'invalid'
+    if found:
+        return 'held'
+    return 'absent'
 
 
 class Foreground:
@@ -1102,6 +1140,8 @@ class Foreground:
         # Set once by `arm`, after the initial activation; from then on the first observed interruption is kept.
         self.armed = False
         self.interrupted = None
+        # The last `read_tree` reading (plain Python values, no CF reference), so a failure reports the tree judged.
+        self.last_tree = None
         self.app = ax.AXUIElementCreateApplication(pid)
         self.callback = callback(lambda _observer, _element, name, _refcon: self.observed(self.text_of(name)))
         observer = pointer()
@@ -1337,28 +1377,148 @@ class Foreground:
             self.cf.CFRelease(window)
         return facts
 
-    def holds_text(self, fragment, limit=6000):
-        """Whether an element of the app's accessibility tree, walked through AXChildren from the application, carries
-        `fragment` in its AXTitle, AXDescription or AXValue."""
-        visited = 0
+    def read_tree(self, fragment=None, limit=6000, depth_limit=60, keep=600):
+        """ONE bounded, cycle-safe walk of the app's accessibility tree through AXChildren from the application, and the
+        owned target window. Every element reached is recorded with its depth, role, subrole, identifier, frame and its
+        AXTitle, AXDescription and AXValue (each with its AXError and full length; the text kept whole where it holds the
+        start of `fragment`, else its first `keep` characters). A child CFEqual to an ancestor on the current path, or an
+        AXApplication below depth 0, is a cycle: recorded and not descended. The walk stops once the full `fragment` is
+        read. Each AXChildren and AXWindows array is copied (owned) and released in a `finally` after its elements are
+        recorded or walked; its elements are borrowed and never kept beyond it (the path holds only elements whose arrays
+        are still held). Kept as `last_tree`, so a verdict and its failure record report the same tree."""
+        probe = fragment[:40] if fragment else None
+        nodes, child_errors, cycles, found, path = [], [], [], [], []
+        bounds = {'visited': 0, 'deepest': 0, 'node_cap_hit': False, 'depth_cap_hit': False, 'limit': limit, 'depth_limit': depth_limit}
 
-        def walk(element, depth):
-            nonlocal visited
-            visited += 1
-            if visited > limit or depth > 60:
-                return False
-            if any(fragment in text for text in (self.attribute(element, name)[1] for name in ('AXTitle', 'AXDescription', 'AXValue')) if isinstance(text, str)):
-                return True
+        def text(element, name):
+            error, value = self.attribute(element, name)
+            if not isinstance(value, str):
+                return {'error': error, 'kind': None if value is None else type(value).__name__, 'length': None, 'text': None if value is None else str(value)}, False
+            return {'error': error, 'kind': 'str', 'length': len(value), 'text': value if probe and probe in value else value[:keep]}, bool(fragment) and fragment in value
+
+        def walk(element, depth, parent):
+            if found:
+                return
+            if bounds['visited'] >= limit:
+                bounds['node_cap_hit'] = True
+                return
+            if depth > depth_limit:
+                bounds['depth_cap_hit'] = True
+                return
+            role = self.attribute(element, 'AXRole')[1]
+            ancestor = next((at for at, held in enumerate(path) if self.cf.CFEqual(element, held)), None)
+            if ancestor is not None or (depth > 0 and role == 'AXApplication'):
+                cycles.append({'parent': parent, 'depth': depth, 'role': role,
+                               'why': f'CFEqual to its ancestor at depth {ancestor}' if ancestor is not None else 'an AXApplication below depth 0'})
+                return
+            bounds['visited'] += 1
+            bounds['deepest'] = max(bounds['deepest'], depth)
+            node = {'index': len(nodes), 'depth': depth, 'role': role, 'subrole': self.attribute(element, 'AXSubrole')[1],
+                    'identifier': self.attribute(element, 'AXIdentifier')[1], 'frame': self.frame(element)}
+            whole = False
+            for name in ('AXTitle', 'AXDescription', 'AXValue'):
+                node[name], held = text(element, name)
+                whole = whole or held
+            nodes.append(node)
+            if whole:
+                found.append(node['index'])
+                return
             children = ctypes.c_void_p()
-            if self.ax.AXUIElementCopyAttributeValue(element, self.string('AXChildren'), ctypes.byref(children)) or not children.value:
-                return False
+            error = self.ax.AXUIElementCopyAttributeValue(element, self.string('AXChildren'), ctypes.byref(children))
+            if error or not children.value:
+                node['children_error'] = error
+                if error not in (0, -25212):  # kAXErrorNoValue: an element without children
+                    child_errors.append({'index': node['index'], 'error': error})
+                return
+            path.append(element)
             try:
                 if self.cf.CFGetTypeID(children.value) != self.cf.CFArrayGetTypeID():
-                    return False
-                return any(walk(self.cf.CFArrayGetValueAtIndex(children.value, i), depth + 1) for i in range(self.cf.CFArrayGetCount(children.value)))
+                    node['children_error'] = 'not an array'
+                    return
+                node['children'] = self.cf.CFArrayGetCount(children.value)
+                for i in range(node['children']):
+                    walk(self.cf.CFArrayGetValueAtIndex(children.value, i), depth + 1, node['index'])
             finally:
+                path.pop()
                 self.cf.CFRelease(children.value)
-        return walk(self.app, 0)
+        walk(self.app, 0, None)
+        windows, owned, reasons = [], [], []
+
+        def consider(window, where):
+            """One window element, described while the array or reference holding it is still held."""
+            facts = {**self.describe(window), 'title': self.attribute(window, 'AXTitle')[1],
+                     'main': self.attribute(window, 'AXMain')[1], 'focused': self.attribute(window, 'AXFocused')[1]}
+            if owned:
+                return facts
+            if facts['role'] == 'AXWindow' and facts['identifier'] == self.TARGET_WINDOW and facts['frame']:
+                owned.append({**facts, 'from': where})
+            else:
+                reasons.append(f"{where} is an {facts['role']} (identifier {facts['identifier']}, frame {facts['frame']})")
+            return facts
+        listed = self.element_value(self.app, 'AXWindows')
+        if listed is None:
+            reasons.append('the app lists no AXWindows')
+        else:
+            try:
+                if self.cf.CFGetTypeID(listed) != self.cf.CFArrayGetTypeID():
+                    reasons.append('AXWindows is not an array')
+                elif self.cf.CFArrayGetCount(listed) == 0:
+                    reasons.append('AXWindows is empty')
+                else:
+                    for i in range(self.cf.CFArrayGetCount(listed)):
+                        windows.append(consider(self.cf.CFArrayGetValueAtIndex(listed, i), f'AXWindows[{i}]'))
+            finally:
+                self.cf.CFRelease(listed)
+        if not owned:
+            focused = self.element_value(self.app, 'AXFocusedWindow')
+            if focused is None:
+                reasons.append('the app names no AXFocusedWindow')
+            else:
+                try:
+                    consider(focused, 'AXFocusedWindow')
+                finally:
+                    self.cf.CFRelease(focused)
+        self.last_tree = {'fragment': fragment, 'probe': probe, 'keep': keep, 'nodes': nodes, 'bounds': bounds, 'children_errors': child_errors,
+                          'cycles': cycles, 'found': found, 'windows': windows, 'owned_window': owned[0] if owned else None,
+                          'owned_window_reason': None if owned else '; '.join(reasons), 'frontmost': self.attribute(self.app, 'AXFrontmost')}
+        return self.last_tree
+
+    def title_reading(self, fragment):
+        """One reading of `fragment` on `read_tree`, judged by `_title_verdict`: held, absent or invalid, with the facts."""
+        tree = self.read_tree(fragment)
+        bounds = tree['bounds']
+        capped = bounds['node_cap_hit'] or bounds['depth_cap_hit']
+        return {'verdict': _title_verdict(tree['owned_window'], tree['cycles'], capped, tree['found']), 'owned_window': tree['owned_window'],
+                'owned_window_reason': tree['owned_window_reason'], 'cycles': len(tree['cycles']), 'first_cycles': tree['cycles'][:3],
+                'capped': capped, 'bounds': bounds, 'frontmost': tree['frontmost']}
+
+    def holds_text(self, fragment, limit=6000):
+        """Whether an element of the app's accessibility tree, walked through AXChildren from the application (`read_tree`),
+        carries `fragment` in its AXTitle, AXDescription or AXValue."""
+        return bool(self.read_tree(fragment, limit)['found'])
+
+    def text_capture(self, fragment, limit=6000, depth_limit=60, keep=600):
+        """What a failing `holds_text` walk actually read, under the same bounds: every element reached through AXChildren
+        from the application, with its depth, role, subrole, identifier, frame and its AXTitle, AXDescription and AXValue
+        (each with its AXError and full length; the text kept whole where it holds the start of `fragment`, else its first
+        `keep` characters), the traversal bounds (visited, deepest depth, whether the node or depth cap was hit, AXChildren
+        errors), the candidates holding the start of `fragment` and whether each holds it whole, the headings, and the app's
+        windows, the cycles met and the owned target window (or why there is none). Nothing is inferred: a missing value is
+        recorded with its error. It reports the tree the last verdict judged (`last_tree`) when that reading was of the same
+        fragment under the same bounds; it walks (`read_tree`) only when there is no such reading."""
+        tree = self.last_tree
+        reused = bool(tree) and tree['fragment'] == fragment and tree['keep'] == keep and (tree['bounds']['limit'], tree['bounds']['depth_limit']) == (limit, depth_limit)
+        if not reused:
+            tree = self.read_tree(fragment, limit, depth_limit, keep)
+        nodes, probe = tree['nodes'], tree['probe']
+        holding = lambda node, whole: any(isinstance(node[n]['text'], str) and (fragment if whole else probe) in node[n]['text'] for n in ('AXTitle', 'AXDescription', 'AXValue'))  # noqa: E731
+        candidates = [{'index': n['index'], 'role': n['role'], 'whole': holding(n, True),
+                       'lengths': {name: n[name]['length'] for name in ('AXTitle', 'AXDescription', 'AXValue')}} for n in nodes if holding(n, False)]
+        return {'fragment_length': len(fragment), 'probe': probe, 'bounds': tree['bounds'], 'children_errors': tree['children_errors'][:200],
+                'cycle_count': len(tree['cycles']), 'cycles': tree['cycles'][:200], 'owned_window': tree['owned_window'],
+                'owned_window_reason': tree['owned_window_reason'], 'the_tree_the_verdict_judged': reused,
+                'candidates': candidates, 'headings': [n['index'] for n in nodes if n['role'] == 'AXHeading'],
+                'windows': tree['windows'], 'frontmost': tree['frontmost'], 'nodes': nodes}
 
     def until(self, condition, timeout):
         """Handle the app's notifications as they arrive until `condition()` holds or the deadline passes; whether it held."""
@@ -1975,6 +2135,675 @@ def keyboard_guard_controls(bundle, directory):
     return (f'route guards: {latch if latch else "the interruption latch was NOT ASSESSED (reported above)"}; and after the owned app exited, {death}')
 
 
+NETWORK_PACKAGE_GATE = '0000000b-0000-4000-8000-0000000000a2'
+
+
+def network_plan_data():
+    """FX-J1 for the network: the Gantt's nested fixture (a package holding TEST-A, B and C, a milestone, FS, SS, FF
+    and SF with lead and lag, Hard and Soft) with its decisions kept: the open TEST-GATE gating TEST-B and TEST-D and
+    naming TEST-F as context-only related work, and a second open decision, TEST-PKG-GATE, that blocks the package,
+    so its children inherit the gate. No calendar: the schedule is elapsed hours and no date is supplied."""
+    plan = measure_gantt.fx_gantt()
+    by_key = {w['key']: w for w in plan['work_items'].values()}
+    gate = next(d for d in plan['decisions'].values() if d['key'] == 'TEST-GATE')
+    gate['related_work'] = [by_key['TEST-F']['id']]
+    package_gate = dict(gate, id=NETWORK_PACKAGE_GATE, key='TEST-PKG-GATE', question='Is the package approach accepted?',
+                        blocks=[by_key['TEST-PKG']['id']], related_work=[])
+    plan['decisions'][NETWORK_PACKAGE_GATE] = package_gate
+    return plan
+
+
+def network_store(directory, name):
+    database = directory / f'{name}.sqlite'
+    run_cli(database, 'import', str(measure_gantt.write_plan(directory / f'{name}.json', network_plan_data())))
+    return database
+
+
+def network_shown(state):
+    return connected(state) and state['page'] == 'network' and state['network']['shown'] and state['network']['nodes'] > 0
+
+
+def network_page(bundle, directory):
+    """The packaged app launched on `--page network` with a nested task selected: the cursor is on that task at entry,
+    the counts are the exported plan's, and nothing is written."""
+    database = network_store(directory, 'network')
+    plan = run_cli(database, 'export')
+    operations = len(run_cli(database, 'history')['entries'])
+    blocks = sum(len(d.get('blocks', [])) for d in plan['decisions'].values())
+    related = sum(len(d.get('related_work', [])) for d in plan['decisions'].values())
+    app = App(bundle, directory, ['--database', str(database), '--page', 'network', '--select-key', 'TEST-C'])
+    try:
+        state = app.wait(lambda s: network_shown(s) and s['network']['cursor_key'] == 'TEST-C', 30, 'the network with the cursor on the selected TEST-C')
+        net = state['network']
+        assert net['nodes'] == len(plan['work_items']) + len(plan['decisions']), net
+        assert net['temporal'] == len(plan['dependencies']) and net['decision_blocks'] == blocks and net['context_links'] == related, net
+        assert net['listed_nodes'] == net['nodes'] and net['visible_edges'] == net['temporal'] + blocks + related, net
+        assert len(run_cli(database, 'history')['entries']) == operations, 'the network wrote nothing'
+        return (f"the network page opened with the cursor on the selected nested task TEST-C and listed {net['nodes']} nodes, {net['temporal']} temporal edges, "
+                f"{blocks} decision blocks and {related} context links, the exported plan's, with nothing written")
+    finally:
+        app.close()
+
+
+def network_keyboard_route(bundle, directory):
+    """Actual entry to the network in the packaged app and the keys after it, with real key events (CGEventPostToPid), each
+    sent with the app frontmost and its window key: from the Gantt with TEST-C selected, Command-6 enters the network (the
+    page change in the app's own state is the evidence the event was delivered), the cursor is on TEST-C, `p` walks to a
+    predecessor, Return opens Detail and Escape returns to that node, `/` gives the actual filter field the keyboard (the
+    field reports it), a typed letter is filter text, Escape hands back and one Down moves the cursor. Then Command-5 and
+    Command-6 again. Only the complete route passes; an interrupted one is NOT ASSESSED."""
+    case = 'network_keyboard_route'
+    if not accessibility_trusted():
+        not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so CGEventPostToPid would be ignored; no key was sent')
+        return None
+    database = network_store(directory, 'network-keys')
+    operations = len(run_cli(database, 'history')['entries'])
+    app = App(bundle, directory, ['--database', str(database), '--page', 'gantt', '--select-key', 'TEST-C'])
+    front = None
+    try:
+        app.wait(lambda s: gantt_loaded(s) and s['gantt']['selected_key'] == 'TEST-C', 30, 'the Gantt with TEST-C selected')
+        front = Foreground(app.process.pid)
+        front.activate(app.process)
+        front.arm()
+        guarded_key(app, front, 'Command-6 to enter the network', 22, COMMAND_FLAG)
+        entered = guarded_wait(app, front, lambda s: network_shown(s), 15, 'Command-6 to show the network page (the delivered event)')
+        assert entered['network']['cursor_key'] == 'TEST-C', f"entry did not put the cursor on the selected task: {entered['network']}"
+        held = guarded_wait(app, front, lambda s: network_shown(s) and (s['network']['focus_reported'] or '').startswith('network.node.'), 15,
+                            'the network region to report the keyboard after entry')
+        guarded_key(app, front, 'p to walk to a predecessor', 35)
+        walked = guarded_wait(app, front, lambda s: s['network']['cursor_key'] not in (None, 'TEST-C') and (s['network']['walked'] or '').startswith('predecessor'), 10,
+                              'a real p to walk to a predecessor of TEST-C')
+        node = f"network.node.{walked['network']['cursor_key']}"
+        guarded_key(app, front, 'Return to open Detail from the node', KEY_CODES['return'])
+        opened = guarded_wait(app, front, lambda s: s['page'] == 'detail', 15, 'Return to open Detail')
+        assert opened['network']['shown'] is False and opened['gantt']['detail_return'] == node, opened['gantt']
+        guarded_key(app, front, 'Escape to close Detail', KEY_CODES['escape'])
+        back = guarded_wait(app, front, lambda s: network_shown(s) and s['network']['focus_target'] == node and s['network']['focus_reported'] == node, 15,
+                            'Escape to return to the network with the originating node reported as focused')
+        guarded_key(app, front, 'slash to focus the filter', KEY_CODES['slash'])
+        guarded_wait(app, front, lambda s: s['network']['filter']['editing'] is True, 10, 'the actual filter field to report the keyboard after /')
+        guarded_key(app, front, 'a letter typed into the filter', KEY_CODES['a'])
+        typed = guarded_wait(app, front, lambda s: s['network']['filter']['text'] == 'a', 10, 'the typed letter to be filter text')
+        guarded_key(app, front, 'Escape to leave the filter', KEY_CODES['escape'])
+        left = guarded_wait(app, front, lambda s: s['network']['filter']['editing'] is False and (s['network']['focus_reported'] or '').startswith('network.node.'), 10,
+                            'Escape to hand the keyboard back to the network region')
+        before_down = left['network']['cursor_key']
+        guarded_key(app, front, 'one Down after the filter', KEY_CODES['down'])
+        guarded_wait(app, front, lambda s: s['network']['cursor_key'] != before_down, 10, 'one real Down to move the cursor after the filter')
+        guarded_key(app, front, 'Command-5 to the Gantt', 23, COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['page'] == 'gantt', 10, 'Command-5 to show the Gantt')
+        guarded_key(app, front, 'Command-6 back to the network', 22, COMMAND_FLAG)
+        again = guarded_wait(app, front, lambda s: network_shown(s), 10, 'Command-6 to show the network again')
+        uninterrupted(front, 'the route is complete')
+        assert len(run_cli(database, 'history')['entries']) == operations, 'the network route wrote nothing'
+        assert app.quit() == 0
+        return ('the complete guarded network keyboard route: real Command-6 entered the network from the Gantt (the app\'s own page changed), with the cursor on '
+                f"the selected TEST-C; p walked to {walked['network']['cursor_key']}; Return opened Detail and Escape returned to that node; / gave the filter field "
+                f"the keyboard, a typed letter was filter text, Escape handed back and one Down moved the cursor; Command-5 and Command-6 again; nothing written "
+                f"(entry focus reported {held['network']['focus_reported']}, after Detail {back['network']['focus_reported']}, filter text {typed['network']['filter']['text']!r}, "
+                f"re-entry cursor {again['network']['cursor_key']})")
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption))
+        return None
+    except AssertionError as error:
+        # R8: the complete bounded failing state, kept before the scratch directory is removed.
+        kept = keep_failure(case, app, front, {'error': str(error)[:4000]})
+        raise AssertionError(f'{error} (complete failing state kept at {kept})') from None
+    finally:
+        if front:
+            front.close()
+        app.close()
+
+
+# --------------------------------------------------------------------------------------------------
+# Network and Gantt layout and pointer guardrails. The invariants: the root, the status bar, the controls and a
+# finite canvas lie inside the usable content of a real window at every declared size; a pointer step counts only
+# when the app's own receiving view acknowledges it (a receipt with a newer sequence) and the shared selection or
+# the view state it promises changed; a drag or a wheel is posted only along an axis the content can move on; a
+# fit is whole when the transformed extent lies inside the viewport. Every pointer event is posted only after the
+# route's guard confirms, immediately before it, that the owned app is frontmost with its window key and that no
+# interruption was observed.
+# --------------------------------------------------------------------------------------------------
+
+def keep_failure(case, app, front=None, extra=None):
+    """The COMPLETE bounded state of a failing route, written into DPM_RENDER_OUT before the scratch directory is
+    removed: the app's last state (frames, network and focus sections, host traces), the AX focus chain and the last
+    events. Returns the path, or None when DPM_RENDER_OUT is not set (then nothing is claimed)."""
+    target = os.environ.get('DPM_RENDER_OUT')
+    if not target:
+        return None
+    out = Path(target)
+    out.mkdir(parents=True, exist_ok=True)
+    record = {'case': case, 'state': app.state() if app else None, 'extra': extra}
+    if front is not None:
+        try:
+            record['ax_focused'] = front.focused_identifier()
+            record['ax_focus_chain'] = front.focused_chain()
+        except Exception as error:  # the record is best effort; the route's own failure stands
+            record['ax_error'] = repr(error)
+    path = out / f'{case}-failure-state.json'
+    path.write_text(json.dumps(record, sort_keys=True, indent=1, default=str))
+    return path
+
+
+def keep_title_failure(app, reader, fragment):
+    """The failing direct-Detail title reading, kept in DPM_RENDER_OUT: the app's own last state (its page, selection and
+    the model's Detail title and context, labelled as model state, never as the external reading), the complete bounded
+    external AX walk (`Foreground.text_capture`) and a screen capture of the app's window rectangle as AX reports it,
+    when one can be taken. None when DPM_RENDER_OUT is not set. Best effort: the route's own assertion stands."""
+    target = os.environ.get('DPM_RENDER_OUT')
+    if not target:
+        return None
+    Path(target).mkdir(parents=True, exist_ok=True)
+    case = 'detail_scroll_route-title'
+    extra ={'model_state_is_not_the_external_reading': True}
+    try:
+        extra['external_ax'] = reader.text_capture(fragment)
+    except Exception as error:
+        extra['external_ax_error'] = repr(error)
+    state = app.state() or {}
+    extra['model'] = {'page': state.get('page'), 'selection': state.get('selection'), 'detail': state.get('detail')}
+    window = (extra.get('external_ax') or {}).get('owned_window') or next((w for w in (extra.get('external_ax') or {}).get('windows', []) if w.get('frame')), None)
+    if window:
+        x, y, width, height = window['frame']
+        shot = Path(target) / f'{case}-window-rect.png'
+        taken = subprocess.run(['/usr/sbin/screencapture', '-x', '-R', f'{x:.0f},{y:.0f},{width:.0f},{height:.0f}', str(shot)], capture_output=True, text=True, timeout=30)
+        extra['screenshot'] = {'path': str(shot), 'what': 'a capture of the screen rectangle of the app window frame AX reported (other windows over it would show)',
+                               'exit': taken.returncode, 'stderr': taken.stderr.strip()[:300], 'taken': shot.is_file() and shot.stat().st_size > 0}
+    else:
+        extra['screenshot'] = {'taken': False, 'why': 'the app reported no window with a frame through AX'}
+    return keep_failure(case, app, reader, extra)
+
+
+def _png_pixels(path):
+    """Width, height and rows of RGBA tuples of an 8-bit RGB or RGBA, non-interlaced PNG (what screencapture writes)."""
+    import zlib
+    data = Path(path).read_bytes()
+    assert data[:8] == b'\x89PNG\r\n\x1a\n', f'{path} is not a PNG'
+    at, idat, header = 8, b'', None
+    while at < len(data):
+        length = int.from_bytes(data[at:at + 4], 'big')
+        kind = data[at + 4:at + 8]
+        body = data[at + 8:at + 8 + length]
+        if kind == b'IHDR':
+            header = body
+        elif kind == b'IDAT':
+            idat += body
+        at += 12 + length
+    width, height, depth, colour, interlace = int.from_bytes(header[0:4], 'big'), int.from_bytes(header[4:8], 'big'), header[8], header[9], header[12]
+    assert depth == 8 and colour in (2, 6) and interlace == 0, f'unsupported PNG layout depth {depth} colour {colour} interlace {interlace}'
+    channels = 4 if colour == 6 else 3
+    raw = zlib.decompress(idat)
+    stride = width * channels
+    rows, previous, offset = [], bytearray(stride), 0
+    for _ in range(height):
+        kind = raw[offset]
+        line = bytearray(raw[offset + 1:offset + 1 + stride])
+        offset += 1 + stride
+        for i in range(stride):
+            left = line[i - channels] if i >= channels else 0
+            up = previous[i]
+            corner = previous[i - channels] if i >= channels else 0
+            if kind == 1:
+                line[i] = (line[i] + left) & 255
+            elif kind == 2:
+                line[i] = (line[i] + up) & 255
+            elif kind == 3:
+                line[i] = (line[i] + (left + up) // 2) & 255
+            elif kind == 4:
+                p = left + up - corner
+                pa, pb, pc = abs(p - left), abs(p - up), abs(p - corner)
+                line[i] = (line[i] + (left if pa <= pb and pa <= pc else up if pb <= pc else corner)) & 255
+        rows.append(bytes(line))
+        previous = line
+    return width, height, channels, rows
+
+
+def window_capture(number, path):
+    """A real capture of the app's window by its window number (screencapture -l). None when it could not be taken
+    (no Screen Recording permission, or the tool failed): then nothing is claimed about pixels."""
+    result = subprocess.run(['/usr/sbin/screencapture', '-x', '-o', '-l', str(number), str(path)], capture_output=True, text=True, timeout=30)
+    if result.returncode != 0 or not Path(path).is_file() or Path(path).stat().st_size == 0:
+        return None
+    return path
+
+
+def drawn_pixels(path, frame, content_width):
+    """How many pixels inside `frame` (content points, top left) differ from that region's most common colour, and
+    the region's size in pixels. A blank canvas has (almost) none."""
+    width, height, channels, rows = _png_pixels(path)
+    scale = width / content_width
+    x0, y0 = max(0, int(frame[0] * scale) + 2), max(0, int(frame[1] * scale) + 2)
+    x1, y1 = min(width, int((frame[0] + frame[2]) * scale) - 2), min(height, int((frame[1] + frame[3]) * scale) - 2)
+    counts = {}
+    pixels = []
+    for y in range(y0, y1, 2):
+        row = rows[y]
+        for x in range(x0, x1, 2):
+            colour = tuple(row[x * channels:x * channels + 3])
+            pixels.append(colour)
+            counts[colour] = counts.get(colour, 0) + 1
+    if not pixels:
+        return 0, 0
+    background = max(counts, key=counts.get)
+    differing = sum(1 for c in pixels if sum(abs(a - b) for a, b in zip(c, background)) > 40)
+    return differing, len(pixels)
+
+
+def _quartz():
+    quartz = ctypes.CDLL('/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices')
+    core = ctypes.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+
+    class Point(ctypes.Structure):
+        _fields_ = [('x', ctypes.c_double), ('y', ctypes.c_double)]
+
+    class Rect(ctypes.Structure):
+        _fields_ = [('x', ctypes.c_double), ('y', ctypes.c_double), ('w', ctypes.c_double), ('h', ctypes.c_double)]
+    quartz.CGEventCreateMouseEvent.restype = ctypes.c_void_p
+    quartz.CGEventCreateMouseEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint32, Point, ctypes.c_uint32]
+    quartz.CGEventSetIntegerValueField.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int64]
+    quartz.CGEventPost.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
+    quartz.CGEventCreateScrollWheelEvent2.restype = ctypes.c_void_p
+    quartz.CGEventCreateScrollWheelEvent2.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32]
+    quartz.CGMainDisplayID.restype = ctypes.c_uint32
+    quartz.CGDisplayBounds.restype = Rect
+    quartz.CGDisplayBounds.argtypes = [ctypes.c_uint32]
+    core.CFRelease.argtypes = [ctypes.c_void_p]
+    return quartz, core, Point
+
+
+def pointer_guard(app, front, step):
+    """The route's own guard, immediately before one pointer event: the owned process still runs, it is frontmost with
+    its target window key, and no interruption was observed since the route was armed. Fails closed: nothing is
+    posted when any of them does not hold."""
+    if app.process.poll() is not None:
+        raise AssertionError(f'the app exited ({app.process.returncode}) before {step}')
+    problem = front.problem()
+    if problem:
+        raise NotAssessed(f'before {step}: {problem}; no pointer event was posted')
+    uninterrupted(front, f'{step} (no pointer event was posted)')
+
+
+def post_mouse(app, front, kind, point, clicks=1, step='a pointer event'):
+    """One real mouse event at a global top-left screen point, posted to the HID event tap only after the guard holds.
+    kind: down, up, moved, dragged. Events are delivered in the order posted; the caller waits on the receiving
+    view's receipt, never on a delay."""
+    pointer_guard(app, front, f'{kind} of {step}')
+    quartz, core, Point = _quartz()
+    code = {'down': 1, 'up': 2, 'moved': 5, 'dragged': 6}[kind]
+    event = quartz.CGEventCreateMouseEvent(None, code, Point(*point), 0)
+    quartz.CGEventSetIntegerValueField(event, 1, clicks)  # kCGMouseEventClickState
+    quartz.CGEventPost(0, event)
+    core.CFRelease(event)
+
+
+def post_click(app, front, point, clicks=1, step='a click'):
+    post_mouse(app, front, 'moved', point, step=step)
+    for n in range(1, clicks + 1):
+        post_mouse(app, front, 'down', point, n, step=step)
+        post_mouse(app, front, 'up', point, n, step=step)
+
+
+def post_scroll(app, front, dy, dx=0, step='a wheel'):
+    pointer_guard(app, front, step)
+    quartz, core, _ = _quartz()
+    event = quartz.CGEventCreateScrollWheelEvent2(None, 0, 2, dy, dx, 0)  # pixel units
+    quartz.CGEventPost(0, event)
+    core.CFRelease(event)
+
+
+def content_origin(layout):
+    """The global top-left screen point of the window's content view: the outer frame is in Cocoa screen coordinates
+    (bottom-left origin of the main display), and the content view here fills the window (bounds equal its size)."""
+    quartz, _, _ = _quartz()
+    screen = quartz.CGDisplayBounds(quartz.CGMainDisplayID())
+    x, y, w, h = layout['window_frame']
+    return x, screen.h - (y + h)
+
+
+def _region_problem(region_frame, expected_frame, tolerance=1.5):
+    """None when the AX frame of the network region is the expected [x, y, w, h] (global top-left points) within
+    `tolerance`; otherwise both frames. Pure: it compares the supplied values only."""
+    if not region_frame or len(region_frame) != 4 or any(abs(a - b) > tolerance for a, b in zip(region_frame, expected_frame)):
+        return f'the AX network.region frame {region_frame} is not the frame the current layout expects {list(expected_frame)}'
+    return None
+
+
+def _receipt_problem(receipt_point, expected_local_point, tolerance=1.5):
+    """None when the region's own receipt point is the expected canvas-local point within `tolerance`; otherwise both
+    points. Pure: it compares the supplied values only."""
+    if not receipt_point or len(receipt_point) != 2 or any(abs(a - b) > tolerance for a, b in zip(receipt_point, expected_local_point)):
+        return f'the mouse_down receipt point {receipt_point} is not the expected canvas-local point {list(expected_local_point)}'
+    return None
+
+
+def pointer_basis(app, front, what, key=None, strict=False):
+    """ONE current snapshot to derive pointer targets from: the latest state and, read in the same evaluation, the owned
+    app's AX network.region, through the existing guarded wait. It holds only when the network is shown with a measured
+    canvas, the model viewport is the canvas, the region has a frame that agrees with the layout, `key` (if given) is
+    drawn and, when `strict`, the whole network layout holds. The state and the region (with the content origin and
+    the expected frame it was compared with); a global target is the region's frame origin plus a canvas-local point."""
+    last, captured = ['no state was written'], {}
+
+    def valid(s):
+        layout = (s.get('gantt') or {}).get('layout')
+        canvas = ((layout or {}).get('frames') or {}).get('network_canvas')
+        if not network_shown(s) or not canvas:
+            last[0] = 'the network page has no measured canvas'
+            return False
+        viewport = s['network']['viewport']
+        if abs(viewport[0] - canvas[2]) > 2 or abs(viewport[1] - canvas[3]) > 2:
+            last[0] = f'the model viewport {viewport} is not the canvas {canvas[2:]}'
+            return False
+        region = front.find('network.region')
+        if not region or not region.get('frame'):
+            last[0] = f'the owned app\'s tree has no network.region with a frame ({region})'
+            return False
+        ox, oy = content_origin(layout)
+        expected = [ox + canvas[0], oy + canvas[1], canvas[2], canvas[3]]
+        problem = _region_problem(region['frame'], expected)
+        if problem:
+            last[0] = f'{problem} (canvas {canvas}, content origin {[ox, oy]})'
+            return False
+        if key is not None and not any(d['key'] == key for d in s['network']['drawn']):
+            last[0] = f'{key} is not drawn in the canvas: {s["network"]["drawn"]}'
+            return False
+        problem = _network_layout_problem(s, DEFAULT_CONTENT) if strict else None
+        if problem:
+            last[0] = problem
+            return False
+        captured['region'] = {**region, 'content_origin': [ox, oy], 'expected_frame': expected}
+        return True
+    try:
+        state = guarded_wait(app, front, valid, 10, what)
+    except AssertionError as error:
+        raise AssertionError(f'{error}; the pointer basis that did not hold: {last[0]}') from None
+    return state, captured['region']
+
+
+def _network_layout_problem(state, size):
+    layout = (state.get('gantt') or {}).get('layout')
+    if not network_shown(state) or not layout:
+        return 'the network page has not been measured yet'
+    problem = _size_problem(state, size)
+    if problem:
+        return problem
+    area, frames = layout['usable_content'], layout['frames']
+    names = ('root', 'status', 'sidebar', 'page', 'network_controls', 'network_filter', 'network_list', 'network_canvas', 'network_inspector')
+    missing = [n for n in names if n not in frames]
+    if missing:
+        return f'{missing} have not been measured yet'
+    where = f"window {layout['window_frame']}, usable {area}, frames { {n: frames[n] for n in names} }"
+    if frames['root'][3] > area[3] + 1.5:
+        return f"the root is {frames['root'][3]} points high against a usable {area[3]}: {where}"
+    outside = [n for n in names if not _inside(frames[n], area)]
+    if outside:
+        return f'{outside} lie outside the usable content area: {where}'
+    canvas = frames['network_canvas']
+    if canvas[2] < 200 or canvas[3] < 120:
+        return f'the canvas {canvas} is not a useful plot area: {where}'
+    viewport = state['network']['viewport']
+    if abs(viewport[0] - canvas[2]) > 2 or abs(viewport[1] - canvas[3]) > 2:
+        return f'the model viewport {viewport} is not the canvas the window gives {canvas[2:]}'
+    if not state['network']['drawn']:
+        return f'no node is drawn inside the canvas without a pre-pan: {state["network"]}'
+    return None
+
+
+def network_layout_and_pointer(bundle, directory):
+    """R1, R2, R4, R6: the network in real windows at the declared minimum, the default and a large size: every part
+    inside the usable content, a finite canvas with drawn pixels (a real capture of the window), then real clicks on
+    drawn nodes (each acknowledged by the region's own mouse_down receipt and the shared selection), a drag on the
+    background and a real wheel that move the view (pixels compared) and change nothing in the store; then a real
+    click on a Gantt bar selects that task. Every pointer step is a real HID event; a step the app did not receive is
+    a failure, never a pass. Without Accessibility permission nothing is posted and the case is NOT ASSESSED."""
+    case = 'network_layout_and_pointer'
+    # Pure controls on supplied values: the helpers refuse the recorded miss and accept agreeing values.
+    assert _receipt_problem([92, 64.5], (92, 42)) is not None, 'the receipt check accepts a receipt 22.5 pt below the card centre'
+    assert _receipt_problem([92.5, 41.5], (92, 42)) is None, 'the receipt check refuses an agreeing receipt'
+    assert _region_problem([570, 255, 706, 398.5], (570, 232.5, 706, 398.5)) is not None, 'the region check accepts a frame 22.5 pt below the layout'
+    assert _region_problem([570, 232.5, 706, 398.5], (570, 232.5, 706, 398.5)) is None, 'the region check refuses an agreeing frame'
+    pointer_log = []
+    database = network_store(directory, 'network-pointer')
+    operations = len(run_cli(database, 'history')['entries'])
+    render = os.environ.get('DPM_RENDER_OUT')
+    out = Path(render) if render else None
+    if out:
+        out.mkdir(parents=True, exist_ok=True)
+    summary, pixel_notes = [], []
+    app = front = None
+    try:
+        for size in ((900, 612), DEFAULT_CONTENT, (1600, 1000)):
+            launched = now_ms()
+            app = App(bundle, directory, ['--database', str(database), '--page', 'network', '--select-key', 'TEST-C', '--window-size', f'{size[0]}x{size[1]}'])
+            state = _await_layout(app, lambda s: _fresh_problem(app, s, launched) or _network_layout_problem(s, size), f'the network layout in a {size[0]}x{size[1]} window')
+            layout, net = state['gantt']['layout'], state['network']
+            frames = layout['frames']
+            line = (f"{size[0]}x{size[1]}: window {[round(v) for v in layout['window_frame']]}, usable {[round(v) for v in layout['usable_content']]}, root {[round(v) for v in frames['root']]}, "
+                    f"canvas {[round(v) for v in frames['network_canvas']]}, list {[round(v) for v in frames['network_list']]}, inspector {[round(v) for v in frames['network_inspector']]}, "
+                    f"{len(net['drawn'])} nodes drawn in the canvas")
+            number = ((state.get('host') or {}).get('network_focus') or {}).get('window')
+            if out and number:
+                shot = window_capture(number, out / f'network-{size[0]}x{size[1]}.png')
+                if shot:
+                    differing, sampled = drawn_pixels(shot, frames['network_canvas'], layout['content_bounds'][2])
+                    assert differing > 200, f'the canvas is blank in the real capture: {differing} of {sampled} sampled pixels differ from its background ({line})'
+                    line += f'; capture {shot.name}: {differing} of {sampled} sampled canvas pixels drawn'
+                else:
+                    pixel_notes.append(f'{size[0]}x{size[1]}: NOT ESTABLISHED (the window could not be captured: no Screen Recording permission or the tool failed)')
+            summary.append(line)
+            assert app.quit() == 0
+            app.close()
+            app = None
+        if not accessibility_trusted():
+            not_assessed(case + '.pointer', 'no Accessibility permission (AXIsProcessTrusted is false): no pointer event was posted')
+            return 'network layout (pointer NOT ASSESSED): ' + '; '.join(summary + pixel_notes)
+        launched = now_ms()
+        app = App(bundle, directory, ['--database', str(database), '--page', 'network', '--select-key', 'TEST-C', '--window-size', 'x'.join(map(str, DEFAULT_CONTENT))])
+        state = _await_layout(app, lambda s: _fresh_problem(app, s, launched) or _network_layout_problem(s, DEFAULT_CONTENT), 'the network layout for the pointer')
+        front = Foreground(app.process.pid)
+        front.activate(app.process)
+        front.arm()
+
+        def receipts(s):
+            return ((s.get('host') or {}).get('network_focus') or {}).get('events', [])
+
+        def logged(step, point, region, s, expected=None):
+            entry = {'step': step, 'posted': [round(v, 2) for v in point], 'region_frame': region['frame'], 'expected_frame': region['expected_frame'],
+                     'canvas': s['gantt']['layout']['frames']['network_canvas'], 'content_origin': region['content_origin'],
+                     'expected_local': expected, 'receipt': None}
+            pointer_log.append(entry)
+            return entry
+
+        def click_node(key, what, strict=False):
+            # Every target from a CURRENT valid snapshot read after the activation and after every earlier step.
+            s, region = pointer_basis(app, front, f'a current pointer basis for {what}', key=key, strict=strict)
+            target = next(d for d in s['network']['drawn'] if d['key'] == key)
+            r = target['rect']
+            expected = (r[0] + r[2] / 2, r[1] + r[3] / 2)
+            point = (region['frame'][0] + expected[0], region['frame'][1] + expected[1])
+            entry = logged(what, point, region, s, list(expected))
+            seq = ((s.get('host') or {}).get('network_focus') or {}).get('sequence', 0)
+
+            def receipt_of(t):
+                down = [e for e in receipts(t) if e.get('event') == 'mouse_down' and e.get('seq', 0) > seq]
+                return down[0].get('point') if down else None
+            post_click(app, front, point, step=what)
+            try:
+                got = guarded_wait(app, front, lambda t: t['gantt']['selected_key'] == key and t['network']['cursor_key'] == key and any(
+                    e.get('event') == 'mouse_down' and e.get('hit') == key and e.get('seq', 0) > seq for e in receipts(t)), 10, what)
+            except AssertionError as error:
+                entry['receipt'] = receipt_of(app.state() or {})
+                raise AssertionError(f"{error}; {_receipt_problem(entry['receipt'], expected) or 'the receipt point agreed'} "
+                                     f"(posted {entry['posted']}, region frame {region['frame']}, canvas {entry['canvas']})") from None
+            entry['receipt'] = receipt_of(got)
+            problem = _receipt_problem(entry['receipt'], expected)
+            assert problem is None, f"{problem}: the click on {key} was posted at {entry['posted']} from the region frame {region['frame']} and the canvas {entry['canvas']}"
+            return got, point
+
+        state, _ = pointer_basis(app, front, 'a current pointer basis after the activation', strict=True)
+        candidates = [d['key'] for d in state['network']['drawn'] if d['key'] != 'TEST-C' and 'decision' not in d['kind'].lower() and 'milestone' not in d['kind'].lower()]
+        assert candidates, f"no other node is drawn to click: {state['network']['drawn']}"
+        first, at = click_node(candidates[0], f'a real click on the drawn node {candidates[0]} to select it', strict=True)
+        milestone = next((d['key'] for d in first['network']['drawn'] if 'milestone' in d['kind'].lower()), None)
+        clicked = [candidates[0]]
+        if milestone and milestone != candidates[0]:
+            second, _ = click_node(milestone, f'a real click on the drawn milestone {milestone}')
+            clicked.append(milestone)
+        else:
+            second = first
+        # Zoom in by the real key until the graph is larger than the canvas, so a drag and a wheel can move it.
+        current = second
+        for _ in range(3):
+            if current['network']['max_pan'][0] > 60:
+                break
+            level = current['network']['zoom_level']
+            guarded_key(app, front, 'equals to zoom in', 24)
+            current = guarded_wait(app, front, lambda t, level=level: t['network']['zoom_level'] > level, 10, 'a real = to zoom in')
+        assert current['network']['max_pan'][0] > 60, f"the zoomed graph still fits the canvas, so no pan is possible: {current['network']}"
+        # The drag's targets come from a current valid snapshot read after the zoom, not from the zoom wait's state.
+        current, region = pointer_basis(app, front, 'a current pointer basis for the drag after the zoom')
+        assert current['network']['max_pan'][0] > 60, f"the zoomed graph still fits the canvas, so no pan is possible: {current['network']}"
+        selected_before = current['gantt']['selected_key']
+        canvas = current['gantt']['layout']['frames']['network_canvas']
+        rects = [d['rect'] for d in current['network']['drawn']]
+        blank = None
+        for fx in (0.5, 0.3, 0.7, 0.15, 0.85):
+            for fy in (0.85, 0.5, 0.15, 0.7, 0.3):
+                p = (canvas[2] * fx, canvas[3] * fy)
+                if not any(r[0] - 8 <= p[0] <= r[0] + r[2] + 8 and r[1] - 8 <= p[1] <= r[1] + r[3] + 8 for r in rects):
+                    blank = p
+                    break
+            if blank:
+                break
+        assert blank, f'no blank background point in the canvas to drag from: {rects}'
+        number = ((current.get('host') or {}).get('network_focus') or {}).get('window')
+        before_shot = window_capture(number, out / 'network-before-drag.png') if out and number else None
+        start = (region['frame'][0] + blank[0], region['frame'][1] + blank[1])
+        logged('the start of a drag on the canvas background', start, region, current, list(blank))
+        pan_before = list(current['network']['pan'])
+        drag = 'a drag on the canvas background'
+        post_mouse(app, front, 'moved', start, step=drag)
+        post_mouse(app, front, 'down', start, step=drag)
+        for step in range(1, 7):
+            post_mouse(app, front, 'dragged', (start[0] - 20 * step, start[1]), step=drag)
+        post_mouse(app, front, 'up', (start[0] - 120, start[1]), step=drag)
+        dragged = guarded_wait(app, front, lambda t: t['network']['pan'][0] > pan_before[0] + 30 and any(e.get('event') == 'drag_end' for e in receipts(t)), 10,
+                               'a real drag on the background to pan the view')
+        assert dragged['gantt']['selected_key'] == selected_before, 'a drag changed the selection'
+        after_shot = window_capture(number, out / 'network-after-drag.png') if out and number else None
+        drag_pixels = 'NOT ESTABLISHED (no capture)'
+        if before_shot and after_shot:
+            a = drawn_pixels(before_shot, canvas, current['gantt']['layout']['content_bounds'][2])
+            b = drawn_pixels(after_shot, canvas, current['gantt']['layout']['content_bounds'][2])
+            changed = Path(before_shot).read_bytes() != Path(after_shot).read_bytes()
+            assert changed, 'the window pixels did not change after the drag'
+            drag_pixels = f'canvas drawn pixels {a[0]} before and {b[0]} after, images differ'
+        pan_drag = list(dragged['network']['pan'])
+        # The point back over the canvas from a current valid snapshot read after the drag.
+        after_drag, region = pointer_basis(app, front, 'a current pointer basis after the drag')
+        back = (region['frame'][0] + blank[0], region['frame'][1] + blank[1])
+        logged('the pointer back over the canvas', back, region, after_drag, list(blank))
+        post_mouse(app, front, 'moved', back, step='the pointer back over the canvas')
+        # The wheel along an axis the content can move on: a graph that fits the canvas along one axis has no pan there.
+        if dragged['network']['max_pan'][1] - pan_drag[1] > 30:
+            post_scroll(app, front, -60, step='a vertical wheel over the canvas')
+        else:
+            post_scroll(app, front, 0, -60, step='a horizontal wheel over the canvas')
+        scrolled = guarded_wait(app, front, lambda t: t['network']['pan'] != pan_drag and any(e.get('event') == 'scroll' for e in receipts(t)), 10,
+                                'a real wheel over the canvas to pan the view')
+        pan_scroll = list(scrolled['network']['pan'])
+        assert all(0 <= v <= m + 0.5 for v, m in zip(pan_scroll, scrolled['network']['max_pan'])), f'the pan left its bounds: {scrolled["network"]}'
+        guarded_key(app, front, 'f to fit the network', 3)
+        fitted = guarded_wait(app, front, lambda t: t['network']['pan'] == [0, 0] and t['network'].get('fitted') and t['network']['scale'] < scrolled['network']['scale'], 10, 'a real f to fit the network')
+        net = fitted['network']
+        extent, viewport = net['extent_drawn'], net['viewport']
+        # The whole transformed extent, not a zoom flag: every point of the graph lies inside the canvas.
+        assert extent[0] >= -0.5 and extent[1] >= -0.5 and extent[0] + extent[2] <= viewport[0] + 0.5 and extent[1] + extent[3] <= viewport[1] + 0.5, \
+            f'the fitted graph {extent} does not lie inside the canvas {viewport}: {net}'
+        assert len(net['drawn']) == min(60, net['listed_nodes']), f"after fit {len(net['drawn'])} of {net['listed_nodes']} shown nodes are inside the canvas: {net['drawn']}"
+        fit_shot = window_capture(number, out / 'network-fit.png') if out and number else None
+        # A stationary pointer: rest it on a drawn node, then zoom by key without moving it. The node the app inspects
+        # must be the one drawn under the resting point in the new geometry (or none), never the node first hovered.
+        target = net['drawn'][len(net['drawn']) // 2]
+        # The resting point from a current valid snapshot read after the fit, not from the zoom stage's geometry.
+        after_fit, region = pointer_basis(app, front, 'a current pointer basis after the fit', key=target['key'])
+        target = next(d for d in after_fit['network']['drawn'] if d['key'] == target['key'])
+        r = target['rect']
+        rested = (r[0] + r[2] / 2, r[1] + r[3] / 2)
+        rest = (region['frame'][0] + rested[0], region['frame'][1] + rested[1])
+        entry = logged(f"the pointer onto {target['key']}", rest, region, after_fit, list(rested))
+        post_mouse(app, front, 'moved', rest, step=f"the pointer onto {target['key']}")
+        hovered = guarded_wait(app, front, lambda t: t['network'].get('hover_key') == target['key'], 10, f"the hover inspection of {target['key']}")
+        entry['receipt'] = hovered['network'].get('hover_point')
+        level = hovered['network']['scale']
+        guarded_key(app, front, 'equals to zoom in under a stationary pointer', 24)
+        rezoomed = guarded_wait(app, front, lambda t: t['network']['scale'] > level, 10, 'a real = under a stationary pointer')
+        point = rezoomed['network'].get('hover_point')
+        under = None
+        if point:
+            under = next((d['key'] for d in rezoomed['network']['drawn'] if d['rect'][0] <= point[0] <= d['rect'][0] + d['rect'][2] and d['rect'][1] <= point[1] <= d['rect'][1] + d['rect'][3]), None)
+        assert rezoomed['network'].get('hover_key') == under, f"after a zoom under a stationary pointer the app inspects {rezoomed['network'].get('hover_key')}, but the node drawn under the point {point} is {under}"
+        hover_line = f"hover {target['key']} under a stationary pointer became {under} after the zoom (the node drawn under {point})"
+        uninterrupted(front, 'the pointer route is complete')
+        assert len(run_cli(database, 'history')['entries']) == operations, 'the pointer route wrote to the store'
+        assert app.quit() == 0
+        front.close()
+        front = None
+        app.close()
+        app = None
+        # The Gantt: a real click on the TEST-D bar's row in the timeline selects TEST-D.
+        gantt_db = gantt_store(directory, 'gantt-pointer')
+        launched = now_ms()
+        app = App(bundle, directory, ['--database', str(gantt_db), '--page', 'gantt', '--select-key', 'TEST-F', '--window-size', 'x'.join(map(str, DEFAULT_CONTENT))])
+        state = _await_layout(app, lambda s: _fresh_problem(app, s, launched) or (None if gantt_loaded(s) and 'timeline' in s['gantt']['layout']['frames'] and s['gantt']['selected_key'] == 'TEST-F' else 'the Gantt timeline is not measured yet'),
+                              'the Gantt with its timeline measured')
+        front = Foreground(app.process.pid)
+        front.activate(app.process)
+        front.arm()
+        # The initial fit: the whole timeline (hour 0 to its last finish or p95, with its trailing room) is as wide as the
+        # measured timeline, unless a viewport was chosen first. Its state, read after the activation, is the click's geometry.
+        fitted_gantt = guarded_wait(app, front, lambda t: t['gantt'].get('fitted') and t['gantt'].get('timeline_extent') and 'timeline' in ((t['gantt'].get('layout') or {}).get('frames') or {}),
+                                    10, 'the initial fit of the Gantt timeline')
+        timeline = fitted_gantt['gantt']['layout']['frames']['timeline']
+        row = front.find('gantt.row.TEST-D')  # role, identifier and frame (screen points, top left), or None
+        row_frame = row['frame'] if row else None
+        assert row_frame, 'the TEST-D row label has no AX frame'
+        start_x, whole = fitted_gantt['gantt']['timeline_extent']
+        assert start_x == 0 and whole <= fitted_gantt['gantt']['viewport_width'] + 0.5 and whole >= fitted_gantt['gantt']['viewport_width'] * 0.9, \
+            f"the fitted timeline {whole} pt from {start_x} does not fill the measured timeline {fitted_gantt['gantt']['viewport_width']} pt"
+        assert abs(fitted_gantt['gantt']['viewport_width'] - (timeline[2] - 0)) <= 2.5, f"the model's timeline width {fitted_gantt['gantt']['viewport_width']} is not the drawn timeline {timeline}"
+        gantt_number = ((fitted_gantt.get('host') or {}).get('gantt_focus') or {}).get('window')
+        gantt_shot = window_capture(gantt_number, out / 'gantt-1180x760-fitted.png') if out and gantt_number else None
+        ox, oy = content_origin(fitted_gantt['gantt']['layout'])
+        point = (ox + timeline[0] + 12, row_frame[1] + row_frame[3] / 2)
+        pointer_log.append({'step': 'a click in the TEST-D row of the timeline', 'posted': [round(v, 2) for v in point], 'row_frame': row_frame,
+                            'timeline': timeline, 'content_origin': [ox, oy]})
+        post_click(app, front, point, step='a click in the TEST-D row of the timeline')
+        chosen = guarded_wait(app, front, lambda t: t['gantt']['selected_key'] == 'TEST-D' and any(
+            e.get('event') == 'click' and e.get('hit') == 'TEST-D' for e in ((t.get('host') or {}).get('gantt_pointer') or {}).get('events', [])), 10,
+            'a real click in the TEST-D bar row of the timeline to select TEST-D')
+        uninterrupted(front, 'the Gantt pointer step is complete')
+        assert app.quit() == 0
+        return ('real network layout and pointer: ' + '; '.join(summary + pixel_notes) +
+                f"; real clicks selected {clicked} (each acknowledged by the region's mouse_down receipt); a real drag on the background panned {pan_before} -> {pan_drag} ({drag_pixels}) "
+                f"with the selection unchanged; a real wheel panned to {pan_scroll} within {scrolled['network']['max_pan']}; f fitted the whole extent {[round(v, 1) for v in extent]} "
+                f"inside the canvas {viewport} at scale {round(net['scale'], 3)} ({'capture ' + Path(fit_shot).name if fit_shot else 'no capture'}); {hover_line}; "
+                f"nothing written; the Gantt opened fitted ({round(whole, 1)} of {fitted_gantt['gantt']['viewport_width']} pt, {'capture ' + Path(gantt_shot).name if gantt_shot else 'no capture'}); "
+                f"a real timeline click at {[round(v) for v in point]} selected TEST-D (receipt in gantt_pointer, cursor {chosen['gantt'].get('cursor_key')})")
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption) if app else str(interruption))
+        return None
+    except AssertionError as error:
+        kept = keep_failure(case, app, front, {'error': str(error)[:4000], 'summary': summary, 'pointer_log': pointer_log})
+        raise AssertionError(f'{error} (complete failing state kept at {kept})') from None
+    finally:
+        if front:
+            front.close()
+        if app:
+            app.close()
+
+
 def main(bundle):
     if sys.platform != 'darwin':
         print(f'SKIPPED: the observer is a macOS app and this is {sys.platform}; nothing was launched and nothing is claimed.')
@@ -1986,7 +2815,8 @@ def main(bundle):
         shutil.copytree(bundle, packaged, symlinks=True)
         for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
                          gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
-                         filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered):
+                         filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
+                         network_page, network_layout_and_pointer, network_keyboard_route):
             result = scenario(packaged, directory)
             # A case that was skipped or not assessed says so itself, loudly, and returns nothing: it is never a pass.
             if result is not None:

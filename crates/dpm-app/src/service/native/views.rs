@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// One macOS view and what feeds it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ViewMapping {
-    /// Stable view name: `now`, `live`, `review`, `detail` or `gantt`.
+    /// Stable view name: `now`, `live`, `review`, `detail`, `gantt` or `network`.
     pub view: String,
     /// What the view answers.
     pub purpose: String,
@@ -26,7 +26,7 @@ fn words(items: &[&str]) -> Vec<String> {
     items.iter().map(ToString::to_string).collect()
 }
 
-/// The five views and their sources.
+/// The six views and their sources.
 ///
 /// Every view names the identity of what it shows: the workspace, lineage and revision of the
 /// project data, the `evaluated_at` of its time-dependent values, and the cursor of each feed it
@@ -93,6 +93,13 @@ pub fn view_mappings() -> Vec<ViewMapping> {
             &["schedule", "explain", "export"],
             &["project"],
             "Every hour, float, criticality and percentile is read from schedule and every relation, with its kind, lag and policy, from export and explain; the client only lays them out and never derives scheduling, a date or readiness. Hours are elapsed from the evaluation time, and a calendar date is shown only where the query supplies one. Human priority is shown apart from criticality.",
+        ),
+        view(
+            "network",
+            "The plan as a precedence network: tasks, milestones and decision gates as nodes, with temporal dependencies, decision blocks and context-only related work as three kinds of edge, and a complete text list of the same nodes and edges.",
+            &["schedule", "explain", "export"],
+            &["project"],
+            "Nodes and temporal edges (kind, lag and Hard or Soft policy) come from export, decision blocks and related work from the decisions in export, a selected task's predecessors, successors and unmet gates from explain, and float and criticality from schedule. Only a decision's blocks gate readiness; related work is context and never blocks. The client only lays the graph out and derives no scheduling, readiness, gate or date.",
         ),
     ]
 }

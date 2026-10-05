@@ -12,7 +12,7 @@ extension Context {
         let connection = try await open(.database(database))
         check(connection.protocolVersion == 1, "the helper and client agree on protocol 1")
         let capabilities = connection.capabilities
-        check(capabilities?.views.map { $0.view } == ["now", "live", "review", "detail", "gantt"], "the five macOS views are mapped")
+        check(capabilities?.views.map { $0.view } == ["now", "live", "review", "detail", "gantt", "network"], "the six macOS views are mapped")
         check(capabilities?.commands == true, "a live store accepts commands")
         let controls = capabilities?.unsupported.map { $0.control } ?? []
         check(["steer_run", "stop_run", "answer_input_request", "provider_session_control"].allSatisfy(controls.contains), "unsupported controls are stated")

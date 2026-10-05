@@ -701,7 +701,7 @@ decoded and before any command runs, whether the caller is typed or JSON. Only `
 because it negotiates. A malformed line is `invalid_request`. The codes the boundary adds are
 `unsupported_protocol`, `invalid_request`, `workspace_mismatch`, `lineage_mismatch`,
 `source_changed` and `workspace_changing`; a client keeps a code it does not know as unknown.
-`hello` also states the capabilities: the five views and the queries and feeds each reads, the
+`hello` also states the capabilities: the six views and the queries and feeds each reads, the
 controls that do not exist (run steering and stopping, answering run input requests, provider
 session control, push events, remote access), what a `reported_only` run is, and the bounds.
 
@@ -712,6 +712,7 @@ session control, push events, remote access), what a `reported_only` run is, and
 | Review | `status`, `explain`, `show`, `history`, `export`, `runs` | project, lifecycle, activity, links |
 | Detail | `explain`, `show`, `runs`, `run`, `run_lifecycle`, `run_activity`, `history`, `export` | project, lifecycle, activity, links |
 | Gantt | `schedule`, `explain`, `export` | project |
+| Network | `schedule`, `explain`, `export` | project |
 
 The Gantt page of the macOS observer (`--page gantt`, Cmd-5) is read-only. Rows follow the plan
 hierarchy (`parent`) in the key order the `schedule` projection lists them; a bar is the row's
@@ -731,6 +732,18 @@ Detail also give the item's own optimistic, likely and pessimistic hours exactly
 supplies them (`schedule.estimate` of the `export` and `explain` payloads), or say that none is
 recorded, apart from priority, float and criticality and from the project's p50/p80/p95; no
 estimate is computed.
+
+The Network page (`--page network`, Cmd-6) is read-only too. Its nodes are the `export` snapshot's
+work items (tasks, milestones and work packages, each a distinct shape with its kind in words) and
+decisions (decision gates). It has three edge kinds, each with its own text and a non-colour cue:
+temporal dependencies (FS, SS, FF, SF with lead or lag and the Hard or Soft policy), decision
+blocks (a decision's `blocks`, the only edge that gates readiness) and context-only related work
+(a decision's `related_work`, drawn dotted and read as "not blocking"). Float and criticality come
+from the same `schedule` read the Gantt uses, read only while the page is shown; the selected
+task's predecessors, successors and unmet gates are those `explain` reports. A text list of every
+node with its edges and attributes is always present and comes first; the graph beside it is laid
+out in columns by the chain of gating edges, which is geometry only. Filters, zoom and pan change
+only what is drawn; selection and the Detail return are shared with the other views.
 
 The measurement of the Gantt (`scripts/measure_gantt.py`) judges every run, a measurement, a control
 or a replayed log, with one analyzer before any statistic is eligible: every planned generation, a
