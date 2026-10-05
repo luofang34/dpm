@@ -48,8 +48,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.toolchain }}
+      # The released binary, checksum-verified, instead of compiling the checker in every job.
       - name: Install dependency checker
-        run: cargo install cargo-deny --locked --version 0.19.8
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.19.8
       - name: Full local quality gates
         run: ./ci.sh
       - name: Package native binaries and corresponding source
