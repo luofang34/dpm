@@ -1619,6 +1619,9 @@
           },
           {
             "text": "Each task reports drag and criticality, and next explains which of them it used."
+          },
+          {
+            "text": "Beside each sampled P(finish <= H), the forecast reports the analytic PERT approximation over the mean critical path: mean = sum of (O+4M+P)/6, variance = sum of ((P-O)/6)^2 and probability = Phi((H-mean)/sigma). It is labelled an approximation that ignores near-critical paths and therefore usually overstates the probability."
           }
         ],
         "instructions": {
@@ -1630,6 +1633,10 @@
             {
               "action": "Add variance, path spread and drag to deterministic projections.",
               "expected_result": "Values match hand-computed examples for each relation kind."
+            },
+            {
+              "action": "Compute the analytic PERT approximation on the mean critical path and report it beside the sampled probability; pin the Reliable Construction example: mean 44, variance 9, P(T <= 47) ≈ 0.84 by the approximation.",
+              "expected_result": "The fixture reports mean 44, variance 9 and P(T <= 47) of about 0.84 by the approximation, labelled as such, next to the sampled value."
             },
             {
               "action": "Expose the fields through status, explain and next with CLI/MCP parity.",
@@ -1644,7 +1651,8 @@
             "Capacity/resource optimization, probabilistic rework branches and Critical Chain buffers require separately reviewed scenarios and input facts."
           ],
           "verification": [
-            "Seeded tests, parity smoke and ./ci.sh."
+            "Seeded tests, parity smoke and ./ci.sh.",
+            "Hand-computed check: the Reliable Construction example yields mean 44, variance 9 and approximate P(T <= 47) = 0.84, and the output labels this value as a mean-critical-path approximation distinct from the sampled probability."
           ]
         },
         "capabilities": [
@@ -6165,6 +6173,179 @@
       "order": [
         1700
       ]
+    },
+    "228dcdce-c3b0-5a24-82c5-0b2727e54515": {
+      "id": "228dcdce-c3b0-5a24-82c5-0b2727e54515",
+      "key": "SCH-60",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "cc81da22-ff27-51ec-811f-7ffdcc4257b2",
+      "kind": "Task",
+      "title": "Place the remaining schedule on calendar dates",
+      "contract": {
+        "objective": "Let Gantt and schedule projections present calendar dates for the remaining schedule, derived only from the evaluation instant and the plan's calendars and never stored as authoritative state, while elapsed-hour values remain available; expose the dates through CLI and MCP with parity; and make MSPDI export carry the project start date and calendars so OmniPlan and Microsoft Project reproduce the same dates.",
+        "acceptance": [
+          {
+            "text": "Every scheduled item reports projected start and finish dates computed from the evaluation instant and the calendars that apply to it; non-working days such as weekends and holidays are skipped exactly as those calendars state, and the elapsed-hour values are still reported alongside."
+          },
+          {
+            "text": "Calendar dates are derived projections: re-evaluating at another instant or with changed calendars recomputes them, and no date is persisted in the plan, the operation log or a cache treated as domain truth."
+          },
+          {
+            "text": "CLI --json output and the MCP structuredContent carry identical date fields, and the Gantt labels dates with their time zone and calendar while keeping them distinct from elapsed hours."
+          },
+          {
+            "text": "MSPDI export writes the project StartDate and every calendar the projection used; importing the exported file into OmniPlan and Microsoft Project reproduces the same task start and finish dates instead of rescheduling on the tool default calendar."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Map elapsed-hour projection results onto calendar dates from the evaluation instant using the resolved calendar of each item.",
+              "expected_result": "Fixed-date tests across weekends, holidays and time-zone transitions match hand-computed dates, and the elapsed-hour values are unchanged."
+            },
+            {
+              "action": "Expose the derived dates in the schedule projection, the Gantt and the CLI/MCP status and explain envelopes.",
+              "expected_result": "Parity smoke shows identical CLI and MCP data, and the plan revision and stored state are unchanged after every query."
+            },
+            {
+              "action": "Write the project StartDate and the used calendars into MSPDI export and open the exported fixture in OmniPlan and one Microsoft Project reader.",
+              "expected_result": "Pinned fixtures show the same start and finish dates in each tool as the projection reports."
+            }
+          ],
+          "in_scope": [
+            "Derived calendar dates for schedule and Gantt projections, their CLI/MCP exposure, and MSPDI export of the project start date and calendars."
+          ],
+          "out_of_scope": [
+            "Storing projected dates, deadlines or date constraints as authoritative inputs, resource levelling or capacity, and calendar editing UI.",
+            "Changing estimates, dependencies or execution gates to make dates line up."
+          ],
+          "verification": [
+            "Fixed-instant calendar projection tests, parity smoke, MSPDI round trips with pinned OmniPlan and Microsoft Project fixtures, and ./ci.sh."
+          ]
+        },
+        "capabilities": [
+          "interchange",
+          "rust",
+          "scheduling"
+        ],
+        "requirement_ids": [
+          "2d5a1316-0b52-5ddc-aecc-23d92a73ec8b",
+          "59030fe0-202e-551c-a7ab-480c74796f55",
+          "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+          "e1682222-b5c1-5fef-9ccd-81d9e40abde8"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "status": "Proposed",
+        "reported_progress_percent": 0,
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "3967af64-d479-5378-a8da-a9fd835ef61b",
+          "4213d6ea-0e3b-5829-a11f-362182ed5ca5",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89",
+          "dec18276-1444-5f73-99ec-9ac136c3acd1"
+        ],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P2",
+        "estimate": null
+      },
+      "order": [
+        700
+      ]
+    },
+    "8560e91e-fb40-5460-b5d0-b09e29b4c5b6": {
+      "id": "8560e91e-fb40-5460-b5d0-b09e29b4c5b6",
+      "key": "VIS-40",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "parent": "b6805961-ff6d-5d4e-9b95-82a46e79170c",
+      "kind": "Task",
+      "title": "Project the dependency network in the shared application boundary",
+      "contract": {
+        "objective": "Assemble dependency network nodes and edges in a Rust projection next to the schedule projection, so the native observer and any later web client render the same network without re-deriving it: temporal, decision-gate and context edge kinds, which edges gate readiness, and critical-link flags taken from the schedule projection relations. Graph layout geometry may remain per client. Implement nothing beyond this projection and its adapters.",
+        "acceptance": [
+          {
+            "text": "The projection returns every task, milestone and decision gate as a node and every temporal dependency (kind, lag, policy), decision-blocking relation and context-only related-work link as a typed edge; edges are marked gating exactly as execution gates them (enforced temporal dependencies and decision blocks), and context-only links never gate."
+          },
+          {
+            "text": "Critical and driving flags on edges come from the schedule projection's relations, and the network query neither persists nor mutates any state: plan revision and history are identical before and after."
+          },
+          {
+            "text": "CLI --json and MCP return the identical network envelope, and the native observer renders from it with no node, edge-kind or gating assembly left in Swift; layout geometry may stay in the client."
+          }
+        ],
+        "instructions": {
+          "steps": [
+            {
+              "action": "Move node and edge assembly from native/swift/Sources/DPMObserverCore/Network.swift into a Rust projection beside the schedule projection.",
+              "expected_result": "Unit tests pin node sets, edge kinds, gating and critical flags for the synthetic regression plans."
+            },
+            {
+              "action": "Expose the projection through dpm-app with CLI and MCP adapters and add it to the parity smoke and the command/tool table.",
+              "expected_result": "Parity smoke and the docs table guard pass with identical CLI and MCP data."
+            },
+            {
+              "action": "Switch the native observer to consume the projection and delete the duplicated Swift derivation.",
+              "expected_result": "Swift tests compare the rendered nodes and edges with the projection, and no edge-kind or gating logic remains in Swift."
+            }
+          ],
+          "in_scope": [
+            "A read-only Rust network projection, its CLI/MCP exposure with parity tests, and switching the native observer to consume it."
+          ],
+          "out_of_scope": [
+            "Graph layout geometry, a web client, editing nodes or edges, and new scheduling or readiness semantics."
+          ],
+          "verification": [
+            "Projection unit tests, CLI/MCP parity smoke, Swift parity tests against the projection, and ./ci.sh."
+          ]
+        },
+        "capabilities": [
+          "rust",
+          "swift",
+          "ui"
+        ],
+        "requirement_ids": [
+          "087248db-f9e4-5c27-968d-c2b539178037",
+          "2202b173-92fd-52d8-a2a2-d94275a7a48f",
+          "bd186e65-ccd7-5720-abd2-1c75c67da7f6",
+          "bf2a0e85-cd71-5fff-87ad-f66a8591a269",
+          "e1682222-b5c1-5fef-9ccd-81d9e40abde8",
+          "ee044f38-e9bc-59d0-818b-ddccf6ce69be"
+        ],
+        "assets": [
+          {
+            "asset": "df61c87b-3509-539e-a70d-47a3b56bf328",
+            "access": "Write"
+          }
+        ]
+      },
+      "execution": {
+        "status": "Proposed",
+        "reported_progress_percent": 0,
+        "artifact_ids": [
+          "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+          "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+          "873be17d-6408-5485-8230-5972d5698e89"
+        ],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P2",
+        "estimate": null
+      },
+      "order": [
+        775
+      ]
     }
   },
   "requirements": {
@@ -7467,6 +7648,7 @@
       "outcome": null,
       "blocks": [
         "07c8d04f-2f86-5d5d-87f6-dfe7de919f20",
+        "228dcdce-c3b0-5a24-82c5-0b2727e54515",
         "40063ef5-e801-5876-9888-3bff011e437c",
         "71bf30b0-6180-5e14-8f72-378c039aee41",
         "87eb53a0-5839-51bf-bdb2-47371bf50315",
@@ -7639,6 +7821,24 @@
         "b56fb8da-2746-5f32-b2d5-c121053aded2",
         "b575823c-58ef-54c6-b75d-eb40b760d033",
         "f6568cb1-e04b-514b-a070-fce7183fda9d"
+      ],
+      "blocks": [],
+      "artifact_ids": [
+        "1b4b0027-f6cf-57b4-817a-b2502bbc1aab",
+        "7973b4e3-8557-5f76-866a-df2a4b8fef50",
+        "873be17d-6408-5485-8230-5972d5698e89"
+      ]
+    },
+    "0ee285d0-ff6c-5929-9963-b7da8dad997e": {
+      "id": "0ee285d0-ff6c-5929-9963-b7da8dad997e",
+      "key": "DEC-COST-CONTROL",
+      "project": "1a5cf818-0bb0-576f-9d50-3654f1524970",
+      "question": "Which real project first needs time-cost trade-off (crashing), budgeted cost schedules (PERT/Cost earliest/latest-start cost envelopes) or earned-value control, and which cost inputs are authoritative?",
+      "status": "Open",
+      "outcome": null,
+      "rationale": "Cost accounting and earned value are v0.1 non-goals, and resource levelling belongs to DEC-ENGINEERING-EXTENSIONS. Review one real case before adding cost fields: activity costs, crash costs and budgets would be authoritative inputs, while cost schedules, crashing plans and earned-value indices are derived projections recomputed from them. Hillier & Lieberman, Project Management with PERT/CPM, describes CPM time-cost trade-offs and PERT/Cost as reference scenarios.",
+      "related_work": [
+        "b575823c-58ef-54c6-b75d-eb40b760d033"
       ],
       "blocks": [],
       "artifact_ids": [
@@ -8724,6 +8924,38 @@
       "id": "4b530a40-aa7c-5b4a-a831-d0d3dd6bf51e",
       "predecessor": "11ac0e2f-16e7-5ac3-b38b-b636b7387f7a",
       "successor": "193f98f7-ba2a-5cea-861c-c92fb8d3bc98",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "935268e9-4653-590f-a03c-b55111111246",
+      "predecessor": "40063ef5-e801-5876-9888-3bff011e437c",
+      "successor": "228dcdce-c3b0-5a24-82c5-0b2727e54515",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "91b3f5d2-3a93-539a-8d35-4aa108b796bc",
+      "predecessor": "228dcdce-c3b0-5a24-82c5-0b2727e54515",
+      "successor": "9c6a76e3-86e7-5d2d-9f87-3ba32cd439c0",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "63660edb-d583-5e4c-a81c-fafd9ca22682",
+      "predecessor": "deb30dda-5b57-5640-907d-8aa94ae47fed",
+      "successor": "8560e91e-fb40-5460-b5d0-b09e29b4c5b6",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard"
+    },
+    {
+      "id": "6a13d208-6d71-5969-be04-bcab84e4e769",
+      "predecessor": "8560e91e-fb40-5460-b5d0-b09e29b4c5b6",
+      "successor": "9c6a76e3-86e7-5d2d-9f87-3ba32cd439c0",
       "kind": "FinishStart",
       "lag_hours": 0.0,
       "policy": "Hard"
