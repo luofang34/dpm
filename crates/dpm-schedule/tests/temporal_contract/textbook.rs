@@ -3,7 +3,7 @@
 
 use super::{Network, TOLERANCE, stable_id};
 use dpm_model::{DependencyKind, WorkItemId};
-use dpm_schedule::{Schedule, SimulationConfig, deterministic, simulate};
+use dpm_schedule::{RelationSchedule, Schedule, SimulationConfig, deterministic, simulate};
 use std::collections::BTreeMap;
 
 /// `(letter, immediate predecessors, optimistic, most likely, pessimistic)`.
@@ -78,6 +78,60 @@ fn reliable_construction_matches_the_published_schedule_and_slack() {
         ('K', 33., 34.), ('L', 33., 33.), ('M', 38., 42.), ('N', 38., 38.),
     ];
     assert_cpm(&schedule, &ids, 44.0, "ABCEFJLN", &starts);
+    assert_eq!(
+        relations(&net, &schedule, &ids, |r| r.critical),
+        ["AB", "BC", "CE", "EF", "FJ", "JL", "LN"]
+    );
+    // Driving but off the critical path: each sets its successor's earliest start, yet the
+    // successor floats. E -> H and K -> N bind nothing.
+    assert_eq!(
+        relations(&net, &schedule, &ids, |r| r.driving && !r.critical),
+        ["CD", "CI", "DG", "GH", "HM", "JK"]
+    );
+    let slack = |from, to| relations_slack(&net, &schedule, &ids, from, to);
+    assert!((slack('E', 'H') - 9.0).abs() <= TOLERANCE);
+    assert!((slack('K', 'N') - 1.0).abs() <= TOLERANCE);
+}
+
+/// `from`-`to` letter pairs of the relations `keep` selects, in letter order.
+fn relations(
+    net: &Network,
+    schedule: &Schedule,
+    ids: &BTreeMap<char, WorkItemId>,
+    keep: impl Fn(&RelationSchedule) -> bool,
+) -> Vec<String> {
+    let letter = |id: WorkItemId| ids.iter().find(|(_, v)| **v == id).map(|(k, _)| *k);
+    let mut pairs: Vec<String> = net
+        .plan
+        .dependencies
+        .iter()
+        .filter(|d| keep(&schedule.relations[&d.id]))
+        .filter_map(|d| {
+            Some(format!(
+                "{}{}",
+                letter(d.predecessor)?,
+                letter(d.successor)?
+            ))
+        })
+        .collect();
+    pairs.sort();
+    pairs
+}
+
+fn relations_slack(
+    net: &Network,
+    schedule: &Schedule,
+    ids: &BTreeMap<char, WorkItemId>,
+    from: char,
+    to: char,
+) -> f64 {
+    let dependency = net
+        .plan
+        .dependencies
+        .iter()
+        .find(|d| d.predecessor == ids[&from] && d.successor == ids[&to])
+        .expect("relation");
+    schedule.relations[&dependency.id].slack_hours
 }
 
 /// The mean critical path is not always the longest sampled path, so sampling must find
@@ -145,4 +199,8 @@ fn cambridge_homework_finds_the_published_critical_path() {
     #[rustfmt::skip]
     let starts = [('A', 0., 0.), ('B', 1., 1.), ('C', 1., 2.), ('D', 4., 4.), ('E', 3., 4.), ('F', 7., 7.)];
     assert_cpm(&schedule, &ids, 11.0, "ABDF", &starts);
+    assert_eq!(
+        relations(&net, &schedule, &ids, |r| r.critical),
+        ["AB", "BD", "DF"]
+    );
 }

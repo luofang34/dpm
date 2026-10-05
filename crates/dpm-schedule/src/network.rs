@@ -4,7 +4,7 @@
 //! O(N + E) and a simulation compiles the network once for all of its iterations.
 
 use crate::ScheduleError;
-use dpm_model::{DependencyKind, Plan, WorkItemId};
+use dpm_model::{DependencyId, DependencyKind, Plan, WorkItemId};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 mod calendar;
@@ -19,6 +19,7 @@ pub(crate) const EPSILON: f64 = 1e-8;
 /// One constraint seen from one of its endpoints; `other` is the position of the far endpoint.
 #[derive(Debug, Clone, Copy)]
 struct Edge {
+    id: DependencyId,
     other: usize,
     kind: DependencyKind,
     lag: f64,
@@ -136,6 +137,7 @@ impl Network {
             };
             let (from, to) = (position(&dep.predecessor)?, position(&dep.successor)?);
             let edge = |other| Edge {
+                id: dep.id,
                 other,
                 kind: dep.kind,
                 lag: dep.lag_hours,
@@ -234,6 +236,37 @@ impl Network {
             available = available.min(slack);
         }
         Ok(available.max(0.0))
+    }
+
+    /// Every constraint with the slack it leaves at the earliest times: how far the successor
+    /// start it requires lies before the start its strongest requirement (or the origin) sets.
+    /// Zero marks the constraint that drives its successor.
+    pub(crate) fn relation_slacks(
+        &self,
+        durations: &[f64],
+        times: &Times,
+        placement: Option<&crate::placement::Placement>,
+    ) -> Result<Vec<(DependencyId, usize, usize, f64)>, ScheduleError> {
+        let mut slacks = Vec::new();
+        for (position, (id, edges)) in self.order.iter().zip(&self.incoming).enumerate() {
+            if let Some(placement) = placement {
+                for (dependency, from, slack) in
+                    self.incoming_slacks_placed(durations, times, position, placement)?
+                {
+                    slacks.push((dependency, from, position, finite(*id, slack)?.max(0.0)));
+                }
+                continue;
+            }
+            let duration = at(durations, position, *id)?;
+            let start = time_at(&times.earliest, position)?;
+            for edge in edges {
+                let before = at(durations, edge.other, *id)?;
+                let weight = relation_weight(edge.kind, before, duration, edge.lag);
+                let required = finite(*id, time_at(&times.earliest, edge.other)? + weight)?;
+                slacks.push((edge.id, edge.other, position, (start - required).max(0.0)));
+            }
+        }
+        Ok(slacks)
     }
 
     /// Total float, clamped at zero, of the activity at `position`.

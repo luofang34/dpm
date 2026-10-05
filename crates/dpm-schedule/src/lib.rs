@@ -17,7 +17,7 @@ pub use cpm::{
 pub use error::ScheduleError;
 pub use options::RemainingOptions;
 pub use placement::worked_between;
-pub use projection::{ActivityCalendar, ActivitySchedule, Schedule};
+pub use projection::{ActivityCalendar, ActivitySchedule, RelationSchedule, Schedule};
 pub use simulation::{
     SimulationConfig, SimulationSummary, percentile, simulate, simulate_remaining,
     simulate_remaining_at, simulate_remaining_with,

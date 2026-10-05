@@ -151,6 +151,10 @@ fn human_work_follows_the_standard_calendar() {
     );
     plan.link(a, b, DependencyKind::FinishStart, 0.0, LagBasis::Elapsed);
     let schedule = deterministic_remaining(&plan.plan, now).expect("schedule");
+    // The night between A's finish and B's start is outside B's calendar, not slack.
+    let relation = schedule.relations[&plan.plan.dependencies[0].id];
+    assert!(relation.driving && relation.critical, "{relation:?}");
+    close(relation.slack_hours, 0.0);
     let (a, b, c) = (
         &schedule.activities[&a],
         &schedule.activities[&b],
@@ -227,6 +231,7 @@ fn finish_constraints_move_the_start_back_on_the_calendar() {
     );
     plan.link(a, b, DependencyKind::FinishFinish, 0.0, LagBasis::Elapsed);
     let schedule = deterministic_remaining(&plan.plan, now).expect("schedule");
+    assert!(schedule.relations[&plan.plan.dependencies[0].id].driving);
     close(
         schedule.activities[&b].earliest_start_hours,
         hours(now, berlin(2, 13)),

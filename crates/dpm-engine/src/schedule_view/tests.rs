@@ -337,3 +337,31 @@ fn a_package_reports_its_descendants_bounds_and_least_float() {
     assert_eq!(row(quiet).criticality, row(floating).criticality);
     assert_eq!(row(quiet).span.map(|s| s.critical), Some(false));
 }
+
+#[test]
+fn relations_mark_the_constraint_that_drives_each_successor() {
+    let mut plan = generated(1, false);
+    let first = add_task(&mut plan, "FIRST", 4.0, None, None);
+    let long = add_task(&mut plan, "LONG", 6.0, None, Some(first));
+    let short = add_task(&mut plan, "SHORT", 1.0, None, Some(first));
+    let join = add_task(&mut plan, "JOIN", 1.0, None, Some(long));
+    plan.dependencies.push(dpm_model::Dependency::new(
+        short,
+        join,
+        dpm_model::DependencyKind::FinishStart,
+        0.0,
+    ));
+    let projection = schedule_projection(&plan, false, now()).expect("projection");
+    let relation = |from, to| {
+        projection
+            .relations
+            .iter()
+            .find(|r| r.predecessor == from && r.successor == to)
+            .expect("relation")
+    };
+    assert_eq!(projection.relations.len(), plan.dependencies.len());
+    assert!(relation(first, long).critical && relation(long, join).critical);
+    assert!(relation(first, short).driving && !relation(first, short).critical);
+    assert!(!relation(short, join).driving);
+    assert_eq!(relation(short, join).slack_hours, 5.0);
+}

@@ -4,7 +4,8 @@
 use crate::EngineError;
 use chrono::{DateTime, Utc};
 use dpm_model::{
-    Applicability, Key, Plan, Priority, Timeline, WorkItem, WorkItemId, WorkKind, WorkStatus,
+    Applicability, DependencyId, DependencyKind, Key, Plan, Priority, Timeline, WorkItem,
+    WorkItemId, WorkKind, WorkStatus,
 };
 use dpm_schedule::{
     ActivityCalendar, ActivitySchedule, Schedule, SimulationSummary, deterministic_remaining_at,
@@ -98,6 +99,28 @@ pub struct ScheduleProjection {
     pub uncertainty: Option<ScheduleUncertainty>,
     /// Every work item in key order.
     pub work: Vec<ScheduledWork>,
+    /// Constraints that still bound outstanding work, in plan order; satisfied, waived and
+    /// inapplicable ones are absent.
+    pub relations: Vec<ScheduledRelation>,
+}
+
+/// One outstanding constraint and how tightly it binds its successor.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScheduledRelation {
+    /// Stable dependency identity.
+    pub id: DependencyId,
+    /// Work providing the constrained event.
+    pub predecessor: WorkItemId,
+    /// Work whose event is bounded.
+    pub successor: WorkItemId,
+    /// FS, SS, FF or SF.
+    pub kind: DependencyKind,
+    /// How far the successor's start lies past what this constraint alone requires.
+    pub slack_hours: f64,
+    /// This constraint sets its successor's earliest start.
+    pub driving: bool,
+    /// Driving between two critical activities, so it lies on a critical path.
+    pub critical: bool,
 }
 
 /// Project the remaining schedule; `probabilistic` adds the simulation `status` and `next` use.
@@ -145,7 +168,26 @@ pub fn schedule_projection(
             p95_finish_hours: s.p95_finish_hours,
         }),
         work,
+        relations: relations(plan, &schedule),
     })
+}
+
+fn relations(plan: &Plan, schedule: &Schedule) -> Vec<ScheduledRelation> {
+    plan.dependencies
+        .iter()
+        .filter_map(|d| {
+            let r = schedule.relations.get(&d.id)?;
+            Some(ScheduledRelation {
+                id: d.id,
+                predecessor: d.predecessor,
+                successor: d.successor,
+                kind: d.kind,
+                slack_hours: r.slack_hours,
+                driving: r.driving,
+                critical: r.critical,
+            })
+        })
+        .collect()
 }
 
 /// A package reports its descendants' bounds, least float, and the criticality of its most

@@ -9,7 +9,7 @@
 use super::{Edge, Network, Times, finite, time_at};
 use crate::ScheduleError;
 use crate::placement::{Placed, Placement};
-use dpm_model::{Endpoint, WorkingTime};
+use dpm_model::{DependencyId, Endpoint, WorkingTime};
 
 /// Earliest starts, verified finishes and review waits by topological position.
 type Forward = (Vec<f64>, Vec<f64>, Vec<f64>);
@@ -198,5 +198,60 @@ impl Network {
             available = available.min(finite(*id, successor - bound)?);
         }
         Ok(available.max(0.0))
+    }
+
+    /// Slack of each incoming constraint of the activity at `position`, on calendars: how far the
+    /// start it requires lies before the start the forward pass placed from its strongest
+    /// requirement, before calendar alignment, so a gap in the successor's calendar does not
+    /// read as slack. A finish constraint that holds the finish past the placed work binds it
+    /// too. A bound past the compiled window is omitted.
+    pub(super) fn incoming_slacks_placed(
+        &self,
+        durations: &[f64],
+        times: &Times,
+        position: usize,
+        placement: &Placement,
+    ) -> Result<Vec<(DependencyId, usize, f64)>, ScheduleError> {
+        let (Some(id), Some(edges)) = (self.order.get(position), self.incoming.get(position))
+        else {
+            return Err(ScheduleError::UnknownPosition(position));
+        };
+        let duration = super::at(durations, position, *id)?;
+        let calendar = placement
+            .execution(position)
+            .map_err(|_| ScheduleError::CalendarRange)?;
+        let mut required = Vec::with_capacity(edges.len());
+        for edge in edges {
+            let event = match edge.kind.predecessor_endpoint() {
+                Endpoint::Start => time_at(&times.earliest, edge.other)?,
+                Endpoint::Finish => time_at(&times.earliest_finish, edge.other)?,
+            };
+            let Ok(bound) = forward(edge, event, calendar) else {
+                continue;
+            };
+            let start = match edge.kind.successor_endpoint() {
+                Endpoint::Start => bound,
+                Endpoint::Finish => calendar
+                    .sub(bound, duration)
+                    .map_err(|_| ScheduleError::CalendarRange)?,
+            };
+            let holds_finish = edge.kind.successor_endpoint() == Endpoint::Finish
+                && bound
+                    >= time_at(&times.earliest_finish, position)?
+                        - time_at(&times.review_wait, position)?
+                        - super::EPSILON;
+            required.push((edge.id, edge.other, start, holds_finish));
+        }
+        let strongest = required
+            .iter()
+            .map(|(_, _, start, _)| *start)
+            .fold(0.0_f64, f64::max);
+        Ok(required
+            .into_iter()
+            .map(|(dependency, from, start, holds_finish)| {
+                let slack = if holds_finish { 0.0 } else { strongest - start };
+                (dependency, from, slack)
+            })
+            .collect())
     }
 }

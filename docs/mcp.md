@@ -941,7 +941,11 @@ descendants), `times` (`earliest_start_hours`, `earliest_finish_hours`, `latest_
 `calendar`; `data.project_finish_hours` is the deterministic remaining duration. A work package's
 `times` enclose its applicable descendants (earliest and latest bounds, their least float) and its
 `criticality` is its most critical descendant's, never the float of the package itself.
-All hours are
+`data.relations` lists, in plan order, every dependency that still bounds outstanding work with
+`id`, `predecessor`, `successor`, `kind`, `slack_hours` (how far the successor's start lies past what
+this dependency alone requires; a gap in the successor's calendar is not slack), `driving` (it sets
+the successor's earliest start) and `critical` (driving between two critical items: a link of the
+critical path); satisfied, waived and inapplicable dependencies are absent. All hours are
 elapsed hours from the clock reading. `calendar` (calendar, executor, `source`, `review_wait_hours`)
 is placement only, present when the plan has calendars, and no calendar date is ever inferred.
 

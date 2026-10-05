@@ -44,4 +44,18 @@ pub struct Schedule {
     pub activities: BTreeMap<WorkItemId, ActivitySchedule>,
     /// Work identities with zero total float.
     pub critical_activities: Vec<WorkItemId>,
+    /// Every constraint between scheduled activities, with its slack at the earliest times.
+    #[serde(default)]
+    pub relations: BTreeMap<dpm_model::DependencyId, RelationSchedule>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// How tightly one constraint binds its successor in the projection.
+pub struct RelationSchedule {
+    /// How far the successor's constrained event lies past the bound this constraint puts on it.
+    pub slack_hours: f64,
+    /// The constraint sets its successor's earliest time: its slack is within tolerance of zero.
+    pub driving: bool,
+    /// A driving constraint between two critical activities, so it lies on a critical path.
+    pub critical: bool,
 }

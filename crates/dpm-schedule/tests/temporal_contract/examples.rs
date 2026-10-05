@@ -79,6 +79,26 @@ fn worked_examples_cover_every_relation_with_lag_and_lead() {
             net.plan, before,
             "{label}: projection must not edit the plan"
         );
+        // A lead that would start B before the origin leaves the relation slack, not driving.
+        let bound = match kind {
+            DependencyKind::FinishStart => 4.0 + lag,
+            DependencyKind::StartStart => lag,
+            DependencyKind::FinishFinish => 4.0 - 3.0 + lag,
+            DependencyKind::StartFinish => lag - 3.0,
+        };
+        let relation = schedule.relations[&net.plan.dependencies[0].id];
+        let slack = b_bounds.0 - bound;
+        assert!(
+            (relation.slack_hours - slack).abs() <= TOLERANCE,
+            "{label}: slack"
+        );
+        assert_eq!(relation.driving, slack <= TOLERANCE, "{label}: driving");
+        let both = a_bounds.4 <= TOLERANCE && b_bounds.4 <= TOLERANCE;
+        assert_eq!(
+            relation.critical,
+            relation.driving && both,
+            "{label}: critical"
+        );
     }
 }
 

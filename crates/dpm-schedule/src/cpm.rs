@@ -1,7 +1,9 @@
 use crate::network::{EPSILON, Network};
 use crate::placement::Placement;
 use crate::remaining_duration::RemainingDuration;
-use crate::{ActivityCalendar, ActivitySchedule, RemainingOptions, Schedule, ScheduleError};
+use crate::{
+    ActivityCalendar, ActivitySchedule, RelationSchedule, RemainingOptions, Schedule, ScheduleError,
+};
 use dpm_model::{Dependency, Plan, Release, WorkItemId};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -312,10 +314,32 @@ fn project(
             },
         );
     }
+    let critical_at = |at: usize| {
+        network
+            .order()
+            .get(at)
+            .and_then(|id| activities.get(id))
+            .is_some_and(|a: &ActivitySchedule| a.critical)
+    };
+    let relations = network
+        .relation_slacks(dense, &times, placement)?
+        .into_iter()
+        .map(|(id, from, to, slack_hours)| {
+            let driving = slack_hours <= EPSILON;
+            let critical = driving && critical_at(from) && critical_at(to);
+            let relation = RelationSchedule {
+                slack_hours,
+                driving,
+                critical,
+            };
+            (id, relation)
+        })
+        .collect();
     Ok(Schedule {
         project_finish_hours: times.finish,
         activities,
         critical_activities,
+        relations,
     })
 }
 
