@@ -3,7 +3,8 @@
 mod change;
 pub use change::{
     AffectedWork, ApplicabilityChange, ChangePreview, EdgeRelaxation, EntityChange,
-    RelaxedConstraint, apply_plan_change, patch, plan_change, propose_change, protected_work,
+    RelaxedConstraint, apply_plan_change, json_equivalent, patch, plan_change, propose_change,
+    protected_work,
 };
 mod command;
 mod context;

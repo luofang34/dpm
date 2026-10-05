@@ -453,3 +453,5 @@ fn logged_commands_and_operations_reject_unknown_fields() {
     change["extra"] = true.into();
     assert!(serde_json::from_value::<EntityChange>(change).is_err());
 }
+
+mod encoding;

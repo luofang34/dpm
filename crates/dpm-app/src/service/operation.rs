@@ -184,9 +184,13 @@ fn answer_resend(
     }
 }
 
-/// Commands compare by their serialized form, the form the log records.
+/// Commands compare by their serialized form, the form the log records, with numbers compared by value: a
+/// resent reviewed change may carry `2` where the log recorded `2.0`.
 fn same(left: &Command, right: &Command) -> Result<bool, AppError> {
-    Ok(serde_json::to_value(left)? == serde_json::to_value(right)?)
+    Ok(dpm_engine::json_equivalent(
+        &serde_json::to_value(left)?,
+        &serde_json::to_value(right)?,
+    ))
 }
 
 #[cfg(test)]

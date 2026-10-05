@@ -69,6 +69,22 @@ pub fn apply_plan_change(
     crate::apply_command(plan, actor, command, timestamp, id)
 }
 
+/// The canonical difference `changes` amount to against `current`, when they carry exactly its data: the form
+/// a review produced, which the log records whatever number encoding a client sent back.
+pub(crate) fn canonical(current: &Plan, changes: &[EntityChange]) -> Option<Vec<EntityChange>> {
+    let candidate = patch(current, changes).ok()?;
+    let canonical = super::differences(current, &candidate).ok()?;
+    let matches = canonical.len() == changes.len()
+        && canonical.iter().zip(changes).all(|(a, b)| {
+            a.collection == b.collection
+                && a.id == b.id
+                && a.fields == b.fields
+                && same(&a.before, &b.before)
+                && same(&a.after, &b.after)
+        });
+    matches.then_some(canonical)
+}
+
 /// Apply entity changes to `current` without any policy check.
 ///
 /// Every change's `before` must equal the entity in `current` (null for an addition), otherwise
@@ -198,13 +214,37 @@ fn patch_links(
 }
 
 fn fresh(found: &Value, change: &EntityChange) -> Result<(), EngineError> {
-    if *found == change.before {
+    if same(found, &change.before) {
         return Ok(());
     }
     Err(EngineError::StaleChange {
         collection: change.collection.clone(),
         id: change.id.clone(),
     })
+}
+
+/// Whether two JSON values carry the same data. Numbers compare by value: a client that decodes and re-encodes
+/// a reviewed change may write `2.0` as `2`, and that is the state it was reviewed against, not a stale one.
+pub fn json_equivalent(left: &Value, right: &Value) -> bool {
+    same(left, right)
+}
+
+fn same(left: &Value, right: &Value) -> bool {
+    match (left, right) {
+        (Value::Number(a), Value::Number(b)) => match (a.as_f64(), b.as_f64()) {
+            (Some(x), Some(y)) if a.is_f64() || b.is_f64() => x == y,
+            _ => a == b,
+        },
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| same(x, y))
+        }
+        (Value::Object(a), Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(key, x)| b.get(key).is_some_and(|y| same(x, y)))
+        }
+        _ => left == right,
+    }
 }
 
 fn describe(change: &EntityChange) -> String {
