@@ -373,6 +373,22 @@ def gantt_loaded(state):
     return connected(state) and state['gantt']['loaded'] and state['gantt']['rows'] > 0
 
 
+def edit_flag_first(bundle, directory):
+    """A flag without a value before the valued options, as `--edit --database PATH --page gantt`: AppKit would pair
+    `--edit` with the next option and open the value left over as a file, and a launch that opens a file shows no main
+    window, so no state is ever written. Opening the Gantt with editing offered writes nothing."""
+    database = gantt_store(directory, 'edit-first')
+    operations = len(run_cli(database, 'history')['entries'])
+    app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'gantt', '--window-size', '1200x760'])
+    try:
+        app.wait(lambda s: gantt_loaded(s) and s['editing']['enabled'], what='the main window and its Gantt rows, with editing offered by --edit first')
+        assert app.quit() == 0
+        assert len(run_cli(database, 'history')['entries']) == operations, 'opening with editing offered wrote nothing'
+    finally:
+        app.close()
+    return 'a value-less flag before the valued options still opens the main window on the Gantt, and nothing is written'
+
+
 def gantt_page(bundle, directory):
     """The packaged app opened on `--page gantt`: its rows are the shared schedule's, the schedule is
     displayed only while the Gantt is shown, a lost helper is marked with the rows kept, and nothing is written."""
@@ -2826,7 +2842,7 @@ def main(bundle):
         packaged = directory / 'DPMObserver.app'
         shutil.copytree(bundle, packaged, symlinks=True)
         for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
-                         gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
+                         edit_flag_first, gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
                          filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
                          network_page, network_layout_and_pointer, network_keyboard_route):
             result = scenario(packaged, directory)

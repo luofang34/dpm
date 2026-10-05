@@ -358,6 +358,7 @@ public final class StateReporter {
             "started_at_ms": millis(started),
             "page": model.page.rawValue.lowercased(),
             "search_focused": model.searchFocused,
+            "editing": ["enabled": model.editing.enabled, "edits": model.editing.draft?.edits.count ?? 0, "notice": model.editing.notice ?? NSNull()] as [String: Any],
             "helper_pid": orNull(snapshot.helperProcess.map { Int($0) }),
             "gantt": gantt(model, layout: layout),
             "network": network(model),

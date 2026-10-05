@@ -151,19 +151,41 @@ final class Launch {
             source.resume()
             signals.append(source)
         }
-        if let size = options.windowSize {
-            // The titled main window: other windows (the menu bar's, an inspector's) are visible too.
-            DispatchQueue.main.async { NSApp.windows.first(where: { $0.isVisible && $0.styleMask.contains(.titled) })?.setContentSize(size) }
+        // The window is sized, and editing offered, only once the titled main window is on screen: an inspector
+        // presented while the window is still being created and sized can keep it from appearing at all.
+        let size = options.windowSize, edit = options.edit
+        if size != nil || edit {
+            whenMainWindowIsShown { window in
+                if let size { window.setContentSize(size) }
+                if edit { self.model.setEditing(true) }
+            }
         }
-        // Editing is offered once the window exists: an inspector presented while the window is being created and
-        // sized can keep the window from appearing.
-        if options.edit { DispatchQueue.main.async { self.model.setEditing(true) } }
         reporter?.attach(model, layout: layout, host: host)
         GanttKeyboard.shared.install(model)
         NetworkPointer.model = model
         MeasureDriver.shared.start(model: model, options: options)
         GanttRenderer.shared.start(model: model, options: options)
         if let selection = options.selection { model.open(selection) }
+    }
+
+    /// Run `act` once with the titled main window as soon as it is on screen; other windows (the menu bar's, an
+    /// inspector's) are visible too and are never it. Every pass of the event loop is checked until it is, so an app
+    /// launched from a shell, which may never become active, still gets its size and editing.
+    private func whenMainWindowIsShown(_ act: @escaping (NSWindow) -> Void) {
+        func shown() -> NSWindow? { NSApp.windows.first { $0.isVisible && $0.styleMask.contains(.titled) } }
+        if let window = shown() {
+            DispatchQueue.main.async { act(window) }
+            return
+        }
+        var token: NSObjectProtocol?
+        token = NotificationCenter.default.addObserver(forName: NSApplication.didUpdateNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                guard token != nil, let window = shown() else { return }
+                if let token { NotificationCenter.default.removeObserver(token) }
+                token = nil
+                act(window)
+            }
+        }
     }
 
     /// The hardware line and the display's refresh rate, as the measurement log's header records them.

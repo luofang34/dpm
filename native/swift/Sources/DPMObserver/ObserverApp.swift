@@ -1,4 +1,5 @@
-// DPM Observer: a local, read-only macOS window onto a DPM workspace.
+// DPM Observer: a local macOS window onto a DPM workspace. It only reads unless a person turns editing on;
+// then edits go through the application's review and explicit apply, and progress through the owner's report.
 //
 // Quitting, or closing the window, ends the helper and nothing else: no run is stopped, no task is
 // released and nothing is verified. Menu commands switch views and read again; none of them can
@@ -33,6 +34,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct ObserverApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = Launch.shared.model
+
+    init() {
+        // The app's own options are parsed by Launch. AppKit would otherwise pair a flag with no value, such as
+        // `--edit`, with the next option and take the value left over as a file to open, and a launch that opens a
+        // file shows no main window.
+        UserDefaults.standard.register(defaults: ["NSTreatUnknownArgumentsAsOpen": false])
+    }
 
     var body: some Scene {
         Window("DPM Observer", id: "main") {
