@@ -2,10 +2,16 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
+
+# A newer push to the same branch or pull request supersedes the run in progress.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
@@ -13,13 +19,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest, macos-15-intel]
-        toolchain: [msrv, stable]
+        # The MSRV is checked once, on Linux; macOS runs the stable toolchain, which also packages
+        # and smoke-tests the native release archive.
+        include:
+          - { os: ubuntu-24.04, toolchain: msrv }
+          - { os: ubuntu-24.04, toolchain: stable }
+          - { os: macos-latest, toolchain: stable }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Install selected Rust toolchain
@@ -38,8 +48,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.toolchain }}
+      # The released binary, checksum-verified, instead of compiling the checker in every job.
       - name: Install dependency checker
-        run: cargo install cargo-deny --locked --version 0.19.8
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.19.8
       - name: Full local quality gates
         run: ./ci.sh
       - name: Package native binaries and corresponding source
@@ -50,7 +63,7 @@ jobs:
         run: python3 scripts/smoke_release.py "$RUNNER_TEMP"/dpm-release/*.tar.gz
       - name: Retain qualified archives and checksums
         if: matrix.toolchain == 'stable'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dpm-${{ matrix.os }}-${{ github.sha }}
           path: ${{ runner.temp }}/dpm-release/*
