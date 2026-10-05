@@ -238,9 +238,9 @@ struct GanttStrip: View {
                     Text(row.key).font(.system(.callout, design: .monospaced).weight(.semibold))
                     Text(row.title).font(.callout.weight(.semibold)).lineLimit(1).help(row.title)
                     Spacer(minLength: 4)
-                    if frame.selected == row.id { Badge(text: "Selected", symbol: "checkmark.circle", tint: .blue) }
                 }
-                Text("\(kindWords(row)) · \(row.status)\(row.priority.isEmpty ? "" : " · priority \(row.priority)")\(row.span?.critical == true ? " · on the critical path" : "") · \(when)\(float) · \(finish)")
+                // The strip follows the cursor, which keys move without selecting; it says which it is.
+                Text("\(frame.selected == row.id ? "Selected" : "Cursor, not selected") · \(kindWords(row)) · \(row.status)\(row.priority.isEmpty ? "" : " · priority \(row.priority)")\(row.span?.critical == true ? " · on the critical path" : "") · \(when)\(float) · \(finish)")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     .help(spread)
             }
@@ -274,7 +274,6 @@ struct GanttStrip: View {
                     if !row.priority.isEmpty { Badge(text: "Priority \(row.priority)", symbol: "person.fill.questionmark") }
                     if row.span?.critical == true { Badge(text: "On the critical path", symbol: "flame", tint: Palette.critical) }
                     Text(row.key).font(.system(.callout, design: .monospaced))
-                    if frame.selected == row.id { Badge(text: "Selected", symbol: "checkmark.circle", tint: .blue) }
                 }
                 Prose(text: facts(row), font: .caption)
                 ForEach(Array(frame.inventory.relations(of: row.id).prefix(8)), id: \.id) { edge in
@@ -293,7 +292,7 @@ struct GanttStrip: View {
 
     /// The row's own numbers in one line each way: nothing here is computed from other values.
     private func facts(_ row: GanttRow) -> String {
-        var parts: [String] = []
+        var parts: [String] = [frame.selected == row.id ? "Selected" : "Cursor, not selected"]
         if let span = row.span {
             parts.append(row.isMilestone ? "Milestone at \(hoursText(span.start)) elapsed" : "Elapsed hours \(hoursText(span.start)) to \(hoursText(span.finish)) (\(hoursText(span.hours)))")
         } else {
@@ -321,10 +320,33 @@ struct GanttBody: View {
     /// The receipts of the pointer events this body's timeline received: one bounded log per concrete body, registered
     /// by its region for its own window.
     @State private var pointer = GanttPointerLog()
+    /// A fold or unfold being animated; nil at rest.
+    @State private var motion: GanttMotion?
 
     var body: some View {
         // The height is the one the window offers, not one derived from the row count: the reader has no
         // ideal size of its own, so the page compresses to the space left and the row count follows it.
+        TimelineView(.animation(paused: motion == nil)) { timeline in
+            content(frame.moving(motion, at: timeline.date))
+        }
+        .onChange(of: frame.state.collapsed) { old, _ in animateFold(from: old) }
+    }
+
+    /// Fold or unfold rows over a short animation, so the rows below the package visibly close up or open out. A
+    /// person who asked for reduced motion, and a scripted measurement, see the result at once.
+    private func animateFold(from old: Set<String>) {
+        // One package folding or unfolding is animated; collapse-all, expand-all and a reveal of several are not.
+        guard old.symmetricDifference(frame.state.collapsed).count == 1, MeasureLog.shared == nil,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, let schedule = frame.schedule else { return }
+        let before = GanttLayout.outline(schedule, collapsed: old, filter: frame.state.filter)
+        guard let started = GanttMotion(from: before, to: model.outline, schedule: schedule, at: Date()) else { return }
+        motion = started
+        DispatchQueue.main.asyncAfter(deadline: .now() + GanttMotion.duration) {
+            if motion?.start == started.start { motion = nil }
+        }
+    }
+
+    private func content(_ frame: GanttFrame) -> some View {
         GeometryReader { proxy in
             let size = proxy.size
             let geometry = GanttGeometry(frame, height: size.height)
@@ -385,8 +407,19 @@ struct GanttLabels: View {
                 ForEach(Array(frame.outline[geometry.firstRow..<(geometry.firstRow + geometry.rowsDrawn)])) { item in
                     GanttLabel(item: item, frame: frame, model: model)
                         .frame(height: GanttLayout.rowHeight)
-                        .offset(y: Double(item.position) * GanttLayout.rowHeight - geometry.offsetY)
+                        .offset(y: frame.top(of: item.id, at: item.position, geometry) - GanttGeometry.axis)
                         .background { if item.position == geometry.firstRow { ObservedProbe(name: "first_row") } }
+                }
+                // Rows folding into a package slide into it and fade; they take no clicks.
+                if let motion = frame.motion {
+                    ForEach(motion.visibleLeaving(geometry, progress: frame.progress), id: \.item.id) { leaving in
+                        GanttLabel(item: leaving.item, frame: frame, model: nil)
+                            .frame(height: GanttLayout.rowHeight)
+                            .offset(y: leaving.top - GanttGeometry.axis)
+                            .opacity(1 - frame.progress)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -416,20 +449,22 @@ struct GanttLabel: View {
             } else {
                 Color.clear.frame(width: 12)
             }
-            Image(systemName: row.isMilestone ? "diamond.fill" : (row.isPackage ? "folder" : "circle")).font(.system(size: 10)).accessibilityHidden(true)
+            Image(systemName: GanttGlyph.symbol(row)).font(.system(size: 10)).foregroundStyle(row.status == "Verified" ? .secondary : .primary)
+                .help(row.status).accessibilityHidden(true)
             Text(row.key).font(.system(size: 11, design: .monospaced))
             Text(row.title).font(.system(size: 12, weight: row.isPackage ? .semibold : .regular)).lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 2)
             Text(row.priority).font(.system(size: 10)).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 6)
+        // The row's band and selection continue across the name, as on the timeline beside it.
+        .background(frame.selected == row.id ? Color.accentColor.opacity(0.16) : (item.position % 2 == 0 ? Palette.band : Color.clear))
         .contentShape(Rectangle())
         .help("\(row.key): \(row.title)")
-        .onTapGesture(count: 2) {
+        .onTapGesture {
             model?.focusRow(item.id)
-            model?.perform(.openDetail)
+            if GanttClicks.isDouble { model?.perform(.openDetail) }
         }
-        .onTapGesture { model?.focusRow(item.id) }
         .spoken(said.label, value: said.value)
         .accessibilityAddTraits(frame.selected == row.id ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction(named: "Open in Detail") {
@@ -703,5 +738,23 @@ final class GanttRegionView: NSView {
             current = Self.reading(editor, by, in: window)
         }
         return ["window": window.windowNumber, "current": current, "readings": readings, "sequence": readingSequence, "limit": Self.limit]
+    }
+}
+
+/// A row's symbol: its kind by shape and, for a task or milestone, its lifecycle state by fill, so the outline says
+/// what is done or under way without colour.
+enum GanttGlyph {
+    static func symbol(_ row: GanttRow) -> String {
+        if row.isPackage { return "folder" }
+        if row.isMilestone { return row.status == "Verified" ? "diamond.fill" : "diamond" }
+        switch row.status {
+        case "Verified": return "checkmark.circle.fill"
+        case "Submitted": return "hourglass.circle"
+        case "InProgress": return "circle.lefthalf.filled"
+        case "Claimed": return "circle.dotted"
+        case "Blocked": return "exclamationmark.circle"
+        case "Proposed": return "circle.dashed"
+        default: return "circle"
+        }
     }
 }

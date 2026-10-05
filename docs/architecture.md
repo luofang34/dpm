@@ -720,24 +720,33 @@ views read alike across clients. No role is the only cue; each is paired with a 
 
 The Gantt page of the macOS observer (`--page gantt`, Cmd-5) is read-only. Rows follow the plan
 hierarchy (`parent`) in the key order the `schedule` projection lists them; a bar is the row's
-`span` in elapsed hours from the evaluation time, a milestone is a diamond with its own text, and
-float, criticality (a fraction of seeded simulations, never the human priority) and the project's
-p50/p80/p95 finish hours are the projection's values. Relations (FS, SS, FF, SF with lead or lag and
-the Hard or Soft policy) come from the `export` snapshot the observer already reads and from
-`explain` in Detail; whether a relation is a link of the critical path is the projection's
+`span` in elapsed hours from the evaluation time, a work package is a summary bar over its
+descendants, a milestone is a diamond with its own text, verified work is a "done" mark with no bar,
+a task's or milestone's symbol gives its lifecycle state (done, in progress, awaiting review,
+blocked) while a package's is fixed, the strip says whether its row is selected or only under the
+cursor, and float, criticality (a fraction of seeded simulations, never the human priority) and the
+project's p50/p80/p95 finish hours are the projection's values. Relations (FS, SS, FF, SF with lead
+or lag and the Hard or Soft policy) come from the `export` snapshot the observer already reads and
+from `explain` in Detail; whether a relation is a link of the critical path is the projection's
 `relations` entry, drawn in the critical colour and said in the relation's label and row words.
-Float is drawn in its own lane under a bar, so the bar's label stays readable. The client lays
-these out and derives nothing: no scheduling, no readiness, and no calendar date, which appears
-only where a query supplies one (the projection supplies none, so hours are labelled elapsed). Collapse and expand, zoom, pan and filters change only what is drawn,
-never the selection (`ObserverModel.selection`, shared with Detail) and never the project. The
-page's `schedule` read is displayed, and judged for staleness, only while the page is shown. A
-schedule read that is owed because the status changed stays owed, and the view stays marked stale,
-until a schedule is installed or the page is hidden: a status read that succeeds followed by a
-schedule read that fails once is retried, not forgotten. A row's text, its accessibility words and
+Float is drawn in its own lane under a bar, so the bar's label stays readable. The client lays these
+out and derives nothing: no scheduling, no readiness, and no calendar date, which appears only where
+a query supplies one (the projection supplies none, so hours are labelled elapsed). Collapse and
+expand, zoom, pan and filters change only what is drawn, never the selection
+(`ObserverModel.selection`, shared with Detail) and never the project; folding or unfolding one
+package leaves every row above it in place and, unless reduced motion is asked for or a scripted
+measurement runs, slides the rows below over a fifth of a second; a later pan only shrinks an offset
+kept past the end, never jumps it. A single click selects at once and a second click opens Detail;
+the selection band spans the name and the timeline. The status bar shows the revision and badges
+only what is not the normal case (a preview or archive, a lost or failed connection, a stale
+reading). The page's `schedule` read is displayed, and judged for staleness, only while the page is
+shown. A schedule read that is owed because the status changed stays owed, and the view stays marked
+stale, until a schedule is installed or the page is hidden: a status read that succeeds followed by
+a schedule read that fails once is retried, not forgotten. A row's text, its accessibility words and
 Detail also give the item's own optimistic, likely and pessimistic hours exactly as the plan
 supplies them (`schedule.estimate` of the `export` and `explain` payloads), or say that none is
-recorded, apart from priority, float and criticality and from the project's p50/p80/p95; no
-estimate is computed.
+recorded, apart from priority, float and criticality and from the project's p50/p80/p95; no estimate
+is computed.
 
 The Network page (`--page network`, Cmd-6) is read-only too. Its nodes are the `export` snapshot's
 work items (tasks, milestones and work packages, each a distinct shape with its kind in words) and

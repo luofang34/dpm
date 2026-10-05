@@ -125,11 +125,11 @@ struct StatusBar: View {
         let snapshot = model.snapshot
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                sourceBadge(snapshot)
-                connectionBadge(snapshot.connection)
-                if snapshot.freshness.current, snapshot.connection.isLive {
-                    Badge(text: "Current", symbol: "checkmark.circle", tint: .green)
-                } else if snapshot.connection.isLive {
+                // Only what is not the normal case gets a badge: a live, connected and current workspace shows its
+                // revision alone, and the badge appears when that stops being true.
+                if let source = sourceBadge(snapshot) { source }
+                if let connection = connectionBadge(snapshot.connection) { connection }
+                if !snapshot.freshness.current, snapshot.connection.isLive {
                     Badge(text: staleWords(snapshot.freshness), symbol: "exclamationmark.triangle", tint: .orange)
                 }
                 if let words = Self.identityWords(snapshot) {
@@ -162,21 +162,21 @@ struct StatusBar: View {
         snapshot.identity.map { "Workspace \($0.workspaceId) · lineage \($0.lineageId ?? "none (preview)") · revision \(snapshot.revision.map { String($0) } ?? "unknown")" }
     }
 
-    private func sourceBadge(_ snapshot: ObserverSnapshot) -> some View {
+    private func sourceBadge(_ snapshot: ObserverSnapshot) -> Badge? {
         switch snapshot.identity?.source {
         case "preview"?: return Badge(text: "Read-only preview", symbol: "eye", tint: .blue)
-        case "live"?: return Badge(text: "Live workspace", symbol: "externaldrive.connected.to.line.below", tint: .green)
+        case "live"?: return nil
         case "archive"?: return Badge(text: "Archive (read-only)", symbol: "archivebox", tint: .brown)
         case let other?: return Badge(text: other, symbol: "questionmark.circle")
         case nil: return Badge(text: "No workspace", symbol: "tray")
         }
     }
 
-    private func connectionBadge(_ state: ConnectionState) -> some View {
+    private func connectionBadge(_ state: ConnectionState) -> Badge? {
         switch state {
         case .idle, .closed: return Badge(text: "Not open", symbol: "circle.dashed")
         case .opening: return Badge(text: "Opening", symbol: "hourglass", tint: .blue)
-        case .connected: return Badge(text: "Connected", symbol: "bolt.horizontal.circle", tint: .green)
+        case .connected: return nil
         case .reconnecting(let attempt, _): return Badge(text: "Reconnecting (attempt \(attempt))", symbol: "arrow.triangle.2.circlepath", tint: .orange)
         case .sourceChanged: return Badge(text: "Source changed", symbol: "arrow.triangle.branch", tint: .red)
         case .failed: return Badge(text: "Failed", symbol: "xmark.octagon", tint: .red)
