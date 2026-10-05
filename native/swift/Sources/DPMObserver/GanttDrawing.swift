@@ -24,6 +24,17 @@ struct GanttFrame {
     var keyboard: Bool
     /// Whether draw passes stamp the measurement log. Rendering to a file never does.
     var stamps: Bool
+    /// A fold or unfold being animated, and how far it has gone (0 to 1).
+    var motion: GanttMotion?
+    var progress = 1.0
+
+    /// The top of a row drawn at `position`: during a fold or unfold, between where it was and where it is now; a row
+    /// that just appeared comes out of the nearest package that was already shown.
+    func top(of id: String, at position: Int, _ geometry: GanttGeometry) -> Double {
+        guard let motion, progress < 1 else { return geometry.y(of: position) }
+        let from = motion.before[id] ?? motion.origin(of: id, schedule: schedule) ?? position
+        return GanttGeometry.axis + (Double(from) + (Double(position) - Double(from)) * progress) * GanttLayout.rowHeight - geometry.offsetY
+    }
 
     @MainActor
     init(model: ObserverModel, keyboard: Bool, stamps: Bool = true) {
@@ -40,6 +51,14 @@ struct GanttFrame {
         self.stamps = stamps
     }
 
+    /// This frame with a fold or unfold in progress at `now`.
+    func moving(_ motion: GanttMotion?, at now: Date) -> GanttFrame {
+        var moved = self
+        moved.motion = motion
+        moved.progress = motion?.progress(at: now) ?? 1
+        return moved
+    }
+
     var cursor: GanttOutlineRow? {
         guard let id = state.focus, let position = positions[id], position < outline.count else { return nil }
         return outline[position]
@@ -53,6 +72,54 @@ struct GanttFrame {
         case .failed: return "FAILED: the last schedule read is shown and is not current"
         default: return current ? nil : "NOT CURRENT: the plan changed or time moved on; this reading is being refreshed"
         }
+    }
+}
+
+/// A fold or unfold of packages in progress: where each row was before it, and the rows it removed with the position
+/// of the package each folds into.
+struct GanttMotion {
+    static let duration = 0.22
+    let start: Date
+    let before: [String: Int]
+    let leaving: [(GanttOutlineRow, Int, Int)]
+
+    /// The rows before and after a change of the collapsed set, or nil when nothing moves.
+    init?(from old: [GanttOutlineRow], to new: [GanttOutlineRow], schedule: GanttSchedule?, at start: Date) {
+        let now = Dictionary(new.map { ($0.id, $0.position) }, uniquingKeysWith: { first, _ in first })
+        before = Dictionary(old.map { ($0.id, $0.position) }, uniquingKeysWith: { first, _ in first })
+        guard before != now else { return nil }
+        self.start = start
+        leaving = old.filter { now[$0.id] == nil }.map { item in
+            var parent = schedule?.row(item.id)?.parent
+            while let up = parent, now[up] == nil { parent = schedule?.row(up)?.parent }
+            return (item, item.position, parent.flatMap { now[$0] } ?? item.position)
+        }
+    }
+
+    /// Where a row that just appeared starts: the old position of its nearest ancestor that was shown.
+    func origin(of id: String, schedule: GanttSchedule?) -> Int? {
+        var parent = schedule?.row(id)?.parent
+        while let up = parent {
+            if let at = before[up] { return at }
+            parent = schedule?.row(up)?.parent
+        }
+        return nil
+    }
+
+    /// The leaving rows drawn now, with their tops: only those inside the rows the geometry shows.
+    func visibleLeaving(_ geometry: GanttGeometry, progress: Double) -> [(item: GanttOutlineRow, top: Double)] {
+        let low = Double(geometry.firstRow - 1), high = Double(geometry.firstRow + geometry.rowsDrawn + 1)
+        return leaving.compactMap { item, from, into in
+            let at = Double(from) + (Double(into) - Double(from)) * progress
+            guard at >= low, at <= high else { return nil }
+            return (item, GanttGeometry.axis + at * GanttLayout.rowHeight - geometry.offsetY)
+        }
+    }
+
+    /// Eased progress at `now`, from 0 to 1.
+    func progress(at now: Date) -> Double {
+        let t = min(1, max(0, now.timeIntervalSince(start) / Self.duration))
+        return t * t * (3 - 2 * t)
     }
 }
 
@@ -133,7 +200,7 @@ enum GanttDrawing {
         // Row bands, the selection and the cursor.
         for position in geometry.firstRow..<max(geometry.firstRow, last) {
             let item = rows[position]
-            let rect = CGRect(x: 0, y: geometry.y(of: position), width: size.width, height: rowHeight)
+            let rect = CGRect(x: 0, y: frame.top(of: item.id, at: position, geometry), width: size.width, height: rowHeight)
             if position % 2 == 0 { context.fill(Path(rect), with: .color(Palette.band)) }
             if frame.selected == item.id { context.fill(Path(rect), with: .color(accent.opacity(0.16))) }
             if frame.state.focus == item.id {
@@ -187,11 +254,13 @@ enum GanttDrawing {
         var seen = Set<String>()
         var labels: [GanttRelationLabels.Request] = []
         func relation(_ edge: GanttRelation, strong: Bool) {
+            // A relation from verified work is satisfied; it is drawn only for the rows being inspected.
+            if !strong, frame.schedule?.row(edge.predecessor)?.status == "Verified" { return }
             guard seen.insert(edge.id).inserted, let successorAt = frame.positions[edge.successor] else { return }
             let successor = rows[successorAt].row
             guard let target = successor.span else { return }
             let atFinish = edge.kind == "FinishFinish" || edge.kind == "StartFinish"
-            let to = CGPoint(x: (atFinish ? target.finish : target.start) * scale - geometry.offsetX, y: geometry.y(of: successorAt) + rowHeight / 2)
+            let to = CGPoint(x: (atFinish ? target.finish : target.start) * scale - geometry.offsetX, y: frame.top(of: edge.successor, at: successorAt, geometry) + rowHeight / 2)
             let dash: [CGFloat] = edge.policy == "Soft" ? [4, 3] : []
             // A link of the critical path keeps its colour when emphasised; its label and row words name it too.
             let onCriticalPath = schedule.criticalRelations.contains(edge.id)
@@ -200,7 +269,9 @@ enum GanttDrawing {
             var path = Path()
             if let predecessorAt = frame.positions[edge.predecessor], let source = rows[predecessorAt].row.span {
                 let fromFinish = edge.kind == "FinishStart" || edge.kind == "FinishFinish"
-                let from = CGPoint(x: (fromFinish ? source.finish : source.start) * scale - geometry.offsetX, y: geometry.y(of: predecessorAt) + rowHeight / 2)
+                // Verified work is a done mark at the origin, so its arrows leave from there.
+                let doneSource = rows[predecessorAt].row.status == "Verified"
+                let from = CGPoint(x: doneSource ? 4 - geometry.offsetX : (fromFinish ? source.finish : source.start) * scale - geometry.offsetX, y: frame.top(of: edge.predecessor, at: predecessorAt, geometry) + rowHeight / 2)
                 let bend = max(from.x, to.x) + 10
                 path.move(to: from)
                 path.addLine(to: CGPoint(x: bend, y: from.y))
@@ -232,61 +303,16 @@ enum GanttDrawing {
             for edge in frame.inventory.relations(of: id) { relation(edge, strong: true) }
         }
 
-        // The bars, milestones and float.
+        // The bars, milestones and float; rows folding into a package slide into it and fade.
         for position in geometry.firstRow..<max(geometry.firstRow, last) {
-            let item = rows[position]
-            let row = item.row
-            let top = geometry.y(of: position)
-            let mid = top + rowHeight / 2
-            guard let span = row.span else {
-                context.draw(Text("not scheduled: \(row.applicability)").font(.system(size: 10).italic()).foregroundColor(.secondary), at: CGPoint(x: 8, y: mid), anchor: .leading)
-                continue
+            drawRow(rows[position], top: frame.top(of: rows[position].id, at: position, geometry), frame: frame, geometry: geometry, size: size, in: &context)
+        }
+        if let motion = frame.motion {
+            var fading = context
+            fading.opacity = 1 - frame.progress
+            for leaving in motion.visibleLeaving(geometry, progress: frame.progress) {
+                drawRow(leaving.item, top: leaving.top, frame: frame, geometry: geometry, size: size, in: &fading)
             }
-            let (x, width) = GanttLayout.bar(span, scale: geometry.pointsPerHour)
-            let left = x - geometry.offsetX
-            guard left + width > -400, left < size.width + 40 else { continue }
-            let critical = span.critical
-            let fill: Color = critical ? Palette.critical : Palette.planned
-            if row.isMilestone {
-                var diamond = Path()
-                diamond.move(to: CGPoint(x: left, y: mid - 8))
-                diamond.addLine(to: CGPoint(x: left + 8, y: mid))
-                diamond.addLine(to: CGPoint(x: left, y: mid + 8))
-                diamond.addLine(to: CGPoint(x: left - 8, y: mid))
-                diamond.closeSubpath()
-                context.fill(diamond, with: .color(fill))
-                context.stroke(diamond, with: .color(Palette.structure), lineWidth: 1)
-                context.draw(Text("◆ \(row.key) milestone, \(hoursText(span.start))").font(.system(size: 10, weight: .semibold)).foregroundColor(.primary), at: CGPoint(x: left + 12, y: mid), anchor: .leading)
-                continue
-            }
-            if let times = row.times, times.totalFloat > 0 {
-                // Float runs in its own lane under the bar, so the bar's label beside it stays clear.
-                let reach = times.latestFinish * scale - geometry.offsetX
-                if reach > left + width {
-                    let lane = top + rowHeight - 4
-                    var slack = Path()
-                    slack.move(to: CGPoint(x: left + width, y: lane))
-                    slack.addLine(to: CGPoint(x: reach, y: lane))
-                    slack.move(to: CGPoint(x: reach, y: lane - 3))
-                    slack.addLine(to: CGPoint(x: reach, y: lane + 1))
-                    context.stroke(slack, with: .color(Palette.float), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-                }
-            }
-            if row.isPackage {
-                // A work package spans its descendants: a bracket, not a bar.
-                var bracket = Path()
-                bracket.move(to: CGPoint(x: left, y: mid + 6))
-                bracket.addLine(to: CGPoint(x: left, y: mid - 5))
-                bracket.addLine(to: CGPoint(x: left + width, y: mid - 5))
-                bracket.addLine(to: CGPoint(x: left + width, y: mid + 6))
-                context.stroke(bracket, with: .color(Palette.structure), style: StrokeStyle(lineWidth: 2, lineCap: .butt))
-            } else {
-                // A zero-hour task is still a visible mark; its hours are in its label.
-                let bar = CGRect(x: left, y: top + 7, width: max(width, 3), height: rowHeight - 14)
-                context.fill(Path(roundedRect: bar, cornerRadius: 4), with: .color(fill))
-            }
-            let tag = "\(row.key)\(critical ? " · critical path" : "") · \(hoursText(span.hours))"
-            context.draw(Text(tag).font(.system(size: 10)).foregroundColor(.primary), at: CGPoint(x: left + width + 6, y: mid), anchor: .leading)
         }
 
         // The emphasised relations' labels, each on its own line and on a plate, so what is under it does not cross it.
@@ -301,6 +327,80 @@ enum GanttDrawing {
         }
 
         stamp(frame, geometry: geometry, schedule: schedule)
+    }
+
+    /// One row's bar, milestone or package summary, its float lane and its label, with its top at `top`.
+    private static func drawRow(_ item: GanttOutlineRow, top: Double, frame: GanttFrame, geometry: GanttGeometry, size: CGSize, in context: inout GraphicsContext) {
+        let row = item.row
+        let rowHeight = GanttLayout.rowHeight
+        let scale = geometry.pointsPerHour
+        let mid = top + rowHeight / 2
+        guard let span = row.span else {
+            context.draw(Text("not scheduled: \(row.applicability)").font(.system(size: 10).italic()).foregroundColor(.secondary), at: CGPoint(x: 8, y: mid), anchor: .leading)
+            return
+        }
+        // Verified work has no remaining duration: a mark at the origin, with no bar and no float.
+        if row.status == "Verified" {
+            context.draw(Text("✓ \(row.key) · done").font(.system(size: 10)).foregroundColor(.secondary), at: CGPoint(x: 6 - geometry.offsetX, y: mid), anchor: .leading)
+            return
+        }
+        let (x, width) = GanttLayout.bar(span, scale: scale)
+        let left = x - geometry.offsetX
+        guard left + width > -400, left < size.width + 40 else { return }
+        let critical = span.critical
+        let fill: Color = critical ? Palette.critical : Palette.planned
+        if row.isMilestone {
+            var diamond = Path()
+            diamond.move(to: CGPoint(x: left, y: mid - 8))
+            diamond.addLine(to: CGPoint(x: left + 8, y: mid))
+            diamond.addLine(to: CGPoint(x: left, y: mid + 8))
+            diamond.addLine(to: CGPoint(x: left - 8, y: mid))
+            diamond.closeSubpath()
+            context.fill(diamond, with: .color(fill))
+            context.stroke(diamond, with: .color(Palette.structure), lineWidth: 1)
+            context.draw(Text("◆ \(row.key) milestone, \(hoursText(span.start))").font(.system(size: 10, weight: .semibold)).foregroundColor(.primary), at: CGPoint(x: left + 12, y: mid), anchor: .leading)
+            return
+        }
+        if let times = row.times, times.totalFloat > 0 {
+            // Float runs in its own lane under the bar, so the bar's label beside it stays clear.
+            let reach = times.latestFinish * scale - geometry.offsetX
+            if reach > left + width {
+                let lane = top + rowHeight - 4
+                var slack = Path()
+                slack.move(to: CGPoint(x: left + width, y: lane))
+                slack.addLine(to: CGPoint(x: reach, y: lane))
+                slack.move(to: CGPoint(x: reach, y: lane - 3))
+                slack.addLine(to: CGPoint(x: reach, y: lane + 1))
+                context.stroke(slack, with: .color(Palette.float), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+            }
+        }
+        if row.isPackage {
+            // A work package spans its descendants: a thin summary bar whose ends point down at the work it holds.
+            let bar = top + 9, right = left + max(width, 1)
+            var summary = Path(CGRect(x: left, y: bar, width: right - left, height: 5))
+            summary.move(to: CGPoint(x: left, y: bar + 5))
+            summary.addLine(to: CGPoint(x: left + 6, y: bar + 5))
+            summary.addLine(to: CGPoint(x: left, y: bar + 11))
+            summary.closeSubpath()
+            summary.move(to: CGPoint(x: right, y: bar + 5))
+            summary.addLine(to: CGPoint(x: right - 6, y: bar + 5))
+            summary.addLine(to: CGPoint(x: right, y: bar + 11))
+            summary.closeSubpath()
+            context.fill(summary, with: .color(Palette.structure))
+        } else {
+            // A zero-hour task is still a visible mark; its hours are in its label.
+            let bar = CGRect(x: left, y: top + 7, width: max(width, 3), height: rowHeight - 14)
+            context.fill(Path(roundedRect: bar, cornerRadius: 4), with: .color(fill))
+        }
+        let state: String
+        switch row.status {
+        case "InProgress": state = " · in progress"
+        case "Submitted": state = " · awaiting review"
+        case "Blocked": state = " · blocked"
+        default: state = ""
+        }
+        let tag = "\(row.key)\(critical ? (row.isPackage ? " · holds critical work" : " · critical path") : "")\(row.isPackage ? "" : state) · \(hoursText(span.hours))"
+        context.draw(Text(tag).font(.system(size: 10)).foregroundColor(.primary), at: CGPoint(x: left + width + 6, y: mid), anchor: .leading)
     }
 
     /// The draw pass reports what it drew. This is the app-owned draw the measurement record counts as a

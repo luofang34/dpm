@@ -336,6 +336,7 @@ extension ObserverModel {
     private func viewOperation(_ kind: String, _ change: (inout GanttViewState) -> Void) {
         let sequence = gantt.sequence &+ 1
         MeasureLog.shared?.emit("view_op_call", gen: sequence, detail: ["op": kind])
+        let previousY = gantt.panY
         var state = gantt
         state.locateNote = nil
         change(&state)
@@ -343,7 +344,10 @@ extension ObserverModel {
         if kind == "pan" { state.viewportChosen = true }
         state.sequence = sequence
         gantt = state
-        clampPan()
+        // Folding or unfolding one package changes only the rows below it, so nothing above it moves: the vertical
+        // offset is kept even past the end of the shorter content, as long as a row stays in view.
+        // A pan or zoom never jumps an offset kept past the end that way: it may only shrink it.
+        clampPan(keepingRowsAbove: kind == "collapse" || kind == "expand", keptY: kind == "pan" || kind == "zoom" ? previousY : nil)
         // A pure geometry operation (pan, zoom) only clamps: the cursor and focus stay where they are and
         // the pan survives even when the cursor is scrolled out of view.
         if kind != "pan", kind != "zoom" {
@@ -366,11 +370,13 @@ extension ObserverModel {
         log.emit("state_set", gen: sequence, detail: detail)
     }
 
-    private func clampPan() {
+    private func clampPan(keepingRowsAbove: Bool = false, keptY: Double? = nil) {
         guard let schedule = snapshot.gantt else { return }
         let state = gantt
         let maxX = max(0, GanttLayout.timelineWidth(schedule, scale: state.scale) - state.viewportWidth)
-        let maxY = max(0, Double(outline.count - state.viewportRows) * GanttLayout.rowHeight)
+        let fitted = max(0, Double(outline.count - state.viewportRows) * GanttLayout.rowHeight)
+        let lastRowAtTop = max(0, Double(outline.count - 1) * GanttLayout.rowHeight)
+        let maxY = keepingRowsAbove ? max(fitted, min(state.panY, lastRowAtTop)) : max(fitted, min(keptY ?? 0, lastRowAtTop))
         let x = max(0, min(maxX, state.panX)), y = max(0, min(maxY, state.panY))
         if x != state.panX || y != state.panY {
             gantt.panX = x

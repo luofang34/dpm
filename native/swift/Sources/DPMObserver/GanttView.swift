@@ -320,10 +320,33 @@ struct GanttBody: View {
     /// The receipts of the pointer events this body's timeline received: one bounded log per concrete body, registered
     /// by its region for its own window.
     @State private var pointer = GanttPointerLog()
+    /// A fold or unfold being animated; nil at rest.
+    @State private var motion: GanttMotion?
 
     var body: some View {
         // The height is the one the window offers, not one derived from the row count: the reader has no
         // ideal size of its own, so the page compresses to the space left and the row count follows it.
+        TimelineView(.animation(paused: motion == nil)) { timeline in
+            content(frame.moving(motion, at: timeline.date))
+        }
+        .onChange(of: frame.state.collapsed) { old, _ in animateFold(from: old) }
+    }
+
+    /// Fold or unfold rows over a short animation, so the rows below the package visibly close up or open out. A
+    /// person who asked for reduced motion, and a scripted measurement, see the result at once.
+    private func animateFold(from old: Set<String>) {
+        // One package folding or unfolding is animated; collapse-all, expand-all and a reveal of several are not.
+        guard old.symmetricDifference(frame.state.collapsed).count == 1, MeasureLog.shared == nil,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, let schedule = frame.schedule else { return }
+        let before = GanttLayout.outline(schedule, collapsed: old, filter: frame.state.filter)
+        guard let started = GanttMotion(from: before, to: model.outline, schedule: schedule, at: Date()) else { return }
+        motion = started
+        DispatchQueue.main.asyncAfter(deadline: .now() + GanttMotion.duration) {
+            if motion?.start == started.start { motion = nil }
+        }
+    }
+
+    private func content(_ frame: GanttFrame) -> some View {
         GeometryReader { proxy in
             let size = proxy.size
             let geometry = GanttGeometry(frame, height: size.height)
@@ -384,8 +407,19 @@ struct GanttLabels: View {
                 ForEach(Array(frame.outline[geometry.firstRow..<(geometry.firstRow + geometry.rowsDrawn)])) { item in
                     GanttLabel(item: item, frame: frame, model: model)
                         .frame(height: GanttLayout.rowHeight)
-                        .offset(y: Double(item.position) * GanttLayout.rowHeight - geometry.offsetY)
+                        .offset(y: frame.top(of: item.id, at: item.position, geometry) - GanttGeometry.axis)
                         .background { if item.position == geometry.firstRow { ObservedProbe(name: "first_row") } }
+                }
+                // Rows folding into a package slide into it and fade; they take no clicks.
+                if let motion = frame.motion {
+                    ForEach(motion.visibleLeaving(geometry, progress: frame.progress), id: \.item.id) { leaving in
+                        GanttLabel(item: leaving.item, frame: frame, model: nil)
+                            .frame(height: GanttLayout.rowHeight)
+                            .offset(y: leaving.top - GanttGeometry.axis)
+                            .opacity(1 - frame.progress)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
