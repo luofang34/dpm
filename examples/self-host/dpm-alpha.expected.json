@@ -1,13 +1,13 @@
 {
   "workspace": "DPM Alpha — prepared roadmap",
   "revision": 0,
-  "task_count": 59,
+  "task_count": 61,
   "work_package_count": 12,
   "milestone_count": 14,
-  "total_work": 85,
+  "total_work": 87,
   "ready_keys": [],
   "completed_work": 0,
-  "open_decisions": 14,
+  "open_decisions": 15,
   "operations": 0,
   "first_contract": "MVP-10",
   "execution_gate": "DEC-EXECUTE",
@@ -73,6 +73,7 @@
     "RUN-10",
     "RUN-20",
     "RUN-30",
+    "SCH-60",
     "UI-30",
     "UI-40",
     "UI-50",
@@ -81,6 +82,7 @@
     "UI-80",
     "VIS-10",
     "VIS-20",
-    "VIS-30"
+    "VIS-30",
+    "VIS-40"
   ]
 }
