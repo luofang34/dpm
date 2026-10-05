@@ -28,8 +28,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Install selected Rust toolchain
@@ -60,7 +60,7 @@ jobs:
         run: python3 scripts/smoke_release.py "$RUNNER_TEMP"/dpm-release/*.tar.gz
       - name: Retain qualified archives and checksums
         if: matrix.toolchain == 'stable'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dpm-${{ matrix.os }}-${{ github.sha }}
           path: ${{ runner.temp }}/dpm-release/*
