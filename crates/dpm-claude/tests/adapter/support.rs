@@ -10,7 +10,6 @@ use dpm_model::{ActivityEntry, ActorId, LifecycleEntry, Plan, RunId, WorkItemId}
 use serde_json::{Value, json};
 use std::{
     fs,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
 
@@ -94,10 +93,23 @@ impl Fixture {
     }
 
     /// An executable script in the work directory, run by `sh`.
+    ///
+    /// A short-lived `sh` writes it, never this process: a child another test thread forks inherits
+    /// every descriptor open here until it execs, and on Linux executing a file some process holds
+    /// open for writing fails with ETXTBSY. With no write descriptor here, no child can hold one.
     pub fn script(&self, name: &str, body: &str) -> PathBuf {
         let path = self.directory.path().join(name);
-        fs::write(&path, format!("#!/bin/sh\n{PRELUDE}{body}")).expect("script");
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("executable");
+        let mut writer = std::process::Command::new("/bin/sh")
+            .args(["-c", "cat > \"$1\" && chmod 755 \"$1\"", "sh"])
+            .arg(&path)
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .expect("script writer");
+        if let Some(mut input) = writer.stdin.take() {
+            std::io::Write::write_all(&mut input, format!("#!/bin/sh\n{PRELUDE}{body}").as_bytes())
+                .expect("script");
+        }
+        assert!(writer.wait().expect("script writer").success(), "script");
         path
     }
 
