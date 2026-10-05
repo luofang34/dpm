@@ -35,6 +35,8 @@ public final class ObserverModel: ObservableObject {
     @Published public internal(set) var gantt = GanttViewState()
     /// How the dependency network is drawn: filter, zoom, pan and the keyboard cursor; never the project.
     @Published public internal(set) var network = NetworkViewState()
+    /// The editing session: a draft of plan edits, its review and its apply. Off until a person turns it on.
+    @Published public internal(set) var editing = EditState()
     /// The graph last built, kept until the snapshot's inventory or schedule reading changes.
     var networkCache: (inventory: Inventory, schedule: UUID?, graph: NetworkGraph)?
     /// The element the shared key handler decided has keyboard focus, as `gantt.row.<key>`,
@@ -235,6 +237,7 @@ public final class ObserverModel: ObservableObject {
         guard let new = pending else { return }
         pending = nil
         snapshot = new
+        continueRebase()
         lastFlush = Date()
         installedAt = lastFlush
         restoreSelection(in: new)

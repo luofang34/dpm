@@ -16,8 +16,8 @@
 // Every connection has a generation, taken before the first suspension of the operation that opens
 // or closes it. An answer that arrives after the connection it was asked of was closed or replaced
 // is dropped before it can touch the state, so a delayed response can never be attached to a new
-// source. Nothing is queued without bound: a selection is one value and a wake-up is one flag. The
-// engine has no command call: it can only read.
+// source. Nothing is queued without bound: a selection is one value and a wake-up is one flag. Its
+// reads never write; its only command is the explicit apply of a reviewed plan change.
 
 import DPMNative
 import Foundation

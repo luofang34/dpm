@@ -1,5 +1,5 @@
-// The only requests the observer makes. Every one is a shared read; there is no command here, and
-// the engine has no way to send one.
+// The shared reads the observer makes. None writes; the one mutation, an explicit apply of a reviewed
+// plan change, is sent only from the editing session.
 
 import DPMNative
 import Foundation

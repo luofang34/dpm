@@ -202,3 +202,92 @@ fn a_store_locked_past_its_timeout_answers_a_retryable_busy_code() {
     app.execute_blocking(claim)
         .expect("the same identity succeeds on retry");
 }
+
+/// Rewrites every whole floating-point number as an integer, as a client's JSON encoder may.
+fn integral(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Number(n) => match n.as_f64() {
+            Some(f) if n.is_f64() && f.fract() == 0.0 && f.abs() < 1e15 => {
+                serde_json::json!(f as i64)
+            }
+            _ => value.clone(),
+        },
+        serde_json::Value::Array(items) => items.iter().map(integral).collect(),
+        serde_json::Value::Object(map) => {
+            map.iter().map(|(k, v)| (k.clone(), integral(v))).collect()
+        }
+        other => other.clone(),
+    }
+}
+
+#[test]
+fn a_reviewed_change_sent_back_with_whole_numbers_applies_once_and_its_resend_is_answered() {
+    let mut app = Application::in_memory_blocking(&fixture()).expect("app");
+    let current = app.plan_blocking().expect("plan");
+    let work = app.work_id_blocking("TEST-B").expect("work");
+    let mut proposed = current.clone();
+    if let Some(estimate) = proposed
+        .work_items
+        .get_mut(&work)
+        .and_then(|w| w.schedule.estimate.as_mut())
+    {
+        estimate.likely_hours = 22.0;
+    }
+    let Command::ApplyChange { changes, reason } =
+        dpm_engine::plan_change(&current, &proposed, "Widen B").expect("change")
+    else {
+        panic!("a plan change");
+    };
+    let reencoded: Vec<_> = changes
+        .iter()
+        .map(|c| dpm_engine::EntityChange {
+            before: integral(&c.before),
+            after: integral(&c.after),
+            ..c.clone()
+        })
+        .collect();
+    let id = OperationId::new();
+    let sent = CommandRequest {
+        actor: ActorId::human("planner"),
+        base_revision: current.revision,
+        base_lineage: None,
+        operation_id: Some(id),
+        command: Command::ApplyChange {
+            changes: reencoded,
+            reason: reason.clone(),
+        },
+    };
+    let first = app
+        .execute_blocking(sent.clone())
+        .expect("a re-encoded reviewed change applies");
+    let mut altered = sent.clone();
+    if let Command::ApplyChange { changes, .. } = &mut altered.command {
+        for change in changes.iter_mut() {
+            change.after = integral(&change.after)
+                .to_string()
+                .replace("22", "23")
+                .parse()
+                .expect("json");
+        }
+    }
+    let again = app
+        .execute_blocking(sent)
+        .expect("its resend is answered with the recorded operation");
+    assert_eq!(
+        app.execute_blocking(altered)
+            .expect_err("a different value under the same identity")
+            .code(),
+        "duplicate_operation"
+    );
+    assert_eq!(json(&again), json(&first));
+    assert_eq!(
+        app.plan_blocking().expect("plan").revision,
+        current.revision + 1
+    );
+    match &first.operation.command {
+        Command::ApplyChange {
+            changes: recorded, ..
+        } => assert_eq!(recorded, &changes, "the log keeps the canonical form"),
+        other => panic!("unexpected command {other:?}"),
+    }
+}

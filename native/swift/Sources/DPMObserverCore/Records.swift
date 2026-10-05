@@ -290,6 +290,8 @@ public struct Inventory: Sendable, Equatable {
     /// Every edge of the plan, as the snapshot lists it, with the edges at each end of a work item.
     public let relations: [GanttRelation]
     private let relationsAt: [String: [Int]]
+    /// The export as read, with the revision and lineage it was read at: the basis an edit is made against.
+    public private(set) var basis: PlanBasis?
 
     public static let empty = Inventory(items: [], artifacts: [:], decisions: [], projectTitle: "")
 
@@ -357,6 +359,7 @@ public struct Inventory: Sendable, Equatable {
         decisions.sort { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
         self.init(items: items, artifacts: artifacts, decisions: decisions, projectTitle: data["project"]["title"].string ?? data["projects"].items.first?["title"].string ?? "",
                   relations: data["dependencies"].items.compactMap(GanttRelation.init))
+        basis = PlanBasis(plan: data, revision: view.envelope.revision ?? 0, lineage: view.envelope.lineageId)
     }
 
     /// The relations that end or start at this work item: the plan's edges, not a derivation.

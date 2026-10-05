@@ -13,6 +13,8 @@ struct LaunchOptions {
     var clock: Instant?
     var stateFile: URL?
     var page: ObserverModel.Page?
+    /// Open with editing offered, as the Edit toggle would.
+    var edit = false
     var selectKey: String?
     var selectRun: String?
     var selectDecision: String?
@@ -58,6 +60,7 @@ struct LaunchOptions {
                 if let text = value() {
                     if let instant = Instant(text) { clock = instant } else { problems.append("--clock \(text) is not an RFC 3339 UTC instant") }
                 }
+            case "--edit": edit = true
             case "--page":
                 if let text = value() {
                     if let found = ObserverModel.Page.allCases.first(where: { $0.rawValue.lowercased() == text.lowercased() }) { page = found } else { problems.append("--page \(text) is not now, live, review, detail, gantt or network") }
@@ -149,8 +152,12 @@ final class Launch {
             signals.append(source)
         }
         if let size = options.windowSize {
-            DispatchQueue.main.async { NSApp.windows.first(where: { $0.isVisible })?.setContentSize(size) }
+            // The titled main window: other windows (the menu bar's, an inspector's) are visible too.
+            DispatchQueue.main.async { NSApp.windows.first(where: { $0.isVisible && $0.styleMask.contains(.titled) })?.setContentSize(size) }
         }
+        // Editing is offered once the window exists: an inspector presented while the window is being created and
+        // sized can keep the window from appearing.
+        if options.edit { DispatchQueue.main.async { self.model.setEditing(true) } }
         reporter?.attach(model, layout: layout, host: host)
         GanttKeyboard.shared.install(model)
         NetworkPointer.model = model

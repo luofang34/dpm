@@ -17,6 +17,14 @@ pub fn apply_command(
 ) -> Result<Operation, EngineError> {
     plan.validate()?;
     nonempty(&actor.to_string(), "actor name", &actor.name)?;
+    // A reviewed change comes back in whatever encoding its client used; the log records the canonical form.
+    let command = match command {
+        Command::ApplyChange { changes, reason } => Command::ApplyChange {
+            changes: crate::change::canonical(plan, &changes).unwrap_or(changes),
+            reason,
+        },
+        other => other,
+    };
     let mut candidate = plan.clone();
     execute(&mut candidate, &actor, &command, timestamp)?;
     candidate.revision = plan.revision.wrapping_add(1);

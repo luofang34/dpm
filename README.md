@@ -29,10 +29,11 @@ of that graph; none of them stores schedule data.
 - SQLite storage with an append-only operation log, backup, restore and history replay.
 - JSON CLI output, with an MCP server returning the same data.
 - Microsoft Project XML (MSPDI) import and export.
-- A terminal console and a read-only macOS observer, both with Gantt and network views.
+- A terminal console and a macOS app, both with Gantt and network views; the app can also edit the
+  plan through reviewed changes.
 
-Not in scope yet: editing in a Gantt chart, web or mobile apps, sync servers, accounts, resource
-levelling, cost accounting and earned value.
+Not in scope yet: web or mobile apps, sync servers, accounts, resource levelling, cost accounting
+and earned value.
 
 ## Quick start
 
@@ -87,8 +88,10 @@ python3 scripts/build_native.py
 open target/native/DPMObserver.app --args --project DIR   # or --database FILE
 ```
 
-The observer is read-only. It shows what to do now, live agent runs, review, details, a Gantt chart
-and a dependency network.
+It shows what to do now, live agent runs, review, details, a Gantt chart and a dependency network.
+With Edit on (⌘E), dragging between bars or nodes links them, dragging a bar's finish changes its
+estimate, and an inspector edits the selected item. Edits gather in a draft and apply only after
+the application's diff is reviewed, with a reason.
 
 ## Development
 

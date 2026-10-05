@@ -349,9 +349,24 @@ public struct NetworkFilter: Equatable, Sendable {
     }
 }
 
+/// A dependency being drawn while editing: from the node pressed to where the pointer is, in canvas coordinates.
+public struct NetworkLinkDrag: Equatable, Sendable {
+    public let from: String
+    public let origin: NetworkPoint
+    public var point: NetworkPoint
+
+    public init(from: String, origin: NetworkPoint, point: NetworkPoint) {
+        self.from = from
+        self.origin = origin
+        self.point = point
+    }
+}
+
 /// What a person changed about how the network is drawn. None of it is part of the project.
 public struct NetworkViewState: Equatable, Sendable {
     public var filter = NetworkFilter()
+    /// While editing, the link being drawn; view state only.
+    public var linking: NetworkLinkDrag?
     public var zoomLevel = NetworkLayout.defaultZoom
     public var panX = 0.0
     public var panY = 0.0
