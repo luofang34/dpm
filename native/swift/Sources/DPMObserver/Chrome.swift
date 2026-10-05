@@ -12,6 +12,7 @@ extension ObserverModel.Page {
         case .review: return "checkmark.seal"
         case .detail: return "doc.text.magnifyingglass"
         case .gantt: return "chart.bar.xaxis"
+        case .network: return "point.3.connected.trianglepath.dotted"
         }
     }
 
@@ -22,6 +23,7 @@ extension ObserverModel.Page {
         case .review: return "3"
         case .detail: return "4"
         case .gantt: return "5"
+        case .network: return "6"
         }
     }
 
@@ -32,6 +34,7 @@ extension ObserverModel.Page {
         case .review: return "Work awaiting independent verification"
         case .detail: return "One task or run in full"
         case .gantt: return "The plan on a timeline: hierarchy, bars, float and relations"
+        case .network: return "The dependency network: tasks, milestones and decision gates with every edge, and its full text list"
         }
     }
 }
@@ -129,6 +132,16 @@ struct StatusBar: View {
                 } else if snapshot.connection.isLive {
                     Badge(text: staleWords(snapshot.freshness), symbol: "exclamationmark.triangle", tint: .orange)
                 }
+                if let words = Self.identityWords(snapshot) {
+                    // The revision stays in view; the workspace and lineage identities are in its tooltip, its
+                    // accessibility label and the Observation basis details.
+                    Text("Revision \(snapshot.revision.map { String($0) } ?? "unknown")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help(words)
+                        .accessibilityLabel(words)
+                        .accessibilityIdentifier("status.revision")
+                }
                 Spacer()
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(freshnessLine(snapshot, now: context.date))
@@ -137,18 +150,16 @@ struct StatusBar: View {
                         .accessibilityLabel(freshnessLine(snapshot, now: context.date))
                 }
             }
-            if let identity = snapshot.identity {
-                Text("Workspace \(identity.workspaceId) · lineage \(identity.lineageId ?? "none (preview)") · revision \(snapshot.revision.map { String($0) } ?? "unknown")")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
             ConnectionBanner(model: model)
         }
         .padding(.horizontal, Layout.margin)
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("status.bar")
+    }
+
+    static func identityWords(_ snapshot: ObserverSnapshot) -> String? {
+        snapshot.identity.map { "Workspace \($0.workspaceId) · lineage \($0.lineageId ?? "none (preview)") · revision \(snapshot.revision.map { String($0) } ?? "unknown")" }
     }
 
     private func sourceBadge(_ snapshot: ObserverSnapshot) -> some View {

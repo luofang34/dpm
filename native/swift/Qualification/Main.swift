@@ -32,6 +32,7 @@ struct Qualify {
             case "--calendar-plan": tools.calendarPlan = value
             case "--dense-plan": tools.densePlan = value
             case "--long-plan": tools.longPlan = value
+            case "--network-plan": tools.networkPlan = value
             case "--only": only = value
             default: usage("unknown option \(flag)")
             }
@@ -104,6 +105,20 @@ struct Qualify {
             ("gantt-content-facts", context.ganttContentFactsAreCompared),
             ("gantt-pan-model-path", context.ganttPanSurvivesAnOffscreenCursor),
             ("gantt-axis-labels", context.ganttAxisLabelsDoNotCollide),
+            ("network-content", context.networkContentIsTheApplications),
+            ("network-projection", context.networkListAndCanvasShareOneProjection),
+            ("network-entry-walk", context.networkEntryWalkAndDetail),
+            ("network-filter-focus-model-path", context.networkFilterFocusIsTheFields),
+            ("network-stale", context.networkKeepsItsViewWhenLost),
+            ("network-dense", context.networkDenseGraph),
+            ("network-long-titles", context.networkLongTitlesStayWhole),
+            ("network-fit-whole", context.networkFitIsWhole),
+            ("network-hover-locate-labels", context.networkHoverLocateAndLabels),
+            ("network-skip-edge-routes", context.networkSkipEdgeIsRouted),
+            ("gantt-fit-whole", context.ganttFitIsWhole),
+            ("gantt-locate-ancestors", context.ganttLocateRevealsOnlyAncestors),
+            ("gantt-relation-labels", context.ganttRelationLabelsDoNotOverprint),
+            ("network-walked-text", context.networkWalkedTextFollowsEachStep),
         ]
         // A control that must fail: it waits for something that never happens. It runs only when asked
         // for by name, and the packaged qualification requires it to exit nonzero.

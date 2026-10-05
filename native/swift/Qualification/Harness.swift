@@ -152,6 +152,7 @@ struct Tools {
     /// The plans of the Gantt scenarios, written by scripts/measure_gantt.py: the nested fixture, the same
     /// with calendars, a 1000-task plan with the dense overlay, and one with 500-character titles.
     var ganttPlan = "", calendarPlan = "", densePlan = "", longPlan = ""
+    var networkPlan = ""
 }
 
 final class Context {

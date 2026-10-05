@@ -77,6 +77,9 @@ final class DetailFocusView: NSView {
         if newWindow == nil, let window, window.firstResponder === self {
             if let region = MainActor.assumeIsolated({ GanttKeyboard.shared.region(in: window) }) {
                 region.take("detail_handoff")
+            } else if let region = MainActor.assumeIsolated({ NetworkRegionView.region(in: window) }) {
+                // Back on the network the same way: its region, already in the window, takes the keyboard.
+                region.take("detail_handoff")
             } else {
                 window.makeFirstResponder(nil)
             }

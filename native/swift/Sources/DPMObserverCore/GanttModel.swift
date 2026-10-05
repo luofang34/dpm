@@ -248,6 +248,14 @@ extension ObserverModel {
     public func closeDetail() {
         guard page == .detail, let origin = detailReturn else { return }
         detailReturn = nil
+        if origin.page == .network {
+            // Back on the network, the originating node is the cursor again and the element asked to focus.
+            // Set after the page, so entering the page does not put the cursor on a link followed inside Detail.
+            page = origin.page
+            if let node = origin.row { network.focus = node }
+            focusTarget = origin.element
+            return
+        }
         if let row = origin.row { gantt.focus = row }
         page = origin.page
         if origin.page == .gantt, snapshot.gantt != nil {
@@ -329,7 +337,10 @@ extension ObserverModel {
         let sequence = gantt.sequence &+ 1
         MeasureLog.shared?.emit("view_op_call", gen: sequence, detail: ["op": kind])
         var state = gantt
+        state.locateNote = nil
         change(&state)
+        // A pan by key, pointer or Locate is the person's viewport: the automatic fit no longer applies.
+        if kind == "pan" { state.viewportChosen = true }
         state.sequence = sequence
         gantt = state
         clampPan()
@@ -358,7 +369,7 @@ extension ObserverModel {
     private func clampPan() {
         guard let schedule = snapshot.gantt else { return }
         let state = gantt
-        let maxX = max(0, GanttLayout.timelineWidth(schedule, level: state.zoomLevel) - state.viewportWidth)
+        let maxX = max(0, GanttLayout.timelineWidth(schedule, scale: state.scale) - state.viewportWidth)
         let maxY = max(0, Double(outline.count - state.viewportRows) * GanttLayout.rowHeight)
         let x = max(0, min(maxX, state.panX)), y = max(0, min(maxY, state.panY))
         if x != state.panX || y != state.panY {
@@ -369,17 +380,87 @@ extension ObserverModel {
 
     private func zoom(by delta: Int) {
         viewOperation("zoom") { state in
-            let before = GanttLayout.pointsPerHour(state.zoomLevel)
-            state.zoomLevel = max(0, min(GanttLayout.zoomSteps.count - 1, state.zoomLevel + delta))
+            let before = state.scale
+            let steps = GanttLayout.zoomSteps
+            // A fitted scale beyond the last step in the direction asked stays: a zoom never goes the other way.
+            if let fitted = state.fitScale, (delta > 0 && fitted >= steps[steps.count - 1] - 1e-9) || (delta < 0 && fitted <= steps[0] + 1e-9) { return }
+            if let fitted = state.fitScale {
+                // From a fitted scale, one step is the next zoom step beyond it in that direction.
+                state.zoomLevel = delta > 0 ? (steps.firstIndex { $0 > fitted + 1e-9 } ?? steps.count - 1) : (steps.lastIndex { $0 < fitted - 1e-9 } ?? 0)
+                state.fitScale = nil
+            } else {
+                state.zoomLevel = max(0, min(GanttLayout.zoomSteps.count - 1, state.zoomLevel + delta))
+            }
+            state.viewportChosen = true
             // The hour at the left edge stays there, so zooming does not lose the place.
-            state.panX = state.panX / before * GanttLayout.pointsPerHour(state.zoomLevel)
+            state.panX = state.panX / before * state.scale
         }
+    }
+
+    /// Fit timeline: the scale at which the whole plan, from hour 0 to its last finish or p95 with the trailing room,
+    /// is exactly the timeline's measured width, scrolled to its start. A view operation only; no hour changes.
+    public func fitTimeline() {
+        applyFit(chosen: true)
+    }
+
+    /// The fit of the valid schedule on entry, kept fitted as the measured width or the schedule changes, until the
+    /// person chooses a viewport (a zoom, a pan, an explicit fit): their zoom, pan and selection then stay through
+    /// refreshes and re-entry.
+    public func fitTimelineInitially() {
+        guard !gantt.viewportChosen, let schedule = snapshot.gantt, let scale = GanttLayout.fitScale(schedule, width: gantt.viewportWidth) else { return }
+        if let current = gantt.fitScale, abs(current - scale) < 1e-9, gantt.panX == 0 { return }
+        applyFit(chosen: false)
+    }
+
+    private func applyFit(chosen: Bool) {
+        guard let schedule = snapshot.gantt, let scale = GanttLayout.fitScale(schedule, width: gantt.viewportWidth) else { return }
+        viewOperation("zoom") { state in
+            state.fitScale = scale
+            // The zoom step shown beside the fitted scale: the largest one not above it.
+            state.zoomLevel = GanttLayout.zoomSteps.lastIndex { $0 <= scale } ?? 0
+            state.panX = 0
+            if chosen { state.viewportChosen = true }
+        }
+    }
+
+    /// Locate selected: the selected row under the cursor, scrolled into view along both axes. A row hidden only by
+    /// collapsed packages is revealed by expanding exactly its collapsed ancestors (no other package). A row the filter
+    /// hides is not panned to: the note says it is filtered out and how to show it, and the selection, the filter, the
+    /// cursor and the view stay as they are. Changes only the view.
+    public func locateSelected() {
+        guard case .work(let id)? = selection, let schedule = snapshot.gantt, let row = schedule.row(id) else { return }
+        var ancestors: [String] = []
+        var cursor = row.parent
+        while let up = cursor, ancestors.count < schedule.rows.count {
+            ancestors.append(up)
+            cursor = schedule.row(up)?.parent
+        }
+        let hiding = Set(ancestors).intersection(gantt.collapsed)
+        let revealed = gantt.collapsed.subtracting(hiding)
+        guard GanttLayout.outline(schedule, collapsed: revealed, filter: gantt.filter).contains(where: { $0.id == id }) else {
+            // Only the note changes: no cursor, pan, zoom, collapse or filter change, and no sequence of a drawn operation.
+            gantt.locateNote = "\(row.key) is selected but the filter (\(gantt.filter.words)) hides its row, so it cannot be shown: clear the filter (x) to locate it. The selection is kept."
+            return
+        }
+        if !hiding.isEmpty { viewOperation("expand") { $0.collapsed.subtract(hiding) } }
+        focusRow(id, selecting: false)
+        guard let start = row.span?.start else { return }
+        let x = max(0, start * gantt.scale - 40)
+        viewOperation("pan") { $0.panX = x }
+    }
+
+    /// The displayed row at a timeline point (the y from the top of the rows, below the axis), at the current scroll offset.
+    public func ganttRow(atY y: Double) -> GanttOutlineRow? {
+        guard y >= 0 else { return nil }
+        let position = Int((y + gantt.panY) / GanttLayout.rowHeight)
+        return position < outline.count ? outline[position] : nil
     }
 
     public func pan(dx: Double, dy: Double) {
         viewOperation("pan") { state in
             state.panX += dx
             state.panY += dy
+            state.viewportChosen = true
         }
     }
 

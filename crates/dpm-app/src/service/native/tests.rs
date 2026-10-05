@@ -153,7 +153,10 @@ fn hello_picks_the_highest_common_protocol_and_states_capabilities() {
         .iter()
         .map(|view| view["view"].as_str().expect("name"))
         .collect();
-    assert_eq!(views, ["now", "live", "review", "detail", "gantt"]);
+    assert_eq!(
+        views,
+        ["now", "live", "review", "detail", "gantt", "network"]
+    );
     assert_eq!(capabilities["commands"], true);
     // Provider-independent runs, with unmanaged sessions labelled and no steering offered.
     assert_eq!(

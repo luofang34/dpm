@@ -35,9 +35,20 @@ struct FrameProbe: NSViewRepresentable {
     }
 }
 
+/// A probe only where a registry observes: with none (no state file, or a still picture rendered off screen) no probe
+/// view is created at all.
+struct ObservedProbe: View {
+    let name: String
+    @Environment(\.layoutRegistry) private var registry
+
+    var body: some View {
+        if registry != nil { FrameProbe(name: name) }
+    }
+}
+
 extension View {
     /// Report this view's frame, from the top left of the window's content view, under `name`.
-    func reportFrame(_ name: String) -> some View { background(FrameProbe(name: name)) }
+    func reportFrame(_ name: String) -> some View { background(ObservedProbe(name: name)) }
 }
 
 final class NamedProbeView: NSView {

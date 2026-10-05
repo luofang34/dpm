@@ -98,9 +98,11 @@ public enum DetailBuilder {
         out.add("Submissions", execution["attempts"].items.map {
             ("Attempt \($0["number"].int ?? 0)", "submitted \(stamp($0["submitted_at"].instant)); outcome \($0["outcome"]["state"].string ?? "unknown")")
         })
-        return SubjectDetail(
+        var detail = SubjectDetail(
             subject: .work(work["id"].string ?? key), title: work["title"].string ?? key, subtitle: "\(key) · \(execution["status"].string ?? "")",
             sections: out.sections, revision: view.envelope.revision, loading: false, error: nil)
+        detail.network = NetworkReport(data)
+        return detail
     }
 
     /// One run in full, from its `run` view and lifecycle. The contract the run observed when it

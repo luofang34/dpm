@@ -81,7 +81,7 @@ struct GanttGeometry {
     init(_ frame: GanttFrame, height: Double) {
         let state = frame.state
         zoomLevel = state.zoomLevel
-        pointsPerHour = GanttLayout.pointsPerHour(state.zoomLevel)
+        pointsPerHour = state.scale
         let rowCount = frame.outline.count
         // A scripted scroll request overrides one axis. The content is finite, so the distance it asks for
         // wraps over the scroll range; the offset the content is then placed at is the one this reports.
@@ -181,9 +181,11 @@ enum GanttDrawing {
         }
 
         // Relations, under the bars. Every drawn row's incoming relations are drawn lightly; those of
-        // the selected row and of the cursor row are drawn strongly and labelled.
+        // the selected row and of the cursor row are drawn strongly and labelled. The labels are placed
+        // together, so several ending at one point never overprint, and drawn over the bars.
         let emphasised = Set([frame.selected, frame.state.focus].compactMap { $0 })
         var seen = Set<String>()
+        var labels: [GanttRelationLabels.Request] = []
         func relation(_ edge: GanttRelation, strong: Bool) {
             guard seen.insert(edge.id).inserted, let successorAt = frame.positions[edge.successor] else { return }
             let successor = rows[successorAt].row
@@ -215,8 +217,8 @@ enum GanttDrawing {
             context.fill(head, with: .color(color.opacity(strong ? 0.95 : 0.4)))
             if strong {
                 let names = frame.schedule?.row(edge.predecessor)?.key ?? "?"
-                let text = "\(edge.abbreviation) \(GanttRelation.lagWords(edge.lagHours, basis: edge.lagBasis)) · \(edge.policy) · from \(names)"
-                context.draw(Text(text).font(.system(size: 9, weight: .semibold)).foregroundColor(.indigo), at: CGPoint(x: to.x + (atFinish ? 10 : -10), y: to.y - 9), anchor: atFinish ? .leading : .trailing)
+                labels.append(GanttRelationLabels.Request(id: edge.id, target: edge.successor, text: GanttRelationLabels.text(edge, from: names),
+                                                          x: to.x + (atFinish ? 10 : -10), y: to.y, leading: atFinish))
             }
         }
         for position in geometry.firstRow..<max(geometry.firstRow, last) {
@@ -237,7 +239,7 @@ enum GanttDrawing {
                 context.draw(Text("not scheduled: \(row.applicability)").font(.system(size: 10).italic()).foregroundColor(.secondary), at: CGPoint(x: 8, y: mid), anchor: .leading)
                 continue
             }
-            let (x, width) = GanttLayout.bar(span, level: frame.state.zoomLevel)
+            let (x, width) = GanttLayout.bar(span, scale: geometry.pointsPerHour)
             let left = x - geometry.offsetX
             guard left + width > -400, left < size.width + 40 else { continue }
             let critical = span.critical
@@ -276,6 +278,13 @@ enum GanttDrawing {
             }
             let tag = "\(row.key)\(critical ? " · critical path" : "") · \(hoursText(span.hours))"
             context.draw(Text(tag).font(.system(size: 10)).foregroundColor(.primary), at: CGPoint(x: left + width + 6, y: mid), anchor: .leading)
+        }
+
+        // The emphasised relations' labels, each on its own line and on a plate, so what is under it does not cross it.
+        for label in GanttRelationLabels.place(labels) {
+            let plate = CGRect(x: label.minX - 2, y: label.minY, width: label.maxX - label.minX + 4, height: label.maxY - label.minY)
+            context.fill(Path(roundedRect: plate, cornerRadius: 3), with: .style(.background.opacity(0.88)))
+            context.draw(Text(label.text).font(.system(size: 9, weight: .semibold)).foregroundColor(.indigo), at: CGPoint(x: label.x, y: label.y), anchor: label.leading ? .leading : .trailing)
         }
 
         if let mark = frame.marked {

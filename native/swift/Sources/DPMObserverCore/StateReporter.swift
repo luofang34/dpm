@@ -265,6 +265,12 @@ public final class StateReporter {
             "filter": ["text": view.filter.text, "status": orNull(view.filter.status), "critical_only": view.filter.criticalOnly, "editing": view.editingFilter] as [String: Any],
             "zoom_level": view.zoomLevel,
             "pan": [view.panX, view.panY],
+            "scale": view.scale,
+            "fitted": view.fitScale != nil,
+            // The whole timeline as drawn now, in timeline points (pan applied), and the timeline's measured width.
+            "timeline_extent": orNull(model.snapshot.gantt.map { [-view.panX, GanttLayout.timelineWidth($0, scale: view.scale)] }),
+            "viewport_width": view.viewportWidth,
+            "locate_note": orNull(view.locateNote),
             "view_sequence": view.sequence,
             "revision": orNull(model.snapshot.gantt?.revision.map { Int($0) }),
             "relations": model.snapshot.inventory.relations.count,
@@ -272,6 +278,54 @@ public final class StateReporter {
             "viewport_rows": view.viewportRows,
             "row_height": GanttLayout.rowHeight,
             "layout": orNull(layout?.described()),
+        ]
+    }
+
+    /// What the network shows, read from the model the view draws; computed only while it is the page shown.
+    static func network(_ model: ObserverModel) -> [String: Any] {
+        guard model.page == .network else { return ["shown": false] }
+        let graph = model.networkGraph
+        let counts = graph.counts
+        let view = model.network
+        return [
+            "shown": true,
+            "nodes": counts.nodes, "temporal": counts.temporal, "decision_blocks": counts.decisionBlocks, "context_links": counts.contextLinks,
+            "listed_nodes": model.networkNodes.count,
+            "visible_edges": model.networkVisibleEdges.count,
+            "cursor_key": orNull(model.networkFocusedNode?.key),
+            "focus_target": orNull(model.focusTarget),
+            "focus_reported": orNull(model.focusReported),
+            "detail_return": orNull(model.detailReturn?.element),
+            "walked": orNull(view.walked),
+            "explain_read": model.networkReport != nil,
+            "filter": ["text": view.filter.text, "kinds": view.filter.kinds.map(\.rawValue).sorted(), "editing": view.editingFilter] as [String: Any],
+            "zoom_level": view.zoomLevel,
+            "pan": [view.panX, view.panY],
+            "viewport": [view.viewportWidth, view.viewportHeight],
+            "max_pan": { let most = NetworkLayout.maxPan(graph, scale: view.scale, viewport: (view.viewportWidth, view.viewportHeight)); return [most.x, most.y] }(),
+            "scale": view.scale,
+            "fitted": view.fitScale != nil,
+            // The whole graph's extent as drawn now, from the canvas's top left (pan applied): Fit is whole when this lies
+            // inside [0, 0, viewport].
+            "extent_drawn": { () -> [Double] in let size = NetworkLayout.extent(graph); return [-view.panX, -view.panY, size.width * view.scale, size.height * view.scale] }(),
+            "locate_note": orNull(view.locateNote),
+            "hover_key": orNull(model.networkHover?.key),
+            "hover_point": orNull(view.hoverPoint.map { [$0.x, $0.y] }),
+            // Where each shown node is drawn now, in canvas points from the canvas's top left, for those inside the canvas
+            // (bounded): the geometry a pointer aims at. The pixels themselves are the suite's to read.
+            "drawn": { () -> [[String: Any]] in
+                let scale = view.scale
+                var out: [[String: Any]] = []
+                for node in model.networkNodes {
+                    guard out.count < 60, let place = graph.place[node.identity] else { continue }
+                    let r = NetworkLayout.rect(place)
+                    let x = r.x * scale - view.panX, y = r.y * scale - view.panY, w = r.width * scale, h = r.height * scale
+                    guard view.viewportWidth > 0, x + w > 0, y + h > 0, x < view.viewportWidth, y < view.viewportHeight else { continue }
+                    out.append(["key": node.key, "kind": node.kindText, "rect": [x, y, w, h]])
+                }
+                return out
+            }(),
+            "view_sequence": view.sequence,
         ]
     }
 
@@ -306,6 +360,7 @@ public final class StateReporter {
             "search_focused": model.searchFocused,
             "helper_pid": orNull(snapshot.helperProcess.map { Int($0) }),
             "gantt": gantt(model, layout: layout),
+            "network": network(model),
             "host": orNull(host?.described()),
             "selection": selection,
             "setup_error": orNull(model.setupError),

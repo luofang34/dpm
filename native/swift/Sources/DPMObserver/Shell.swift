@@ -1,5 +1,5 @@
 // The window: the status bar that always says what is shown and how current it is, a sidebar of
-// the five views, and the view itself. Before a workspace is chosen it shows how to choose one.
+// the six views, and the view itself. Before a workspace is chosen it shows how to choose one.
 
 import DPMObserverCore
 import SwiftUI
@@ -75,6 +75,10 @@ struct InspectionView: View {
         DisclosureGroup("Observation basis", isExpanded: $open) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
+                    if let words = StatusBar.identityWords(model.snapshot) {
+                        Text("Source").font(.caption.weight(.semibold))
+                        Prose(text: words, font: .caption2).textSelection(.enabled).spoken("Source", value: words)
+                    }
                     Text("Feeds followed").font(.caption.weight(.semibold))
                     ForEach(inspection.cursors, id: \.self) { Prose(text: $0, font: .caption2).spoken($0) }
                     Text("Views on display").font(.caption.weight(.semibold))
@@ -102,6 +106,7 @@ struct PageView: View {
         case .review: ReviewView(model: model)
         case .detail: DetailView(model: model)
         case .gantt: GanttView(model: model)
+        case .network: NetworkView(model: model)
         }
     }
 }
