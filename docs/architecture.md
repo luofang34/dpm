@@ -793,10 +793,20 @@ Applying needs a live, connected and current workspace. The engine compares a re
 the current state by value, so a client that re-encodes `2.0` as `2` applies the change it reviewed,
 and the log records the canonical difference `plan diff` shows.
 
-Progress is not a plan edit. For started work, the inspector's progress slider, or a drag along the
-bar's body, sends the acting actor's `ReportProgress` at once through the same command boundary; the
-application refuses it unless that actor owns the started work. The bar shows the reported share
-darker from its start. A report never accepts work, unlocks a successor or rescales an estimate.
+Task operations are not plan edits either. With editing on, the inspector sends the acting actor's
+claim, start, block, unblock and submit, and a separate verify or reject, each as one application
+command with a request identity and the observed revision and lineage. The application decides; the
+app shows the operation as accepted with its revision, refused with the reason, or unknown, and an
+unknown outcome holds every further command and plan apply until the same request is reconciled. A
+refusal keeps the typed reason or note and asks for the work to be read again and its changes looked
+at before anything is sent again, and after an accepted operation nothing more is sent until the plan
+is read at its revision. Closing the review gives the keyboard back to where it was opened.
+
+Progress is not a plan edit. For started work, the inspector's progress slider sends the acting
+actor's `ReportProgress` through the same command boundary when Report is pressed; dragging the edge
+of a bar's reported share only sets the slider, so no drag changes anything by itself. The application
+refuses the report unless that actor owns the started work. The bar shows the reported share darker
+from its start. A report never accepts work, unlocks a successor or rescales an estimate.
 
 Folding a package leaves every row above it in place. Its rows stay where they are and are hidden
 or revealed through a band under the package, whose edge moves with the rows below it.

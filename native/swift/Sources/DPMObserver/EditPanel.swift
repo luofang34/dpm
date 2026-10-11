@@ -3,6 +3,7 @@
 // the draft is applied with a reason. Every check is the application's; this only gathers and shows.
 
 
+import AppKit
 import DPMObserverCore
 import SwiftUI
 
@@ -42,6 +43,8 @@ struct EditPanel: View {
                 }
                 .help("Attribution recorded with the change, as kind:name (human or service); not an authenticated identity.")
                 if case .work(let identity)? = model.selection, let item = model.snapshot.inventory.byIdentity[identity] {
+                    OperationsPanel(model: model, item: item)
+                    Divider()
                     ItemEditor(model: model, item: item).id(identity)
                 } else {
                     Text("Select a task, milestone or package to edit it.").font(.callout).foregroundStyle(.secondary)
@@ -260,6 +263,7 @@ struct NewTaskEditor: View {
 /// The edits made so far, removable one by one, and the way to review them.
 struct DraftList: View {
     @ObservedObject var model: ObserverModel
+    @FocusState private var reviewFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -276,9 +280,10 @@ struct DraftList: View {
                     }
                 }
                 HStack {
-                    Button("Review changes…") { model.reviewDraft() }
+                    Button("Review changes…") { model.reviewDraft(fromInspector: !RegionFocus.regionHoldsKeyboard) }
                         .keyboardShortcut(.return, modifiers: .command)
                         .disabled(model.editing.held)
+                        .focused($reviewFocused)
                         .accessibilityIdentifier("edit.review")
                     Button("Discard", role: .destructive) { model.discardDraft() }.disabled(model.editing.held)
                 }
@@ -295,12 +300,24 @@ struct DraftList: View {
                 Button("Reconcile") { model.reconcileApply() }.accessibilityIdentifier("edit.reconcile").help("Resend request \(sent.operationId) to learn what became of it")
             }
         }
+        // A review opened from here gives the keyboard back here when it closes.
+        .onChange(of: model.editing.inspectorReturns) { reviewFocused = true }
+    }
+}
+
+/// Whether the Gantt or network region holds the keyboard, so a review opened now returns there when it closes.
+enum RegionFocus {
+    @MainActor static var regionHoldsKeyboard: Bool {
+        let responder = NSApp.keyWindow?.firstResponder
+        return responder is GanttRegionView || responder is NetworkRegionView
     }
 }
 
 /// The application's review of the draft: what an apply would record, the work affected, and the apply itself.
 struct ReviewSheet: View {
     @ObservedObject var model: ObserverModel
+    /// The reason has the keyboard once the review is shown, so the review can be completed from the keyboard alone.
+    @FocusState private var reasonFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -351,6 +368,9 @@ struct ReviewSheet: View {
         .frame(minHeight: 120)
         TextField("Reason (recorded with the change)", text: Binding(get: { model.editing.reason }, set: { model.setEditReason($0) }))
             .textFieldStyle(.roundedBorder)
+            .focused($reasonFocused)
+            .onAppear { reasonFocused = true }
+            .accessibilityLabel("Reason, recorded with the change")
             .accessibilityIdentifier("edit.reason")
         if let blocked = model.applyBlocker { Label(blocked, systemImage: "lock").font(.caption).accessibilityIdentifier("edit.blocked") }
         HStack {
@@ -376,6 +396,10 @@ struct ProgressEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Reported progress \(Int(percent))%\(item.owner.map { " · owner \($0)" } ?? "")").font(.caption).foregroundStyle(.secondary)
+            if let staged = model.operations.stagedProgress, staged.work == item.identity {
+                Label("Set to \(staged.percent)% on the bar; Report sends it", systemImage: "hand.draw").font(.caption)
+                    .accessibilityIdentifier("edit.progress-staged")
+            }
             HStack {
                 Slider(value: $percent, in: 0...100, step: 5)
                     .accessibilityLabel("Reported progress of \(item.key)")
@@ -387,7 +411,13 @@ struct ProgressEditor: View {
                     .help("Report this share as \(model.editing.actor); a report of 100% is not acceptance")
             }
         }
-        .onAppear { percent = Double(item.reportedProgress) }
+        .onAppear { percent = Double(staged ?? item.reportedProgress) }
         .onChange(of: item.reportedProgress) { _, now in percent = Double(now) }
+        .onChange(of: model.operations.stagedProgress?.percent) { _, now in if let now, staged != nil { percent = Double(now) } }
+    }
+
+    private var staged: Int? {
+        guard let staged = model.operations.stagedProgress, staged.work == item.identity else { return nil }
+        return staged.percent
     }
 }

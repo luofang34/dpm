@@ -37,6 +37,8 @@ public final class ObserverModel: ObservableObject {
     @Published public internal(set) var network = NetworkViewState()
     /// The editing session: a draft of plan edits, its review and its apply. Off until a person turns it on.
     @Published public internal(set) var editing = EditState()
+    /// Task operations sent from the app and what became of the last one.
+    @Published public internal(set) var operations = OperationState()
     /// The graph last built, kept until the snapshot's inventory or schedule reading changes.
     var networkCache: (inventory: Inventory, schedule: UUID?, graph: NetworkGraph)?
     /// The element the shared key handler decided has keyboard focus, as `gantt.row.<key>`,
@@ -65,7 +67,12 @@ public final class ObserverModel: ObservableObject {
     private var searchFocusPending = false
 
     public private(set) var engine: ObserverEngine?
-    private var chosen: WorkspaceSelection?
+    private(set) var chosen: WorkspaceSelection?
+    /// Requests of other workspaces whose outcome is not known yet, by workspace, restored when it is shown again.
+    var parkedWrites: [String: ParkedWrites] = [:]
+    /// The workspace whose requests and drafts are the current ones: the identity of the workspace shown, and empty
+    /// from the moment another is opened or it is closed until a workspace is shown again.
+    var writesKey = ""
     /// The newest snapshot accepted, whether installed or still waiting for its turn. Anything
     /// older than it, from an earlier generation or an earlier publication, is dropped.
     private var newest: (generation: Int, sequence: UInt64)?
@@ -123,7 +130,10 @@ public final class ObserverModel: ObservableObject {
 
     public func open(_ choice: WorkspaceSelection) {
         guard let engine = engine else { return }
-        if !Self.same(choice, chosen) { selection = nil }
+        if !Self.same(choice, chosen) {
+            selection = nil
+            leaveWrites()
+        }
         chosen = choice
         Task { await engine.open(choice) }
     }
@@ -131,6 +141,7 @@ public final class ObserverModel: ObservableObject {
     public func close() {
         guard let engine = engine else { return }
         selection = nil
+        leaveWrites()
         chosen = nil
         Task { await engine.close() }
     }
@@ -237,6 +248,7 @@ public final class ObserverModel: ObservableObject {
         guard let new = pending else { return }
         pending = nil
         snapshot = new
+        adoptWrites()
         continueRebase()
         lastFlush = Date()
         installedAt = lastFlush

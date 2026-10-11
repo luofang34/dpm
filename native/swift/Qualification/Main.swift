@@ -109,6 +109,8 @@ struct Qualify {
             ("edit-unknown-reconciled", context.editUnknownOutcomeIsReconciled),
             ("edit-progress-owner", context.editProgressIsTheOwnersReport),
             ("edit-refusals", context.editRefusalsKeepTheDraft),
+            ("task-operations", context.taskOperationsGoThroughTheApplication),
+            ("operations-switch", context.operationsSettleOnlyTheirWorkspace),
             ("gantt-axis-labels", context.ganttAxisLabelsDoNotCollide),
             ("network-content", context.networkContentIsTheApplications),
             ("network-projection", context.networkListAndCanvasShareOneProjection),
