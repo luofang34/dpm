@@ -358,7 +358,8 @@ public final class StateReporter {
             "started_at_ms": millis(started),
             "page": model.page.rawValue.lowercased(),
             "search_focused": model.searchFocused,
-            "editing": ["enabled": model.editing.enabled, "edits": model.editing.draft?.edits.count ?? 0, "notice": model.editing.notice ?? NSNull()] as [String: Any],
+            "editing": ["enabled": model.editing.enabled, "edits": model.editing.draft?.edits.count ?? 0, "notice": model.editing.notice ?? NSNull(),
+                        "reviewing": model.editing.reviewing, "phase": Self.words(model.editing.phase)] as [String: Any],
             "helper_pid": orNull(snapshot.helperProcess.map { Int($0) }),
             "gantt": gantt(model, layout: layout),
             "network": network(model),
@@ -399,5 +400,18 @@ public final class StateReporter {
             ],
             "main_thread": ["ticks": ticks, "max_gap_ms": gaps.max, "window_max_gap_ms": gaps.window, "steady_max_gap_ms": orNull(gaps.steady)],
         ]
+    }
+
+    /// The edit phase in one word, for the state file.
+    static func words(_ phase: EditState.Phase) -> String {
+        switch phase {
+        case .drafting: return "drafting"
+        case .validating: return "validating"
+        case .reviewed: return "reviewed"
+        case .refused: return "refused"
+        case .applying: return "applying"
+        case .applied: return "applied"
+        case .unknown: return "unknown"
+        }
     }
 }

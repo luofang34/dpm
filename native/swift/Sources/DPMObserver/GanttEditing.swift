@@ -4,7 +4,8 @@
 // - Either end of a bar is a link handle: dragging from it draws an elbow connector, and dropping it on another bar's
 //   left or right half joins that bar's start or finish, which names FS, SS, FF or SF.
 // - Dragging the body of a task not yet started draws a link from its finish.
-// - Dragging the body of a started task sets its reported progress, as a share of the bar, in steps of 5%.
+// - Dragging the edge of a started task's reported share sets a new share, in steps of 5%, in the inspector; its
+//   Report button sends it, so the drag itself changes nothing.
 // - Option-dragging the finish end of a task not yet started scales its own three-point estimate by the ratio of the
 //   new bar length to the old; the review shows the exact hours.
 
@@ -106,8 +107,10 @@ struct GanttEditDrag: Equatable {
             guard point.y >= GanttGeometry.axis, model.ganttRow(atY: point.y - GanttGeometry.axis)?.id == work else { return nil }
             let percent = Self.percent(left: left, right: right, at: point.x)
             guard percent != model.snapshot.inventory.byIdentity[work]?.reportedProgress else { return nil }
-            model.reportProgress(work: work, percent: percent)
-            return "progress \(model.editName(work)) \(percent)%"
+            // A drag only sets the share; the inspector's Report sends it, so no drag changes anything by itself.
+            model.stageProgress(work: work, percent: percent)
+            model.select(.work(work))
+            return "staged progress \(model.editName(work)) \(percent)%"
         }
     }
 
@@ -219,7 +222,7 @@ struct GanttEditDragView: View {
             let ratio = GanttEditDrag.ratio(left: left, right: right, to: drag.point.x)
             return "Scale \(model.editName(work))'s three-point estimate by \(String(format: "%.2f", ratio))×; the review shows the exact hours"
         case let .progress(work, left, right):
-            return "Report \(GanttEditDrag.percent(left: left, right: right, at: drag.point.x))% for \(model.editName(work)) as \(model.editing.actor)"
+            return "Set \(GanttEditDrag.percent(left: left, right: right, at: drag.point.x))% for \(model.editName(work)); Report in the inspector sends it"
         }
     }
 }

@@ -54,6 +54,10 @@ public struct EditState: Equatable, Sendable {
     /// Counts each close of the review sheet, after an apply or a cancel; the page it was opened from gives the
     /// keyboard back to its region when this changes.
     public var focusReturns = 0
+    /// Whether the review was opened from the inspector rather than from the Gantt or network region; closing it
+    /// gives the keyboard back to where it was opened, and counts here for the inspector.
+    public var reviewFromInspector = false
+    public var inspectorReturns = 0
 }
 
 extension ObserverModel {
@@ -89,7 +93,7 @@ extension ObserverModel {
     public func closeReview() {
         guard editing.reviewing else { return }
         editing.reviewing = false
-        editing.focusReturns &+= 1
+        if editing.reviewFromInspector { editing.inspectorReturns &+= 1 } else { editing.focusReturns &+= 1 }
     }
 
     /// The parent of a work item as the draft's basis records it.
@@ -132,8 +136,9 @@ extension ObserverModel {
     }
 
     /// Ask the application to validate and diff the draft against the basis it was made from; nothing is recorded.
-    public func reviewDraft() {
+    public func reviewDraft(fromInspector: Bool = false) {
         guard let draft = editing.draft, !draft.isEmpty, !editing.held, let engine else { return }
+        editing.reviewFromInspector = fromInspector
         editing.phase = .validating
         editing.reviewing = true
         Task { [weak self] in
@@ -188,6 +193,7 @@ extension ObserverModel {
         if let unavailable = editUnavailable { return unavailable }
         if editing.unresolved != nil { return "Reconcile the last apply first." }
         if operations.unresolved != nil { return "Reconcile the last operation first: its outcome is unknown." }
+        if case .sending = operations.phase { return "An operation is still being sent." }
         if editing.reviewed == nil { return "Review the draft first." }
         if EditCommands.actor(editing.actor) == nil { return "Give the actor as kind:name, such as human:ada." }
         if editing.reason.trimmingCharacters(in: .whitespaces).isEmpty { return "Give a reason; it is recorded with the change." }

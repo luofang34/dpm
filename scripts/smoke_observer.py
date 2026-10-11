@@ -1259,6 +1259,14 @@ class Foreground:
             return f'the owned app has no key window (AXFocusedWindow AXError {error})'
         try:
             role, identifier = self.attribute(window.value, 'AXRole')[1], self.attribute(window.value, 'AXIdentifier')[1]
+            if role == 'AXSheet' and getattr(self, 'allow_sheets', False):
+                # A route that opens a sheet of the target window still holds it: the sheet's parent is that window.
+                parent = self.element_value(window.value, 'AXParent')
+                if parent is not None:
+                    try:
+                        role, identifier = self.attribute(parent, 'AXRole')[1], self.attribute(parent, 'AXIdentifier')[1]
+                    finally:
+                        self.cf.CFRelease(parent)
         finally:
             self.cf.CFRelease(window.value)
         if role != 'AXWindow' or identifier != self.TARGET_WINDOW:
@@ -2201,6 +2209,62 @@ def network_page(bundle, directory):
         app.close()
 
 
+def edit_keyboard_route(bundle, directory):
+    """Reviewed plan editing by keyboard alone in the packaged app, with real key events: with editing on and the
+    Gantt holding the keyboard on the nested TEST-C, Command-[ proposes moving it out of its package (a draft edit),
+    Command-Return opens the review with the reason field holding the keyboard, a pasted reason and Command-Return
+    apply it, and Escape closes the review and gives the keyboard back to TEST-C's row. One ApplyChange is recorded,
+    with the reason. Only the complete route passes; an interrupted one is NOT ASSESSED."""
+    case = 'edit_keyboard_route'
+    if not accessibility_trusted():
+        not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so CGEventPostToPid would be ignored; no key was sent')
+        return None
+    database = gantt_store(directory, 'edit-keys')
+    operations = len(run_cli(database, 'history')['entries'])
+    reason = 'Move C out of the package by keyboard'
+    subprocess.run(['/usr/bin/pbcopy'], input=reason, text=True, check=True, timeout=15)
+    app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'gantt', '--select-key', 'TEST-C'])
+    front = None
+    try:
+        app.wait(lambda s: gantt_loaded(s) and s['gantt']['selected_key'] == 'TEST-C' and s['editing']['enabled'], 30, 'the Gantt with TEST-C selected and editing on')
+        front = Foreground(app.process.pid)
+        front.allow_sheets = True
+        front.activate(app.process)
+        front.arm()
+        row = 'gantt.row.TEST-C'
+        guarded_wait(app, front, lambda s: s['gantt']['focus_reported'] == row, 15, 'the Gantt region to hold the keyboard on TEST-C')
+        guarded_key(app, front, 'Command-[ to move TEST-C out of its package', 33, COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 1, 10, 'Command-[ to add one edit to the draft')
+        guarded_key(app, front, 'Command-Return to review the draft', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the application\'s review to be shown')
+        guarded_key(app, front, 'Command-V to paste the reason into the focused reason field', 9, COMMAND_FLAG)
+        guarded_key(app, front, 'Command-Return to apply', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the reviewed draft to be applied')
+        guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
+        back = guarded_wait(app, front, lambda s: not s['editing']['reviewing'] and s['gantt']['focus_reported'] == row, 15,
+                            'Escape to close the review and give the keyboard back to TEST-C')
+        uninterrupted(front, 'the route is complete')
+        entries = run_cli(database, 'history')['entries']
+        assert len(entries) == operations + 1, f'one operation was recorded: {len(entries) - operations}'
+        command = entries[-1]['operation']['command']
+        assert command.get('ApplyChange', {}).get('reason') == reason, command
+        parent = run_cli(database, 'show', 'TEST-C')['parent']
+        assert app.quit() == 0
+        return (f'reviewed plan editing by keyboard alone: Command-[ drafted the outdent, Command-Return reviewed it, a pasted reason and '
+                f'Command-Return applied it as one ApplyChange with that reason (TEST-C parent now {parent}), and Escape gave the keyboard back to '
+                f"{back['gantt']['focus_reported']}")
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption))
+        return None
+    except AssertionError as error:
+        kept = keep_failure(case, app, front, {'error': str(error)[:4000]})
+        raise AssertionError(f'{error} (complete failing state kept at {kept})') from None
+    finally:
+        if front:
+            front.close()
+        app.close()
+
+
 def network_keyboard_route(bundle, directory):
     """Actual entry to the network in the packaged app and the keys after it, with real key events (CGEventPostToPid), each
     sent with the app frontmost and its window key: from the Gantt with TEST-C selected, Command-6 enters the network (the
@@ -2844,7 +2908,7 @@ def main(bundle):
         for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
                          edit_flag_first, gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
                          filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
-                         network_page, network_layout_and_pointer, network_keyboard_route):
+                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route):
             result = scenario(packaged, directory)
             # A case that was skipped or not assessed says so itself, loudly, and returns nothing: it is never a pass.
             if result is not None:
