@@ -125,7 +125,10 @@ public final class ObserverModel: ObservableObject {
 
     public func open(_ choice: WorkspaceSelection) {
         guard let engine = engine else { return }
-        if !Self.same(choice, chosen) { selection = nil }
+        if !Self.same(choice, chosen) {
+            selection = nil
+            resetWrites()
+        }
         chosen = choice
         Task { await engine.open(choice) }
     }

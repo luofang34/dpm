@@ -1,8 +1,9 @@
 // Task operations from the native app go through the application's commands with the acting actor, a request
 // identity and the observed revision and lineage, and end visibly: accepted, refused with the reason, or unknown and
-// then reconciled. 100% progress unlocks nothing, self-verification is refused, a same-identity resend records
-// nothing new, a stale send keeps what was typed and asks for the changes to be read, and an unknown outcome holds
-// every further command until the same request is reconciled.
+// then reconciled. 100% progress unlocks nothing and only the accepted verify does; self-verification is refused; a
+// same-identity resend records nothing new; every refusal keeps what was typed and holds further operations until
+// the work was read again and its changes looked at; an unknown outcome holds every further command until the same
+// request is reconciled; a bar drag only stages progress; and another workspace starts with nothing pending.
 
 import Combine
 import DPMNative
@@ -11,7 +12,7 @@ import Foundation
 
 extension Context {
     func taskOperationsGoThroughTheApplication() async throws {
-        print("operations: claim, start, progress, block, unblock, submit, an independent verify; refusals, retries, stale sends and unknown outcomes")
+        print("operations: the owner's operations, an independent reject and verify; refusals, retries, stale sends and unknown outcomes")
         let database = try await newStore("task-operations")
         let armed = LockedBox(false), sent = Event()
         // No background reads: the stale send below is made against a revision the model has not read yet.
@@ -27,7 +28,7 @@ extension Context {
         let found = await MainActor.run { model.snapshot.inventory.items.first { $0.key == "TEST-A" }?.identity }
         guard let a = found else { check(false, "the fixture is readable"); return }
 
-        /// Send one operation as `actor` and wait for its answer.
+        /// Send one operation as `actor` and wait for its answer; an accepted one is read before the next is sent.
         func operate(_ operation: TaskOperation, as actor: String) async throws -> OperationState.Phase {
             let blocker = await MainActor.run { () -> String? in model.setEditActor(actor); return model.operationBlocker }
             if let blocker { throw SuiteError(description: "\(operation.words) could not be sent: \(blocker)") }
@@ -39,63 +40,87 @@ extension Context {
                 }
             }
             let phase = await MainActor.run { model.operations.phase }
-            // An accepted operation holds the next one until the plan is read at its revision.
             if case .accepted(_, _, let revision?) = phase {
                 _ = try await modelExpect(model, "the plan to be read at revision \(revision)", 30) { ($0.inventory.basis?.revision ?? 0) >= revision && $0.freshness.current }
             }
             return phase
         }
+        /// After a refusal: held until the work is read again, then released by looking at its changes.
+        func readChanges(_ what: String) async throws {
+            // Background reads are off here, so the plan is read on request until it is current.
+            await MainActor.run { model.reload() }
+            _ = try await modelExpect(model, "the view to be current after \(what)", 30) { $0.freshness.current }
+            let held = await MainActor.run { model.operationBlocker }
+            check(held?.contains("look at its changes") == true, "\(what): operations are held until the changes are read: \(held ?? "not held")")
+            let observed = await MainActor.run { model.operations.staleObservation }
+            guard let observed else { check(false, "\(what): the refusal records the work as it was"); return }
+            _ = try await modelExpect(model, "the work to be read again after \(what)", 30) { _ in MainActor.assumeIsolated { model.rereadSince(observed) } }
+            let cleared = await MainActor.run { () -> String? in model.acknowledgeChanges(); return model.operationBlocker }
+            check(cleared == nil, "\(what): once the changes were read, operations may be sent: \(cleared ?? "none")")
+        }
         func accepted(_ phase: OperationState.Phase) -> Bool { if case .accepted = phase { return true } else { return false } }
+        func ready(_ key: String) async throws -> JSON { try await cliJSON(database, ["explain", key])["data"]["ready"] }
 
         await MainActor.run { model.setEditing(true) }
-        for operation in [TaskOperation.claim, .start, .progress(percent: 100)] {
+        for operation in [TaskOperation.claim, .start, .progress(percent: 100), .block(reason: "Fixture missing"), .unblock] {
             let phase = try await operate(operation, as: "agent:pilot")
             check(accepted(phase), "\(operation.words) by the owner is accepted with its revision: \(phase)")
         }
-        let successor = try await cliJSON(database, ["explain", "TEST-B"])["data"]["ready"]
-        check(successor == .bool(false), "100% progress unlocks nothing: TEST-B is not ready")
-        for operation in [TaskOperation.block(reason: "Fixture missing"), .unblock] {
-            let phase = try await operate(operation, as: "agent:pilot")
-            check(accepted(phase), "\(operation.words) by the owner is accepted: \(phase)")
-        }
+        check(try await ready("TEST-B") == .bool(false), "100% progress unlocks nothing: TEST-B is not ready")
+
+        // A drag on the bar only stages a share; nothing is recorded until Report is pressed.
+        let staged = try await historyCount(database)
+        await MainActor.run { model.stageProgress(work: a, percent: 55) }
+        let stagedState = await MainActor.run { model.operations.stagedProgress.map { "\($0.percent)" } }
+        let stagedHistory = try await historyCount(database)
+        check(stagedState == "55" && stagedHistory == staged, "a staged share records nothing until it is reported")
+        await MainActor.run { model.dropStagedProgress() }
+
         // The same request again is answered with the operation already recorded, and records nothing.
         let history = try await historyCount(database)
         let (engine, basis) = await MainActor.run { (model.engine, model.snapshot.inventory.basis) }
         if let engine, let basis, let actor = EditCommands.actor("agent:pilot") {
             let request = CommandRequest(actor: actor, baseRevision: basis.revision, baseLineage: basis.lineage, operationId: UUIDv7.make(),
-                                         command: .object(["ReportProgress": .object(["work": .string(a), "percent": .integer(100), "note": .null])]))
+                                         command: .object(["ReportProgress": .object(["work": .string(a), "percent": .integer(90), "note": .null])]))
             let first = await engine.apply(request)
             let again = await engine.apply(request)
             let recorded = try await historyCount(database)
             check(first == again && recorded == history + 1, "a same-identity resend returns the recorded operation: \(first) \(again)")
+            // The resend went around the model, which reads the plan before the next operation.
+            await MainActor.run { model.reload() }
+            _ = try await modelExpect(model, "the plan to be read after the resend", 30) { ($0.inventory.basis?.revision ?? 0) > basis.revision && $0.freshness.current }
         }
 
-        // The resend went around the model, so the model reads the plan again before the next operation.
-        await MainActor.run { model.reload() }
-        _ = try await modelExpect(model, "the plan to be read after the resend", 30) { ($0.inventory.basis?.revision ?? 0) >= 6 && $0.freshness.current }
-        let submitted = try await operate(.submit(note: "Evidence attached"), as: "agent:pilot")
-        check(accepted(submitted), "submit by the owner is accepted: \(submitted)")
+        check(accepted(try await operate(.submit(note: "Evidence attached"), as: "agent:pilot")), "submit by the owner is accepted")
         await MainActor.run { model.setOperationNote("Looks done") }
         let selfReview = try await operate(.verify(note: "Looks done"), as: "agent:pilot")
         if case .refused(_, _, let refusal, _) = selfReview {
-            check(refusal.fromApplication && !refusal.message.isEmpty, "the submitting actor's verify is refused with the application's reason: \(refusal.message)")
+            check(refusal.fromApplication && refusal.message.contains("cannot verify"), "the submitting actor's verify is refused with the application's reason: \(refusal.message)")
         } else {
             check(false, "self-verification is refused: \(selfReview)")
         }
-        let typed = await MainActor.run { model.operations.note }
-        check(typed == "Looks done", "a refusal keeps what was typed")
+        let note = await MainActor.run { model.operations.note }
+        check(note == "Looks done", "a refusal keeps what was typed")
+        try await readChanges("the refused self-verification")
 
-        // A send against a revision the model has not read is refused as stale; nothing more is sent until the work is
-        // read again and its changes are looked at.
+        // A send against a revision the model has not read is refused as stale and held the same way.
         let decided = try await cliJSON(database, ["decide", "TEST-GATE", "Proceed", "--actor", "human:lead"])["revision"].uint ?? 0
         await MainActor.run { model.setOperationReason("Report incomplete") }
         let stale = try await operate(.reject(reason: "Report incomplete"), as: "human:reviewer")
-        if case .refused(_, _, let refusal, _) = stale { check(refusal.stale, "a send from an older revision is refused as stale: \(refusal.code)") }
-        let held = await MainActor.run { (model.operationBlocker, model.operations.reason) }
-        check(held.0?.contains("look at its changes") == true && held.1 == "Report incomplete", "the stale refusal keeps the reason and asks for the changes first: \(held)")
-        _ = try await modelExpect(model, "the plan to be read again", 30) { ($0.inventory.basis?.revision ?? 0) >= decided && $0.freshness.current }
-        let cleared = await MainActor.run { () -> String? in model.acknowledgeChanges(); return model.operationBlocker }
-        check(cleared == nil, "once the changes were looked at, operations may be sent: \(cleared ?? "none")")
+        if case .refused(_, _, let refusal, _) = stale {
+            check(refusal.stale, "a send from an older revision is refused as stale: \(refusal.code)")
+        } else {
+            check(false, "a send from an older revision is refused: \(stale)")
+        }
+        let reason = await MainActor.run { model.operations.reason }
+        check(reason == "Report incomplete", "the stale refusal keeps the reason")
+        _ = try await modelExpect(model, "the decision to be read", 30) { ($0.inventory.basis?.revision ?? 0) >= decided }
+        try await readChanges("the stale reject")
+
+        // An independent reject is accepted and returns the work to its owner, who submits again.
+        check(accepted(try await operate(.reject(reason: "Report incomplete"), as: "human:reviewer")), "an independent reject is accepted")
+        check(accepted(try await operate(.submit(note: "Report completed"), as: "agent:pilot")), "the owner submits again")
+        check(try await ready("TEST-B") == .bool(false), "a submission unlocks nothing: TEST-B is still not ready")
 
         // An unknown outcome holds every further command until the same request is reconciled, which records it once.
         guard let pid = await MainActor.run(body: { model.snapshot.helperProcess }) else { throw SuiteError(description: "no helper process") }
@@ -119,6 +144,13 @@ extension Context {
         let status = try await cliJSON(database, ["show", "TEST-A"])["data"]["execution"]["status"]
         let after = try await historyCount(database)
         check(status == .string("Verified") && after == before + 1, "the reconciled verify is recorded once: \(status)")
+        check(try await ready("TEST-B") == .bool(true), "only the accepted verify unlocks TEST-B")
+
+        // Another workspace starts with nothing pending: no request of this one is reconciled or awaited there.
+        let other = try await newStore("task-operations-other")
+        await MainActor.run { model.stageProgress(work: a, percent: 20); model.open(.database(other)) }
+        let reset = await MainActor.run { model.operations.phase == .idle && model.operations.stagedProgress == nil && model.operations.awaitedRevision == nil }
+        check(reset, "opening another workspace forgets the operations of this one")
         await closeGantt(model)
     }
 

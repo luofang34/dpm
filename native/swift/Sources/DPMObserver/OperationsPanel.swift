@@ -8,6 +8,10 @@ import SwiftUI
 struct OperationsPanel: View {
     @ObservedObject var model: ObserverModel
     let item: WorkItem
+    /// The control the keyboard is on; after an outcome it returns to the operation that was pressed, or to the
+    /// control the outcome asks for next (Reconcile, or reading the changes).
+    @FocusState private var focus: String?
+    @State private var pressed: String?
 
     var body: some View {
         let blocker = model.operationBlocker
@@ -41,12 +45,24 @@ struct OperationsPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ops.panel")
+        .onChange(of: model.operations.phase) { _, phase in
+            switch phase {
+            case .unknown: focus = "ops.reconcile"
+            case .refused: focus = "ops.acknowledge"
+            case .accepted: focus = pressed
+            default: break
+            }
+        }
     }
 
     private func action(_ title: String, _ operation: TaskOperation, id: String) -> some View {
-        Button(title) { model.operate(operation, on: item.identity) }
-            .accessibilityLabel("\(title) \(item.key)")
-            .accessibilityIdentifier(id)
+        Button(title) {
+            pressed = id
+            model.operate(operation, on: item.identity)
+        }
+        .focused($focus, equals: id)
+        .accessibilityLabel("\(title) \(item.key)")
+        .accessibilityIdentifier(id)
     }
 
     @ViewBuilder private var outcome: some View {
@@ -69,6 +85,8 @@ struct OperationsPanel: View {
                 Label("Whether \(sent.operation.words) was recorded is unknown: \(cause)", systemImage: "questionmark.circle")
                     .font(.caption).fixedSize(horizontal: false, vertical: true)
                 Button("Reconcile") { model.reconcileOperation() }
+                    .focused($focus, equals: "ops.reconcile")
+                    .accessibilityLabel("Reconcile \(sent.operation.words) of \(model.editName(sent.work))")
                     .accessibilityIdentifier("ops.reconcile")
                     .help("Resend request \(sent.request.operationId) to learn what became of it")
             }
@@ -78,14 +96,16 @@ struct OperationsPanel: View {
     /// The work as it was refused beside the work read again, before anything is sent again.
     @ViewBuilder private func changes(since observed: ObservedWork, work: String) -> some View {
         let now = model.snapshot.inventory.byIdentity[work]
-        let reread = (model.snapshot.inventory.basis?.revision ?? observed.revision) != observed.revision
+        let reread = model.rereadSince(observed)
         VStack(alignment: .leading, spacing: 2) {
-            Text("Changed since revision \(observed.revision):").font(.caption.weight(.semibold))
+            Text(reread ? "Read again; as refused → now:" : "Reading the work again…").font(.caption.weight(.semibold))
             Text("status \(observed.status) → \(now?.status ?? "?")").font(.caption)
             Text("owner \(observed.owner ?? "none") → \(now?.owner ?? "none")").font(.caption)
             Text("progress \(observed.progress)% → \(now?.reportedProgress ?? 0)%").font(.caption)
             Button("I have read the changes") { model.acknowledgeChanges() }
                 .disabled(!reread)
+                .focused($focus, equals: "ops.acknowledge")
+                .accessibilityLabel("I have read the changes to \(model.editName(work))")
                 .accessibilityIdentifier("ops.acknowledge")
                 .help(reread ? "Allow the next operation against the plan as read now" : "Waiting for the plan to be read again")
         }

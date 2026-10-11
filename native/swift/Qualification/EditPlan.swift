@@ -188,7 +188,12 @@ extension Context {
         await MainActor.run { model.setEditing(true); model.setEditActor("human:planner"); model.reportProgress(work: a, percent: 40) }
         try await waitOperation(model, "the non-owner's report to be refused") { if case .refused = $0.phase { return true } else { return false } }
         check(try await historyCount(database) == before, "a report by someone other than the owner recorded nothing")
-        await MainActor.run { model.setEditActor("agent:pilot"); model.reportProgress(work: a, percent: 40) }
+        // The refusal holds further operations until the work was read again and its changes looked at.
+        let observed = await MainActor.run { model.operations.staleObservation }
+        if let observed {
+            _ = try await modelExpect(model, "the work to be read again", 30) { _ in MainActor.assumeIsolated { model.rereadSince(observed) } }
+        }
+        await MainActor.run { model.acknowledgeChanges(); model.setEditActor("agent:pilot"); model.reportProgress(work: a, percent: 40) }
         try await waitOperation(model, "the owner's report to be recorded") { if case .accepted = $0.phase { return true } else { return false } }
         let shown = try await cliJSON(database, ["show", "TEST-A"])["data"]["execution"]
         check(shown["reported_progress_percent"] == .integer(40) && shown["status"].string == "InProgress",
