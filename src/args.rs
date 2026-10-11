@@ -397,6 +397,21 @@ pub(crate) enum PlanCommand {
         #[arg(long)]
         actor: String,
     },
+    /// Review the inverse of a recorded plan change against the current plan; changes nothing.
+    RevertPreview {
+        /// Identity of the recorded plan change, as history reports it.
+        operation: OperationId,
+    },
+    /// Apply the reviewed inverse of a recorded plan change with a reason, at the --base-revision
+    /// its preview showed, as a new operation naming the reverted one.
+    Revert {
+        /// Identity of the recorded plan change, as history reports it.
+        operation: OperationId,
+        #[arg(long)]
+        reason: String,
+        #[arg(long)]
+        actor: String,
+    },
     /// Map a Microsoft Project XML (MSPDI) file onto a reviewed candidate; changes nothing.
     ImportMspdi {
         file: PathBuf,

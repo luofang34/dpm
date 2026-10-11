@@ -55,6 +55,8 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | plan template | plan_template | Minimal valid proposal for a workspace without projects or work |
 | plan diff FILE | propose_change | Validate a candidate and inspect entity/field differences |
 | plan apply FILE --reason TEXT | apply_change | Human/service applies an observed-revision proposal atomically |
+| plan revert-preview OPERATION | propose_revert | Inverse of a recorded plan change reviewed against the current plan; later changes and protected execution are refused with the entities named |
+| plan revert OPERATION --reason TEXT | revert_change | Human/service applies that reviewed inverse at its revision as a new operation naming the reverted one; history is never rewritten |
 | plan import-mspdi FILE --project-key KEY | import_mspdi | [MSPDI](#microsoft-project-xml-interchange) candidate, preview and per-item report; no state change |
 | plan export-mspdi --project-key KEY | export_mspdi | One project's work as MSPDI with a report of omitted data |
 | revision | workspace_revision | Committed revision and lineage read without loading the plan; poll it before reloading other views |

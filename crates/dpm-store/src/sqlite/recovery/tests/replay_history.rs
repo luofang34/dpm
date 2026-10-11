@@ -60,7 +60,7 @@ impl Recorder {
         self.persist(&plan, &operation, &label);
     }
 
-    fn change(&mut self, edit: impl FnOnce(&mut Plan)) {
+    fn change(&mut self, edit: impl FnOnce(&mut Plan)) -> Operation {
         let mut plan = self.plan();
         let mut proposed = plan.clone();
         edit(&mut proposed);
@@ -75,6 +75,7 @@ impl Recorder {
         )
         .expect("plan change");
         self.persist(&plan, &operation, "ApplyChange");
+        operation
     }
 
     fn persist(&mut self, plan: &Plan, operation: &Operation, label: &str) {
@@ -325,6 +326,7 @@ fn review_steps(
 fn kind(command: &Command) -> &'static str {
     match command {
         Command::ApplyChange { .. } => "ApplyChange",
+        Command::RevertChange { .. } => "RevertChange",
         Command::RatifyContract { .. } => "RatifyContract",
         Command::Reject { .. } => "Reject",
         Command::Claim { .. } => "Claim",
@@ -346,7 +348,7 @@ fn kind(command: &Command) -> &'static str {
     }
 }
 
-const COMMAND_KINDS: usize = 19;
+const COMMAND_KINDS: usize = 20;
 
 #[test]
 fn replay_reproduces_the_snapshot_after_every_command_kind() {
@@ -364,12 +366,25 @@ fn replay_reproduces_the_snapshot_after_every_command_kind() {
     let count = steps.len();
     let mut kinds: std::collections::BTreeSet<_> = steps.iter().map(|(_, c)| kind(c)).collect();
     kinds.insert("ApplyChange");
+    kinds.insert("RevertChange");
     assert_eq!(kinds.len(), COMMAND_KINDS, "{kinds:?}");
     for (actor, command) in steps {
         r.run(actor, command);
     }
+    // A change and its revert, which replays as the reviewed inverse it recorded.
+    let renamed = r.change(|plan| plan.workspace.name = "Renamed workspace".into());
+    let inverse =
+        dpm_engine::propose_revert(&r.plan(), renamed.id, &renamed.command).expect("inverse");
+    r.run(
+        lead(),
+        Command::RevertChange {
+            operation: renamed.id,
+            changes: inverse.changes,
+            reason: text("undo the rename"),
+        },
+    );
     let recorded = r.store.operation_count_blocking().expect("count");
-    assert_eq!(recorded, u64::try_from(count + 1).expect("count"));
+    assert_eq!(recorded, u64::try_from(count + 3).expect("count"));
 }
 
 #[test]

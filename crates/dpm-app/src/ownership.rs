@@ -3,6 +3,22 @@ use dpm_engine::{Command, EngineError};
 use dpm_model::ActorId;
 
 impl Application {
+    /// Build the revert of a recorded plan change: its reviewed inverse for the current plan, as
+    /// `ProposeRevert` shows it. The application checks again, when it commits, that the changes are
+    /// exactly that inverse.
+    pub fn revert_command_blocking(
+        &self,
+        operation: dpm_model::OperationId,
+        reason: String,
+    ) -> Result<Command, AppError> {
+        self.ensure_writable()?;
+        Ok(Command::RevertChange {
+            operation,
+            changes: self.propose_revert_blocking(operation)?.data.changes,
+            reason,
+        })
+    }
+
     /// Build a release command for a work key; the engine decides whether the caller may release.
     pub fn release_command_blocking(&self, key: &str, reason: String) -> Result<Command, AppError> {
         self.ensure_writable()?;

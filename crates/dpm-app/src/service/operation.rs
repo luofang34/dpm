@@ -108,6 +108,12 @@ fn attempt_blocking(
             actual: plan.revision,
         });
     }
+    if let Intent::Command(Command::RevertChange {
+        operation, changes, ..
+    }) = intent
+    {
+        check_revert(store, &plan, *operation, changes)?;
+    }
     let operation = apply(&mut plan, actor.clone(), intent, id)?;
     match store.persist_blocking(&plan, &operation, preconditions.base_lineage) {
         Ok(entry) => Ok(Committed::New(entry.operation)),
@@ -115,6 +121,35 @@ fn attempt_blocking(
             answer_resend(store, *recorded, actor, intent).map(Committed::Recorded)
         }
         Err(error) => Err(error.into()),
+    }
+}
+
+/// A revert names a recorded plan change and must carry exactly the inverse that `ProposeRevert`
+/// reviews for the current plan, so it can neither undo something else nor change more than that.
+fn check_revert(
+    store: &SqliteStore,
+    plan: &Plan,
+    operation: OperationId,
+    changes: &[dpm_engine::EntityChange],
+) -> Result<(), AppError> {
+    let recorded = store
+        .recorded_operation_blocking(operation)?
+        .ok_or_else(|| {
+            AppError::InvalidRequest(format!(
+                "operation {operation} is not recorded in this workspace"
+            ))
+        })?;
+    let expected =
+        dpm_engine::propose_revert(plan, operation, &recorded.operation.operation.command)?;
+    if dpm_engine::json_equivalent(
+        &serde_json::to_value(changes)?,
+        &serde_json::to_value(&expected.changes)?,
+    ) {
+        Ok(())
+    } else {
+        Err(AppError::InvalidRequest(format!(
+            "the changes are not the reviewed inverse of operation {operation}; propose the revert again"
+        )))
     }
 }
 

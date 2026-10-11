@@ -9,6 +9,8 @@ pub(super) fn command(tool: &str) -> Option<&'static str> {
         "plan_template" => "plan template",
         "propose_change" => "plan diff",
         "apply_change" => "plan apply",
+        "propose_revert" => "plan revert-preview",
+        "revert_change" => "plan revert",
         "import_mspdi" => "plan import-mspdi",
         "export_mspdi" => "plan export-mspdi",
         "history" => "history",

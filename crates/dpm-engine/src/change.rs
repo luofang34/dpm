@@ -19,6 +19,8 @@ mod protection;
 pub use protection::protected_work;
 mod replacement;
 pub use replacement::AffectedWork;
+mod revert;
+pub use revert::propose_revert;
 
 /// One entity-level semantic difference, including explicit additions and removals.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
