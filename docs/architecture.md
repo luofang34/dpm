@@ -574,6 +574,14 @@ and decision `resolved_at` stamping on the patched plan that applying the full p
 Artifacts are not part of the delta: evidence changes only through the evidence command, so a
 proposal that alters artifacts is refused before a delta exists.
 
+A recorded plan change is undone by a revert, never by editing history or restoring a store.
+`plan revert-preview` / `propose_revert` reviews its inverse (each entity's `before` and `after`
+swapped) against the current plan; the inverse is refused, naming every entity, when a later
+change touched what it would restore, and refused like any proposal when it would rewrite protected
+execution. A human or service applies it with `plan revert` / `revert_change` at the revision the
+review showed; the `RevertChange` operation names the change it undoes and is itself revertible. A
+restore, by contrast, copies a whole store into a new lineage and changes no plan.
+
 The difference identifies edges by ID and compares links as a set, so a delta does not record the
 order of `dependencies` or `links`. After a plan change both keep their current order, with removed
 entries dropped and added ones appended in the delta's order; a proposal that only reorders them is

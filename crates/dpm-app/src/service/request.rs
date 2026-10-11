@@ -52,6 +52,12 @@ pub enum Query {
         /// Full candidate snapshot retaining the observed revision.
         plan: Box<Plan>,
     },
+    /// Review the inverse of a recorded plan change against the current plan without changing
+    /// state; its changes are what a `RevertChange` command must carry.
+    ProposeRevert {
+        /// The recorded plan change to undo.
+        operation: OperationId,
+    },
     /// The committed revision and its lineage, read without decoding the plan; for polling.
     Revision,
     /// Read append-only semantic operations in local sequence order.

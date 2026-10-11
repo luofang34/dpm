@@ -245,11 +245,30 @@ def basis_parity(directory, reviewer):
         twins.close()
 
 
+def rename(plan):
+    next(w for w in plan['work_items'].values() if w['key'] == 'TEST-B')['title'] = 'Contract B, renamed'
+
+
+def revert_parity(directory, reviewer):
+    """A revert names the change it undoes, which each store recorded under its own identity."""
+    twins = Twins(directory, 'revert', json.loads(FIXTURE.read_text()))
+    try:
+        twins.apply(reviewer, 'Rename B', rename)
+        local, remote = (run_cli(database, 'history')['entries'][-1]['operation']['id'] for database in (twins.cli_db, twins.mcp_db))
+        twins.aliases[remote] = local
+        twins.mutate(reviewer, 'revert_change', {'operation': remote, 'reason': 'Undo the rename'},
+                     'plan', 'revert', local, '--reason', 'Undo the rename')
+        return twins.finish()
+    finally:
+        twins.close()
+
+
 def operation_smoke(directory):
     """Every mutation tool records, through either adapter, the same Operation."""
     reviewer = 'human:reviewer'
     covered = lifecycle_parity(directory, reviewer, 'agent:worker', 'agent:heir')
     covered |= basis_parity(directory, reviewer)
+    covered |= revert_parity(directory, reviewer)
     probe = Agent(directory / 'lifecycle-mcp.sqlite', 'agent:probe')
     try:
         tools = probe.request('tools/list', {})['tools']

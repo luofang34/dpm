@@ -140,7 +140,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_calibration', 'get_schedule', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'validate_plan', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register', 'workspace_revision', 'start_run', 'report_run', 'record_run_activity', 'link_run_operation', 'list_runs', 'get_run', 'run_lifecycle', 'run_activity'} == names
+        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_calibration', 'get_schedule', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'propose_revert', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'revert_change', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'validate_plan', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register', 'workspace_revision', 'start_run', 'report_run', 'record_run_activity', 'link_run_operation', 'list_runs', 'get_run', 'run_lifecycle', 'run_activity'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('next_work', {}, ('next',)),
@@ -454,6 +454,44 @@ def dependency_smoke(directory):
         reviewer.close()
 
 
+def revert_smoke(directory):
+    """A recorded plan change is reverted only through review: CLI and MCP preview the same inverse, an agent may
+    not apply it, a human applies it as a new operation naming the reverted one, and a revert over a later change
+    is refused naming the entity, alike through both adapters."""
+    database = directory / 'revert.sqlite'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    worker = Agent(database, 'agent:revert')
+    reviewer = Agent(database, 'human:reviewer')
+    try:
+        plan = run_cli(database, 'export')
+        renamed = next(w for w in plan['work_items'].values() if w['key'] == 'TEST-B')
+        original = renamed['title']
+        renamed['title'] = 'Contract B, renamed'
+        candidate = directory / 'revert-rename.json'
+        candidate.write_text(json.dumps(plan))
+        run_cli(database, 'plan', 'apply', str(candidate), '--reason', 'Rename B', '--actor', 'human:reviewer')
+        operation = run_cli(database, 'history')['entries'][-1]['operation']['id']
+        revision = run_cli(database, 'export')['revision']
+        preview = worker.call('propose_revert', {'operation': operation})['data']
+        assert preview == run_cli(database, 'plan', 'revert-preview', operation), 'CLI and MCP review the same inverse'
+        assert [(c['collection'], c['fields']) for c in preview['changes']] == [('work_items', ['title'])], preview
+        refused = worker.call('revert_change', {'operation': operation, 'reason': 'undo', 'base_revision': revision}, error='invalid_command')
+        assert 'approve plan scope' in refused['message'], refused
+        assert run_cli(database, 'export')['revision'] == revision, 'a refused revert records nothing'
+        applied = reviewer.call('revert_change', {'operation': operation, 'reason': 'Undo the rename', 'base_revision': revision})
+        assert applied['data']['command']['RevertChange']['operation'] == operation, applied
+        entry = run_cli(database, 'history')['entries'][-1]['operation']
+        assert entry['id'] == applied['data']['id'] and entry['command']['RevertChange']['changes'] == preview['changes']
+        assert run_cli(database, 'show', 'TEST-B')['title'] == original
+        remote = worker.call('propose_revert', {'operation': operation}, error='invalid_command')
+        local = run_cli(database, 'plan', 'revert-preview', operation, error='invalid_command')['error']
+        assert remote['message'] == local['message'] and 'TEST-B' in remote['message'], (remote, local)
+    finally:
+        worker.close()
+        reviewer.close()
+    print('PASS: a plan change is reverted through review with CLI/MCP parity; agents may not apply it; conflicts name the entity')
+
+
 def owner_endpoint_refusal(database, edge):
     """A human owning either endpoint cannot waive the edge, identically through CLI and MCP."""
     owner = Agent(database, 'human:owner')
@@ -559,6 +597,7 @@ if __name__ == '__main__':
         review_smoke(Path(directory))
         scope_smoke(Path(directory))
         dependency_smoke(Path(directory))
+        revert_smoke(Path(directory))
         timing_smoke(Path(directory))
         # Conditional-work parity lives in its own module, which reuses this module's helpers.
         from smoke_conditional import smoke as conditional_smoke

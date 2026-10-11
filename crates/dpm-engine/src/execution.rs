@@ -23,6 +23,15 @@ pub fn apply_command(
             changes: crate::change::canonical(plan, &changes).unwrap_or(changes),
             reason,
         },
+        Command::RevertChange {
+            operation,
+            changes,
+            reason,
+        } => Command::RevertChange {
+            operation,
+            changes: crate::change::canonical(plan, &changes).unwrap_or(changes),
+            reason,
+        },
         other => other,
     };
     let mut candidate = plan.clone();
@@ -48,7 +57,10 @@ fn execute(
     at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     match command {
-        Command::ApplyChange { changes, reason } => apply_change(plan, actor, changes, reason, at),
+        Command::ApplyChange { changes, reason }
+        | Command::RevertChange {
+            changes, reason, ..
+        } => apply_change(plan, actor, changes, reason, at),
         Command::RatifyContract { work } => review::ratify(plan, actor, *work),
         Command::Reject { work, reason } => review::reject(plan, actor, *work, reason, at),
         Command::Claim { work } => claim(plan, actor, *work, at),

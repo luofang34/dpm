@@ -4,7 +4,7 @@ mod change;
 pub use change::{
     AffectedWork, ApplicabilityChange, ChangePreview, EdgeRelaxation, EntityChange,
     RelaxedConstraint, apply_plan_change, json_equivalent, patch, plan_change, propose_change,
-    protected_work,
+    propose_revert, protected_work,
 };
 mod command;
 mod context;

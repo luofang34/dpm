@@ -10,6 +10,7 @@ mod error;
 mod interchange;
 mod output;
 mod ownership;
+mod plan;
 mod recovery;
 mod runs;
 mod tracking;

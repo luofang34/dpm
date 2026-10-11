@@ -2,6 +2,8 @@
 
 use super::{API_VERSION, Application, NextRequest, Observed, Query, QueryResponse};
 use crate::AppError;
+use dpm_engine::ChangePreview;
+use dpm_model::OperationId;
 use dpm_store::HistoryPage;
 use serde::Serialize;
 
@@ -43,6 +45,7 @@ impl Application {
                 run,
             } => respond(self.run_activity_blocking(after_sequence, limit, run)?),
             Query::ProposeChange { plan } => respond(self.propose_change_blocking(&plan)?),
+            Query::ProposeRevert { operation } => respond(self.propose_revert_blocking(operation)?),
             Query::Export => respond(self.export_blocking()?),
             Query::PlanSchema => respond(self.observe_blocking(|_, _, _| crate::plan_schema())?),
             Query::PlanTemplate => {
@@ -80,6 +83,27 @@ impl Application {
             Query::Explain { key } => respond(self.explain_blocking(&key)?),
         }
     }
+    /// Review the inverse of a recorded plan change against the current plan; nothing is recorded.
+    pub fn propose_revert_blocking(
+        &self,
+        operation: OperationId,
+    ) -> Result<Observed<ChangePreview>, AppError> {
+        let recorded: dpm_store::HistoryEntry = match &self.backing {
+            #[cfg(feature = "sqlite")]
+            super::Backing::Database(store) => store.recorded_operation_blocking(operation)?,
+            super::Backing::Preview(_) => None,
+        }
+        .ok_or_else(|| {
+            AppError::InvalidRequest(format!(
+                "operation {operation} is not recorded in this workspace"
+            ))
+        })?;
+        let command = recorded.operation.operation.command;
+        self.observe_blocking(|plan, _, _| {
+            Ok(dpm_engine::propose_revert(plan, operation, &command)?)
+        })
+    }
+
     /// Read one history page with its revision and lineage in the store's own transaction; a
     /// preview has no history.
     #[cfg_attr(not(feature = "sqlite"), allow(unused_variables))]

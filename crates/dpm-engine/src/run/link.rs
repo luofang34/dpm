@@ -58,6 +58,7 @@ fn command_work(command: &Command) -> Option<WorkItemId> {
         | Command::RevalidateBasis { work, .. } => Some(*work),
         Command::LinkExternal(request) => Some(request.work),
         Command::ApplyChange { .. }
+        | Command::RevertChange { .. }
         | Command::WaiveDependency { .. }
         | Command::RestoreDependency { .. }
         | Command::Decide { .. } => None,

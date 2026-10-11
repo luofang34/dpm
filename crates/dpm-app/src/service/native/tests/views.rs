@@ -7,6 +7,7 @@ use crate::{Query, view_mappings};
 fn query_name(query: &Query) -> &'static str {
     match query {
         Query::ProposeChange { .. } => "propose_change",
+        Query::ProposeRevert { .. } => "propose_revert",
         Query::Revision => "revision",
         Query::History { .. } => "history",
         Query::Export => "export",

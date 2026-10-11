@@ -11,6 +11,7 @@ mod interchange;
 mod lifecycle;
 mod ownership;
 mod preconditions;
+mod revert;
 mod runs;
 mod schemas;
 mod validation;
@@ -143,9 +144,9 @@ const NAMES: &[(&str, &str)] = &[
 ];
 
 pub(crate) fn definitions() -> Vec<Value> {
-    NAMES.iter().chain(ownership::NAMES.iter()).chain(validation::NAMES.iter()).chain(runs::NAMES.iter()).map(|(name,description)| {
+    NAMES.iter().chain(ownership::NAMES.iter()).chain(revert::NAMES.iter()).chain(validation::NAMES.iter()).chain(runs::NAMES.iter()).map(|(name,description)| {
         if runs::handles(name) { return runs::definition(name, description, cli::command(name)); }
-        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "history" | "workspace_revision" | "workspace_list" | "project_status" | "get_calibration" | "get_schedule" | "next_work" | "get_work" | "explain_work");
+        let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "propose_revert" | "history" | "workspace_revision" | "workspace_list" | "project_status" | "get_calibration" | "get_schedule" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
         if matches!(*name,"ratify_contract"|"reject_work"|"get_work"|"explain_work"|"claim_work"|"start_work"|"report_blocker"|"unblock_work"|"submit_work"|"verify_work"|"report_progress"|"add_artifact"|"attach_git_head"|"link_external"|"unlink_external"|"revalidate_basis") {
@@ -163,6 +164,7 @@ pub(crate) fn definitions() -> Vec<Value> {
             },
             "import_mspdi" | "export_mspdi" => interchange::schema(name, &mut properties, &mut required),
             "release_work" | "handoff_work" => ownership::schema(name, &mut properties, &mut required),
+            "propose_revert" | "revert_change" => revert::schema(name, &mut properties, &mut required),
             "validate_plan" => validation::schema(&mut properties, &mut required),
             "history" => { properties.insert("after_sequence".into(),json!({"type":"integer","minimum":0,"default":0})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"maximum":1000,"default":100})); },
             "workspace_register" => { properties.insert("database".into(),json!({"type":"string"})); properties.insert("replace".into(),json!({"type":"boolean","default":false})); required.push("database"); },
@@ -274,6 +276,9 @@ pub(crate) fn call_tool_blocking(
     }
     if ownership::handles(name) {
         return ownership::call_blocking(app, actor, name, value, preconditions);
+    }
+    if revert::handles(name) {
+        return revert::call_blocking(app, actor, name, value, preconditions);
     }
     if validation::handles(name) || name == "plan_schema" {
         return validation::call(name, value);

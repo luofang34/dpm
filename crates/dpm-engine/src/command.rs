@@ -21,6 +21,16 @@ pub enum Command {
         /// Human-readable purpose of the accepted scope change.
         reason: String,
     },
+    /// Undo a recorded plan change by applying its reviewed inverse, as a new operation that names
+    /// the one it reverts; the history is never rewritten.
+    RevertChange {
+        /// The recorded plan change being undone.
+        operation: OperationId,
+        /// The inverse exactly as [`crate::propose_revert`] reports it for the current plan.
+        changes: Vec<crate::EntityChange>,
+        /// Human-readable purpose of the revert.
+        reason: String,
+    },
     /// Approve a proposed execution contract as a human or service.
     RatifyContract {
         /// Proposed task with a complete objective and acceptance criteria.

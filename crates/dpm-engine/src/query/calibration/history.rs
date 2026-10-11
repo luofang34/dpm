@@ -30,7 +30,7 @@ impl<'a> HistoryIndex<'a> {
                 Command::Decide { decision, .. } => {
                     index.decided.insert(*decision, operation);
                 }
-                Command::ApplyChange { changes, .. } => {
+                Command::ApplyChange { changes, .. } | Command::RevertChange { changes, .. } => {
                     for added in changes.iter().filter(|c| {
                         c.collection == "decisions" && c.before.is_null() && !c.after.is_null()
                     }) {
