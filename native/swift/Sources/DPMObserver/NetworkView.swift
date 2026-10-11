@@ -312,6 +312,11 @@ struct NetworkCanvas: View {
         }
         ZStack {
             Canvas { context, size in
+                // While measuring, every draw pass says what it drew; the network workload pairs requests with these.
+                if MeasureLog.shared != nil {
+                    Measure.event("network_draw", detail: ["nodes": graph.nodes.count, "focus": state.focus.flatMap { graph.node($0)?.key } ?? "",
+                                                           "pan_x": state.panX, "pan_y": state.panY])
+                }
                 context.translateBy(x: -state.panX, y: -state.panY)
                 context.scaleBy(x: scale, y: scale)
                 let visible = CGRect(x: state.panX / scale, y: state.panY / scale, width: size.width / scale, height: size.height / scale).insetBy(dx: -NetworkLayout.nodeWidth, dy: -NetworkLayout.nodeHeight)

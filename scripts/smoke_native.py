@@ -28,6 +28,7 @@ from pathlib import Path
 
 import build_native
 import measure_gantt
+import measure_network
 import smoke_observer
 from smoke_agent import CLI, ROOT, Agent, run_cli, run_cli_envelope
 
@@ -141,6 +142,7 @@ def main():
     # numbers and an invalid one none. The real controls and the real draws are judged by the same functions later.
     analyzer_checks = measure_gantt.self_test()
     print(f'PASS: measurement analyzer and evidence capture on frozen synthetic logs: {len(analyzer_checks)} checks')
+    print(f'PASS: network workload analyzer on frozen synthetic logs: {len(measure_network.self_test())} checks')
     built = build_native.build(rust='--no-rust' not in sys.argv)
     suite = build_native.compile_suite(built)
     with tempfile.TemporaryDirectory() as scratch:
