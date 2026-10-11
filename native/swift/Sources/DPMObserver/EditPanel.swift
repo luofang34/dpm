@@ -102,14 +102,6 @@ struct ItemEditor: View {
                 .accessibilityIdentifier("edit.estimate")
             }
             HStack {
-                Picker("Kind", selection: Binding(get: { draftedKind }, set: { model.edit(.kind(work: item.identity, kind: $0)) })) {
-                    Text("Task").tag("Task")
-                    Text("Milestone").tag("Milestone")
-                    Text("Work package").tag("WorkPackage")
-                }
-                .accessibilityIdentifier("edit.kind")
-            }
-            HStack {
                 Button("Outdent") { model.edit(.parent(work: item.identity, parent: model.editParent(of: model.editParent(of: item.identity) ?? ""))) }
                     .keyboardShortcut("[", modifiers: .command)
                     .disabled(model.editParent(of: item.identity) == nil)
@@ -169,11 +161,6 @@ struct ItemEditor: View {
             }
         }
         .onAppear(perform: load)
-    }
-
-    /// The kind the draft gives the item, so a pending change of kind shows as chosen.
-    private var draftedKind: String {
-        model.editing.draft?.candidate()["work_items"][item.identity]["kind"].string ?? item.kind
     }
 
     private var otherIdentity: String? {

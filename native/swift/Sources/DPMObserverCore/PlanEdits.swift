@@ -22,7 +22,6 @@ public enum PlanEdit: Equatable, Sendable {
     case title(work: String, text: String)
     case objective(work: String, text: String)
     case acceptance(work: String, criteria: [String])
-    case kind(work: String, kind: String)
     case newTask(NewTask)
     case gate(decision: String, work: String, blocks: Bool)
 
@@ -128,10 +127,6 @@ public struct PlanDraft: Equatable, Sendable {
             return plan.setting(["work_items", work, "contract", "objective"], to: .string(text))
         case let .acceptance(work, criteria):
             return plan.setting(["work_items", work, "contract", "acceptance"], to: .array(criteria.map { .object(["text": .string($0)]) }))
-        case let .kind(work, kind):
-            // A milestone or package has no duration of its own; the application says whether the change is allowed.
-            let changed = plan.setting(["work_items", work, "kind"], to: .string(kind))
-            return kind == "Task" ? changed : changed.setting(["work_items", work, "schedule", "estimate"], to: .null)
         case let .newTask(task):
             return plan.setting(["work_items", task.id], to: newItem(task, in: plan))
         case let .gate(decision, work, blocks):
@@ -181,7 +176,6 @@ public struct PlanDraft: Equatable, Sendable {
         case let .title(work, text): return "Rename \(names(work)) to “\(text)”"
         case let .objective(work, _): return "Change the objective of \(names(work))"
         case let .acceptance(work, criteria): return "Set \(criteria.count) acceptance criteria of \(names(work))"
-        case let .kind(work, kind): return "Make \(names(work)) a \(kind == "WorkPackage" ? "work package" : kind.lowercased())"
         case let .newTask(task): return "New task \(task.key): \(task.title)"
         case let .gate(decision, work, blocks): return blocks ? "Gate \(names(work)) on \(names(decision))" : "Stop gating \(names(work)) on \(names(decision))"
         }

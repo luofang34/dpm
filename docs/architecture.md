@@ -772,7 +772,7 @@ FF, start to finish SF); the draft's links are drawn on the chart until applied 
 Option-drag of the finish of a task not yet started scales its own three-point estimate by the ratio
 of the new bar length to the old (the review shows the exact hours), a drag between network nodes
 proposes FS, and the inspector edits
-title, objective, acceptance, estimate, kind, nesting (⌘] and ⌘[), dependencies, decision gates and
+title, objective, acceptance, estimate, nesting (⌘] and ⌘[), dependencies, decision gates and
 new tasks by keyboard. A bar never moves: dates are derived. Reviewing the draft is the read-only
 `propose_change` query against the pinned basis, which returns the entity changes, the affected work
 and applicability changes and records nothing; applying sends those changes as one `ApplyChange`

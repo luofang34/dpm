@@ -363,7 +363,7 @@ struct NetworkCanvas: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .allowsHitTesting(false)
             }
-            NetworkRegion(request: model.focusTarget, cursor: focusWords, model: model, onKeyboard: { holds in
+            NetworkRegion(request: model.focusTarget, returns: model.editing.focusReturns, cursor: focusWords, model: model, onKeyboard: { holds in
                 keyboard = holds
                 // What the region's actual first-responder state says, for the state file (a sync aid, not proof of focus).
                 model.reportFocus(holds ? model.focusTarget : (model.network.editingFilter ? "network.filter" : nil))
@@ -546,6 +546,8 @@ struct NetworkInspector: View {
 struct NetworkRegion: NSViewRepresentable {
     @Environment(\.hostObservation) private var host
     let request: String?
+    /// Changes each time the review sheet closes; the region then takes the keyboard back.
+    let returns: Int
     let cursor: String?
     let model: ObserverModel
     let onKeyboard: (Bool) -> Void
@@ -555,6 +557,7 @@ struct NetworkRegion: NSViewRepresentable {
         view.onKeyboard = onKeyboard
         view.cursor = cursor
         view.request = request
+        view.returns = returns
         view.model = model
         view.host = host
         return view
@@ -565,6 +568,10 @@ struct NetworkRegion: NSViewRepresentable {
         view.cursor = cursor
         view.model = model
         view.host = host
+        if view.returns != returns {
+            view.returns = returns
+            view.take("review_closed")
+        }
         // The ONE handoff path: a new node named as the element to focus (a walk, a move, a return from Detail, an
         // ordinary Escape in the filter) makes the region take the keyboard here, and nowhere else.
         guard view.request != request else { return }
@@ -574,6 +581,7 @@ struct NetworkRegion: NSViewRepresentable {
 }
 
 final class NetworkRegionView: NSView {
+    var returns = 0
     var onKeyboard: ((Bool) -> Void)?
     var request: String?
     var cursor: String? {
