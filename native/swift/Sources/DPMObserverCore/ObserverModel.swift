@@ -68,8 +68,11 @@ public final class ObserverModel: ObservableObject {
 
     public private(set) var engine: ObserverEngine?
     private(set) var chosen: WorkspaceSelection?
-    /// Requests of other workspaces whose outcome is not known yet, by workspace, restored when it is opened again.
+    /// Requests of other workspaces whose outcome is not known yet, by workspace, restored when it is shown again.
     var parkedWrites: [String: ParkedWrites] = [:]
+    /// The workspace whose requests and drafts are the current ones: the identity of the workspace shown, and empty
+    /// from the moment another is opened or it is closed until a workspace is shown again.
+    var writesKey = ""
     /// The newest snapshot accepted, whether installed or still waiting for its turn. Anything
     /// older than it, from an earlier generation or an earlier publication, is dropped.
     private var newest: (generation: Int, sequence: UInt64)?
@@ -129,7 +132,7 @@ public final class ObserverModel: ObservableObject {
         guard let engine = engine else { return }
         if !Self.same(choice, chosen) {
             selection = nil
-            switchWrites(to: Self.writesKey(choice))
+            leaveWrites()
         }
         chosen = choice
         Task { await engine.open(choice) }
@@ -138,6 +141,7 @@ public final class ObserverModel: ObservableObject {
     public func close() {
         guard let engine = engine else { return }
         selection = nil
+        leaveWrites()
         chosen = nil
         Task { await engine.close() }
     }
@@ -206,16 +210,6 @@ public final class ObserverModel: ObservableObject {
     /// Whether closing Detail has somewhere to go back to.
     public var canReturn: Bool { page == .detail && detailReturn != nil }
 
-    /// The workspace a sent request belongs to.
-    static func writesKey(_ choice: WorkspaceSelection?) -> String {
-        switch choice {
-        case .project(let url)?: return "project:" + url.path
-        case .database(let url)?: return "database:" + url.path
-        case .discover(let url)?: return "discover:" + url.path
-        case nil: return ""
-        }
-    }
-
     static func same(_ left: WorkspaceSelection, _ right: WorkspaceSelection?) -> Bool {
         guard let right = right else { return false }
         switch (left, right) {
@@ -254,6 +248,7 @@ public final class ObserverModel: ObservableObject {
         guard let new = pending else { return }
         pending = nil
         snapshot = new
+        adoptWrites()
         continueRebase()
         lastFlush = Date()
         installedAt = lastFlush

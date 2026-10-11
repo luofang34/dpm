@@ -165,27 +165,41 @@ extension ObserverModel {
 
     public func dropStagedProgress() { operations.stagedProgress = nil }
 
-    /// The workspace now open, as sent requests name it.
-    var writesKey: String { Self.writesKey(chosen) }
+    /// The key of the workspace a snapshot shows: its identity and lineage, however it was selected.
+    static func writesKey(of identity: Identity?) -> String {
+        identity.map { "\($0.workspaceId)/\($0.lineageId ?? "")" } ?? ""
+    }
 
-    /// Leave this workspace's requests and drafts behind for `next`: a request whose outcome is not known yet is parked
-    /// under its own workspace and restored, still to be reconciled, when that workspace is opened again; nothing of
-    /// one workspace is reconciled, awaited or applied in another.
-    func switchWrites(to next: String) {
+    /// Leave the workspace shown: a request whose outcome is not known yet is parked under it and restored, still to be
+    /// reconciled, when it is shown again; until another workspace is shown no answer settles anything here.
+    func leaveWrites() {
         var parked = ParkedWrites()
         if case .sending(let sent) = operations.phase { parked.operation = sent }
         if let sent = operations.unresolved { parked.operation = sent }
         parked.apply = editing.unresolved ?? editing.sending
-        if parked.operation != nil || parked.apply != nil { parkedWrites[writesKey] = parked }
+        if !writesKey.isEmpty, parked.operation != nil || parked.apply != nil { parkedWrites[writesKey] = parked }
         let keep = (editing.enabled, editing.actor)
         editing = EditState()
         editing.enabled = keep.0
         editing.actor = keep.1
         operations = OperationState()
-        guard let restored = parkedWrites.removeValue(forKey: next) else { return }
-        let cause = "sent before another workspace was opened"
+        writesKey = ""
+    }
+
+    /// Called with every installed snapshot: once a workspace is shown, its requests become the current ones, and any
+    /// it left unresolved are restored, with an apply's draft, to be reconciled.
+    func adoptWrites() {
+        let shown = Self.writesKey(of: snapshot.identity)
+        guard !shown.isEmpty, shown != writesKey else { return }
+        if !writesKey.isEmpty { leaveWrites() }
+        writesKey = shown
+        guard let restored = parkedWrites.removeValue(forKey: shown) else { return }
+        let cause = "sent before this workspace was left"
         if let sent = restored.operation { operations.phase = .unknown(sent, cause: cause) }
-        if let sent = restored.apply { editing.phase = .unknown(sent, cause: cause) }
+        if let sent = restored.apply {
+            editing.draft = sent.draft
+            editing.phase = .unknown(sent, cause: cause)
+        }
     }
 
     /// An answer for a workspace that is not open: it settles that workspace's parked request, and nothing here.
