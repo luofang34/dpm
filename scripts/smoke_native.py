@@ -131,6 +131,16 @@ def negative_controls(suite, arguments, directory):
         assert result.returncode != 0 and expected in result.stdout, f'the negative control for {name} did not fail as required (exit {result.returncode}):\n{result.stdout[-1500:]}'
 
 
+def bundled_adapters(bundle):
+    """DPMObserver.app carries every adapter: the helper, the CLI and the agent server, and its CLI offers `gui`."""
+    helpers = bundle / 'Contents/Helpers'
+    for name in ('dpm', 'dpm-mcp', 'dpm-native'):
+        assert (helpers / name).is_file(), f'{name} is missing from {helpers}'
+    usage = subprocess.run([str(helpers / 'dpm'), '--help'], capture_output=True, text=True, timeout=60, check=True).stdout
+    assert any(line.split()[:1] == ['gui'] for line in usage.splitlines() if line.startswith('  ')), usage
+    print(f'PASS: {bundle.name} carries dpm, dpm-mcp and dpm-native, and its dpm offers gui')
+
+
 def main():
     if sys.platform != 'darwin':
         print(f'SKIPPED: the native bridge is a macOS client and this is {sys.platform}; nothing was built or qualified and nothing is claimed.')
@@ -144,6 +154,7 @@ def main():
     print(f'PASS: measurement analyzer and evidence capture on frozen synthetic logs: {len(analyzer_checks)} checks')
     print(f'PASS: network workload analyzer on frozen synthetic logs: {len(measure_network.self_test())} checks')
     built = build_native.build(rust='--no-rust' not in sys.argv)
+    bundled_adapters(built['observer'])
     suite = build_native.compile_suite(built)
     with tempfile.TemporaryDirectory() as scratch:
         directory = Path(scratch)

@@ -9,6 +9,7 @@ Layout of the result, under the Cargo target directory in `native/`:
     DPMHost.app/Contents/Info.plist
     DPMObserver.app/Contents/MacOS/dpm-observer      the SwiftUI live execution observer
     DPMObserver.app/Contents/Helpers/dpm-native      its own copy of the helper
+    DPMObserver.app/Contents/Helpers/dpm, dpm-mcp    the CLI and the agent server, so one bundle carries every adapter
     DPMObserver.app/Contents/Info.plist
     lib/libDPMNative.a, lib/DPMNative.swiftmodule   the client library, usable on its own
     lib/libDPMObserverCore.a, lib/DPMObserverCore.swiftmodule   the observer's engine, no UI
@@ -52,7 +53,7 @@ def build(rust=True):
     if shutil.which('swiftc') is None:
         raise SystemExit('swiftc is not available: the native bridge cannot be built here')
     if rust:
-        run('cargo', 'build', '--release', '-p', 'dpm-native', '--locked')
+        run('cargo', 'build', '--release', '-p', 'dpm-native', '-p', 'dpm', '-p', 'dpm-mcp', '--locked')
     # Without Cargo's own answer, the directory Cargo would use by default.
     target = target_directory() if rust else Path(os.environ.get('CARGO_TARGET_DIR') or ROOT / 'target').resolve()
     helper = target / 'release' / 'dpm-native'
@@ -84,6 +85,11 @@ def build(rust=True):
     run('swiftc', *FLAGS, '-parse-as-library', '-I', library, '-L', library, '-lDPMObserverCore', '-lDPMNative',
         *OBSERVER_SOURCES, '-o', executable)
     shutil.copy2(helper, observer / 'Helpers/dpm-native')
+    for adapter in ('dpm', 'dpm-mcp'):
+        built = target / 'release' / adapter
+        if not built.exists():
+            raise SystemExit(f'{built} is missing: build the release binaries first (cargo build --release)')
+        shutil.copy2(built, observer / 'Helpers' / adapter)
     shutil.copy2(SWIFT / 'ObserverInfo.plist', observer / 'Info.plist')
     if shutil.which('codesign'):
         run('codesign', '--force', '--sign', '-', '--deep', out / 'DPMObserver.app', stderr=subprocess.DEVNULL)

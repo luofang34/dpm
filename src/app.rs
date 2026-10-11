@@ -1,5 +1,7 @@
 use crate::{
-    args::{Cli, Commands, PlanCommand, Preconditions, StoreCommand, WorkspaceCommand},
+    args::{
+        Cli, Commands, OpenCommand, PlanCommand, Preconditions, StoreCommand, WorkspaceCommand,
+    },
     bootstrap::{initialize_blocking, read_plan_blocking},
     error::{CliError, io_error},
     output,
@@ -26,14 +28,20 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
         operation_id,
     };
     let cwd = std::env::current_dir().map_err(io_error("read current directory", "."))?;
-    let command = command.unwrap_or(if json {
-        Commands::Status {
+    let command = match command {
+        Some(command) => command,
+        None if json => Commands::Status {
             no_simulation: false,
             calibrated: false,
-        }
-    } else {
-        Commands::Tui
-    });
+        },
+        None => match crate::launch::opening(
+            crate::launch::Terminal::probe(),
+            cfg!(target_os = "macos"),
+        )? {
+            crate::launch::Opening::Console => Commands::Open(OpenCommand::Tui),
+            crate::launch::Opening::App => Commands::Open(OpenCommand::Gui),
+        },
+    };
     let query_clock = crate::clock::for_command(&command, clock)?;
     let root = project.as_deref().unwrap_or(&cwd);
     match command {
@@ -64,6 +72,10 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
             }
         }
         Commands::Validate { file } => crate::bootstrap::validate_blocking(&file, json),
+        // The app opens the workspace itself; nothing here reads or writes it.
+        Commands::Open(OpenCommand::Gui) => {
+            crate::launch::gui_blocking(project.as_deref(), database.as_deref(), &cwd)
+        }
         Commands::Store(StoreCommand::Restore { from, to }) => {
             crate::recovery::restore_blocking(&from, &to, json)
         }
@@ -153,7 +165,7 @@ fn run_open_blocking(
         Commands::Store(StoreCommand::Run { command }) => {
             crate::runs::command_blocking(app, command, json, preconditions)
         }
-        Commands::Tui => crate::console::run_blocking(app),
+        Commands::Open(OpenCommand::Tui) => crate::console::run_blocking(app),
         mutation => mutate_blocking(app, mutation, json, preconditions),
     }
 }

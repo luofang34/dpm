@@ -227,8 +227,8 @@ pub(crate) enum Commands {
         #[arg(long)]
         actor: String,
     },
-    /// Open the Ratatui operator console.
-    Tui,
+    #[command(flatten)]
+    Open(OpenCommand),
     /// Stop enforcing a soft dependency as a human or service; hard dependencies need plan review.
     WaiveDependency {
         /// Stable dependency identity, as shown by explain or export.
@@ -262,6 +262,15 @@ pub(crate) enum Commands {
         #[arg(long)]
         actor: String,
     },
+}
+
+/// The interactive views, flattened into the top-level command list.
+#[derive(Debug, Subcommand)]
+pub(crate) enum OpenCommand {
+    /// Open the Ratatui operator console.
+    Tui,
+    /// Open the macOS app (DPMObserver.app) on this project.
+    Gui,
 }
 
 /// Operation log, run and store-file commands, flattened into the top-level command list.

@@ -85,13 +85,16 @@ On macOS 14 or later with Swift installed:
 
 ```sh
 python3 scripts/build_native.py
-open target/native/DPMObserver.app --args --project DIR   # or --database FILE
+target/native/DPMObserver.app/Contents/Helpers/dpm gui --project DIR   # or --database FILE
 ```
 
+The app carries `dpm`, `dpm-mcp` and `dpm-native`. `dpm` alone opens the terminal console in a
+terminal and the app otherwise; `dpm tui` and `dpm gui` choose explicitly.
+
 It shows what to do now, live agent runs, review, details, a Gantt chart and a dependency network.
-With Edit on (⌘E), dragging between bars or nodes links them, dragging a bar's finish changes its
-estimate, and an inspector edits the selected item. Edits gather in a draft and apply only after
-the application's diff is reviewed, with a reason.
+With Edit on (⌘E), dragging from a bar's end to another bar links them, Option-dragging a bar's
+finish changes its estimate, and an inspector edits the selected item and runs its task operations.
+Plan edits gather in a draft and apply only after the application's diff is reviewed, with a reason.
 
 ## Development
 
