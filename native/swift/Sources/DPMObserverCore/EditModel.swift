@@ -51,6 +51,9 @@ public struct EditState: Equatable, Sendable {
     public var held: Bool { unresolved != nil || phase == .applying }
     /// A stale refusal asked for a re-read: the draft is rebased and reviewed once a newer plan is read.
     public var rebasePending = false
+    /// Counts each close of the review sheet, after an apply or a cancel; the page it was opened from gives the
+    /// keyboard back to its region when this changes.
+    public var focusReturns = 0
 }
 
 extension ObserverModel {
@@ -83,7 +86,11 @@ extension ObserverModel {
     public func setEditReason(_ text: String) { editing.reason = text }
 
     /// Close the review sheet; the draft and its review stay.
-    public func closeReview() { editing.reviewing = false }
+    public func closeReview() {
+        guard editing.reviewing else { return }
+        editing.reviewing = false
+        editing.focusReturns &+= 1
+    }
 
     /// The parent of a work item as the draft's basis records it.
     public func editParent(of identity: String) -> String? {

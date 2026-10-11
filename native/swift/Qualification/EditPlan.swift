@@ -200,7 +200,7 @@ extension Context {
     /// Wait on the main actor for a published edit state that satisfies `predicate`, or fail; driven by the model's
     /// own publications, never by polling.
     @MainActor
-    private func waitEdit(_ model: ObserverModel, _ what: String, _ seconds: TimeInterval = 30, _ predicate: @escaping (EditState) -> Bool) async throws {
+    func waitEdit(_ model: ObserverModel, _ what: String, _ seconds: TimeInterval = 30, _ predicate: @escaping (EditState) -> Bool) async throws {
         if predicate(model.editing) { return }
         let found: Bool = await withCheckedContinuation { continuation in
             var cancellable: AnyCancellable?
