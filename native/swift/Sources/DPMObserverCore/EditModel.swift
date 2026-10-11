@@ -17,6 +17,8 @@ public struct SentApply: Equatable, Sendable {
     public let reason: String
     public let actor: JSON
     public let operationId: String
+    /// The workspace it was sent to; its answer never settles another.
+    public let workspace: String
 
     var request: CommandRequest { EditCommands.apply(preview, reason: reason, actor: actor, operationId: operationId) }
 }
@@ -51,6 +53,8 @@ public struct EditState: Equatable, Sendable {
     public var held: Bool { unresolved != nil || phase == .applying }
     /// A stale refusal asked for a re-read: the draft is rebased and reviewed once a newer plan is read.
     public var rebasePending = false
+    /// The apply on its way, until its answer arrives.
+    public var sending: SentApply?
     /// Counts each close of the review sheet, after an apply or a cancel; the page it was opened from gives the
     /// keyboard back to its region when this changes.
     public var focusReturns = 0
@@ -93,7 +97,9 @@ extension ObserverModel {
     public func closeReview() {
         guard editing.reviewing else { return }
         editing.reviewing = false
-        if editing.reviewFromInspector { editing.inspectorReturns &+= 1 } else { editing.focusReturns &+= 1 }
+        // The inspector's Review button exists only while there is a draft; after an apply removed it, the region
+        // the edit was made from takes the keyboard.
+        if editing.reviewFromInspector, editing.draft != nil { editing.inspectorReturns &+= 1 } else { editing.focusReturns &+= 1 }
     }
 
     /// The parent of a work item as the draft's basis records it.
@@ -180,8 +186,9 @@ extension ObserverModel {
         editing.notice = applyBlocker
         guard editing.notice == nil, let preview = editing.reviewed, let engine, let actor = EditCommands.actor(editing.actor) else { return }
         guard let draft = editing.draft else { return }
-        let sent = SentApply(draft: draft, preview: preview, reason: editing.reason, actor: actor, operationId: UUIDv7.make())
+        let sent = SentApply(draft: draft, preview: preview, reason: editing.reason, actor: actor, operationId: UUIDv7.make(), workspace: writesKey)
         editing.phase = .applying
+        editing.sending = sent
         Task { [weak self] in
             let outcome = await engine.apply(sent.request)
             await MainActor.run { self?.settle(outcome, sent: sent) }
@@ -210,6 +217,7 @@ extension ObserverModel {
     public func reconcileApply() {
         guard let sent = editing.unresolved, let engine else { return }
         editing.phase = .applying
+        editing.sending = sent
         Task { [weak self] in
             var outcome = await engine.reconcile(sent.request)
             // Only the application's own answer settles it: a resend that never reached the application leaves
@@ -222,6 +230,16 @@ extension ObserverModel {
     }
 
     func settle(_ outcome: ApplyOutcome, sent: SentApply) {
+        // Only the application's own answer settles a request that may have been sent.
+        var outcome = outcome
+        if case .refused(let refusal) = outcome, !refusal.fromApplication {
+            outcome = .unknown(operationId: sent.operationId, cause: refusal.message)
+        }
+        guard sent.workspace == writesKey else {
+            settleParked(outcome, apply: sent)
+            return
+        }
+        editing.sending = nil
         switch outcome {
         case .applied(let id, let revision):
             editing.phase = .applied(operationId: id, revision: revision)

@@ -12,6 +12,9 @@ struct OperationsPanel: View {
     /// control the outcome asks for next (Reconcile, or reading the changes).
     @FocusState private var focus: String?
     @State private var pressed: String?
+    /// Where the keyboard goes once that control can take it: a control still disabled when an outcome arrives gets
+    /// the keyboard when it is enabled, never before.
+    @State private var wanted: String?
 
     var body: some View {
         let blocker = model.operationBlocker
@@ -25,9 +28,9 @@ struct OperationsPanel: View {
             }
             .disabled(blocker != nil)
             TextField("Reason (block or reject)", text: Binding(get: { model.operations.reason }, set: { model.setOperationReason($0) }))
-                .textFieldStyle(.roundedBorder).accessibilityLabel("Reason for a block or a reject").accessibilityIdentifier("ops.reason")
+                .textFieldStyle(.roundedBorder).focused($focus, equals: "ops.reason").accessibilityLabel("Reason for a block or a reject").accessibilityIdentifier("ops.reason")
             TextField("Note (submit or verify)", text: Binding(get: { model.operations.note }, set: { model.setOperationNote($0) }))
-                .textFieldStyle(.roundedBorder).accessibilityLabel("Note for a submit or a verify").accessibilityIdentifier("ops.note")
+                .textFieldStyle(.roundedBorder).focused($focus, equals: "ops.note").accessibilityLabel("Note for a submit or a verify").accessibilityIdentifier("ops.note")
             HStack {
                 action("Block", .block(reason: model.operations.reason), id: "ops.block")
                     .disabled(blocker != nil || model.operations.reason.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -47,12 +50,34 @@ struct OperationsPanel: View {
         .accessibilityIdentifier("ops.panel")
         .onChange(of: model.operations.phase) { _, phase in
             switch phase {
-            case .unknown: focus = "ops.reconcile"
-            case .refused: focus = "ops.acknowledge"
-            case .accepted: focus = pressed
+            case .unknown: wanted = "ops.reconcile"
+            case .refused: wanted = "ops.acknowledge"
+            // A cleared reason leaves Block and Reject disabled: the reason field takes the keyboard instead.
+            case .accepted(_, let operation, _):
+                switch operation {
+                case .block, .reject: wanted = "ops.reason"
+                default: wanted = pressed
+                }
             default: break
             }
+            settleFocus()
         }
+        .onChange(of: model.operationBlocker) { settleFocus() }
+        .onChange(of: model.operations.staleObservation.map { model.rereadSince($0) }) { settleFocus() }
+    }
+
+    /// Give the keyboard to the wanted control once it is enabled.
+    private func settleFocus() {
+        guard let target = wanted else { return }
+        let enabled: Bool
+        switch target {
+        case "ops.reconcile", "ops.reason", "ops.note": enabled = true
+        case "ops.acknowledge": enabled = model.operations.staleObservation.map { model.rereadSince($0) } ?? false
+        default: enabled = model.operationBlocker == nil
+        }
+        guard enabled else { return }
+        focus = target
+        wanted = nil
     }
 
     private func action(_ title: String, _ operation: TaskOperation, id: String) -> some View {

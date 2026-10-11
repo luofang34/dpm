@@ -2222,6 +2222,8 @@ def edit_keyboard_route(bundle, directory):
     database = gantt_store(directory, 'edit-keys')
     operations = len(run_cli(database, 'history')['entries'])
     reason = 'Move C out of the package by keyboard'
+    # The reason is pasted; the person's clipboard is put back afterwards.
+    clipboard = subprocess.run(['/usr/bin/pbpaste'], capture_output=True, timeout=15).stdout
     subprocess.run(['/usr/bin/pbcopy'], input=reason, text=True, check=True, timeout=15)
     app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'gantt', '--select-key', 'TEST-C'])
     front = None
@@ -2260,6 +2262,7 @@ def edit_keyboard_route(bundle, directory):
         kept = keep_failure(case, app, front, {'error': str(error)[:4000]})
         raise AssertionError(f'{error} (complete failing state kept at {kept})') from None
     finally:
+        subprocess.run(['/usr/bin/pbcopy'], input=clipboard, check=False, timeout=15)
         if front:
             front.close()
         app.close()

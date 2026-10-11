@@ -58,6 +58,8 @@ public struct SentOperation: Equatable, Sendable {
     public let operation: TaskOperation
     public let request: CommandRequest
     public let observed: ObservedWork
+    /// The workspace it was sent to; its answer never settles another.
+    public let workspace: String
 
     public static func == (left: SentOperation, right: SentOperation) -> Bool {
         left.work == right.work && left.operation == right.operation && left.request.operationId == right.request.operationId
@@ -71,8 +73,16 @@ public struct ObservedWork: Equatable, Sendable {
     public let status: String
     public let owner: String?
     public let progress: Int
-    /// How many status reads the model had made; a later one is a read of the work since.
-    let reads: Int
+    /// The engine generation and its snapshot publication when the refusal arrived; a current snapshot published since,
+    /// including after the engine reopened, is the work read again.
+    public internal(set) var generation = 0
+    public internal(set) var reads = 0
+}
+
+/// Requests of a workspace that was left before their outcome was known.
+struct ParkedWrites {
+    var operation: SentOperation?
+    var apply: SentApply?
 }
 
 public struct OperationState: Equatable, @unchecked Sendable {
@@ -94,8 +104,10 @@ public struct OperationState: Equatable, @unchecked Sendable {
     /// A progress share set by dragging a bar, shown in the inspector until it is reported or dropped; a drag never
     /// sends anything by itself.
     public var stagedProgress: (work: String, percent: Int)?
-    /// The revision an accepted operation produced; nothing more is sent until the plan is read at least that far.
+    /// The revision an accepted operation produced, in its lineage; nothing more is sent until the plan of that
+    /// lineage is read at least that far.
     public var awaitedRevision: UInt64?
+    var awaitedLineage: String?
 
     public var unresolved: SentOperation? { if case .unknown(let sent, _) = phase { return sent } else { return nil } }
     public var inFlight: Bool { if case .sending = phase { return true } else { return unresolved != nil } }
@@ -120,7 +132,9 @@ extension ObserverModel {
         if case .sending = operations.phase { return "The last operation is still being sent." }
         if editing.phase == .applying { return "A plan change is being applied." }
         if operations.staleObservation != nil { return "The last operation was refused; read the work again and look at its changes first." }
-        if let awaited = operations.awaitedRevision, (snapshot.inventory.basis?.revision ?? 0) < awaited { return "Reading the plan again…" }
+        if let awaited = operations.awaitedRevision, let basis = snapshot.inventory.basis, basis.lineage == operations.awaitedLineage, basis.revision < awaited {
+            return "Reading the plan again…"
+        }
         if EditCommands.actor(editing.actor) == nil { return "Give the actor as kind:name, such as human:ada." }
         return nil
     }
@@ -131,10 +145,12 @@ extension ObserverModel {
     /// Whether the work was read again since it was refused: a later status read, or another revision or lineage.
     public func rereadSince(_ observed: ObservedWork) -> Bool {
         guard snapshot.freshness.current, let basis = snapshot.inventory.basis else { return false }
-        return statusReads > observed.reads || basis.revision != observed.revision || basis.lineage != observed.lineage
+        return snapshot.generation != observed.generation || statusReads != observed.reads || basis.revision != observed.revision
+            || basis.lineage != observed.lineage
     }
 
-    var statusReads: Int { snapshot.counters.projectReads &+ snapshot.counters.timeReads }
+    /// The snapshot publication now; a later one, current, means the plan was confirmed or read again since.
+    var statusReads: Int { Int(truncatingIfNeeded: snapshot.sequence) }
 
     /// The person has read the work again and looked at what changed; the next operation may be sent.
     public func acknowledgeChanges() {
@@ -149,13 +165,38 @@ extension ObserverModel {
 
     public func dropStagedProgress() { operations.stagedProgress = nil }
 
-    /// Forget every sent request and draft of another workspace, so nothing of it is reconciled or applied here.
-    func resetWrites() {
+    /// The workspace now open, as sent requests name it.
+    var writesKey: String { Self.writesKey(chosen) }
+
+    /// Leave this workspace's requests and drafts behind for `next`: a request whose outcome is not known yet is parked
+    /// under its own workspace and restored, still to be reconciled, when that workspace is opened again; nothing of
+    /// one workspace is reconciled, awaited or applied in another.
+    func switchWrites(to next: String) {
+        var parked = ParkedWrites()
+        if case .sending(let sent) = operations.phase { parked.operation = sent }
+        if let sent = operations.unresolved { parked.operation = sent }
+        parked.apply = editing.unresolved ?? editing.sending
+        if parked.operation != nil || parked.apply != nil { parkedWrites[writesKey] = parked }
         let keep = (editing.enabled, editing.actor)
         editing = EditState()
         editing.enabled = keep.0
         editing.actor = keep.1
         operations = OperationState()
+        guard let restored = parkedWrites.removeValue(forKey: next) else { return }
+        let cause = "sent before another workspace was opened"
+        if let sent = restored.operation { operations.phase = .unknown(sent, cause: cause) }
+        if let sent = restored.apply { editing.phase = .unknown(sent, cause: cause) }
+    }
+
+    /// An answer for a workspace that is not open: it settles that workspace's parked request, and nothing here.
+    func settleParked(_ outcome: ApplyOutcome, operation: SentOperation? = nil, apply: SentApply? = nil) {
+        let key = operation?.workspace ?? apply?.workspace ?? ""
+        guard var parked = parkedWrites[key] else { return }
+        if case .unknown = outcome {} else {
+            if operation != nil { parked.operation = nil }
+            if apply != nil { parked.apply = nil }
+        }
+        parkedWrites[key] = parked.operation == nil && parked.apply == nil ? nil : parked
     }
 
     /// Send one operation on `work` as the acting actor, against the plan now shown.
@@ -166,8 +207,8 @@ extension ObserverModel {
                                      command: operation.command(work: work))
         let item = snapshot.inventory.byIdentity[work]
         let observed = ObservedWork(revision: basis.revision, lineage: basis.lineage, status: item?.status ?? "unknown", owner: item?.owner,
-                                    progress: item?.reportedProgress ?? 0, reads: statusReads)
-        let sent = SentOperation(work: work, operation: operation, request: request, observed: observed)
+                                    progress: item?.reportedProgress ?? 0)
+        let sent = SentOperation(work: work, operation: operation, request: request, observed: observed, workspace: writesKey)
         operations.phase = .sending(sent)
         operations.reviewedChanges = false
         if case .progress = operation { operations.stagedProgress = nil }
@@ -192,10 +233,20 @@ extension ObserverModel {
     }
 
     func settleOperation(_ outcome: ApplyOutcome, sent: SentOperation) {
+        // Only the application's own answer settles a request that may have been sent.
+        var outcome = outcome
+        if case .refused(let refusal) = outcome, !refusal.fromApplication {
+            outcome = .unknown(operationId: sent.request.operationId, cause: refusal.message)
+        }
+        guard sent.workspace == writesKey else {
+            settleParked(outcome, operation: sent)
+            return
+        }
         switch outcome {
         case .applied(_, let revision):
             operations.phase = .accepted(work: sent.work, operation: sent.operation, revision: revision)
             operations.awaitedRevision = revision
+            operations.awaitedLineage = sent.request.baseLineage
             switch sent.operation {
             case .block, .reject: operations.reason = ""
             case .submit, .verify: operations.note = ""
@@ -203,7 +254,11 @@ extension ObserverModel {
             }
             reload()
         case .refused(let refusal):
-            operations.phase = .refused(work: sent.work, operation: sent.operation, refusal: refusal, observed: sent.observed)
+            // The reads counted from here on are reads of the work since the refusal.
+            var observed = sent.observed
+            observed.generation = snapshot.generation
+            observed.reads = statusReads
+            operations.phase = .refused(work: sent.work, operation: sent.operation, refusal: refusal, observed: observed)
             reload()
         case .unknown(_, let cause):
             operations.phase = .unknown(sent, cause: cause)
