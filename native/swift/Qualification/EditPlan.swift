@@ -186,10 +186,10 @@ extension Context {
         guard let a = found else { check(false, "the fixture is readable"); return }
         let before = try await historyCount(database)
         await MainActor.run { model.setEditing(true); model.setEditActor("human:planner"); model.reportProgress(work: a, percent: 40) }
-        try await waitEdit(model, "the non-owner's report to be refused") { $0.notice?.hasPrefix("Progress for TEST-A was refused") == true }
+        try await waitOperation(model, "the non-owner's report to be refused") { if case .refused = $0.phase { return true } else { return false } }
         check(try await historyCount(database) == before, "a report by someone other than the owner recorded nothing")
         await MainActor.run { model.setEditActor("agent:pilot"); model.reportProgress(work: a, percent: 40) }
-        try await waitEdit(model, "the owner's report to be recorded") { $0.notice?.hasPrefix("Reported 40% for TEST-A") == true }
+        try await waitOperation(model, "the owner's report to be recorded") { if case .accepted = $0.phase { return true } else { return false } }
         let shown = try await cliJSON(database, ["show", "TEST-A"])["data"]["execution"]
         check(shown["reported_progress_percent"] == .integer(40) && shown["status"].string == "InProgress",
               "the owner's report is recorded as 40% and the work stays in progress: \(shown["reported_progress_percent"]) \(shown["status"])")

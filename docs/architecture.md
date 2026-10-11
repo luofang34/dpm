@@ -793,6 +793,15 @@ Applying needs a live, connected and current workspace. The engine compares a re
 the current state by value, so a client that re-encodes `2.0` as `2` applies the change it reviewed,
 and the log records the canonical difference `plan diff` shows.
 
+Task operations are not plan edits either. With editing on, the inspector sends the acting actor's
+claim, start, block, unblock and submit, and a separate verify or reject, each as one application
+command with a request identity and the observed revision and lineage. The application decides; the
+app shows the operation as accepted with its revision, refused with the reason, or unknown, and an
+unknown outcome holds every further command and plan apply until the same request is reconciled. A
+refusal keeps the typed reason or note; a stale refusal also asks for the work's changes since it
+was read to be looked at before anything is sent again, and after an accepted operation nothing more
+is sent until the plan is read at its revision.
+
 Progress is not a plan edit. For started work, the inspector's progress slider, or a drag along the
 bar's body, sends the acting actor's `ReportProgress` at once through the same command boundary; the
 application refuses it unless that actor owns the started work. The bar shows the reported share

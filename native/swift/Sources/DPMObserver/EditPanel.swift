@@ -42,6 +42,10 @@ struct EditPanel: View {
                 }
                 .help("Attribution recorded with the change, as kind:name (human or service); not an authenticated identity.")
                 if case .work(let identity)? = model.selection, let item = model.snapshot.inventory.byIdentity[identity] {
+                    if item.kind != "WorkPackage" {
+                        OperationsPanel(model: model, item: item)
+                        Divider()
+                    }
                     ItemEditor(model: model, item: item).id(identity)
                 } else {
                     Text("Select a task, milestone or package to edit it.").font(.callout).foregroundStyle(.secondary)

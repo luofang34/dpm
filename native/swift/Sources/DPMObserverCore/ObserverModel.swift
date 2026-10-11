@@ -37,6 +37,8 @@ public final class ObserverModel: ObservableObject {
     @Published public internal(set) var network = NetworkViewState()
     /// The editing session: a draft of plan edits, its review and its apply. Off until a person turns it on.
     @Published public internal(set) var editing = EditState()
+    /// Task operations sent from the app and what became of the last one.
+    @Published public internal(set) var operations = OperationState()
     /// The graph last built, kept until the snapshot's inventory or schedule reading changes.
     var networkCache: (inventory: Inventory, schedule: UUID?, graph: NetworkGraph)?
     /// The element the shared key handler decided has keyboard focus, as `gantt.row.<key>`,
