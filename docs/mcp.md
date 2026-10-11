@@ -47,6 +47,7 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | import FILE | CLI-only: bootstrap | Human/service initializes an absent store from a validated plan |
 | validate FILE | validate_plan | Decode and check every graph invariant without a workspace; `revision` is `null` |
 | tui | CLI-only: interactive terminal | Read-only operator console over the same queries |
+| gui | CLI-only: local app launch | Opens DPMObserver.app on the selected or discovered project; `dpm` alone opens the console in a terminal and the app on macOS without one |
 | backup --to PATH | CLI-only: store file administration | Operator copies the store file with its whole history, and the [run store](#runs-and-activity) beside it if there is one |
 | restore --from PATH --to PATH | CLI-only: store file administration | Operator restores a backup into a new store file, and its run store into a new lineage-bound run store |
 | verify-store PATH | CLI-only: store file administration | Operator checks a store or backup file, replays its history and verifies the run store beside it |
