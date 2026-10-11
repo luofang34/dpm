@@ -80,6 +80,9 @@ final class MeasureDriver {
     private var unavailable = false
     /// The display link's own record: when it was made, how many ticks arrived and when the first did.
     private var started: UInt64?
+    /// While a network pan window runs, the step each display frame pans by.
+    private var networkStep: Double?
+    private var networkRequests = 0
     private var ticksSeen = 0
     private var firstTickMs: Double?
 
@@ -151,6 +154,18 @@ final class MeasureDriver {
             reportDisplayState(reason: "first_tick")
         }
         Measure.event("tick", detail: ["link_timestamp": link.timestamp, "target_timestamp": link.targetTimestamp])
+        if let step = networkStep, let model {
+            // One pan request per display frame; at the edge of the content the direction turns, so every request moves
+            // the view and every frame drawn for it is a moved frame.
+            networkRequests &+= 1
+            Measure.event("net_pan_request", gen: networkRequests, detail: ["dx": step])
+            let before = (model.network.panX, model.network.panY)
+            model.panNetwork(dx: step, dy: step / 2)
+            if (model.network.panX, model.network.panY) == before {
+                networkStep = -step
+                model.panNetwork(dx: -step, dy: -step / 2)
+            }
+        }
         guard let axis = axis, let model = model, let log = MeasureLog.shared else { return }
         let metrics = model.scrollMetrics(axis)
         let range = metrics.extent - metrics.viewport
@@ -205,6 +220,14 @@ final class MeasureDriver {
             await scroll(seconds: options.measureSeconds)
         case "session":
             await session(options)
+        case "network-first-draw":
+            await ready(.network)
+        case "network-selections":
+            await ready(.network)
+            await networkSelections(options.measureKeys)
+        case "network-pan":
+            await ready(.network)
+            await networkPan(seconds: options.measureSeconds)
         default:
             Measure.event("driver_error", detail: ["script": script, "reason": "unknown script"])
         }
@@ -282,6 +305,32 @@ final class MeasureDriver {
             model.driveScroll(nil)
             try? await Task.sleep(nanoseconds: 500_000_000)
         }
+    }
+
+    /// Serial selections on the network, each requested and then given time to draw: the log pairs each request with
+    /// the first draw whose focus is the requested node.
+    private func networkSelections(_ keys: [String]) async {
+        guard let model = model else { return }
+        for key in keys {
+            guard let identity = model.snapshot.inventory.items.first(where: { $0.key == key })?.identity else {
+                Measure.event("driver_error", detail: ["reason": "no task \(key)"])
+                continue
+            }
+            Measure.event("net_select_request", detail: ["key": key])
+            model.focusNode(identity, selecting: true)
+            // A pause by design: each selection is drawn before the next is requested.
+            try? await Task.sleep(nanoseconds: 400_000_000)
+        }
+    }
+
+    /// Pan the network by a step per display frame for `seconds`, logged as a window the analyzer counts draws in.
+    private func networkPan(seconds: Double) async {
+        Measure.event("net_pan_window_start", detail: ["seconds": seconds])
+        networkStep = 6
+        // The measured window's length is the measurement, not a wait for completion.
+        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        networkStep = nil
+        Measure.event("net_pan_window_end", detail: ["requests": networkRequests])
     }
 
     /// The five-minute session of the memory budget: the view operations, a scroll and the selections, in turn.
