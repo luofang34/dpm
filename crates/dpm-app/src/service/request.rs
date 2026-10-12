@@ -106,6 +106,10 @@ pub enum Query {
         /// them; absent or false leaves the forecast unchanged.
         #[serde(default)]
         calibrated: bool,
+        /// Elapsed hours after the clock reading for which the forecast states the probability of
+        /// finishing the project and reaching each milestone; absent leaves them null.
+        #[serde(default)]
+        horizon_hours: Option<f64>,
     },
     /// The remaining-work schedule projection: elapsed-hour times, float, package spans and, when
     /// requested, the seeded simulation's criticality and finish percentiles.

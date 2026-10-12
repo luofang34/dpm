@@ -84,6 +84,10 @@ pub(crate) enum Commands {
         /// forecast, and state each factor; the stored plan is unchanged.
         #[arg(long)]
         calibrated: bool,
+        /// Elapsed hours after the clock reading for which the forecast states the probability of
+        /// finishing the project and reaching each milestone, sampled and by the PERT approximation.
+        #[arg(long, value_name = "HOURS")]
+        horizon: Option<f64>,
     },
     /// Recommend executable work and explain the ranking.
     Next {

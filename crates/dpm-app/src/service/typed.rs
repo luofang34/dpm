@@ -86,11 +86,16 @@ impl Application {
             }),
         }
     }
-    /// Execution counts and, when `probabilistic`, the seeded Monte Carlo forecast.
-    pub fn status_blocking(&self, probabilistic: bool) -> Result<Observed<StatusView>, AppError> {
+    /// Execution counts and, when `probabilistic`, the seeded Monte Carlo forecast, with
+    /// probabilities of finishing within `horizon_hours` when one is given.
+    pub fn status_blocking(
+        &self,
+        probabilistic: bool,
+        horizon_hours: Option<f64>,
+    ) -> Result<Observed<StatusView>, AppError> {
         self.observe_blocking(|plan, now, lineage_id| {
             Ok(StatusView {
-                summary: dpm_engine::status(plan, probabilistic, now)?,
+                summary: dpm_engine::status_at_horizon(plan, probabilistic, now, horizon_hours)?,
                 lineage_id,
             })
         })

@@ -237,7 +237,7 @@ fn a_damaged_run_store_is_refused_and_leaves_the_project_usable() {
     );
     assert!(app.start_run_blocking(start_request()).is_err());
     assert_eq!(
-        app.status_blocking(false).expect("status").revision,
+        app.status_blocking(false, None).expect("status").revision,
         2,
         "project queries are unaffected"
     );

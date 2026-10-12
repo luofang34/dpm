@@ -58,6 +58,7 @@ fn the_default_status_is_unchanged_without_the_calibrated_option() {
         Query::Status {
             probabilistic: true,
             calibrated: false,
+            horizon_hours: None,
         },
     );
     let plan = app.plan_blocking().expect("plan");
@@ -75,6 +76,7 @@ fn the_default_status_is_unchanged_without_the_calibrated_option() {
         Query::Status {
             probabilistic: true,
             calibrated: true,
+            horizon_hours: None,
         },
     );
     let applied = calibrated

@@ -5,9 +5,12 @@ use dpm_model::{
     Applicability, BasisStatus, Plan, Timeline, WorkItem, WorkItemId, basis_dependents,
     basis_status,
 };
-use dpm_schedule::{deterministic_remaining_at, simulate_remaining_at};
+use dpm_schedule::{
+    deterministic_remaining_at, drag_remaining_at, pert_approximation_remaining_at,
+    simulate_remaining_at,
+};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Execution contract, prerequisites, and derived reason for a work item.
@@ -41,6 +44,18 @@ pub struct WorkExplanation {
     pub unestimated: bool,
     /// Fraction of sampled schedules in which each activity is critical.
     pub criticality: Option<f64>,
+    /// Hours the deterministic remaining finish would move if this work took no time: zero off
+    /// the critical path, negative when shortening it would delay the finish; absent for work
+    /// outside the active graph.
+    #[serde(default)]
+    pub drag_hours: Option<f64>,
+    /// Classical PERT variance `((P − O) / 6)²` of the remaining duration, in hours squared:
+    /// started work keeps only the range its elapsed time allows (`O` raised to the elapsed
+    /// hours), finished or unestimated work has none. It is the analytic approximation's input,
+    /// not the variance of the beta-PERT duration the simulation samples. Absent for work outside
+    /// the active graph.
+    #[serde(default)]
+    pub pert_variance_hours2: Option<f64>,
     /// Readiness, blocker, gate, lifecycle, lag and schedule explanations.
     pub why_now: Vec<String>,
     /// Provisional bases this work relies on, and other work relying on its submission attempts.
@@ -92,6 +107,7 @@ pub fn explain_work(
         .unwrap_or_else(|| gates::evaluate(plan, authoritative, Transition::Claim, &timeline));
     let ready = gates.ready;
     let criticality = simulation.criticality.get(&work).copied();
+    let (drag_hours, pert_variance_hours2) = risk(plan, &timeline, work)?;
     let unestimated = super::is_unestimated(&timeline, authoritative);
     let mut why_now = why_now(
         plan,
@@ -122,12 +138,28 @@ pub fn explain_work(
         schedule: schedule.activities.get(&work).cloned(),
         unestimated,
         criticality,
+        drag_hours,
+        pert_variance_hours2,
         why_now,
         basis: BasisReport {
             relies_on: basis_status(plan, authoritative),
             relied_on_by: basis_dependents(plan, work),
         },
     })
+}
+
+/// Drag and classical remaining variance of one work item in the remaining projection.
+fn risk(
+    plan: &Plan,
+    timeline: &Timeline,
+    work: WorkItemId,
+) -> Result<(Option<f64>, Option<f64>), EngineError> {
+    let drag = drag_remaining_at(plan, timeline, &BTreeSet::from([work]))?;
+    let approximation = pert_approximation_remaining_at(plan, timeline)?;
+    Ok((
+        drag.get(&work).copied(),
+        approximation.activity_variance_hours2.get(&work).copied(),
+    ))
 }
 
 /// Explanation shared by `explain` and `next` for a task the forecast counts as 0 h.

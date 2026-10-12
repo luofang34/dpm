@@ -38,14 +38,15 @@ pub use execution::apply_command;
 pub use query::{
     Advisory, AgingWork, AppliedCalibration, AppliedFactor, AppliedReviewDelay,
     BULK_WINDOW_SECONDS, BasisReport, CalibrationReport, CalibrationRules, ClaimOutcomes,
-    Durations, EstimateCalibration, EstimateSample, Exclusion, ExclusionReason, FlowReport,
-    HistoryCoverage, HolderOutcomes, HourBasis, InapplicableWork, MAX_APPLIED_RATIO, MAX_SCENARIOS,
-    MIN_ACTUAL_SECONDS, MIN_AGENT_APPLIED_RATIO, MIN_APPLIED_RATIO, MIN_SAMPLES, NextWorkCandidate,
-    NextWorkQuery, OpenChoices, REVIEW_FLOOR_SECONDS, RatioGroup, ReasonCount, Reliability,
-    ScenarioForecast, StatusSummary, THROUGHPUT_WEEKS, Throughput, WaitGroup, WaitReport,
-    WeekCount, WorkExplanation, advisories, calibration, excluded_in_flight, explain_work,
-    in_status_scope, is_unestimated, min_applied_ratio, next_work, status, status_calibrated,
-    unestimated,
+    CriticalityBasis, Durations, EstimateCalibration, EstimateSample, Exclusion, ExclusionReason,
+    FlowReport, ForecastSpread, HistoryCoverage, HolderOutcomes, HourBasis, InapplicableWork,
+    MAX_APPLIED_RATIO, MAX_SCENARIOS, MIN_ACTUAL_SECONDS, MIN_AGENT_APPLIED_RATIO,
+    MIN_APPLIED_RATIO, MIN_SAMPLES, MilestoneForecast, NextWorkCandidate, NextWorkQuery,
+    OpenChoices, PathStep, PertApproximationReport, REVIEW_FLOOR_SECONDS, RatioGroup, ReasonCount,
+    Reliability, RiskForecast, ScenarioForecast, StatusSummary, THROUGHPUT_WEEKS, Throughput,
+    WaitGroup, WaitReport, WeekCount, WorkExplanation, advisories, calibration, excluded_in_flight,
+    explain_work, in_status_scope, is_unestimated, min_applied_ratio, next_work, status,
+    status_at_horizon, status_calibrated, status_calibrated_at_horizon, unestimated,
 };
 pub use readiness::{completion, is_ready, show_work};
 

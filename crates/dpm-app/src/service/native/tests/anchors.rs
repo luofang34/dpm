@@ -15,6 +15,7 @@ fn status_query() -> Query {
     Query::Status {
         probabilistic: false,
         calibrated: false,
+        horizon_hours: None,
     }
 }
 

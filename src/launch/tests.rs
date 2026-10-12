@@ -132,7 +132,8 @@ fn bare_dpm_is_status_with_json_without_probing_and_otherwise_the_console_the_ap
         status,
         Commands::Status {
             no_simulation: false,
-            calibrated: false
+            calibrated: false,
+            horizon: None,
         }
     ));
     let console = default_command(false, || terminal(true, true), false).expect("console");
