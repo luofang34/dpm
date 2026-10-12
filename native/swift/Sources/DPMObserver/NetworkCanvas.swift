@@ -161,7 +161,7 @@ struct NetworkCanvas: View {
         let before = link.points[link.points.count - 2]
         context.fill(GanttEditDrag.arrowhead(at: CGPoint(x: tip.x, y: tip.y), pointingRight: before.x < tip.x || (before.x == tip.x && link.kind.hasSuffix("Start"))),
                      with: .color(Palette.relationEmphasis))
-        let middle = link.points[link.points.count / 2]
+        let middle = link.labelPoint
         let plate = Text("draft \(GanttRelation.abbreviation(link.kind))").font(.system(size: 9, weight: .semibold)).foregroundColor(Palette.relationEmphasis)
         context.fill(Path(roundedRect: CGRect(x: middle.x - 26, y: middle.y - 7, width: 52, height: 14), cornerRadius: 3),
                      with: .color(Color(nsColor: .windowBackgroundColor).opacity(0.9)))

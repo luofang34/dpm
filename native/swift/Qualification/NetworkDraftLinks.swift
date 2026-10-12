@@ -14,6 +14,10 @@ extension Context {
               "finish to a later start turns once, between the ends")
         check(ElbowRoute.points(from: p(0, 0), outward: 10, to: p(50, 40), inward: 10) == [p(0, 0), p(60, 0), p(60, 40), p(60, 40), p(50, 40)],
               "finish to finish turns beyond both ends and enters from the right")
+        check(ElbowRoute.points(from: p(50, 0), outward: -10, to: p(0, 40), inward: -10) == [p(50, 0), p(-10, 0), p(-10, 40), p(-10, 40), p(0, 40)],
+              "start to start turns before both ends and enters from the left")
+        check(ElbowRoute.points(from: p(100, 0), outward: -10, to: p(0, 40), inward: 10) == [p(100, 0), p(10, 0), p(10, 40), p(0, 40)],
+              "start to an earlier finish turns once, between the ends")
         check(ElbowRoute.points(from: p(100, 0), outward: 10, to: p(0, 40), inward: -10) == [p(100, 0), p(110, 0), p(110, 20), p(-10, 20), p(-10, 40), p(0, 40)],
               "a link running back turns between the rows")
 
@@ -30,6 +34,12 @@ extension Context {
         }
         check(drawn.0.count == 1 && drawn.0.first?.kind == "FinishFinish" && drawn.0.first?.points.first == drawn.1 && drawn.0.first?.points.last == drawn.2,
               "a drafted FF link is drawn from TEST-D's finish edge to TEST-F's finish edge: \(drawn.0)")
+        // The plate sits on the longest run, so the 52 by 14 plate never covers the arrowhead at the link's end.
+        let clear = drawn.0.first.map { link in link.points.last.map { abs(link.labelPoint.x - $0.x) > 32 || abs(link.labelPoint.y - $0.y) > 11 } ?? false } ?? false
+        check(clear, "the draft plate is clear of the arrowhead")
+        let fs = ElbowRoute.points(from: p(0, 0), outward: 10, to: p(300, 60), inward: -10)
+        let plate = NetworkDraftLink(from: "A", to: "B", kind: "FinishStart", points: fs).labelPoint
+        check(abs(plate.x - 300) > 32 || abs(plate.y - 60) > 11, "on a finish-to-start link the plate is clear of the arrowhead: \(plate)")
         let hidden = await MainActor.run { () -> Int in model.setNetworkFilterText("TEST-D"); defer { model.setNetworkFilterText("") }; return model.networkDraftLinks.count }
         check(hidden == 0, "a drafted link with an end filtered out of the network is not drawn")
         let kept = await MainActor.run { (model.networkDraftLinks.count, model.editing.draft?.edits.count ?? 0) }

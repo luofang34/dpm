@@ -41,6 +41,22 @@ public struct NetworkDraftLink: Equatable, Sendable {
     /// `FinishStart`, `StartStart`, `FinishFinish` or `StartFinish`.
     public let kind: String
     public let points: [NetworkPoint]
+
+    public init(from: String, to: String, kind: String, points: [NetworkPoint]) {
+        self.from = from
+        self.to = to
+        self.kind = kind
+        self.points = points
+    }
+
+    /// Where the link's "draft" plate goes: the middle of its longest run, clear of the arrowhead at its end.
+    public var labelPoint: NetworkPoint {
+        let runs = zip(points, points.dropFirst())
+        guard let longest = runs.max(by: { hypot($0.1.x - $0.0.x, $0.1.y - $0.0.y) < hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }) else {
+            return points.first ?? NetworkPoint(x: 0, y: 0)
+        }
+        return NetworkPoint(x: (longest.0.x + longest.1.x) / 2, y: (longest.0.y + longest.1.y) / 2)
+    }
 }
 
 extension ObserverModel {

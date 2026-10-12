@@ -360,7 +360,10 @@ struct NetworkLinkView: View {
             Canvas { context, _ in
                 guard let start = canvas(model.networkEnd(link.from, link.fromEnd)) else { return }
                 let tip = target.flatMap { canvas(model.networkEnd($0.node.identity, $0.end)) } ?? NetworkPoint(x: link.point.x, y: link.point.y)
-                let points = ElbowRoute.points(from: start, outward: ElbowRoute.outward(link.fromEnd), to: tip, inward: target.map { ElbowRoute.inward($0.end) } ?? 0)
+                // The run out of a node scales with the zoom, as the drafted link it becomes is drawn.
+                let scale = model.network.scale
+                let points = ElbowRoute.points(from: start, outward: ElbowRoute.outward(link.fromEnd) * scale, to: tip,
+                                               inward: target.map { ElbowRoute.inward($0.end) * scale } ?? 0)
                 var path = Path()
                 path.addLines(points.map { CGPoint(x: $0.x, y: $0.y) })
                 context.stroke(path, with: .color(Palette.relationEmphasis), style: StrokeStyle(lineWidth: 2, dash: target == nil ? [5, 3] : []))
