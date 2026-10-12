@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+# Ships inside the macOS app bundle, not as a crates.io package.
+publish = false
 description = "Persistent local helper serving the versioned native DPM contract to a macOS host"
 
 [dependencies]

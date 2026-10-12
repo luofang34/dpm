@@ -7,6 +7,17 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+# The demo roadmap is compiled in; the test fixture keeps the packaged unit tests runnable.
+include = [
+    "/src/**/*.rs",
+    "/examples/self-host/dpm-alpha.json",
+    "/tests/support/execution-plan.json",
+    "/README.md",
+    "/LICENSE",
+]
 
 [[bin]]
 name = "dpm"

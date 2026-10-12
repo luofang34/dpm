@@ -1,0 +1,47 @@
+name: Publish
+
+# Publishes the dpm binary and the libraries it is built from to crates.io, in dependency order, from
+# a commit on main. scripts/check_repository.py keeps that set equal to the crates without
+# `publish = false`. A dry run packages and builds every crate without uploading; a real run skips
+# versions already published and waits out the rate limit on new crates, so it can be run again.
+# Store CARGO_REGISTRY_TOKEN on the crates-io environment and restrict that environment to main:
+# workflow_dispatch runs the file from the chosen ref, so the step below is a reminder, not a gate.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Package and verify only; upload nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    # A trusted publisher on crates.io can be bound to this workflow and environment.
+    environment: crates-io
+    steps:
+      - name: Refuse anything but main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Publish from main, not $GITHUB_REF" >&2
+          exit 1
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+      - name: Crates.io set matches the manifests
+        run: python3 scripts/check_repository.py
+      - name: Package and verify
+        run: python3 scripts/publish_crates.py --dry-run
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: python3 scripts/publish_crates.py
