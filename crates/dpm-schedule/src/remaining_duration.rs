@@ -113,6 +113,22 @@ impl RemainingDuration {
         }
     }
 
+    /// Classical PERT variance of the remaining duration, for the analytic approximation.
+    ///
+    /// Known remainders have none. Started work keeps only the range its elapsed time still
+    /// allows, so the variance shrinks as the task runs and vanishes past its pessimistic bound.
+    pub(crate) fn pert_variance(&self) -> f64 {
+        match self {
+            Self::Fixed(_) => 0.0,
+            Self::Shifted {
+                distribution,
+                elapsed,
+                ..
+            } => distribution.pert_variance_after(*elapsed),
+            Self::Truncated(table) => table.distribution.pert_variance_after(table.elapsed),
+        }
+    }
+
     /// One sampled remaining duration in elapsed hours.
     pub(crate) fn sample(&self, rng: &mut XorShift64) -> f64 {
         match self {
