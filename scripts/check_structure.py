@@ -38,6 +38,22 @@ for probe, expected in [
 ]:
     assert bool(waivers(probe)) == expected, f'waiver probe misread: {probe!r}'
 
+def oversized(name, source, limit=500):
+    """The failure for a source longer than `limit` lines, naming it and its length, or None."""
+    count = len(source.splitlines())
+    return f'{name}: {count} lines exceeds {limit}' if count > limit else None
+
+
+assert oversized('probe.swift', 'x\n' * 501) == 'probe.swift: 501 lines exceeds 500', 'a 501-line source must fail'
+assert oversized('probe.swift', 'x\n' * 500) is None, 'a 500-line source must pass'
+
+# The native app keeps the same file limit as the Rust sources.
+swift = sorted((ROOT / 'native' / 'swift').rglob('*.swift'))
+for path in swift:
+    failure = oversized(path.relative_to(ROOT), path.read_text())
+    if failure:
+        failures.append(failure)
+
 files = sorted((ROOT / 'crates').rglob('*.rs')) + sorted((ROOT / 'src').rglob('*.rs'))
 for path in files:
     source = path.read_text()
@@ -87,4 +103,4 @@ for path in ROOT.rglob('*'):
 
 if failures:
     sys.exit('\n'.join(failures))
-print(f'PASS: structural guardrails across {len(files)} Rust files')
+print(f'PASS: structural guardrails across {len(files)} Rust files and {len(swift)} Swift files')
