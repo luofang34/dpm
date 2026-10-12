@@ -17,6 +17,8 @@ AGENT = 'dpm-publish (https://github.com/luofang34/dpm)'
 # crates.io admits a short burst of new crates and then about one every ten minutes.
 RATE_LIMIT_WAIT_S = 11 * 60
 RATE_LIMIT_ATTEMPTS = 6
+# Cargo waits a minute for a new version to reach the index; dependents need it there.
+INDEX_WAIT_S = 10 * 60
 
 
 def packages():
@@ -56,11 +58,19 @@ def publish(name):
         sys.stderr.write(result.stderr)
         if result.returncode == 0:
             return
-        if '429' not in result.stderr and 'Too Many Requests' not in result.stderr:
+        if 'status 429' not in result.stderr and 'Too Many Requests' not in result.stderr:
             raise SystemExit(f'{name}: cargo publish failed')
         print(f'{name}: rate limited (attempt {attempt}); waiting {RATE_LIMIT_WAIT_S} s', flush=True)
         time.sleep(RATE_LIMIT_WAIT_S)
     raise SystemExit(f'{name}: still rate limited after {RATE_LIMIT_ATTEMPTS} attempts; run again later')
+
+
+def await_index(name, version):
+    deadline = time.monotonic() + INDEX_WAIT_S
+    while not published(name, version):
+        if time.monotonic() > deadline:
+            raise SystemExit(f'{name} {version} was uploaded but is not listed yet; run again to continue')
+        time.sleep(15)
 
 
 def main():
@@ -77,6 +87,7 @@ def main():
             print(f'{name} {version}: already on crates.io', flush=True)
             continue
         publish(name)
+        await_index(name, version)
         print(f'{name} {version}: published', flush=True)
 
 
