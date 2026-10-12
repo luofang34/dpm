@@ -2347,11 +2347,13 @@ def edit_keyboard_route(bundle, directory):
 
 def inspector_keyboard_route(bundle, directory):
     """The edit inspector and its task operations by keyboard alone, with real key events and the system's keyboard
-    navigation on for the app: Tab walks a defined focus order, twice the same, through every control, each read with a
-    label; Option-Command-C claims the selected task and the keyboard stays where it was; a title typed, the review opened
-    from it, a pasted reason and Command-Return apply it, and the keyboard goes to the rows, since the apply rebuilt the
-    inspector; a second edit's review cancelled with Escape gives the keyboard back to the title field. Only the complete route passes; an interrupted one is NOT
-    ASSESSED."""
+    navigation as it is (Tab reaches fields; buttons are reached by shortcuts). Tab walks a defined focus order, the same
+    twice, every stop read with a label. A title (Return), an estimate (Return in an hours field) and the removal of a
+    link (Option-Command-L with its key in the link field) enter the draft, are reviewed with Command-Return, a pasted reason applies
+    them with Command-Return, and the keyboard is on the rows. A review opened from the link field and cancelled gives
+    the keyboard back to that field. Option-Command-C claims, Option-Command-S starts, Option-Command-V is refused and
+    Option-Command-K, once the work was read again, releases the hold; the keyboard never moves. Only the complete route
+    passes; an interrupted one is NOT ASSESSED."""
     case = 'inspector_keyboard_route'
     if not accessibility_trusted():
         not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so CGEventPostToPid would be ignored; no key was sent')
@@ -2408,52 +2410,69 @@ def inspector_keyboard_route(bundle, directory):
         unlabeled = [index for index, (_, label) in enumerate(first) if not label]
         assert not unlabeled, f'stops without a label at {unlabeled}: {first}'
 
-        # A plan edit by keyboard, reviewed from the inspector and applied; the keyboard goes back to the rows.
-        tab_to('Title')
-        guarded_key(app, front, 'Command-A to select the title', 0, COMMAND_FLAG)
-        paste('Contract A, retitled by keyboard', 'Command-V to paste a new title')
+        def field(label, text, step):
+            tab_to(label)
+            guarded_key(app, front, f'Command-A in {label}', 0, COMMAND_FLAG)
+            paste(text, step)
+
+        # Plan edits by keyboard alone, reviewed from the inspector and applied; the keyboard then goes to the rows.
+        field('Title', 'Contract A, retitled by keyboard', 'Command-V to paste a new title')
         guarded_key(app, front, 'Return to set the title', KEY_CODES['return'])
         guarded_wait(app, front, lambda s: s['editing']['edits'] == 1, 10, 'the title edit to enter the draft')
-        guarded_key(app, front, 'Command-Return to review from the title field', KEY_CODES['return'], COMMAND_FLAG)
+        for label, value in (('Optimistic hours', '2'), ('Likely hours', '3'), ('Pessimistic hours', '9')):
+            field(label, value, f'Command-V into {label}')
+        guarded_key(app, front, 'Return in an hours field to set the estimate', KEY_CODES['return'])
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 2, 10, 'the estimate edit to enter the draft')
+        field('Other work key', 'TEST-B', 'Command-V the key of a linked task')
+        guarded_key(app, front, 'Option-Command-L to remove the link with TEST-B', 37, COMMAND_FLAG | OPTION_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 3, 10, 'the link removal to enter the draft')
+        guarded_key(app, front, 'Command-Return to review from the inspector', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the review to be shown')
-        paste('Retitle A by keyboard', 'Command-V to paste the reason')
+        paste('Retitle, re-estimate and unlink A by keyboard', 'Command-V to paste the reason')
         guarded_key(app, front, 'Command-Return to apply', KEY_CODES['return'], COMMAND_FLAG)
-        guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edit to be applied')
+        guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edits to be applied')
         guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
         guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close after the apply')
         front.wait_focus_change(3.0)
         after_apply = front.focused_facts()
         assert after_apply[0] == 'gantt.region', f'the keyboard did not go to the rows after the apply rebuilt the inspector: {after_apply}'
 
-        # A second edit's review cancelled from the inspector gives the keyboard back to Review.
-        tab_to('Title')
-        guarded_key(app, front, 'Command-A to select the title', 0, COMMAND_FLAG)
-        paste('Contract A, not applied', 'Command-V to paste another title')
+        # A review opened from the link field and cancelled gives the keyboard back to that field.
+        field('Title', 'Contract A, not applied', 'Command-V to paste another title')
         guarded_key(app, front, 'Return to set the title', KEY_CODES['return'])
         guarded_wait(app, front, lambda s: s['editing']['edits'] == 1, 10, 'the second edit to enter the draft')
-        guarded_key(app, front, 'Command-Return to review again from the title field', KEY_CODES['return'], COMMAND_FLAG)
+        tab_to('Other work key')
+        guarded_key(app, front, 'Command-Return to review from the link field', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['reviewing'], 20, 'the second review to be shown')
         guarded_key(app, front, 'Escape to cancel the review', KEY_CODES['escape'])
         guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close')
         front.wait_focus_change(3.0)
         returned = front.focused_facts()[1]
-        assert returned == 'Title', f'the keyboard did not go back to the title field after the cancel: {returned}'
-        # A task operation by its shortcut, last since claimed work's contract is protected: the outcome is shown and the
-        # keyboard stays where it was.
-        tab_to('Note (submit or verify)')
-        guarded_key(app, front, 'Option-Command-C to claim TEST-A', 8, COMMAND_FLAG | OPTION_FLAG)
-        guarded_wait(app, front, lambda s: s['operations']['phase'] == 'accepted', 20, 'the claim to be accepted')
-        claimed = front.focused_facts()[1]
-        assert claimed == 'Note (submit or verify)', f'the keyboard left the note field after the claim: {claimed}'
+        assert returned == 'Other work key', f'the keyboard did not go back to the link field after the cancel: {returned}'
+        guarded_key(app, front, 'Option-Command-Delete to discard the draft', KEY_CODES['delete'], COMMAND_FLAG | OPTION_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 0, 10, 'the draft to be discarded')
 
+        # Task operations by their shortcuts; the keyboard stays in the link field throughout.
+        for code, name, phase in ((8, 'claim', 'accepted'), (1, 'start', 'accepted'), (9, 'verify', 'refused')):
+            guarded_wait(app, front, lambda s: s['operations']['blocker'] is None, 20, f'operations to be possible before {name}')
+            guarded_key(app, front, f'Option-Command shortcut to {name} TEST-A', code, COMMAND_FLAG | OPTION_FLAG)
+            guarded_wait(app, front, lambda s, phase=phase: s['operations']['phase'] == phase, 20, f'{name} to be {phase}')
+        held = app.state()['operations']['blocker']
+        assert held and 'look at its changes' in held, f'a refused operation did not hold the next one: {held}'
+        guarded_wait(app, front, lambda s: s['freshness']['current'], 20, 'the work to be read again after the refusal')
+        guarded_key(app, front, 'Option-Command-K to acknowledge the changes', 40, COMMAND_FLAG | OPTION_FLAG)
+        guarded_wait(app, front, lambda s: s['operations']['blocker'] is None, 20, 'the hold to be released')
+        kept = front.focused_facts()[1]
+        assert kept == 'Other work key', f'an operation moved the keyboard: {kept}'
         uninterrupted(front, 'the route is complete')
         entries = run_cli(database, 'history')['entries'][operations:]
         kinds = [next(iter(e['operation']['command'])) for e in entries]
-        assert kinds == ['ApplyChange', 'Claim'], kinds
+        assert kinds == ['ApplyChange', 'Claim', 'Start'], kinds
         assert app.quit() == 0
         return (f'the inspector by keyboard alone: a defined focus order of {len(first)} stops, every one labelled, the same on two walks; '
-                f'Option-Command-C claimed TEST-A with the keyboard left in place; a typed title reviewed from the inspector and applied, the '
-                f'keyboard then on the rows; a cancelled review gave the keyboard back to the title field; recorded {kinds}')
+                f'a title, an estimate and a link removal entered by keys were reviewed and applied, the keyboard then on the rows; a review '
+                f'cancelled from the link field gave the keyboard back to it; claim, start, a refused verify and its acknowledgement by '
+                f'shortcuts left the keyboard in place; recorded {kinds}')
     except NotAssessed as interruption:
         not_assessed(case, interruption_or_death(app.process, interruption))
         return None

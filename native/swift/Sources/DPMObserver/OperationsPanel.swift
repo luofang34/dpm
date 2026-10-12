@@ -23,9 +23,9 @@ struct OperationsPanel: View {
             }
             .disabled(blocker != nil)
             TextField("Reason (block or reject)", text: Binding(get: { model.operations.reason }, set: { model.setOperationReason($0) }))
-                .textFieldStyle(.roundedBorder).accessibilityLabel("Reason for a block or a reject").accessibilityIdentifier("ops.reason")
+                .textFieldStyle(.roundedBorder).modifier(InspectorFocus(model: model, name: "ops-reason")).accessibilityLabel("Reason for a block or a reject").accessibilityIdentifier("ops.reason")
             TextField("Note (submit or verify)", text: Binding(get: { model.operations.note }, set: { model.setOperationNote($0) }))
-                .textFieldStyle(.roundedBorder).accessibilityLabel("Note for a submit or a verify").accessibilityIdentifier("ops.note")
+                .textFieldStyle(.roundedBorder).modifier(InspectorFocus(model: model, name: "ops-note")).accessibilityLabel("Note for a submit or a verify").accessibilityIdentifier("ops.note")
             HStack {
                 action("Block", .block(reason: model.operations.reason), id: "ops.block")
                     .disabled(blocker != nil || model.operations.reason.trimmingCharacters(in: .whitespaces).isEmpty)

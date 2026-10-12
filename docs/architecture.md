@@ -800,9 +800,10 @@ app shows the operation as accepted with its revision, refused with the reason, 
 unknown outcome holds every further command and plan apply until the same request is reconciled. A
 refusal keeps the typed reason or note and asks for the work to be read again and its changes looked
 at before anything is sent again, and after an accepted operation nothing more is sent until the plan
-is read at its revision. Every operation, Reconcile and reading the changes has an Option-Command
-shortcut, so the inspector works by keyboard whether or not the system's keyboard navigation reaches
-buttons, and an operation leaves the keyboard where it was. Closing a review gives the keyboard back
+is read at its revision. Every operation, Reconcile, reading the changes, setting criteria, removing
+a link or gate and discarding the draft has an Option-Command shortcut, and the title, objective,
+estimate, link, gate and new-task fields commit on Return, so the inspector works by keyboard whether
+or not the system's keyboard navigation reaches buttons; an operation leaves the keyboard where it was. Closing a review gives the keyboard back
 to the field or region it was opened from; after an apply from the inspector, whose fields are
 rebuilt, the region takes it.
 
