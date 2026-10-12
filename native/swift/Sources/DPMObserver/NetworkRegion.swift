@@ -233,7 +233,8 @@ final class NetworkRegionView: NSView {
                     model.setEditNotice("A work package's span comes from its tasks: link one of its tasks instead of \(node.key).")
                     return
                 }
-                let fromEnd = model.network.linking?.fromEnd ?? end(of: node, at: start)
+                let current = model.network.linking.flatMap { $0.from == press.identity ? $0.fromEnd : nil }
+                let fromEnd = current ?? end(of: node, at: start)
                 model.setNetworkLink(NetworkLinkDrag(from: press.identity, fromEnd: fromEnd, origin: NetworkPoint(x: start.x, y: start.y), point: NetworkPoint(x: point.x, y: point.y)))
                 return
             }

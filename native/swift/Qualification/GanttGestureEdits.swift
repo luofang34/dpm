@@ -66,6 +66,14 @@ extension Context {
         let applied = entries.last?["operation"]["command"]["ApplyChange"]
         let edges = try await cliJSON(database, ["export"])["data"]["dependencies"].array ?? []
         let lagNow = edges.first { $0["id"].string == existing.id }.flatMap { hours($0["lag_hours"]) }
+        // The network names a node's ends as a Gantt bar does: its left half is the start, its right half the finish.
+        let ends = await MainActor.run { () -> [PlanEnd] in
+            let graph = model.networkGraph
+            guard let node = graph.node(a), let place = graph.place[a] else { return [] }
+            let box = NetworkLayout.rect(place), scale = 2.0, pan = 10.0
+            return [0.25, 0.75].map { NetworkLayout.end(of: node, in: graph, at: ((box.x + box.width * $0) * scale - pan, 0), pan: (pan, 0), scale: scale) }
+        }
+        check(ends == [.start, .finish], "a network node's left half is its start and its right half its finish, panned and zoomed: \(ends)")
         check(entries.count == history + 1 && applied?["reason"].string == "Wait four hours after A" && lagNow == existing.lagHours + 4,
               "one ApplyChange recorded the reviewed lag with its reason: lag now \(lagNow ?? -1) h")
         await closeGantt(model)
@@ -121,6 +129,12 @@ extension Context {
         check(GanttGesture.lag(drivers: drivers, dx: -15, pointsPerHour: 10) == .success(.lag(dependency: "late", hours: 0.5)),
               "a whole-bar drag offers a lag on the link that drives the bar, in quarter hours, leads included")
         check(GanttGesture.lag(drivers: [], dx: 40, pointsPerHour: 10) == .failure(.noDriver), "a bar with no link into it offers no lag and says why")
+        let waived = GanttRelation(id: "waived", predecessor: "R", successor: "X", kind: "FinishStart", lagHours: 0, waived: true)
+        check(GanttGesture.lag(drivers: drivers + [GanttGesture.Driver(relation: waived, eventX: 500)], dx: 10, pointsPerHour: 10) == .success(.lag(dependency: "late", hours: 3)),
+              "a waived link bounds nothing, so it never takes the lag")
+        let working = GanttRelation(id: "working", predecessor: "W", successor: "X", kind: "FinishStart", lagHours: 1, lagBasis: "Working")
+        check(GanttGesture.lag(drivers: [GanttGesture.Driver(relation: working, eventX: 10)], dx: 40, pointsPerHour: 10) == .failure(.workingLag),
+              "a driving link whose lag counts working hours is left to the inspector, since a drag measures elapsed hours")
         check(GanttGesture.lag(drivers: drivers, dx: 1, pointsPerHour: 10) == .failure(.unmoved), "a drag of less than an eighth of an hour offers nothing")
     }
 }

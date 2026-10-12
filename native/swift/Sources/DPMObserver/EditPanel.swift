@@ -218,7 +218,7 @@ struct ItemEditor: View {
             model.setEditNotice("No \(GanttRelation.abbreviation(linkKind)) link \(linkAsPredecessor ? "after" : "before") \(linkKey) to set a lag on.")
             return
         }
-        guard let hours = Double(linkLag.trimmingCharacters(in: .whitespaces)) else {
+        guard let hours = Double(linkLag.trimmingCharacters(in: .whitespaces)), hours.isFinite else {
             model.setEditNotice("Type the lag in hours, negative for a lead.")
             return
         }
@@ -255,7 +255,7 @@ struct ItemEditor: View {
         default: ends = (.finish, .start)
         }
         let (from, to) = linkAsPredecessor ? (other, item.identity) : (item.identity, other)
-        model.edit(.link(id: UUID().uuidString.lowercased(), from: from, fromEnd: ends.0, to: to, toEnd: ends.1, lagHours: Double(linkLag) ?? 0))
+        model.edit(.link(id: UUID().uuidString.lowercased(), from: from, fromEnd: ends.0, to: to, toEnd: ends.1, lagHours: Double(linkLag).flatMap { $0.isFinite ? $0 : nil } ?? 0))
         linkKey = ""
     }
 

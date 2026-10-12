@@ -28,7 +28,11 @@ struct GanttTimelinePointer: ViewModifier {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 4)
                     .onChanged { value in
-                        if dragged == .zero, editDrag == nil, model.editing.enabled { editDrag = GanttEditDrag.begin(at: value.startLocation, model: model) }
+                        if dragged == .zero, editDrag == nil {
+                            if model.editing.enabled { editDrag = GanttEditDrag.begin(at: value.startLocation, model: model) }
+                            log.note("drag_begin", ["start": [value.startLocation.x, value.startLocation.y], "at": [value.location.x, value.location.y],
+                                                    "editing": model.editing.enabled, "edit": editDrag != nil])
+                        }
                         if var drag = editDrag {
                             drag.point = value.location
                             editDrag = drag

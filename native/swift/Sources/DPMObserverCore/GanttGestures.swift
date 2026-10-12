@@ -89,7 +89,8 @@ public enum GanttGesture {
         return .join(id: bar.id, end: x < (bar.left + bar.right) / 2 ? .start : .finish)
     }
 
-    /// A link into the dragged bar and where its predecessor's event is drawn, the event the bar waits for.
+    /// A link into the dragged bar and the earliest start it allows the bar, drawn on the timeline: the predecessor's
+    /// event plus the link's lag, less the bar's length for a link that bounds its finish.
     public struct Driver: Equatable, Sendable {
         public let relation: GanttRelation
         public let eventX: Double
@@ -99,24 +100,28 @@ public enum GanttGesture {
         }
     }
 
-    /// What dropping a whole bar dragged `dx` points offers: a new lag on the link whose predecessor event is latest, the
-    /// one that drives the bar, moved by the drag in quarter hours; or the reason there is none.
+    /// What dropping a whole bar dragged `dx` points offers: a new lag on the link that drives the bar, the one whose
+    /// bound on its start is latest (a waived link bounds nothing), moved by the drag in quarter hours; or the reason
+    /// there is none. A drag measures elapsed hours, so a link whose lag counts working hours is left to the inspector.
     public static func lag(drivers: [Driver], dx: Double, pointsPerHour: Double) -> Result<PlanEdit, ShiftRefusal> {
-        guard let driver = drivers.max(by: { $0.eventX < $1.eventX }) else { return .failure(.noDriver) }
+        guard let driver = drivers.filter({ !$0.relation.waived }).max(by: { $0.eventX < $1.eventX }) else { return .failure(.noDriver) }
+        guard driver.relation.lagBasis == "Elapsed" else { return .failure(.workingLag) }
         let delta = quarter(dx / max(pointsPerHour, .leastNonzeroMagnitude))
         guard delta != 0 else { return .failure(.unmoved) }
-        return .success(.lag(dependency: driver.relation.id, hours: quarter(driver.relation.lagHours + delta)))
+        return .success(.lag(dependency: driver.relation.id, hours: driver.relation.lagHours + delta))
     }
 
     /// Why a whole-bar drag offers no lag.
     public enum ShiftRefusal: Error, Equatable, Sendable {
         case noDriver
         case unmoved
+        case workingLag
 
         public var words: String {
             switch self {
             case .noDriver: return "Dates are derived, so a bar does not move: link it to a predecessor, then drag it to offer a lag."
             case .unmoved: return "Dates are derived, so a bar does not move; drag it along the timeline to offer a lag on the link that drives it."
+            case .workingLag: return "The link that drives this bar counts its lag in working hours; set it in the inspector (⌥⌘E)."
             }
         }
     }

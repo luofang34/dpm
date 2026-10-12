@@ -76,14 +76,18 @@ struct GanttEditDrag: Equatable {
         }
     }
 
-    /// The links into `work` with where each predecessor's awaited event is drawn: its finish for FS and FF, its start
-    /// for SS and SF.
+    /// The links into `work`, each with the earliest start it allows the bar as drawn: the predecessor's finish (FS, FF)
+    /// or start (SS, SF) plus the link's lag, less the bar's length when the link bounds its finish (FF, SF). A predecessor
+    /// not drawn now is ranked last.
     @MainActor static func drivers(of work: String, model: ObserverModel) -> [GanttGesture.Driver] {
-        model.snapshot.inventory.relations(of: work).filter { $0.successor == work }.map { relation in
-            let predecessor = bar(of: relation.predecessor, model: model)
-            let atStart = relation.kind == "StartStart" || relation.kind == "StartFinish"
-            let x = predecessor.map { Double(atStart ? $0.left : $0.right) } ?? -.infinity
-            return GanttGesture.Driver(relation: relation, eventX: x)
+        let own = bar(of: work, model: model)
+        let length = own.map { Double($0.right - $0.left) } ?? 0
+        return model.snapshot.inventory.relations(of: work).filter { $0.successor == work }.map { relation in
+            let fromStart = relation.kind == "StartStart" || relation.kind == "StartFinish"
+            let boundsFinish = relation.kind == "FinishFinish" || relation.kind == "StartFinish"
+            guard let predecessor = bar(of: relation.predecessor, model: model) else { return GanttGesture.Driver(relation: relation, eventX: -.infinity) }
+            let event = Double(fromStart ? predecessor.left : predecessor.right) + relation.lagHours * model.gantt.scale
+            return GanttGesture.Driver(relation: relation, eventX: boundsFinish ? event - length : event)
         }
     }
 

@@ -24,6 +24,7 @@ import copy
 import ctypes
 import hashlib
 import json
+import math
 import os
 import re
 import select
@@ -2553,17 +2554,26 @@ def gantt_drag_route(bundle, directory):
     def bars(state):
         return {b['key']: b for b in state['gantt']['bars']}
 
+    aim = [0.0, 0.0]
+
+    def receipts(state):
+        return [e for e in ((state.get('host') or {}).get('gantt_pointer') or {}).get('events', []) if e.get('event') in ('edit_drag', 'drag_end')]
+
     def drag(start, end, step):
-        """One real press, eight drags and a release, from `start` to `end` in timeline points."""
+        """One real press, eight drags and a release, from `start` to `end` in timeline points; the timeline's own receipt
+        of the finished drag, which says what it proposed."""
         state = app.state()
+        seen = len(receipts(state))
         timeline = state['gantt']['layout']['frames']['timeline']
         ox, oy = content_origin(state['gantt']['layout'])
-        place = lambda p: (ox + timeline[0] + p[0], oy + timeline[1] + p[1])
+        place = lambda p: (ox + timeline[0] + p[0] + aim[0], oy + timeline[1] + p[1] + aim[1])
         post_mouse(app, front, 'moved', place(start), step=step)
         post_mouse(app, front, 'down', place(start), step=step)
         for i in range(1, 9):
             post_mouse(app, front, 'dragged', place((start[0] + (end[0] - start[0]) * i / 8, start[1] + (end[1] - start[1]) * i / 8)), step=step)
         post_mouse(app, front, 'up', place(end), step=step)
+        done = guarded_wait(app, front, lambda s: len(receipts(s)) > seen, 10, f'the timeline to receive {step}')
+        return receipts(done)[-1]
 
     try:
         shown = app.wait(lambda s: gantt_loaded(s) and s['editing']['enabled'] and {'TEST-B', 'TEST-C', 'TEST-D', 'TEST-F'} <= set(bars(s)), 30,
@@ -2576,13 +2586,45 @@ def gantt_drag_route(bundle, directory):
         package = next((b for b in shown['gantt']['bars'] if b['kind'] == 'WorkPackage'), None)
         assert package, f'the work package has no drawn bar to drop on: {shown["gantt"]["bars"]}'
         d, f, b, c = before['TEST-D'], before['TEST-F'], before['TEST-B'], before['TEST-C']
-        drag((d['right'] - 1, d['mid']), (f['right'] - 2, f['mid']), "a drag from TEST-D's finish to TEST-F's right half")
+        assert b['right'] - b['left'] > 16, f'TEST-B is too narrow at this zoom for a body drag clear of its ends: {b}'
+        # The aim is checked with a real click on TEST-D: the timeline's receipt says where it landed, and every drag is
+        # corrected by the difference, so a press meant for a bar's end takes that end.
+        layout = shown['gantt']['layout']
+        ox, oy = content_origin(layout)
+        timeline = layout['frames']['timeline']
+        target = ((d['left'] + d['right']) / 2, d['mid'])
+        post_click(app, front, (ox + timeline[0] + target[0], oy + timeline[1] + target[1]), step='a click on TEST-D to check the aim')
+        clicked = guarded_wait(app, front, lambda s: any(e.get('event') == 'click' for e in ((s.get('host') or {}).get('gantt_pointer') or {}).get('events', [])), 10,
+                               'the timeline to receive the aiming click')
+        receipt = [e for e in clicked['host']['gantt_pointer']['events'] if e.get('event') == 'click'][-1]
+        assert receipt.get('hit') == 'TEST-D', f'the aiming click on TEST-D landed elsewhere: {receipt}'
+        aim[0], aim[1] = target[0] - receipt['point'][0], target[1] - receipt['point'][1]
+        # Selecting TEST-D fills the inspector, and the fitted timeline follows its new width: bars are read again, once
+        # the selection is shown, and before every drag, as a person aims at what is drawn now.
+        settled = guarded_wait(app, front, lambda s: s['gantt']['selected_key'] == 'TEST-D' and s['detail'] and not s['detail']['loading'], 10,
+                               'the selection of TEST-D to be shown')
+        before = bars(settled)
+        d, f = before['TEST-D'], before['TEST-F']
+        linked = drag((d['right'] - 1, d['mid']), (f['right'] - 2, f['mid']), "a drag from TEST-D's finish to TEST-F's right half")
+        began = [e for e in app.state()['host']['gantt_pointer']['events'] if e.get('event') == 'drag_begin']
+        assert linked.get('event') == 'edit_drag' and 'FinishFinish' in (linked.get('proposed') or ''), (
+            f'the drag from TEST-D proposed no FF link: {linked}; aimed at {d["right"] - 1, d["mid"]} with correction {aim}; '
+            f'click receipt {receipt}; bar {d}; began {began}')
         guarded_wait(app, front, lambda s: s['editing']['edits'] == 1, 10, 'the FF link to enter the draft')
+        now = app.state()
+        b, scale = bars(now)['TEST-B'], now['gantt']['scale']
         middle = (b['left'] + b['right']) / 2
-        drag((middle, b['mid']), (middle + 60, b['mid']), "a drag of TEST-B's body along the timeline")
+        shifted = drag((middle, b['mid']), (middle + 60, b['mid']), "a drag of TEST-B's body along the timeline")
+        assert shifted.get('event') == 'edit_drag' and (shifted.get('proposed') or '').startswith('lag'), f'the body drag proposed no lag: {shifted}'
         guarded_wait(app, front, lambda s: s['editing']['edits'] == 2, 10, 'the lag to enter the draft')
-        moved = [k for k, bar in bars(app.state()).items() if before.get(k) and (bar['left'], bar['right']) != (before[k]['left'], before[k]['right'])]
+        # In hours, since a fitted timeline rescales as the inspector's draft grows: no bar starts or ends elsewhere.
+        after = app.state()
+        hours = lambda bar, state: (bar['left'] / state['gantt']['scale'], bar['right'] / state['gantt']['scale'])
+        moved = [k for k, bar in bars(after).items() if before.get(k) and k != package['key']
+                 and max(abs(x - y) for x, y in zip(hours(bar, after), hours(before[k], settled))) > 0.05]
         assert not moved, f'a drag moved bars before any apply: {moved}'
+        now = bars(app.state())
+        c, package = now['TEST-C'], now[package['key']]
         drag((c['right'] - 1, c['mid']), ((package['left'] + package['right']) / 2, package['mid']), "a drag from TEST-C's finish onto the work package")
         refused = guarded_wait(app, front, lambda s: 'work package' in (s['editing']['notice'] or ''), 10, 'the drop on the package to be refused in the view')
         assert refused['editing']['edits'] == 2, f'a drop on a package entered the draft: {refused["editing"]}'
@@ -2592,6 +2634,8 @@ def gantt_drag_route(bundle, directory):
         guarded_key(app, front, 'Command-V to paste the reason', 9, COMMAND_FLAG)
         guarded_key(app, front, 'Command-Return to apply', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the drag proposals to be applied')
+        guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
+        guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close')
         uninterrupted(front, 'the route is complete')
         entries = run_cli(database, 'history')['entries'][operations:]
         assert [next(iter(e['operation']['command'])) for e in entries] == ['ApplyChange'], entries
@@ -2600,7 +2644,8 @@ def gantt_drag_route(bundle, directory):
         edges = {(keys[e['predecessor']], e['kind'], keys[e['successor']]): e for e in plan['dependencies']}
         assert ('TEST-D', 'FinishFinish', 'TEST-F') in edges, f'no FF link from TEST-D to TEST-F: {sorted(edges)}'
         lag = edges[('TEST-A', 'FinishStart', 'TEST-B')]['lag_hours']
-        assert lag > 0, f'the whole-bar drag drafted no lag on A to B: {lag}'
+        expected = math.floor(60 / scale * 4 + 0.5) / 4
+        assert lag == expected, f'the 60 pt drag at {scale} pt an hour drafted {lag} h on A to B, not {expected} h'
         assert app.quit() == 0
         return (f"linking and lag by real pointer drags: TEST-D's finish to TEST-F's right half drafted an FF link; TEST-B's body dragged 60 pt "
                 f"moved no bar and drafted a {lag} h lag on A to B; a drop on {package['key']} was refused in the view ({refused['editing']['notice']}); "
