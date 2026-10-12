@@ -355,17 +355,47 @@ struct NetworkLinkView: View {
     @ObservedObject var model: ObserverModel
 
     var body: some View {
+        let target = self.target
         ZStack(alignment: .topLeading) {
             Canvas { context, _ in
+                guard let start = canvas(model.networkEnd(link.from, link.fromEnd)) else { return }
+                let tip = target.flatMap { canvas(model.networkEnd($0.node.identity, $0.end)) } ?? NetworkPoint(x: link.point.x, y: link.point.y)
+                // The run out of a node scales with the zoom, as the drafted link it becomes is drawn.
+                let scale = model.network.scale
+                let points = ElbowRoute.points(from: start, outward: ElbowRoute.outward(link.fromEnd) * scale, to: tip,
+                                               inward: target.map { ElbowRoute.inward($0.end) * scale } ?? 0)
                 var path = Path()
-                path.move(to: CGPoint(x: link.origin.x, y: link.origin.y))
-                path.addLine(to: CGPoint(x: link.point.x, y: link.point.y))
-                context.stroke(path, with: .color(Palette.relationEmphasis), style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                path.addLines(points.map { CGPoint(x: $0.x, y: $0.y) })
+                context.stroke(path, with: .color(Palette.relationEmphasis), style: StrokeStyle(lineWidth: 2, dash: target == nil ? [5, 3] : []))
+                context.fill(Path(ellipseIn: CGRect(x: start.x - 4, y: start.y - 4, width: 8, height: 8)), with: .color(Palette.relationEmphasis))
+                if let end = target?.end {
+                    context.fill(GanttEditDrag.arrowhead(at: CGPoint(x: tip.x, y: tip.y), pointingRight: end == .start), with: .color(Palette.relationEmphasis))
+                }
             }
-            Text("Link from \(model.editName(link.from))'s \(link.fromEnd.rawValue): drop on a task or milestone, its left half for its start, its right half for its finish").font(.caption).padding(5)
+            Text(hint(target)).font(.caption).padding(5)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
                 .offset(x: link.point.x + 12, y: link.point.y + 12)
         }
         .allowsHitTesting(false)
+    }
+
+    /// The task or milestone under the pointer and the end of it a drop would join.
+    private var target: (node: NetworkNode, end: PlanEnd)? {
+        let state = model.network, at = (x: link.point.x, y: link.point.y)
+        guard let node = NetworkLayout.hit(model.networkGraph, shown: model.networkNodes, at: at, pan: (state.panX, state.panY), scale: state.scale),
+              node.identity != link.from, !node.isDecision, node.kind != .package else { return nil }
+        return (node, NetworkLayout.end(of: node, in: model.networkGraph, at: at, pan: (state.panX, state.panY), scale: state.scale))
+    }
+
+    /// A graph point where the canvas draws it.
+    private func canvas(_ point: NetworkPoint?) -> NetworkPoint? {
+        point.map { NetworkPoint(x: $0.x * model.network.scale - model.network.panX, y: $0.y * model.network.scale - model.network.panY) }
+    }
+
+    private func hint(_ target: (node: NetworkNode, end: PlanEnd)?) -> String {
+        guard let target else {
+            return "Link from \(model.editName(link.from))'s \(link.fromEnd.rawValue): drop on a task or milestone, its left half for its start, its right half for its finish"
+        }
+        return "\(GanttRelation.abbreviation(PlanEdit.kind(from: link.fromEnd, to: target.end))) \(model.editName(link.from)) → \(target.node.key)"
     }
 }

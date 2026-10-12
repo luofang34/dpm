@@ -138,31 +138,12 @@ struct GanttEditDrag: Equatable {
         }
     }
 
-    /// An elbow connector from an end of a bar to `to`, as links are drawn: out from the bar's end, and into the target
-    /// from the side its end faces, so the last run never crosses the target bar. Ends facing each other with room
-    /// between turn once; ends facing the same way turn beyond both; a link running back turns between the rows.
+    /// An elbow connector from an end of a bar to `to`, as links are drawn on every page (`ElbowRoute`).
     static func elbow(from: CGPoint, outward: CGFloat, to: CGPoint, inward: CGFloat) -> Path {
+        let points = ElbowRoute.points(from: NetworkPoint(x: Double(from.x), y: Double(from.y)), outward: Double(outward),
+                                       to: NetworkPoint(x: Double(to.x), y: Double(to.y)), inward: Double(inward))
         var path = Path()
-        let out = from.x + outward, entry = to.x + inward
-        path.move(to: from)
-        let facing = (outward > 0 && inward < 0 && entry >= out) || (outward < 0 && inward > 0 && entry <= out)
-        let sameWay = (outward > 0 && inward > 0) || (outward < 0 && inward < 0) || inward == 0
-        if facing {
-            path.addLine(to: CGPoint(x: entry, y: from.y))
-            path.addLine(to: CGPoint(x: entry, y: to.y))
-        } else if sameWay {
-            let turn = inward == 0 ? out : (outward > 0 ? max(out, entry) : min(out, entry))
-            path.addLine(to: CGPoint(x: turn, y: from.y))
-            path.addLine(to: CGPoint(x: turn, y: to.y))
-            if inward != 0 { path.addLine(to: CGPoint(x: entry, y: to.y)) }
-        } else {
-            let between = (from.y + to.y) / 2
-            path.addLine(to: CGPoint(x: out, y: from.y))
-            path.addLine(to: CGPoint(x: out, y: between))
-            path.addLine(to: CGPoint(x: entry, y: between))
-            path.addLine(to: CGPoint(x: entry, y: to.y))
-        }
-        path.addLine(to: to)
+        path.addLines(points.map { CGPoint(x: $0.x, y: $0.y) })
         return path
     }
 

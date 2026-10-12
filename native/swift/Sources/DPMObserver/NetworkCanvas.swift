@@ -66,6 +66,8 @@ struct NetworkCanvas: View {
                         context.stroke(Path(roundedRect: rect.insetBy(dx: -2, dy: -2), cornerRadius: 6), with: .color(.accentColor.opacity(0.6)), lineWidth: 1.5)
                     }
                 }
+                // The draft's links, over the nodes they join, until they are applied, removed or discarded.
+                for link in model.networkDraftLinks { Self.drawDraft(link, in: &context) }
             }
             if let note = state.locateNote {
                 VStack {
@@ -148,6 +150,22 @@ struct NetworkCanvas: View {
         case .context:
             context.stroke(path, with: .color(.secondary), style: StrokeStyle(lineWidth: 1, dash: [1, 3]))
         }
+    }
+
+    /// One drafted link: a dashed elbow connector with its arrowhead and a "draft" plate naming its kind.
+    static func drawDraft(_ link: NetworkDraftLink, in context: inout GraphicsContext) {
+        guard let tip = link.points.last, link.points.count > 1 else { return }
+        var path = Path()
+        path.addLines(link.points.map { CGPoint(x: $0.x, y: $0.y) })
+        context.stroke(path, with: .color(Palette.relationEmphasis), style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+        let before = link.points[link.points.count - 2]
+        context.fill(GanttEditDrag.arrowhead(at: CGPoint(x: tip.x, y: tip.y), pointingRight: before.x < tip.x || (before.x == tip.x && link.kind.hasSuffix("Start"))),
+                     with: .color(Palette.relationEmphasis))
+        let middle = link.labelPoint
+        let plate = Text("draft \(GanttRelation.abbreviation(link.kind))").font(.system(size: 9, weight: .semibold)).foregroundColor(Palette.relationEmphasis)
+        context.fill(Path(roundedRect: CGRect(x: middle.x - 26, y: middle.y - 7, width: 52, height: 14), cornerRadius: 3),
+                     with: .color(Color(nsColor: .windowBackgroundColor).opacity(0.9)))
+        context.draw(plate, at: CGPoint(x: middle.x, y: middle.y))
     }
 
     static func drawNode(_ node: NetworkNode, in rect: CGRect, focused: Bool, keyboard: Bool, context: inout GraphicsContext) {

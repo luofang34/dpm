@@ -2672,6 +2672,63 @@ def gantt_drag_route(bundle, directory):
         app.close()
 
 
+def network_drag_route(bundle, directory):
+    """Linking on the network by a real pointer drag while editing: from the right half of one drawn task to the left
+    half of another drafts a finish-to-start link, which the canvas then draws between those ends with its kind;
+    Option-Command-Delete discards the draft and the drawn link goes with it. Nothing is written. Only the complete
+    route passes; an interrupted one is NOT ASSESSED."""
+    case = 'network_drag_route'
+    if not accessibility_trusted():
+        not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so no pointer event was posted')
+        return None
+    database = network_store(directory, 'network-drag')
+    operations = len(run_cli(database, 'history')['entries'])
+    app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'network', '--window-size', '1400x900'])
+    front = None
+    try:
+        tasks = lambda s: [n for n in s['network']['drawn'] if n['kind'].startswith('task')]
+        measured = lambda s: (((s.get('gantt') or {}).get('layout') or {}).get('frames') or {}).get('network_canvas')
+        shown = app.wait(lambda s: network_shown(s) and s['editing']['enabled'] and len(tasks(s)) >= 2 and measured(s), 30,
+                         'the network with a measured canvas, two drawn tasks and editing on')
+        front = Foreground(app.process.pid)
+        front.activate(app.process)
+        front.arm()
+        first, second = sorted(tasks(shown), key=lambda n: (n['rect'][0], n['rect'][1]))[:2]
+        layout = shown['gantt']['layout']
+        canvas = layout['frames']['network_canvas']
+        ox, oy = content_origin(layout)
+        place = lambda x, y: (ox + canvas[0] + x, oy + canvas[1] + y)
+        x0, y0, w0, h0 = first['rect']
+        x1, y1, w1, h1 = second['rect']
+        start, end = place(x0 + w0 * 0.75, y0 + h0 / 2), place(x1 + w1 * 0.25, y1 + h1 / 2)
+        step = f"a drag from {first['key']}'s right half to {second['key']}'s left half"
+        post_mouse(app, front, 'moved', start, step=step)
+        post_mouse(app, front, 'down', start, step=step)
+        for i in range(1, 9):
+            post_mouse(app, front, 'dragged', (start[0] + (end[0] - start[0]) * i / 8, start[1] + (end[1] - start[1]) * i / 8), step=step)
+        post_mouse(app, front, 'up', end, step=step)
+        drafted = guarded_wait(app, front, lambda s: s['editing']['edits'] == 1 and s['network']['drafted'], 10, 'the dragged link to be drafted and drawn')
+        link = drafted['network']['drafted'][0]
+        assert (link['kind'], link['from'], link['to']) == ('FinishStart', first['key'], second['key']), f'the drawn draft link is not FS {first["key"]} to {second["key"]}: {link}'
+        guarded_key(app, front, 'Option-Command-Delete to discard the draft', KEY_CODES['delete'], COMMAND_FLAG | OPTION_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 0 and not s['network']['drafted'], 10, 'the discarded draft to draw no link')
+        uninterrupted(front, 'the route is complete')
+        assert len(run_cli(database, 'history')['entries']) == operations, 'the network drag wrote something'
+        assert app.quit() == 0
+        return (f"linking on the network by a real pointer drag: {first['key']}'s right half to {second['key']}'s left half drafted an FS link, drawn "
+                f"on the canvas between those ends ({link['corners']} corners); discarding the draft removed it; nothing written")
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption))
+        return None
+    except AssertionError as error:
+        kept = keep_failure(case, app, front, {'error': str(error)[:4000]})
+        raise AssertionError(f'{error} (complete failing state kept at {kept})') from None
+    finally:
+        if front:
+            front.close()
+        app.close()
+
+
 def inspector_edit_keyboard_route(bundle, directory):
     """Every kind of plan edit by keyboard alone on TEST-F, whose title is 500 characters: its title (Return, and Return
     again leaves one edit), objective (Return), acceptance criteria (Option-Command-A), estimate (Return in an hours
@@ -3468,7 +3525,7 @@ def main(bundle):
         for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
                          edit_flag_first, gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
                          filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
-                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route, inspector_edit_keyboard_route, gantt_drag_route):
+                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route, inspector_edit_keyboard_route, gantt_drag_route, network_drag_route):
             result = scenario(packaged, directory)
             # A case that was skipped or not assessed says so itself, loudly, and returns nothing: it is never a pass.
             if result is not None:
