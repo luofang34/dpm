@@ -1,11 +1,13 @@
-name: Publish
+name: Release
 
 # Publishes the dpm binary and the libraries it is built from to crates.io, in dependency order, from
 # a commit on main. scripts/check_repository.py keeps that set equal to the crates without
 # `publish = false`. A dry run packages and builds every crate without uploading; a real run skips
 # versions already published and waits out the rate limit on new crates, so it can be run again.
-# Store CARGO_REGISTRY_TOKEN on the crates-io environment and restrict that environment to main:
-# workflow_dispatch runs the file from the chosen ref, so the step below is a reminder, not a gate.
+# Uploads authenticate by crates.io trusted publishing: each published crate trusts this workflow
+# file (release.yml) in the crates-io environment, and the job exchanges its GitHub OIDC token for a
+# short-lived crates.io token. Restrict the crates-io environment to main: workflow_dispatch runs
+# the file from the chosen ref, so the step below is a reminder, not a gate.
 on:
   workflow_dispatch:
     inputs:
@@ -18,20 +20,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: publish
+  group: release
   cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    # A trusted publisher on crates.io can be bound to this workflow and environment.
     environment: crates-io
+    permissions:
+      contents: read
+      # Only for the crates.io trusted-publishing token exchange.
+      id-token: write
     steps:
       - name: Refuse anything but main
         if: github.ref != 'refs/heads/main'
         run: |
-          echo "Publish from main, not $GITHUB_REF" >&2
+          echo "Release from main, not $GITHUB_REF" >&2
           exit 1
       - uses: actions/checkout@v7
       - name: Install Rust toolchain
@@ -40,8 +45,12 @@ jobs:
         run: python3 scripts/check_repository.py
       - name: Package and verify
         run: python3 scripts/publish_crates.py --dry-run
+      - name: Authenticate to crates.io
+        if: ${{ !inputs.dry_run }}
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
       - name: Publish
         if: ${{ !inputs.dry_run }}
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: python3 scripts/publish_crates.py
