@@ -2585,8 +2585,10 @@ def gantt_drag_route(bundle, directory):
         return receipts(done)[-1]
 
     try:
-        shown = app.wait(lambda s: gantt_loaded(s) and s['editing']['enabled'] and {'TEST-B', 'TEST-C', 'TEST-D', 'TEST-F'} <= set(bars(s)), 30,
-                         'the Gantt with its bars and editing on')
+        # The timeline's frame is measured after the first draw: the aim needs it, so it is awaited with the bars.
+        measured = lambda s: 'timeline' in ((s['gantt'].get('layout') or {}).get('frames') or {})
+        shown = app.wait(lambda s: gantt_loaded(s) and s['editing']['enabled'] and {'TEST-B', 'TEST-C', 'TEST-D', 'TEST-F'} <= set(bars(s)) and measured(s), 30,
+                         'the Gantt with its bars, a measured timeline and editing on')
         front = Foreground(app.process.pid)
         front.allow_sheets = True
         front.activate(app.process)
