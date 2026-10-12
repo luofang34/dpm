@@ -519,6 +519,17 @@ sampling order, and transcendental functions come from the pure-Rust `libm` (cli
 platform ones), so a query is bit-for-bit reproducible for the same plan and clock reading on every
 device. Task durations are sampled independently; correlated overruns are not modeled.
 
+The same samples give each milestone's P50/P80/P95 and, for a horizon `H` passed to the query, the
+fraction of samples finishing by `H`. Beside it `dpm-schedule` reports the classical analytic PERT
+approximation along one mean critical path: critical driving dependencies followed back from a
+critical activity that sets the finish, taking the larger-variance branch at a fork (then the
+smaller id), with variance `Σ((P − O) / 6)²` over the durations the path's finish depends on and
+probability `Φ((H − mean) / σ)`. Those variances are the textbook ones, not the sampled beta-PERT
+variances, and the approximation ignores near-critical paths, so it usually overstates the
+probability; the sampled value is the forecast. Drag is measured by recomputing the deterministic
+projection with one activity's duration at zero, only for the activities a query asks about, since
+SS, FF and SF constraints admit no closed form over float.
+
 ## Calibration and flow
 
 `dpm-engine` measures how recorded work compared with its estimates from the snapshot and the

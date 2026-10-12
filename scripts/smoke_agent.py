@@ -143,6 +143,7 @@ def smoke(database):
         assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_calibration', 'get_schedule', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'propose_revert', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'revert_change', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'validate_plan', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register', 'workspace_revision', 'start_run', 'report_run', 'record_run_activity', 'link_run_operation', 'list_runs', 'get_run', 'run_lifecycle', 'run_activity'} == names
         pairs = [
             ('project_status', {}, ('status',)),
+            ('project_status', {'horizon_hours': 80}, ('status', '--horizon', '80')),
             ('next_work', {}, ('next',)),
             ('next_work', {'capabilities': ['unrelated']}, ('next', '--capability', 'unrelated')),
             ('get_work', {'key': 'TEST-A'}, ('show', 'TEST-A')),
@@ -154,6 +155,13 @@ def smoke(database):
         for tool, arguments, command in pairs:
             # The whole result is shared: version, observed revision and data.
             assert worker.call(tool, arguments) == run_cli_envelope(database, *command)
+        # The horizon parity case must compare real probabilities, not two nulls.
+        forecast = worker.call('project_status', {'horizon_hours': 80})['data']['forecast']
+        assert forecast['probability_by_horizon'] is not None and forecast['pert_approximation']['probability_by_horizon'] is not None, forecast
+        assert all(m['probability_by_horizon'] is not None for m in forecast['milestones']) and forecast['milestones'], forecast
+        assert worker.call('project_status', {})['data']['forecast']['probability_by_horizon'] is None
+        refused_horizon = worker.call('project_status', {'horizon_hours': -1}, error='invalid_command')
+        assert refused_horizon['message'] == run_cli(database, 'status', '--horizon=-1', error='invalid_command')['error']['message']
         missing_pairs = [
             ('get_work', {'key': 'missing'}, ('show', 'missing')),
             ('claim_work', {'key': 'missing', 'base_revision': 0}, ('claim', 'missing')),

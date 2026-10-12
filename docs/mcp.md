@@ -70,7 +70,7 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | run show RUN | get_run | One run with its observed contract, source, freshness and linked operations |
 | run lifecycle --after-sequence N --limit N | run_lifecycle | Durable run lifecycle feed; never pruned |
 | run activity --after-sequence N --limit N | run_activity | Bounded run activity feed with its own cursor; reports a gap when retention outran the cursor |
-| status --calibrated | project_status | Counts and optional Monte Carlo forecast; `calibrated` applies [measured factors](#calibration-and-flow) to a copy of the plan |
+| status --calibrated --horizon HOURS | project_status | Counts and optional Monte Carlo forecast with [schedule risk](#schedule-risk); `calibrated` applies [measured factors](#calibration-and-flow) to a copy of the plan; `horizon_hours` adds finish probabilities |
 | schedule --no-simulation | get_schedule | The [schedule projection](#schedule-projection) of every work item at one clock reading; `probabilistic` (default true) adds sampled criticality and p50/p80/p95 finish hours, which are null otherwise |
 | calibration | get_calibration | [Estimate ratios, review and decision waits, and flow](#calibration-and-flow) measured from history |
 | next --project-key KEY --asset-key KEY --actor KIND:NAME | next_work | Full-graph ranking, then [scope](#scoped-next) and limit; outside-scope work stays visible; `actor` adds a holding-claims advisory |
@@ -975,6 +975,42 @@ explained item is in that list, and `why_now` then states that its schedule, flo
 assume 0 h; a `next_work` candidate in the list carries the same statement in `reasons`. Text
 `status` prints a leading `Unestimated:` line with the count and the first five keys, and the TUI Now
 page and Detail state it in words. These fields are additive; `api_version` is unchanged.
+
+### Schedule risk
+
+`project_status.forecast` is present whenever the headline percentiles are (it is `null` for
+`--no-simulation`, while open choices withhold percentiles, or when no work has an estimate). It
+holds `milestones` (`id`, `key`, `p50_finish_hours`, `p80_finish_hours`, `p95_finish_hours` and
+`probability_by_horizon` for every applicable milestone, in key order, from the same seeded samples
+as the project percentiles), `horizon_hours`, `probability_by_horizon` (the fraction of sampled
+schedules finishing the project by the horizon: the forecast), `spread` and `pert_approximation`.
+`status --horizon HOURS` / `project_status` `horizon_hours` (finite, at least 0, elapsed hours after
+the clock reading) is a query parameter only; without it every `probability_by_horizon` is `null`,
+and a negative or non-finite horizon is refused with `invalid_command`.
+
+`pert_approximation` is the classical PERT normal over one mean critical path, reported beside the
+sampled probability and never instead of it: `mean_hours` (the deterministic remaining finish,
+which without calendars is the path's PERT means `(O + 4M + P) / 6` plus lags), `variance_hours2`
+(the sum of `((P − O) / 6)²` over the durations the path's finish depends on: an SS successor's
+finish does not depend on its predecessor's duration, an FF successor's does not depend on its
+own), `sigma_hours`, `probability_by_horizon` = `Φ((H − mean) / σ)`, `path` (`id`, `key`, first
+activity first) and `note`. The path follows critical driving dependencies back from a critical
+activity that sets the finish and continues into no critical dependency; at a fork it takes the
+branch with the larger variance, then the smaller work id. Because it ignores near-critical paths
+it usually overstates the probability. Started work contributes its remaining mean and the variance
+of the range its elapsed time still allows (`O` raised to the elapsed hours); finished work
+contributes neither. `spread` holds `pert_sigma_hours` (that analytic σ) and `sampled_std_dev_hours`
+(the sample standard deviation of the simulated finishes).
+
+`explain_work.pert_variance_hours2` is that classical remaining variance of the explained item,
+not the variance of the beta-PERT duration the simulation samples; `explain_work.drag_hours` and
+each `next_work` candidate's `drag_hours` are how far the deterministic remaining finish would move
+if the work took no time, measured by recomputing the schedule with its duration at zero: `0` off
+the critical path (and for a critical task whose duration the finish does not depend on), negative
+when shortening it would delay the finish. A candidate's `criticality_basis` is `simulated` (the
+score uses the sampled `criticality`) or `deterministic` (1 on the deterministic critical path,
+otherwise 0), and `reasons` names it. Drag is reported but not ranked; `reasons` says so and the
+score is unchanged. These fields are additive; `api_version` is unchanged.
 
 `explain_work.transitions` reports `claim`, `start`, `submit` and `verify` with the same shape as
 `gates` (the claim report). A milestone's `progress.completed_at` is the latest release among its

@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
 mod cli;
+mod forecast;
 mod interchange;
 mod lifecycle;
 mod ownership;
@@ -63,7 +64,7 @@ const NAMES: &[(&str, &str)] = &[
     ),
     (
         "project_status",
-        "Project execution counts and schedule forecast; calibrated applies measured estimate ratios and review waits and states each factor",
+        "Project execution counts and schedule forecast with milestone percentiles; horizon_hours adds sampled and PERT-approximate probabilities of finishing by then; calibrated applies measured estimate ratios and review waits and states each factor",
     ),
     (
         "get_calibration",
@@ -168,8 +169,7 @@ pub(crate) fn definitions() -> Vec<Value> {
             "validate_plan" => validation::schema(&mut properties, &mut required),
             "history" => { properties.insert("after_sequence".into(),json!({"type":"integer","minimum":0,"default":0})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"maximum":1000,"default":100})); },
             "workspace_register" => { properties.insert("database".into(),json!({"type":"string"})); properties.insert("replace".into(),json!({"type":"boolean","default":false})); required.push("database"); },
-            "project_status" => { properties.insert("probabilistic".into(),json!({"type":"boolean"})); properties.insert("calibrated".into(),json!({"type":"boolean","default":false,"description":"Apply measured factors with enough samples to a copy of the plan and report them under calibration"})); },
-            "get_schedule" => { properties.insert("probabilistic".into(),json!({"type":"boolean","default":true,"description":"Add seeded criticality and finish percentiles; false projects the deterministic schedule only"})); },
+            "project_status" | "get_schedule" => forecast::schema(name, &mut properties),
             "next_work" => { properties.insert("capabilities".into(),json!({"type":"array","items":{"type":"string"}})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"default":5})); properties.insert("probabilistic".into(),json!({"type":"boolean","default":true}));
                 properties.insert("project_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"Project keys whose subtrees form a query-only scope; not a directory"}));
                 properties.insert("asset_keys".into(),json!({"type":"array","items":{"type":"string"},"description":"WorkspaceAsset keys returned work must fit: at least one named, every write listed"}));
@@ -231,6 +231,7 @@ struct Arguments {
     probabilistic: bool,
     #[serde(default)]
     calibrated: bool,
+    horizon_hours: Option<f64>,
     actor: Option<String>,
     #[serde(default = "default_limit")]
     limit: usize,
@@ -307,6 +308,7 @@ pub(crate) fn call_tool_blocking(
         "project_status" => Some(Query::Status {
             probabilistic: args.probabilistic,
             calibrated: args.calibrated,
+            horizon_hours: args.horizon_hours,
         }),
         "get_calibration" => Some(Query::Calibration),
         "get_schedule" => Some(Query::Schedule {
