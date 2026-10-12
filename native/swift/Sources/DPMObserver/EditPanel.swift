@@ -364,6 +364,13 @@ enum RegionFocus {
         let responder = NSApp.keyWindow?.firstResponder
         return responder is GanttRegionView || responder is NetworkRegionView
     }
+
+    /// Whether text other than a page's filter is being edited in `window`, as in an inspector field, whether or not the
+    /// app is active. A cursor row or node named again does not take the keyboard from it; the filter's handoff still does.
+    @MainActor static func otherTextEdits(in window: NSWindow?) -> Bool {
+        guard let editor = window?.firstResponder as? NSTextView else { return false }
+        return GanttRegionView.filterField(of: editor) == nil && NetworkRegionView.filterField(of: editor) == nil
+    }
 }
 
 /// The application's review of the draft: what an apply would record, the work affected, and the apply itself.

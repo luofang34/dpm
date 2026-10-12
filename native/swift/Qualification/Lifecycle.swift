@@ -66,6 +66,13 @@ func freeze(_ pid: Int32) async -> Bool {
     }
 }
 
+/// Stop a process and wait, on this thread, until it is stopped: for a seam that must stop it before its caller goes on.
+func stopNow(_ pid: Int32) -> Bool {
+    kill(pid, SIGSTOP)
+    var status: Int32 = 0
+    return waitpid(pid, &status, WUNTRACED) == pid && (status & 0x7F) == 0x7F
+}
+
 /// Resume a stopped process.
 func thaw(_ pid: Int32) { kill(pid, SIGCONT) }
 

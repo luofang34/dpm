@@ -19,6 +19,7 @@ struct GanttView: View {
     @State private var holdsKeyboard = false
     /// Counts the model's requests for a row to have the keyboard; the region takes it on each, if it lacks it.
     @State private var keyboardRequest = 0
+    @State private var rowNamed = 0
     /// Whether the cursor row's complete text is expanded in the strip; compact by default, so the chart is the primary area.
     @State private var detailsShown = false
 
@@ -38,7 +39,7 @@ struct GanttView: View {
             GanttStrip(frame: frame, scrolling: true, expanded: $detailsShown)
                 .frame(maxHeight: detailsShown ? 170 : 62)
             Divider()
-            GanttBody(model: model, frame: frame, keyboardRequest: keyboardRequest) { holds in
+            GanttBody(model: model, frame: frame, keyboardRequest: keyboardRequest, rowNamed: rowNamed) { holds in
                 holdsKeyboard = holds
                 report(holds)
             }
@@ -54,12 +55,14 @@ struct GanttView: View {
         }
         // Closing the review, after an apply or a cancel, gives the keyboard back to the rows it was opened from.
         .onChange(of: model.editing.focusReturns) { keyboardRequest &+= 1 }
+        .onChange(of: model.rowRequests) { keyboardRequest &+= 1 }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("gantt")
         .onAppear { report() }
         .onChange(of: model.focusTarget) {
-            // The shared handler (or the pointer) put the cursor on a row: the region takes the keyboard.
-            if let target = model.focusTarget, target.hasPrefix("gantt.row.") { keyboardRequest &+= 1 }
+            // The shared handler put the cursor on a row: the region takes the keyboard, unless other text is being edited
+            // in its window (a row named again when a newer plan is read must not take it from an inspector field).
+            if let target = model.focusTarget, target.hasPrefix("gantt.row.") { rowNamed &+= 1 }
             report()
         }
         .onChange(of: model.gantt.editingFilter) { report() }
@@ -322,6 +325,7 @@ struct GanttBody: View {
     @Environment(\.layoutRegistry) private var layout
     let frame: GanttFrame
     let keyboardRequest: Int
+    let rowNamed: Int
     /// Told whether the region holds the keyboard each time it gains or loses it.
     let onKeyboard: (Bool) -> Void
     /// The receipts of the pointer events this body's timeline received: one bounded log per concrete body, registered
@@ -376,7 +380,7 @@ struct GanttBody: View {
             .frame(width: size.width, height: size.height, alignment: .topLeading)
             .clipped()
             .reportFrame("body")
-            .background(GanttRegion(request: keyboardRequest, cursor: frame.cursor.map { speech($0, frame: frame).label }, pointer: pointer, onKeyboard: onKeyboard) { probed in
+            .background(GanttRegion(request: keyboardRequest, renamed: rowNamed, cursor: frame.cursor.map { speech($0, frame: frame).label }, pointer: pointer, onKeyboard: onKeyboard) { probed in
                 let rows = Int((probed.height - GanttGeometry.axis) / GanttLayout.rowHeight)
                 DispatchQueue.main.async {
                     let before = model.gantt.viewportRows

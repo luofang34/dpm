@@ -89,7 +89,9 @@ class App:
                 raise AssertionError(f'the app exited ({self.process.returncode}) while waiting for {what}: {self.process.stdout.read()[-1500:]}')
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise AssertionError(f'timed out waiting for {what}; last state: {json.dumps(last, sort_keys=True)[:1500]}')
+                # What the app was doing comes first: the whole state is long and is cut.
+                doing = {k: (last or {}).get(k) for k in ('operations', 'editing', 'selection')}
+                raise AssertionError(f'timed out waiting for {what}; {json.dumps(doing, sort_keys=True)[:1500]}; last state: {json.dumps(last, sort_keys=True)[:1500]}')
             self.queue.control(None, 8, remaining)
 
     def quit(self):
@@ -1350,6 +1352,17 @@ class Foreground:
             self.cf.CFRunLoopRunInMode(self.mode, remaining, True)
         return True
 
+    def settle_focus(self, label, timeout, deadline=15.0):
+        """The label of what has the keyboard once it reads `label`, or when focus stops moving for `timeout` seconds, or
+        at `deadline`. Closing a sheet moves the keyboard through the window before it lands, so one change is not the
+        landing; a keyboard that never stops moving is reported where it is at the deadline."""
+        end = time.monotonic() + deadline
+        while True:
+            current = self.focused_facts()[1]
+            remaining = end - time.monotonic()
+            if current == label or remaining <= 0 or not self.wait_focus_change(min(timeout, remaining)):
+                return self.focused_facts()[1]
+
     def focused_identifier(self):
         """The accessibility identifier of the element that has the keyboard in the app, or None."""
         element = ctypes.c_void_p()
@@ -2434,8 +2447,10 @@ def inspector_keyboard_route(bundle, directory):
         guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edits to be applied')
         guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
         guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close after the apply')
-        front.wait_focus_change(3.0)
-        after_apply = front.focused_facts()[1]
+        # The apply's own revision is read before the keyboard is judged: that read names the cursor row again.
+        applied = run_cli(database, 'export')['revision']
+        guarded_wait(app, front, lambda s: (s['revision'] or 0) >= applied and s['freshness']['current'], 20, 'the applied revision to be read')
+        after_apply = front.settle_focus('Other work key', 3.0)
         assert after_apply == 'Other work key', f'the keyboard did not go back to the link field after the apply: {after_apply}'
 
         # A review opened from the link field and cancelled gives the keyboard back to that field.
@@ -2447,17 +2462,22 @@ def inspector_keyboard_route(bundle, directory):
         guarded_wait(app, front, lambda s: s['editing']['reviewing'], 20, 'the second review to be shown')
         guarded_key(app, front, 'Escape to cancel the review', KEY_CODES['escape'])
         guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close')
-        front.wait_focus_change(3.0)
-        returned = front.focused_facts()[1]
+        returned = front.settle_focus('Other work key', 3.0)
         assert returned == 'Other work key', f'the keyboard did not go back to the link field after the cancel: {returned}'
         guarded_key(app, front, 'Option-Command-Delete to discard the draft', KEY_CODES['delete'], COMMAND_FLAG | OPTION_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['edits'] == 0, 10, 'the draft to be discarded')
 
+        # The gate applied above holds TEST-A until its decision is made; a lead decides it elsewhere, and the
+        # app follows that change by itself before any operation is sent.
+        run_cli(database, 'decide', 'TEST-GATE', 'Proceed', '--actor', 'human:lead')
+        decided = run_cli(database, 'export')['revision']
+        guarded_wait(app, front, lambda s: (s['revision'] or 0) >= decided and s['freshness']['current'], 20, 'the decision to be read')
         # Task operations by their shortcuts; the keyboard stays in the link field throughout.
         for code, name, phase in ((8, 'claim', 'accepted'), (1, 'start', 'accepted'), (9, 'verify', 'refused')):
             guarded_wait(app, front, lambda s: s['operations']['blocker'] is None, 20, f'operations to be possible before {name}')
             guarded_key(app, front, f'Option-Command shortcut to {name} TEST-A', code, COMMAND_FLAG | OPTION_FLAG)
-            guarded_wait(app, front, lambda s, phase=phase: s['operations']['phase'] == phase, 20, f'{name} to be {phase}')
+            # The phase names its operation: the previous operation's answer is never taken for this one's.
+            guarded_wait(app, front, lambda s, phase=phase, name=name: (s['operations']['phase'], s['operations']['operation']) == (phase, name), 20, f'{name} to be {phase}')
         held = app.state()['operations']['blocker']
         assert held and 'look at its changes' in held, f'a refused operation did not hold the next one: {held}'
         guarded_wait(app, front, lambda s: s['freshness']['current'], 20, 'the work to be read again after the refusal')
@@ -2468,7 +2488,7 @@ def inspector_keyboard_route(bundle, directory):
         uninterrupted(front, 'the route is complete')
         entries = run_cli(database, 'history')['entries'][operations:]
         kinds = [next(iter(e['operation']['command'])) for e in entries]
-        assert kinds == ['ApplyChange', 'Claim', 'Start'], kinds
+        assert kinds == ['ApplyChange', 'Decide', 'Claim', 'Start'], kinds
         assert app.quit() == 0
         return (f'the inspector by keyboard alone: a defined focus order of {len(first)} stops, every one labelled, the same on two walks; '
                 f'a title, an estimate and a gate entered by keys were reviewed and applied, the keyboard back in the link field; a review '
@@ -2563,8 +2583,9 @@ def inspector_edit_keyboard_route(bundle, directory):
         guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edits to be applied')
         guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
         guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close')
-        front.wait_focus_change(3.0)
-        back = front.focused_facts()[1]
+        applied = run_cli(database, 'export')['revision']
+        guarded_wait(app, front, lambda s: (s['revision'] or 0) >= applied and s['freshness']['current'], 20, 'the applied revision to be read')
+        back = front.settle_focus('Decision key to gate on', 3.0)
         assert back == 'Decision key to gate on', f'the keyboard did not go back to the gate field after the apply: {back}'
         uninterrupted(front, 'the route is complete')
         entries = run_cli(database, 'history')['entries'][operations:]
@@ -2629,9 +2650,20 @@ def network_keyboard_route(bundle, directory):
         back = guarded_wait(app, front, lambda s: network_shown(s) and s['network']['focus_target'] == node and s['network']['focus_reported'] == node, 15,
                             'Escape to return to the network with the originating node reported as focused')
         guarded_key(app, front, 'slash to focus the filter', KEY_CODES['slash'])
-        guarded_wait(app, front, lambda s: s['network']['filter']['editing'] is True, 10, 'the actual filter field to report the keyboard after /')
+        # The field's own editor, read from the window, holds the keyboard before a letter is typed: the model's flag can
+        # turn on a moment before the window hands its editor the keyboard.
+        guarded_wait(app, front, lambda s: s['network']['filter']['editing'] is True
+                     and ((((s.get('host') or {}).get('network_filter_editor') or {}).get('current') or {}).get('first_responder') is True),
+                     10, 'the actual filter field to report the keyboard after /')
+        def network_editor(s):
+            return (((s.get('host') or {}).get('network_filter_editor') or {}).get('current') or {})
         guarded_key(app, front, 'a letter typed into the filter', KEY_CODES['a'])
-        typed = guarded_wait(app, front, lambda s: s['network']['filter']['text'] == 'a', 10, 'the typed letter to be filter text')
+        typed = guarded_wait(app, front, lambda s: network_editor(s).get('length', 0) > 0, 10, 'the typed letter in the filter\'s real editor')
+        # An input source that composes holds the letter as marked text until Return commits it; a plain one commits it.
+        if network_editor(typed).get('has_marked_text') is True:
+            guarded_key(app, front, 'Return to commit the composition', KEY_CODES['return'])
+        typed = guarded_wait(app, front, lambda s: network_editor(s).get('has_marked_text') is False and network_editor(s).get('length', 0) > 0
+                             and s['network']['filter']['text'] == network_editor(s).get('string'), 10, 'the typed letter to be filter text')
         guarded_key(app, front, 'Escape to leave the filter', KEY_CODES['escape'])
         left = guarded_wait(app, front, lambda s: s['network']['filter']['editing'] is False and (s['network']['focus_reported'] or '').startswith('network.node.'), 10,
                             'Escape to hand the keyboard back to the network region')

@@ -44,6 +44,9 @@ public final class ObserverModel: ObservableObject {
     /// The element the shared key handler decided has keyboard focus, as `gantt.row.<key>`,
     /// `gantt.filter` or `detail.back`; what the views are asked to focus.
     @Published public internal(set) var focusTarget: String?
+    /// Counts deliberate requests for the Gantt rows to take the keyboard (a row clicked or located), which hold
+    /// even while an inspector field is being edited; a row named again by a newer plan read is not one.
+    @Published public internal(set) var rowRequests = 0
     /// The element that says it has focus, as the view itself reports it (like `searchFocused`).
     @Published public internal(set) var focusReported: String?
     /// The Gantt filter field lost focus without Escape or a commit: the rows are not asked to take it.

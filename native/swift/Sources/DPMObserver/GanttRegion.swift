@@ -14,6 +14,9 @@ struct GanttRegion: NSViewRepresentable {
     @Environment(\.hostObservation) private var host
     /// The model's requests for a row to have the keyboard, counted; a new one makes the region take it.
     let request: Int
+    /// The cursor row named again, counted; a new one makes the region take the keyboard unless other text is being
+    /// edited in its window, as in an inspector field.
+    let renamed: Int
     /// The cursor row in words, the region's accessibility value.
     let cursor: String?
     let pointer: GanttPointerLog
@@ -23,15 +26,21 @@ struct GanttRegion: NSViewRepresentable {
     func makeNSView(context: Context) -> GanttRegionView {
         let view = GanttRegionView()
         view.request = request
+        view.renamed = renamed
         update(view)
         return view
     }
 
     func updateNSView(_ view: GanttRegionView, context: Context) {
         update(view)
-        guard view.request != request else { return }
-        view.request = request
-        view.take("row_requested")
+        if view.request != request {
+            view.request = request
+            view.take("row_requested")
+        }
+        if view.renamed != renamed {
+            view.renamed = renamed
+            if !RegionFocus.otherTextEdits(in: view.window) { view.take("row_named") }
+        }
     }
 
     private func update(_ view: GanttRegionView) {
@@ -51,6 +60,7 @@ final class GanttRegionView: NSView {
     var onKeyboard: ((Bool) -> Void)?
     var onResize: ((CGSize) -> Void)?
     var request = 0
+    var renamed = 0
     var cursor: String? {
         didSet { if cursor != oldValue, holdsKeyboard { NSAccessibility.post(element: self, notification: .valueChanged) } }
     }
