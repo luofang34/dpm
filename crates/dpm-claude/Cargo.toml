@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+# A local runtime adapter run from a checkout, not a crates.io package.
+publish = false
 description = "Adapter that connects the installed Claude Code runtime to DPM run records"
 
 [[bin]]

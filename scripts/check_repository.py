@@ -3,6 +3,7 @@
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -97,6 +98,30 @@ else:
     if observed != probes.keys():
         failures.append('Git did not return every ignore-rule probe')
 
+# crates.io holds the dpm binary and exactly the libraries it is built from; a new workspace member must
+# choose here, so a publish never fails on a dependency that is not on crates.io.
+PUBLISHED = {'dpm', 'dpm-model', 'dpm-schedule', 'dpm-engine', 'dpm-store', 'dpm-interchange', 'dpm-app', 'dpm-tui'}
+manifests = {}
+for member in tomllib.loads((ROOT / 'Cargo.toml').read_text())['workspace']['members']:
+    package = tomllib.loads((ROOT / member / 'Cargo.toml').read_text())
+    manifests[package['package']['name']] = package
+    package['directory'] = ROOT / member
+for name, package in manifests.items():
+    published = package['package'].get('publish', True) is not False
+    if published != (name in PUBLISHED):
+        failures.append(f'{name}: publish is {published}, but the crates.io set {sorted(PUBLISHED)} says otherwise')
+    if published:
+        local = [d for d in package.get('dependencies', {}) if d in manifests]
+        failures += [f'{name} depends on {d}, which is not published' for d in local if d not in PUBLISHED]
+        failures += [f'{name}: {d} needs a version beside its path to publish' for d in local
+                     if not isinstance(package['dependencies'][d], dict) or 'version' not in package['dependencies'][d]]
+        if 'description' not in package['package']:
+            failures.append(f'{name}: a published crate needs a description')
+        licence = package['directory'] / 'LICENSE'
+        if name != 'dpm' and (licence.is_symlink() or not licence.is_file()
+                              or licence.read_bytes() != (ROOT / 'LICENSE').read_bytes()):
+            failures.append(f'{name}: a published crate carries a plain copy of LICENSE (links are not archived)')
+
 if failures:
     sys.exit('\n'.join(failures))
-print(f'PASS: self-host inventory, publication hygiene, ignore rules and documentation links ({len(paths)} files)')
+print(f'PASS: self-host inventory, publication hygiene, the crates.io set, ignore rules and documentation links ({len(paths)} files)')
