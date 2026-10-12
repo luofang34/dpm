@@ -226,6 +226,8 @@ extension ObserverModel {
         let observed = ObservedWork(revision: basis.revision, lineage: basis.lineage, status: item?.status ?? "unknown", owner: item?.owner,
                                     progress: item?.reportedProgress ?? 0)
         let sent = SentOperation(work: work, operation: operation, request: request, observed: observed, workspace: writesKey)
+        // A hold's words from an earlier press no longer apply once an operation is sent.
+        if editing.notice != nil { editing.notice = nil }
         operations.phase = .sending(sent)
         operations.reviewedChanges = false
         if case .progress = operation { operations.stagedProgress = nil }

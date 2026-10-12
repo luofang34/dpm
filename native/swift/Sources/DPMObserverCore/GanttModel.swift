@@ -243,6 +243,7 @@ extension ObserverModel {
     public func focusRow(_ identity: String, selecting: Bool = true) {
         guard let position = outline.first(where: { $0.id == identity })?.position else { return }
         moveFocus(to: position)
+        rowRequests &+= 1
         if selecting { select(.work(identity)) }
     }
 

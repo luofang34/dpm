@@ -1352,12 +1352,15 @@ class Foreground:
             self.cf.CFRunLoopRunInMode(self.mode, remaining, True)
         return True
 
-    def settle_focus(self, label, timeout):
-        """The label of what has the keyboard once it reads `label`, or when focus stops moving for `timeout` seconds.
-        Closing a sheet moves the keyboard through the window before it lands, so one change is not the landing."""
+    def settle_focus(self, label, timeout, deadline=15.0):
+        """The label of what has the keyboard once it reads `label`, or when focus stops moving for `timeout` seconds, or
+        at `deadline`. Closing a sheet moves the keyboard through the window before it lands, so one change is not the
+        landing; a keyboard that never stops moving is reported where it is at the deadline."""
+        end = time.monotonic() + deadline
         while True:
             current = self.focused_facts()[1]
-            if current == label or not self.wait_focus_change(timeout):
+            remaining = end - time.monotonic()
+            if current == label or remaining <= 0 or not self.wait_focus_change(min(timeout, remaining)):
                 return self.focused_facts()[1]
 
     def focused_identifier(self):
@@ -2444,6 +2447,9 @@ def inspector_keyboard_route(bundle, directory):
         guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edits to be applied')
         guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
         guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close after the apply')
+        # The apply's own revision is read before the keyboard is judged: that read names the cursor row again.
+        applied = run_cli(database, 'export')['revision']
+        guarded_wait(app, front, lambda s: (s['revision'] or 0) >= applied and s['freshness']['current'], 20, 'the applied revision to be read')
         after_apply = front.settle_focus('Other work key', 3.0)
         assert after_apply == 'Other work key', f'the keyboard did not go back to the link field after the apply: {after_apply}'
 
@@ -2577,6 +2583,8 @@ def inspector_edit_keyboard_route(bundle, directory):
         guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edits to be applied')
         guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
         guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close')
+        applied = run_cli(database, 'export')['revision']
+        guarded_wait(app, front, lambda s: (s['revision'] or 0) >= applied and s['freshness']['current'], 20, 'the applied revision to be read')
         back = front.settle_focus('Decision key to gate on', 3.0)
         assert back == 'Decision key to gate on', f'the keyboard did not go back to the gate field after the apply: {back}'
         uninterrupted(front, 'the route is complete')

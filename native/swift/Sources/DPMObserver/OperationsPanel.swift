@@ -45,8 +45,9 @@ struct OperationsPanel: View {
     }
 
     /// Every operation has a shortcut, so it is reachable by keyboard whether or not the system's keyboard navigation
-    /// lets Tab reach buttons; a shortcut leaves the keyboard where it was. A hold is the model's alone: `operate`
-    /// refuses with the hold's words, so a press made as the hold lifts is never lost to a button not yet redrawn.
+    /// lets Tab reach buttons; a shortcut leaves the keyboard where it was. Holds are the model's alone: `operate`
+    /// refuses with the hold's words, so a press made as a hold lifts is never lost to a button not yet redrawn. Block
+    /// and Reject still wait for a reason, which is what the person typed, not a hold.
     private static let shortcuts: [String: (KeyEquivalent, String)] = [
         "ops.claim": ("c", "⌥⌘C"), "ops.start": ("s", "⌥⌘S"), "ops.unblock": ("u", "⌥⌘U"), "ops.block": ("b", "⌥⌘B"),
         "ops.submit": (.return, "⌥⌘↩"), "ops.verify": ("v", "⌥⌘V"), "ops.reject": ("j", "⌥⌘J"),

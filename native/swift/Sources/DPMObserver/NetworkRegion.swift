@@ -41,7 +41,7 @@ struct NetworkRegion: NSViewRepresentable {
         // ordinary Escape in the filter) makes the region take the keyboard here, and nowhere else.
         guard view.request != request else { return }
         view.request = request
-        if let request, request.hasPrefix("network.node."), !RegionFocus.fieldHoldsKeyboard { view.take("node_requested") }
+        if let request, request.hasPrefix("network.node."), !RegionFocus.otherTextEdits(in: view.window) { view.take("node_requested") }
     }
 }
 
