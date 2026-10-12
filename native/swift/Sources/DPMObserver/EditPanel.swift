@@ -134,7 +134,8 @@ struct ItemEditor: View {
                 }
                 .labelsHidden().frame(width: 80)
                 .accessibilityLabel("Link direction")
-                .help("after KEY: KEY is the predecessor; before KEY: KEY is the successor")
+                .help("after KEY: KEY is the predecessor; before KEY: KEY is the successor (⌥⌘D switches)")
+                .background(LinkKeys(kind: $linkKind, asPredecessor: $linkAsPredecessor))
                 TextField("Other work key", text: $linkKey).textFieldStyle(.roundedBorder).onSubmit(addLink)
                     .help("Return adds the link; Option-Command-L removes the link with this key").modifier(InspectorFocus(model: model, name: "link-key")).accessibilityLabel("Other work key").accessibilityIdentifier("edit.link-key")
             }
@@ -143,6 +144,7 @@ struct ItemEditor: View {
                     ForEach(["FinishStart", "StartStart", "FinishFinish", "StartFinish"], id: \.self) { Text(GanttRelation.abbreviation($0)).tag($0) }
                 }
                 .labelsHidden().frame(width: 70).accessibilityLabel("Relation kind")
+                .help("Finish to start, start to start, finish to finish or start to finish (⌥⌘1 to ⌥⌘4)")
                 TextField("Lag in hours (negative for a lead)", text: $linkLag).textFieldStyle(.roundedBorder).onSubmit(addLink).modifier(InspectorFocus(model: model, name: "link-lag")).frame(width: 120).accessibilityLabel("Lag in hours, negative for lead").accessibilityIdentifier("edit.link-lag")
                 Button("Add link") { addLink() }.disabled(otherIdentity == nil).accessibilityIdentifier("edit.add-link")
                 Button("Remove link") { removeLink() }
@@ -280,9 +282,10 @@ struct NewTaskEditor: View {
     @State private var objective = ""
     @State private var acceptance = ""
     @State private var likely = ""
+    @State private var expanded = false
 
     var body: some View {
-        DisclosureGroup("New task") {
+        DisclosureGroup("New task", isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 6) {
                 TextField("New task key, e.g. VIS-70", text: $key).textFieldStyle(.roundedBorder).onSubmit(add).modifier(InspectorFocus(model: model, name: "new-key")).accessibilityIdentifier("edit.new-key")
                 TextField("New task title", text: $title).textFieldStyle(.roundedBorder).onSubmit(add).modifier(InspectorFocus(model: model, name: "new-title"))
@@ -297,6 +300,8 @@ struct NewTaskEditor: View {
             }
             .padding(.top, 4)
         }
+        .help("A new task, Proposed until ratified (⌥⌘N opens or closes)")
+        .background(Button("") { expanded.toggle() }.keyboardShortcut("n", modifiers: [.command, .option]).opacity(0).accessibilityHidden(true))
     }
 
     private func add() {
@@ -392,7 +397,10 @@ struct ReviewSheet: View {
                     .accessibilityIdentifier("edit.refusal")
                 if refusal.stale {
                     Text("Your edits are kept. Read the current plan and review them again before applying.").font(.callout)
-                    Button("Re-read and review again") { model.rebaseDraft() }.accessibilityIdentifier("edit.rebase")
+                    Button("Re-read and review again") { model.rebaseDraft() }
+                        .keyboardShortcut("r", modifiers: [.command, .shift])
+                        .help("Read the current plan and review the kept edits against it (⇧⌘R here; ⌘R Read Again once the review is closed)")
+                        .accessibilityIdentifier("edit.rebase")
                 }
             case .applying:
                 ProgressView("Applying…")
@@ -400,7 +408,9 @@ struct ReviewSheet: View {
                 Label("Applied as operation \(id) at revision \(revision.map(String.init) ?? "?").", systemImage: "checkmark.circle")
             case .unknown(let sent, let cause):
                 Label("The outcome of request \(sent.operationId) is unknown: \(cause)", systemImage: "questionmark.circle").fixedSize(horizontal: false, vertical: true)
-                Button("Reconcile") { model.reconcileApply() }.accessibilityIdentifier("edit.sheet-reconcile")
+                Button("Reconcile") { model.reconcileApply() }
+                    .keyboardShortcut("r", modifiers: [.command, .option, .shift]).help("Resend the request to learn what became of it (⇧⌥⌘R)")
+                    .accessibilityIdentifier("edit.sheet-reconcile")
             }
             HStack {
                 Spacer()

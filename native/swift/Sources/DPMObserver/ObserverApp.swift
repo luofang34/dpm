@@ -62,7 +62,7 @@ struct ObserverApp: App {
                 }
                 Button("Find Task or Decision") { model.findWork() }.keyboardShortcut("f", modifiers: .command).disabled(!model.hasWorkspace)
                 Divider()
-                Button("Read Again") { model.reload() }.keyboardShortcut("r", modifiers: .command).disabled(!model.hasWorkspace)
+                Button("Read Again") { model.readAgain() }.keyboardShortcut("r", modifiers: .command).disabled(!model.hasWorkspace)
             }
         }
     }

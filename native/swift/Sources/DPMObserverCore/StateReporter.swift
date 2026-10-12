@@ -359,7 +359,7 @@ public final class StateReporter {
             "page": model.page.rawValue.lowercased(),
             "search_focused": model.searchFocused,
             "editing": ["enabled": model.editing.enabled, "edits": model.editing.draft?.edits.count ?? 0, "notice": model.editing.notice ?? NSNull(),
-                        "reviewing": model.editing.reviewing, "phase": Self.words(model.editing.phase)] as [String: Any],
+                        "reviewing": model.editing.reviewing, "phase": Self.words(model.editing.phase), "refusal": Self.refusal(model.editing.phase)] as [String: Any],
             "operations": ["phase": Self.words(model.operations.phase), "operation": orNull(Self.operation(model.operations.phase)),
                            "blocker": model.operationBlocker ?? NSNull()] as [String: Any],
             "helper_pid": orNull(snapshot.helperProcess.map { Int($0) }),
@@ -422,6 +422,12 @@ public final class StateReporter {
         case .sending(let sent), .unknown(let sent, _): return sent.operation.words
         case .accepted(_, let operation, _), .refused(_, let operation, _, _): return operation.words
         }
+    }
+
+    /// A refused review or apply: the application's words and whether it was refused as stale; null otherwise.
+    static func refusal(_ phase: EditState.Phase) -> Any {
+        guard case .refused(let refusal) = phase else { return NSNull() }
+        return ["message": refusal.message, "stale": refusal.stale, "code": refusal.code] as [String: Any]
     }
 
     /// The edit phase in one word, for the state file.

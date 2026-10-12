@@ -2593,40 +2593,67 @@ def inspector_edit_keyboard_route(bundle, directory):
             field(label, value)
         guarded_key(app, front, 'Return in an hours field to set the estimate', KEY_CODES['return'])
         edits(4, 'the estimate')
-        field('Other work key', 'TEST-B')
-        guarded_key(app, front, 'Return to add the link after TEST-B', KEY_CODES['return'])
+        # A start-to-start link before TEST-M1: Option-Command-D for the direction, Option-Command-2 for the kind.
+        field('Other work key', 'TEST-M1')
+        guarded_key(app, front, 'Option-Command-D for before', 2, COMMAND_FLAG | OPTION_FLAG)
+        guarded_key(app, front, 'Option-Command-2 for start to start', 19, COMMAND_FLAG | OPTION_FLAG)
+        guarded_key(app, front, 'Return to add the SS link before TEST-M1', KEY_CODES['return'])
         edits(5, 'the new link')
+        guarded_key(app, front, 'Option-Command-D back to after', 2, COMMAND_FLAG | OPTION_FLAG)
+        guarded_key(app, front, 'Option-Command-1 back to finish to start', 18, COMMAND_FLAG | OPTION_FLAG)
         field('Other work key', 'TEST-E')
         guarded_key(app, front, 'Option-Command-L to remove the finish-to-start link from TEST-E', 37, COMMAND_FLAG | OPTION_FLAG)
         edits(6, 'the link removal')
         field('Decision key to gate on', 'TEST-GATE')
         guarded_key(app, front, 'Return to gate on TEST-GATE', KEY_CODES['return'])
         edits(7, 'the gate')
+        # A new task from the collapsed group, opened by Option-Command-N.
+        guarded_key(app, front, 'Option-Command-N to open New task', 45, COMMAND_FLAG | OPTION_FLAG)
+        field('New task key, e.g. VIS-70', 'KB-1')
+        field('New task title', 'Added by keyboard')
+        guarded_key(app, front, 'Return to add the new task', KEY_CODES['return'])
+        edits(8, 'the new task')
         guarded_key(app, front, 'Command-Return to review every edit', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the review of every edit')
         paste('Every plan edit by keyboard', 'Command-V to paste the reason')
+        # Someone else changes the plan meanwhile: the apply is refused as stale, Shift-Command-R reads the plan again and reviews
+        # the kept edits, and Command-Return applies them.
+        run_cli(database, 'claim', 'TEST-A', '--actor', 'agent:worker')
+        decided = run_cli(database, 'export')['revision']
+        guarded_wait(app, front, lambda s: (s['revision'] or 0) >= decided and s['freshness']['current'], 20, 'the other change to be read')
+        guarded_key(app, front, 'Command-Return to apply against the older plan', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['phase'] == 'refused' and (s['editing']['refusal'] or {}).get('stale') is True and s['editing']['edits'] == 8, 20,
+                     'the stale apply to be refused as stale with the edits kept')
+        guarded_key(app, front, 'Shift-Command-R to read the plan again and review', 15, COMMAND_FLAG | SHIFT_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['phase'] == 'reviewed' and s['editing']['reviewing'], 20, 'the kept edits reviewed against the current plan')
         guarded_key(app, front, 'Command-Return to apply', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edits to be applied')
         guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
         guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close')
         applied = run_cli(database, 'export')['revision']
         guarded_wait(app, front, lambda s: (s['revision'] or 0) >= applied and s['freshness']['current'], 20, 'the applied revision to be read')
-        back = front.settle_focus('Decision key to gate on', 3.0)
-        assert back == 'Decision key to gate on', f'the keyboard did not go back to the gate field after the apply: {back}'
+        back = front.settle_focus('New task title', 3.0)
+        assert back == 'New task title', f'the keyboard did not go back to the field the review was opened from after the apply: {back}'
         uninterrupted(front, 'the route is complete')
         entries = run_cli(database, 'history')['entries'][operations:]
-        assert len(entries) == 1, f'one change was recorded: {len(entries)}'
-        changes = entries[0]['operation']['command']['ApplyChange']['changes']
+        kinds = [next(iter(e['operation']['command'])) for e in entries]
+        assert kinds == ['Claim', 'ApplyChange'], f'the other change and one apply were recorded: {kinds}'
+        changes = entries[-1]['operation']['command']['ApplyChange']['changes']
         fields = {field for c in changes if c['collection'] == 'work_items' for field in c['fields']}
         assert {'title', 'contract', 'schedule'} <= fields, fields
         collections = sorted(c['collection'] for c in changes)
         assert collections.count('dependencies') == 2 and 'decisions' in collections, collections
+        plan = run_cli(database, 'export')
+        keys = {w['id']: w['key'] for w in plan['work_items'].values()}
+        assert any((keys[d['predecessor']], d['kind'], keys[d['successor']]) == ('TEST-F', 'StartStart', 'TEST-M1') for d in plan['dependencies']), 'no SS link before TEST-M1'
+        assert 'KB-1' in keys.values(), 'the new task was not added'
         shown = run_cli(database, 'show', 'TEST-F')
         assert len(shown['title']) > 400 and shown['contract']['objective'] == 'Prove every plan edit works by keyboard', shown['title'][:60]
         assert app.quit() == 0
         return (f'every plan edit by keyboard on the 500-character TEST-F: title (a second Return left one edit), objective, criteria, '
-                f'estimate, a link added and one removed, and a gate, reviewed and applied as one change of {len(changes)} entities; the '
-                f'keyboard back in the gate field')
+                f'estimate, an SS link before TEST-M1 (Option-Command-D, -2) added and an FS link removed, a gate and a new task (Option-'
+                f'Command-N), reviewed; a stale apply refused with the edits kept, Shift-Command-R re-read and reviewed them, and they applied as '
+                f'one change of {len(changes)} entities; the keyboard back in the field the review was opened from')
     except NotAssessed as interruption:
         not_assessed(case, interruption_or_death(app.process, interruption))
         return None
