@@ -37,3 +37,6 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Swift package builds
+.build/

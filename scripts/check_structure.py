@@ -54,6 +54,27 @@ for path in swift:
     if failure:
         failures.append(failure)
 
+# Option-Command chords macOS keeps for itself (Dock hiding, hide others, minimize all, close all, zoom): a shortcut on
+# one of them never reaches the app, though a test that posts keys to the app's process would still pass.
+SYSTEM_OPTION_COMMAND = set('dhmw8')
+
+
+def system_chords(source):
+    """The Option-Command shortcuts in `source` that macOS takes before the app sees them."""
+    taken = []
+    for key, modifiers in re.findall(r'keyboardShortcut\("(.)",\s*modifiers:\s*\[([^\]]*)\]\)', source):
+        named = {m.strip() for m in modifiers.split(',')}
+        if named == {'.command', '.option'} and key.lower() in SYSTEM_OPTION_COMMAND:
+            taken.append(key)
+    return taken
+
+
+assert system_chords('.keyboardShortcut("d", modifiers: [.command, .option])') == ['d'], 'a system chord must be found'
+assert system_chords('.keyboardShortcut("x", modifiers: [.option, .command])') == [], 'an app chord must pass'
+for path in swift:
+    for key in system_chords(path.read_text()):
+        failures.append(f'{path.relative_to(ROOT)}: Option-Command-{key.upper()} is a macOS system shortcut')
+
 files = sorted((ROOT / 'crates').rglob('*.rs')) + sorted((ROOT / 'src').rglob('*.rs'))
 for path in files:
     source = path.read_text()

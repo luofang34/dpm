@@ -184,7 +184,8 @@ extension ObserverModel {
         if let basis = snapshot.inventory.basis, basis.revision != draft.basis.revision || basis.lineage != draft.basis.lineage {
             editing.rebasePending = false
             editing.draft = draft.rebased(on: basis)
-            reviewDraft()
+            // Reviewed again from where the first review was opened, so closing it returns the keyboard there.
+            reviewDraft(fromInspector: editing.reviewFromInspector)
         } else {
             editing.rebasePending = true
             editing.phase = .validating
