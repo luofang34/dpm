@@ -60,6 +60,7 @@ struct Sidebar: View {
                     .accessibilityIdentifier("page.\(page.rawValue.lowercased())")
             }
         }
+        .accessibilityLabel("Pages")
         .accessibilityIdentifier("sidebar")
     }
 }

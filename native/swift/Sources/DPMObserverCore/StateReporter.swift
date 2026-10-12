@@ -360,6 +360,7 @@ public final class StateReporter {
             "search_focused": model.searchFocused,
             "editing": ["enabled": model.editing.enabled, "edits": model.editing.draft?.edits.count ?? 0, "notice": model.editing.notice ?? NSNull(),
                         "reviewing": model.editing.reviewing, "phase": Self.words(model.editing.phase)] as [String: Any],
+            "operations": ["phase": Self.words(model.operations.phase), "blocker": model.operationBlocker ?? NSNull()] as [String: Any],
             "helper_pid": orNull(snapshot.helperProcess.map { Int($0) }),
             "gantt": gantt(model, layout: layout),
             "network": network(model),
@@ -400,6 +401,17 @@ public final class StateReporter {
             ],
             "main_thread": ["ticks": ticks, "max_gap_ms": gaps.max, "window_max_gap_ms": gaps.window, "steady_max_gap_ms": orNull(gaps.steady)],
         ]
+    }
+
+    /// The operation phase in one word, for the state file.
+    static func words(_ phase: OperationState.Phase) -> String {
+        switch phase {
+        case .idle: return "idle"
+        case .sending: return "sending"
+        case .accepted: return "accepted"
+        case .refused: return "refused"
+        case .unknown: return "unknown"
+        }
     }
 
     /// The edit phase in one word, for the state file.

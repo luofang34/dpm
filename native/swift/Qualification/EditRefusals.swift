@@ -75,6 +75,8 @@ extension Context {
         let returned = await MainActor.run { () -> Bool in
             let before = model.editing.focusReturns
             model.closeReview()
+            // The sheet's dismissal, once it is gone, is what hands the keyboard back.
+            model.reviewDismissed()
             return model.editing.focusReturns == before &+ 1 && !model.editing.reviewing
         }
         check(returned, "closing the review signals the page it was opened from to take the keyboard back")

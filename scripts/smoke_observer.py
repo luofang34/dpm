@@ -457,6 +457,7 @@ KEY_CODES = {'down': 125, 'up': 126, 'left': 123, 'right': 124, 'space': 49, 're
              'slash': 44, 'c': 8, 'a': 0, 'delete': 51}
 SHIFT_FLAG = 0x20000
 COMMAND_FLAG = 0x100000
+OPTION_FLAG = 0x80000
 
 
 def accessibility_trusted():
@@ -1272,6 +1273,82 @@ class Foreground:
         if role != 'AXWindow' or identifier != self.TARGET_WINDOW:
             return f'the key window is not the target window (role {role}, identifier {identifier})'
         return None
+
+    def focused_facts(self):
+        """(identifier, label) of the control that has the keyboard: for a text field, the field around AppKit's field
+        editor. The label is what assistive technology reads: the description, else the title, else the placeholder.
+        (None, None) when nothing has the keyboard."""
+        element = ctypes.c_void_p()
+        if self.ax.AXUIElementCopyAttributeValue(self.app, self.string('AXFocusedUIElement'), ctypes.byref(element)) or not element.value:
+            return None, None
+        current, owned = element.value, [element.value]
+        try:
+            for _ in range(3):
+                identifier = self.attribute(current, 'AXIdentifier')[1]
+                if identifier:
+                    label = next((value for name in ('AXDescription', 'AXTitle', 'AXPlaceholderValue')
+                                  for value in [self.attribute(current, name)[1]] if value), None)
+                    return identifier, label
+                parent = self.element_value(current, 'AXParent')
+                if parent is None:
+                    break
+                owned.append(parent)
+                current = parent
+            label = next((value for name in ('AXDescription', 'AXTitle', 'AXPlaceholderValue')
+                          for value in [self.attribute(owned[0], name)[1]] if value), None)
+            if label is None and self.attribute(owned[0], 'AXRole')[1] in ('AXOutline', 'AXList', 'AXTable'):
+                # A list is read through its selected row, as assistive technology reads it.
+                label = self.selected_row_label(owned[0])
+            return None, label
+        finally:
+            for held in owned:
+                self.cf.CFRelease(held)
+
+    def selected_row_label(self, outline):
+        """The label of a list's selected row, as assistive technology reads it: the first description or static text in it."""
+        rows = self.element_value(outline, 'AXSelectedRows')
+        if rows is None:
+            return None
+        try:
+            if self.cf.CFGetTypeID(rows) != self.cf.CFArrayGetTypeID() or self.cf.CFArrayGetCount(rows) == 0:
+                return None
+            return self.text_in(self.cf.CFArrayGetValueAtIndex(rows, 0), 3)
+        finally:
+            self.cf.CFRelease(rows)
+
+    def text_in(self, element, depth):
+        """The first description, or static text, in an element or the elements inside it, `depth` levels down."""
+        label = self.attribute(element, 'AXDescription')[1]
+        if label:
+            return label
+        if self.attribute(element, 'AXRole')[1] == 'AXStaticText':
+            value = self.attribute(element, 'AXValue')[1]
+            if value:
+                return value
+        if depth == 0:
+            return None
+        children = self.element_value(element, 'AXChildren')
+        if children is None:
+            return None
+        try:
+            for index in range(self.cf.CFArrayGetCount(children)):
+                found = self.text_in(self.cf.CFArrayGetValueAtIndex(children, index), depth - 1)
+                if found:
+                    return found
+            return None
+        finally:
+            self.cf.CFRelease(children)
+
+    def wait_focus_change(self, timeout):
+        """Handle notifications until the app reports the keyboard moved, or the timeout is out: an event, not a poll."""
+        seen = self.events.count('AXFocusedUIElementChanged')
+        deadline = time.monotonic() + timeout
+        while self.events.count('AXFocusedUIElementChanged') == seen:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            self.cf.CFRunLoopRunInMode(self.mode, remaining, True)
+        return True
 
     def focused_identifier(self):
         """The accessibility identifier of the element that has the keyboard in the app, or None."""
@@ -2268,6 +2345,128 @@ def edit_keyboard_route(bundle, directory):
         app.close()
 
 
+def inspector_keyboard_route(bundle, directory):
+    """The edit inspector and its task operations by keyboard alone, with real key events and the system's keyboard
+    navigation on for the app: Tab walks a defined focus order, twice the same, through every control, each read with a
+    label; Option-Command-C claims the selected task and the keyboard stays where it was; a title typed, the review opened
+    from it, a pasted reason and Command-Return apply it, and the keyboard goes to the rows, since the apply rebuilt the
+    inspector; a second edit's review cancelled with Escape gives the keyboard back to the title field. Only the complete route passes; an interrupted one is NOT
+    ASSESSED."""
+    case = 'inspector_keyboard_route'
+    if not accessibility_trusted():
+        not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so CGEventPostToPid would be ignored; no key was sent')
+        return None
+    database = gantt_store(directory, 'inspector-keys')
+    operations = len(run_cli(database, 'history')['entries'])
+    clipboard = subprocess.run(['/usr/bin/pbpaste'], capture_output=True, timeout=15).stdout
+    app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'gantt', '--select-key', 'TEST-A', '--window-size', '1400x900'])
+    front = None
+
+    def paste(text, step):
+        subprocess.run(['/usr/bin/pbcopy'], input=text, text=True, check=True, timeout=15)
+        guarded_key(app, front, step, 9, COMMAND_FLAG)
+
+    def walk(limit=90):
+        """Tab from the rows until the keyboard is back where it started, recording (identifier, label) at each stop."""
+        stops = []
+        start = front.focused_facts()[0]
+        for _ in range(limit):
+            guarded_key(app, front, 'Tab to the next control', KEY_CODES['tab'])
+            front.wait_focus_change(2.0)
+            facts = front.focused_facts()
+            if facts[0] == start:
+                return stops
+            stops.append(facts)
+        raise AssertionError(f'Tab did not come back to {start} within {limit} presses: {stops[-12:]}')
+
+    def tab_to(label, limit=90):
+        """Tab until the control read as `label` has the keyboard; a field is known by what assistive technology reads."""
+        for _ in range(limit):
+            if front.focused_facts()[1] == label:
+                return
+            guarded_key(app, front, f'Tab towards {label}', KEY_CODES['tab'])
+            front.wait_focus_change(2.0)
+        raise AssertionError(f'Tab never reached {label}')
+
+    try:
+        app.wait(lambda s: gantt_loaded(s) and s['gantt']['selected_key'] == 'TEST-A' and s['editing']['enabled'], 30,
+                 'the Gantt with TEST-A selected and editing on')
+        front = Foreground(app.process.pid)
+        front.allow_sheets = True
+        front.activate(app.process)
+        front.arm()
+        guarded_wait(app, front, lambda s: s['gantt']['focus_reported'] == 'gantt.row.TEST-A', 15, 'the rows to hold the keyboard on TEST-A')
+        first, second = walk(), walk()
+        assert first == second, f'the focus order differs between two walks: {first} != {second}'
+        reached = {label for _, label in first}
+        # Tab reaches every field, each read with a full label; buttons are reached by their shortcuts, whatever the
+        # system's keyboard navigation is.
+        required = {'Acting as (kind:name)', 'Reason (block or reject)', 'Note (submit or verify)', 'Title', 'Objective',
+                    'Acceptance criteria, one per line', 'Optimistic hours', 'Likely hours', 'Pessimistic hours', 'Other work key',
+                    'Lag in hours (negative for a lead)', 'Decision key to gate on'}
+        assert required <= reached, f'Tab does not reach {sorted(required - reached)}: {first}'
+        unlabeled = [index for index, (_, label) in enumerate(first) if not label]
+        assert not unlabeled, f'stops without a label at {unlabeled}: {first}'
+
+        # A plan edit by keyboard, reviewed from the inspector and applied; the keyboard goes back to the rows.
+        tab_to('Title')
+        guarded_key(app, front, 'Command-A to select the title', 0, COMMAND_FLAG)
+        paste('Contract A, retitled by keyboard', 'Command-V to paste a new title')
+        guarded_key(app, front, 'Return to set the title', KEY_CODES['return'])
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 1, 10, 'the title edit to enter the draft')
+        guarded_key(app, front, 'Command-Return to review from the title field', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the review to be shown')
+        paste('Retitle A by keyboard', 'Command-V to paste the reason')
+        guarded_key(app, front, 'Command-Return to apply', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edit to be applied')
+        guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
+        guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close after the apply')
+        front.wait_focus_change(3.0)
+        after_apply = front.focused_facts()
+        assert after_apply[0] == 'gantt.region', f'the keyboard did not go to the rows after the apply rebuilt the inspector: {after_apply}'
+
+        # A second edit's review cancelled from the inspector gives the keyboard back to Review.
+        tab_to('Title')
+        guarded_key(app, front, 'Command-A to select the title', 0, COMMAND_FLAG)
+        paste('Contract A, not applied', 'Command-V to paste another title')
+        guarded_key(app, front, 'Return to set the title', KEY_CODES['return'])
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 1, 10, 'the second edit to enter the draft')
+        guarded_key(app, front, 'Command-Return to review again from the title field', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['reviewing'], 20, 'the second review to be shown')
+        guarded_key(app, front, 'Escape to cancel the review', KEY_CODES['escape'])
+        guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close')
+        front.wait_focus_change(3.0)
+        returned = front.focused_facts()[1]
+        assert returned == 'Title', f'the keyboard did not go back to the title field after the cancel: {returned}'
+        # A task operation by its shortcut, last since claimed work's contract is protected: the outcome is shown and the
+        # keyboard stays where it was.
+        tab_to('Note (submit or verify)')
+        guarded_key(app, front, 'Option-Command-C to claim TEST-A', 8, COMMAND_FLAG | OPTION_FLAG)
+        guarded_wait(app, front, lambda s: s['operations']['phase'] == 'accepted', 20, 'the claim to be accepted')
+        claimed = front.focused_facts()[1]
+        assert claimed == 'Note (submit or verify)', f'the keyboard left the note field after the claim: {claimed}'
+
+        uninterrupted(front, 'the route is complete')
+        entries = run_cli(database, 'history')['entries'][operations:]
+        kinds = [next(iter(e['operation']['command'])) for e in entries]
+        assert kinds == ['ApplyChange', 'Claim'], kinds
+        assert app.quit() == 0
+        return (f'the inspector by keyboard alone: a defined focus order of {len(first)} stops, every one labelled, the same on two walks; '
+                f'Option-Command-C claimed TEST-A with the keyboard left in place; a typed title reviewed from the inspector and applied, the '
+                f'keyboard then on the rows; a cancelled review gave the keyboard back to the title field; recorded {kinds}')
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption))
+        return None
+    except AssertionError as error:
+        kept = keep_failure(case, app, front, {'error': str(error)[:4000]})
+        raise AssertionError(f'{error} (complete failing state kept at {kept})') from None
+    finally:
+        subprocess.run(['/usr/bin/pbcopy'], input=clipboard, check=False, timeout=15)
+        if front:
+            front.close()
+        app.close()
+
+
 def network_keyboard_route(bundle, directory):
     """Actual entry to the network in the packaged app and the keys after it, with real key events (CGEventPostToPid), each
     sent with the app frontmost and its window key: from the Gantt with TEST-C selected, Command-6 enters the network (the
@@ -2911,7 +3110,7 @@ def main(bundle):
         for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
                          edit_flag_first, gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
                          filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
-                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route):
+                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route):
             result = scenario(packaged, directory)
             # A case that was skipped or not assessed says so itself, loudly, and returns nothing: it is never a pass.
             if result is not None:

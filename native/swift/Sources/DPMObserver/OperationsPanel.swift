@@ -8,13 +8,8 @@ import SwiftUI
 struct OperationsPanel: View {
     @ObservedObject var model: ObserverModel
     let item: WorkItem
-    /// The control the keyboard is on; after an outcome it returns to the operation that was pressed, or to the
-    /// control the outcome asks for next (Reconcile, or reading the changes).
-    @FocusState private var focus: String?
-    @State private var pressed: String?
-    /// Where the keyboard goes once that control can take it: a control still disabled when an outcome arrives gets
-    /// the keyboard when it is enabled, never before.
-    @State private var wanted: String?
+    /// Every operation, Reconcile and reading the changes have shortcuts, so nothing here moves the keyboard: after an
+    /// operation and its outcome it is where the person left it.
 
     var body: some View {
         let blocker = model.operationBlocker
@@ -28,9 +23,9 @@ struct OperationsPanel: View {
             }
             .disabled(blocker != nil)
             TextField("Reason (block or reject)", text: Binding(get: { model.operations.reason }, set: { model.setOperationReason($0) }))
-                .textFieldStyle(.roundedBorder).focused($focus, equals: "ops.reason").accessibilityLabel("Reason for a block or a reject").accessibilityIdentifier("ops.reason")
+                .textFieldStyle(.roundedBorder).accessibilityLabel("Reason for a block or a reject").accessibilityIdentifier("ops.reason")
             TextField("Note (submit or verify)", text: Binding(get: { model.operations.note }, set: { model.setOperationNote($0) }))
-                .textFieldStyle(.roundedBorder).focused($focus, equals: "ops.note").accessibilityLabel("Note for a submit or a verify").accessibilityIdentifier("ops.note")
+                .textFieldStyle(.roundedBorder).accessibilityLabel("Note for a submit or a verify").accessibilityIdentifier("ops.note")
             HStack {
                 action("Block", .block(reason: model.operations.reason), id: "ops.block")
                     .disabled(blocker != nil || model.operations.reason.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -48,44 +43,22 @@ struct OperationsPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ops.panel")
-        .onChange(of: model.operations.phase) { _, phase in
-            switch phase {
-            case .unknown: wanted = "ops.reconcile"
-            case .refused: wanted = "ops.acknowledge"
-            // A cleared reason leaves Block and Reject disabled: the reason field takes the keyboard instead.
-            case .accepted(_, let operation, _):
-                switch operation {
-                case .block, .reject: wanted = "ops.reason"
-                default: wanted = pressed
-                }
-            default: break
-            }
-            settleFocus()
-        }
-        .onChange(of: model.operationBlocker) { settleFocus() }
-        .onChange(of: model.operations.staleObservation.map { model.rereadSince($0) }) { settleFocus() }
     }
 
-    /// Give the keyboard to the wanted control once it is enabled.
-    private func settleFocus() {
-        guard let target = wanted else { return }
-        let enabled: Bool
-        switch target {
-        case "ops.reconcile", "ops.reason", "ops.note": enabled = true
-        case "ops.acknowledge": enabled = model.operations.staleObservation.map { model.rereadSince($0) } ?? false
-        default: enabled = model.operationBlocker == nil
-        }
-        guard enabled else { return }
-        focus = target
-        wanted = nil
-    }
+    /// Every operation has a shortcut, so it is reachable by keyboard whether or not the system's keyboard navigation
+    /// lets Tab reach buttons; a shortcut leaves the keyboard where it was.
+    private static let shortcuts: [String: (KeyEquivalent, String)] = [
+        "ops.claim": ("c", "⌥⌘C"), "ops.start": ("s", "⌥⌘S"), "ops.unblock": ("u", "⌥⌘U"), "ops.block": ("b", "⌥⌘B"),
+        "ops.submit": (.return, "⌥⌘↩"), "ops.verify": ("v", "⌥⌘V"), "ops.reject": ("j", "⌥⌘J"),
+    ]
 
     private func action(_ title: String, _ operation: TaskOperation, id: String) -> some View {
-        Button(title) {
-            pressed = id
+        let shortcut = Self.shortcuts[id]
+        return Button(title) {
             model.operate(operation, on: item.identity)
         }
-        .focused($focus, equals: id)
+        .modifier(OperationShortcut(key: shortcut?.0))
+        .help(shortcut.map { "\(title) (\($0.1))" } ?? title)
         .accessibilityLabel("\(title) \(item.key)")
         .accessibilityIdentifier(id)
     }
@@ -110,7 +83,8 @@ struct OperationsPanel: View {
                 Label("Whether \(sent.operation.words) was recorded is unknown: \(cause)", systemImage: "questionmark.circle")
                     .font(.caption).fixedSize(horizontal: false, vertical: true)
                 Button("Reconcile") { model.reconcileOperation() }
-                    .focused($focus, equals: "ops.reconcile")
+                    .keyboardShortcut("r", modifiers: [.command, .option])
+                    .help("Reconcile (⌥⌘R)")
                     .accessibilityLabel("Reconcile \(sent.operation.words) of \(model.editName(sent.work))")
                     .accessibilityIdentifier("ops.reconcile")
                     .help("Resend request \(sent.request.operationId) to learn what became of it")
@@ -128,13 +102,22 @@ struct OperationsPanel: View {
             Text("owner \(observed.owner ?? "none") → \(now?.owner ?? "none")").font(.caption)
             Text("progress \(observed.progress)% → \(now?.reportedProgress ?? 0)%").font(.caption)
             Button("I have read the changes") { model.acknowledgeChanges() }
+                .keyboardShortcut("k", modifiers: [.command, .option])
                 .disabled(!reread)
-                .focused($focus, equals: "ops.acknowledge")
                 .accessibilityLabel("I have read the changes to \(model.editName(work))")
                 .accessibilityIdentifier("ops.acknowledge")
                 .help(reread ? "Allow the next operation against the plan as read now" : "Waiting for the plan to be read again")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ops.changes")
+    }
+}
+
+/// An operation's Option-Command shortcut, when it has one.
+private struct OperationShortcut: ViewModifier {
+    let key: KeyEquivalent?
+
+    func body(content: Content) -> some View {
+        if let key { content.keyboardShortcut(key, modifiers: [.command, .option]) } else { content }
     }
 }

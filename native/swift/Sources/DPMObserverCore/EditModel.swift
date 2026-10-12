@@ -58,9 +58,12 @@ public struct EditState: Equatable, Sendable {
     /// Counts each close of the review sheet, after an apply or a cancel; the page it was opened from gives the
     /// keyboard back to its region when this changes.
     public var focusReturns = 0
-    /// Whether the review was opened from the inspector rather than from the Gantt or network region; closing it
-    /// gives the keyboard back to where it was opened, and counts here for the inspector.
+    /// Whether the review was opened from the inspector rather than from the Gantt or network region.
     public var reviewFromInspector = false
+    /// Whether the region takes the keyboard once the closed review's sheet is gone.
+    public var returnToRegion = false
+    /// The inspector field that last had the keyboard, and a count of requests to give it back after a cancelled review.
+    public var inspectorFocus: String?
     public var inspectorReturns = 0
 }
 
@@ -94,12 +97,30 @@ extension ObserverModel {
     public func setEditReason(_ text: String) { editing.reason = text }
 
     /// Close the review sheet; the draft and its review stay.
+    /// Called once the review's sheet is gone: the region the keyboard belongs to takes it, when it should.
+    public func reviewDismissed() {
+        if editing.returnToRegion {
+            editing.returnToRegion = false
+            editing.focusReturns &+= 1
+        } else if editing.reviewFromInspector {
+            editing.inspectorReturns &+= 1
+        }
+    }
+
+    /// The inspector field that has the keyboard now, so a cancelled review can give it back.
+    public func noteInspectorFocus(_ field: String?) {
+        if let field, editing.inspectorFocus != field { editing.inspectorFocus = field }
+    }
+
     public func closeReview() {
         guard editing.reviewing else { return }
         editing.reviewing = false
-        // The inspector's Review button exists only while there is a draft; after an apply removed it, the region
-        // the edit was made from takes the keyboard.
-        if editing.reviewFromInspector, editing.draft != nil { editing.inspectorReturns &+= 1 } else { editing.focusReturns &+= 1 }
+        // Closing a sheet gives the keyboard back to the control that had it. A review opened from the Gantt or network
+        // region, and an apply from the inspector (which rebuilds the fields it was opened from), give it to the region
+        // once the sheet is gone.
+        var applied = false
+        if case .applied = editing.phase { applied = true }
+        editing.returnToRegion = !editing.reviewFromInspector || applied
     }
 
     /// The parent of a work item as the draft's basis records it.

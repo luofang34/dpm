@@ -49,7 +49,9 @@ struct GanttView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .inspector(isPresented: Binding(get: { model.editing.enabled }, set: { model.setEditing($0) })) { EditPanel(model: model) }
-        .sheet(isPresented: Binding(get: { model.editing.reviewing }, set: { if !$0 { model.closeReview() } })) { ReviewSheet(model: model) }
+        .sheet(isPresented: Binding(get: { model.editing.reviewing }, set: { if !$0 { model.closeReview() } }), onDismiss: { model.reviewDismissed() }) {
+            ReviewSheet(model: model)
+        }
         // Closing the review, after an apply or a cancel, gives the keyboard back to the rows it was opened from.
         .onChange(of: model.editing.focusReturns) { keyboardRequest &+= 1 }
         .accessibilityElement(children: .contain)

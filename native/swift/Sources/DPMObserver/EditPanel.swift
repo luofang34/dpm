@@ -37,7 +37,7 @@ struct EditPanel: View {
                         .accessibilityIdentifier("edit.notice")
                 }
                 LabeledContent("Acting as") {
-                    TextField("kind:name", text: Binding(get: { model.editing.actor }, set: { model.setEditActor($0) }))
+                    TextField("Acting as (kind:name)", text: Binding(get: { model.editing.actor }, set: { model.setEditActor($0) }))
                         .textFieldStyle(.roundedBorder)
                         .accessibilityIdentifier("edit.actor")
                 }
@@ -76,6 +76,8 @@ struct ItemEditor: View {
     @State private var linkLag = "0"
     @State private var linkAsPredecessor = true
     @State private var gateKey = ""
+    /// The field with the keyboard; a cancelled review gives it back.
+    @FocusState private var focused: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -84,7 +86,8 @@ struct ItemEditor: View {
             field("Objective", $objective, axis: .vertical) { model.edit(.objective(work: item.identity, text: objective)) }
             VStack(alignment: .leading, spacing: 4) {
                 Text("Acceptance criteria, one per line").font(.caption).foregroundStyle(.secondary)
-                TextField("Criteria", text: $acceptance, axis: .vertical).lineLimit(3...8).textFieldStyle(.roundedBorder)
+                TextField("Acceptance criteria, one per line", text: $acceptance, axis: .vertical).lineLimit(3...8).textFieldStyle(.roundedBorder)
+                    .focused($focused, equals: "acceptance")
                     .accessibilityLabel("Acceptance criteria, one per line").accessibilityIdentifier("edit.acceptance")
                 Button("Set criteria") {
                     model.edit(.acceptance(work: item.identity, criteria: acceptance.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }))
@@ -133,14 +136,14 @@ struct ItemEditor: View {
                 .labelsHidden().frame(width: 80)
                 .accessibilityLabel("Link direction")
                 .help("after KEY: KEY is the predecessor; before KEY: KEY is the successor")
-                TextField("key", text: $linkKey).textFieldStyle(.roundedBorder).accessibilityLabel("Other work key").accessibilityIdentifier("edit.link-key")
+                TextField("Other work key", text: $linkKey).textFieldStyle(.roundedBorder).focused($focused, equals: "link-key").accessibilityLabel("Other work key").accessibilityIdentifier("edit.link-key")
             }
             HStack {
                 Picker("", selection: $linkKind) {
                     ForEach(["FinishStart", "StartStart", "FinishFinish", "StartFinish"], id: \.self) { Text(GanttRelation.abbreviation($0)).tag($0) }
                 }
                 .labelsHidden().frame(width: 70).accessibilityLabel("Relation kind")
-                TextField("lag h", text: $linkLag).textFieldStyle(.roundedBorder).frame(width: 60).accessibilityLabel("Lag in hours, negative for lead")
+                TextField("Lag in hours (negative for a lead)", text: $linkLag).textFieldStyle(.roundedBorder).focused($focused, equals: "link-lag").frame(width: 120).accessibilityLabel("Lag in hours, negative for lead").accessibilityIdentifier("edit.link-lag")
                 Button("Add link") { addLink() }.disabled(otherIdentity == nil).accessibilityIdentifier("edit.add-link")
             }
             Divider()
@@ -154,7 +157,7 @@ struct ItemEditor: View {
                 }
             }
             HStack {
-                TextField("decision key", text: $gateKey).textFieldStyle(.roundedBorder).accessibilityLabel("Decision key to gate on")
+                TextField("Decision key to gate on", text: $gateKey).textFieldStyle(.roundedBorder).focused($focused, equals: "gate-key").accessibilityLabel("Decision key to gate on").accessibilityIdentifier("edit.gate-key")
                 Button("Gate on") {
                     if let decision = model.snapshot.inventory.decision(key: gateKey.trimmingCharacters(in: .whitespaces)) {
                         model.edit(.gate(decision: decision.identity, work: item.identity, blocks: true))
@@ -164,6 +167,8 @@ struct ItemEditor: View {
             }
         }
         .onAppear(perform: load)
+        .onChange(of: focused) { _, field in model.noteInspectorFocus(field) }
+        .onChange(of: model.editing.inspectorReturns) { focused = model.editing.inspectorFocus }
     }
 
     private var otherIdentity: String? {
@@ -207,8 +212,9 @@ struct ItemEditor: View {
             Text(label).font(.caption).foregroundStyle(.secondary)
             HStack {
                 TextField(label, text: text, axis: axis).lineLimit(axis == .vertical ? 2...6 : 1...1).textFieldStyle(.roundedBorder)
-                    .onSubmit(commit).accessibilityLabel(label)
-                Button("Set", action: commit).accessibilityLabel("Set \(label.lowercased())")
+                    .focused($focused, equals: label.lowercased())
+                    .onSubmit(commit).accessibilityLabel(label).accessibilityIdentifier("edit.\(label.lowercased())")
+                Button("Set", action: commit).accessibilityLabel("Set \(label.lowercased())").accessibilityIdentifier("edit.set-\(label.lowercased())")
             }
         }
     }
@@ -216,7 +222,7 @@ struct ItemEditor: View {
     private func hours(_ label: String, _ text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.caption2).foregroundStyle(.secondary)
-            TextField("h", text: text).textFieldStyle(.roundedBorder).accessibilityLabel("\(label) hours")
+            TextField("\(label) hours", text: text).textFieldStyle(.roundedBorder).focused($focused, equals: label.lowercased()).accessibilityLabel("\(label) hours").accessibilityIdentifier("edit.hours-\(label.lowercased())")
         }
     }
 }
@@ -233,10 +239,10 @@ struct NewTaskEditor: View {
     var body: some View {
         DisclosureGroup("New task") {
             VStack(alignment: .leading, spacing: 6) {
-                TextField("Key, e.g. VIS-70", text: $key).textFieldStyle(.roundedBorder).accessibilityIdentifier("edit.new-key")
-                TextField("Title", text: $title).textFieldStyle(.roundedBorder)
-                TextField("Objective", text: $objective, axis: .vertical).lineLimit(2...4).textFieldStyle(.roundedBorder)
-                TextField("Acceptance criteria, one per line", text: $acceptance, axis: .vertical).lineLimit(2...6).textFieldStyle(.roundedBorder)
+                TextField("New task key, e.g. VIS-70", text: $key).textFieldStyle(.roundedBorder).accessibilityIdentifier("edit.new-key")
+                TextField("New task title", text: $title).textFieldStyle(.roundedBorder)
+                TextField("New task objective", text: $objective, axis: .vertical).lineLimit(2...4).textFieldStyle(.roundedBorder)
+                TextField("New task acceptance criteria, one per line", text: $acceptance, axis: .vertical).lineLimit(2...6).textFieldStyle(.roundedBorder)
                 TextField("Likely hours (optimistic ½×, pessimistic 2×)", text: $likely).textFieldStyle(.roundedBorder)
                 Text("Under \(parent.map(model.editName) ?? "the top level")").font(.caption).foregroundStyle(.secondary)
                 Button("Add to draft") {
@@ -263,7 +269,6 @@ struct NewTaskEditor: View {
 /// The edits made so far, removable one by one, and the way to review them.
 struct DraftList: View {
     @ObservedObject var model: ObserverModel
-    @FocusState private var reviewFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -283,7 +288,6 @@ struct DraftList: View {
                     Button("Review changes…") { model.reviewDraft(fromInspector: !RegionFocus.regionHoldsKeyboard) }
                         .keyboardShortcut(.return, modifiers: .command)
                         .disabled(model.editing.held)
-                        .focused($reviewFocused)
                         .accessibilityIdentifier("edit.review")
                     Button("Discard", role: .destructive) { model.discardDraft() }.disabled(model.editing.held)
                 }
@@ -300,8 +304,6 @@ struct DraftList: View {
                 Button("Reconcile") { model.reconcileApply() }.accessibilityIdentifier("edit.reconcile").help("Resend request \(sent.operationId) to learn what became of it")
             }
         }
-        // A review opened from here gives the keyboard back here when it closes.
-        .onChange(of: model.editing.inspectorReturns) { reviewFocused = true }
     }
 }
 

@@ -14,6 +14,8 @@ extension Context {
         // Each send arms a fresh event, so every "on the wire" is the exchange of that send.
         let armed = LockedBox(false), sent = LockedBox(Event())
         let model = try await openGanttModel(.database(first)) { settings in
+            // A replaced helper waits long enough for the lost state to be seen.
+            settings.reconnectDelays = [0.5, 1]
             let audited = settings.onBlockingStep
             settings.onBlockingStep = { step in
                 audited?(step)
@@ -30,6 +32,11 @@ extension Context {
         try await waitOperation(model, "starting unclaimed work to be refused") { if case .refused = $0.phase { return true } else { return false } }
         guard let pid = await MainActor.run(body: { model.snapshot.helperProcess }) else { throw SuiteError(description: "no helper process") }
         kill(pid, SIGKILL)
+        // While the helper is lost, applies and operations are both disabled with the reason shown.
+        _ = try await modelExpect(model, "the lost helper to be shown", 30) { if case .reconnecting = $0.connection { return true } else { return false } }
+        let lost = await MainActor.run { (model.applyBlocker, model.operationBlocker) }
+        check(lost.0?.contains("not connected") == true && lost.1?.contains("not connected") == true,
+              "while the helper is lost, applies and operations are disabled with the reason shown: \(lost)")
         _ = try await modelExpect(model, "the helper to be replaced and the view current", 60) { $0.counters.reconnects >= 1 && $0.connection == .connected && $0.freshness.current }
         let released = await MainActor.run { () -> String? in model.acknowledgeChanges(); return model.operationBlocker }
         check(released == nil, "after a reconnect the refused work was read again and the hold released: \(released ?? "none")")
