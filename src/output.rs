@@ -21,14 +21,14 @@ pub(crate) fn success_blocking(
 }
 
 pub(crate) fn value_blocking(
-    value: &(impl Serialize + std::fmt::Debug),
+    value: &impl Serialize,
     revision: Option<u64>,
     json: bool,
 ) -> Result<(), CliError> {
     if json {
         success_blocking(revision, value)
     } else {
-        text_blocking(&format!("{value:#?}"))
+        text_blocking(&serde_json::to_string_pretty(value)?)
     }
 }
 
@@ -46,7 +46,7 @@ pub(crate) fn operation_blocking(operation: RecordedOperation, json: bool) -> Re
     if json {
         json_blocking(&Envelope::from(operation))
     } else {
-        text_blocking(&format!("{operation:#?}"))
+        text_blocking(&serde_json::to_string_pretty(&operation)?)
     }
 }
 

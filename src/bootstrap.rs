@@ -35,7 +35,7 @@ pub(crate) fn initialize_blocking(
             ..Envelope::new(Some(plan.revision), data)
         })
     } else {
-        output::text_blocking(&format!("{data:#?}"))
+        output::text_blocking(&serde_json::to_string_pretty(&data)?)
     }
 }
 
