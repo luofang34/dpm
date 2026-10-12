@@ -2,6 +2,7 @@
 //! DPMObserver app; `dpm tui` and `dpm gui` choose explicitly. Opening the app issues no application command:
 //! it hands the app the project selection, and the app opens that workspace itself.
 
+use crate::args::{Commands, OpenCommand};
 use crate::error::CliError;
 use std::path::{Path, PathBuf};
 
@@ -31,6 +32,25 @@ impl Terminal {
 pub(crate) enum Opening {
     Console,
     App,
+}
+
+/// What `dpm` with no subcommand runs: the status envelope with --json, whatever the terminal, never probing it;
+/// otherwise the console or the app as `opening` decides from the probed terminal.
+pub(crate) fn default_command(
+    json: bool,
+    probe: impl FnOnce() -> Terminal,
+    macos: bool,
+) -> Result<Commands, CliError> {
+    if json {
+        return Ok(Commands::Status {
+            no_simulation: false,
+            calibrated: false,
+        });
+    }
+    Ok(match opening(probe(), macos)? {
+        Opening::Console => Commands::Open(OpenCommand::Tui),
+        Opening::App => Commands::Open(OpenCommand::Gui),
+    })
 }
 
 /// The console on a terminal, the app on macOS when neither end is a terminal, otherwise a usage error.

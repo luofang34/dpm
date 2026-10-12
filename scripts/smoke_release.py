@@ -4,10 +4,12 @@ import argparse
 import hashlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from pathlib import Path, PurePosixPath
 
 
@@ -94,11 +96,36 @@ def exercise(root, manifest, directory):
     return env
 
 
+def gui_smoke(root, directory, env):
+    """On macOS the archive carries DPMObserver.app beside dpm with every adapter, and `dpm gui` opens it on the project:
+    the archived app's own process starts with that database. It is then asked to quit."""
+    app = root / 'bin/DPMObserver.app'
+    for name in ('dpm', 'dpm-mcp', 'dpm-native'):
+        assert (app / 'Contents/Helpers' / name).is_file(), f'the archived app lacks {name}'
+    database = directory / 'gui.sqlite'
+    subprocess.run([str(root / 'bin/dpm'), '--database', str(database), 'init', 'GUI qualification', '--json'],
+                   env=env, check=True, timeout=30, capture_output=True)
+    subprocess.run([str(root / 'bin/dpm'), '--database', str(database), 'gui'], env=env, check=True, timeout=60)
+    executable = str(app / 'Contents/MacOS/dpm-observer')
+    # The system opener returns before the app is up; its process is looked for until a bounded deadline.
+    deadline, found = time.monotonic() + 30, None
+    while found is None and time.monotonic() < deadline:
+        listing = subprocess.run(['/bin/ps', '-axo', 'pid=,command='], capture_output=True, text=True, check=True).stdout
+        found = next((line for line in listing.splitlines() if executable in line and str(database) in line), None)
+        if found is None:
+            time.sleep(0.25)
+    assert found, 'dpm gui did not start the archived app on the project database'
+    os.kill(int(found.split()[0]), signal.SIGTERM)
+
+
 def verify(archive):
     with tempfile.TemporaryDirectory(prefix='dpm-installed-') as temporary:
         directory = Path(temporary)
         root, manifest = unpack(archive, directory)
         env = exercise(root, manifest, directory)
+        opened = sys.platform == 'darwin' and (root / 'bin/DPMObserver.app').is_dir()
+        if opened:
+            gui_smoke(root, directory, env)
         env.update(DPM_BIN=str(root / 'bin/dpm'), DPM_MCP_BIN=str(root / 'bin/dpm-mcp'))
         subprocess.run([sys.executable, str(root / 'source/scripts/smoke_terminal.py')],
                        cwd=directory, env=env, check=True, timeout=120)
@@ -113,7 +140,8 @@ def verify(archive):
         else:
             raise AssertionError('corrupt archive accepted')
         assert not (directory / 'refused').exists()
-    print(f'PASS: {manifest["target"]} package checksums, corresponding source, isolated CLI/MCP/TUI, ownership and history recovery')
+    print(f'PASS: {manifest["target"]} package checksums, corresponding source, isolated CLI/MCP/TUI, ownership and history recovery'
+          + ('; the archived DPMObserver.app opened by dpm gui' if opened else ''))
 
 
 if __name__ == '__main__':

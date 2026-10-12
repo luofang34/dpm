@@ -121,3 +121,26 @@ fn an_existing_bundle_is_opened_by_path_and_otherwise_by_identifier_and_a_failur
     );
     std::fs::remove_dir_all(&root).expect("cleanup");
 }
+
+#[test]
+fn bare_dpm_is_status_with_json_without_probing_and_otherwise_the_console_the_app_or_a_usage_error()
+{
+    use crate::args::{Commands, OpenCommand};
+    let status =
+        default_command(true, || panic!("--json never probes the terminal"), true).expect("status");
+    assert!(matches!(
+        status,
+        Commands::Status {
+            no_simulation: false,
+            calibrated: false
+        }
+    ));
+    let console = default_command(false, || terminal(true, true), false).expect("console");
+    assert!(matches!(console, Commands::Open(OpenCommand::Tui)));
+    let app = default_command(false, || terminal(false, false), true).expect("app");
+    assert!(matches!(app, Commands::Open(OpenCommand::Gui)));
+    assert!(
+        default_command(false, || terminal(false, false), false).is_err(),
+        "no app off macOS"
+    );
+}
