@@ -3,7 +3,9 @@
 
 use super::{Network, TOLERANCE, stable_id};
 use dpm_model::{DependencyKind, WorkItemId};
-use dpm_schedule::{RelationSchedule, Schedule, SimulationConfig, deterministic, simulate};
+use dpm_schedule::{
+    RelationSchedule, Schedule, SimulationConfig, deterministic, pert_approximation, simulate,
+};
 use std::collections::BTreeMap;
 
 /// `(letter, immediate predecessors, optimistic, most likely, pessimistic)`.
@@ -157,6 +159,43 @@ fn reliable_construction_sampling_spreads_criticality_beyond_the_mean_path() {
     }
     assert!(criticality('K') < criticality('L'));
     assert!(summary.p50_finish_hours > 40.0 && summary.p95_finish_hours > 47.0);
+}
+
+/// The same project's classical PERT analysis (Hillier & Lieberman, section 22.4): the mean
+/// critical path A-B-C-E-F-J-L-N has mean 44 weeks and variance 9, so P(T <= 47) = Φ(1) = 0.8413.
+/// The sampled forecast also lets the near-critical paths through D-G-H-M and K overtake it, so
+/// its probability of finishing by 47 is lower than the approximation's.
+#[test]
+fn reliable_construction_pert_approximation_matches_the_textbook() {
+    let (net, ids) = build(&RELIABLE);
+    let approximation = pert_approximation(&net.plan).expect("approximation");
+    let letters: String = approximation
+        .path
+        .iter()
+        .filter_map(|id| ids.iter().find(|(_, v)| *v == id).map(|(k, _)| *k))
+        .collect();
+    assert_eq!(letters, "ABCEFJLN");
+    assert!((approximation.mean_hours - 44.0).abs() <= TOLERANCE);
+    assert!((approximation.variance_hours2 - 9.0).abs() <= TOLERANCE);
+    assert!((approximation.sigma_hours - 3.0).abs() <= TOLERANCE);
+    let approximate = approximation.probability_by(47.0);
+    assert!((approximate - 0.8413).abs() <= 0.001, "{approximate}");
+    let variance = |letter: char| approximation.activity_variance_hours2[&ids[&letter]];
+    assert!((variance('C') - 4.0).abs() <= TOLERANCE && (variance('K') - 0.0).abs() <= TOLERANCE);
+    let summary = simulate(
+        &net.plan,
+        SimulationConfig {
+            iterations: 4_000,
+            seed: 22,
+        },
+    )
+    .expect("simulation");
+    let sampled = summary.probability_by(47.0);
+    assert!(
+        sampled < approximate,
+        "sampled {sampled} must be below the approximation {approximate}"
+    );
+    assert!(summary.sampled_std_dev_hours > 0.0);
 }
 
 /// Cambridge International AS & A Level Computer Science 9608, topic 4.4.3 support guide,

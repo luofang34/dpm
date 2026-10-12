@@ -2,6 +2,7 @@ use super::*;
 use dpm_model::{ActorId, ThreePointEstimate, WorkStatus};
 
 mod agreement;
+mod milestones;
 
 fn fixture() -> Plan {
     serde_json::from_str(include_str!(
@@ -136,27 +137,45 @@ fn baseline(plan: &Plan) -> Vec<(WorkItemId, RemainingDuration)> {
         .collect()
 }
 
-/// Sampled project finishes and critical counts, one public deterministic projection per sample.
+/// Sampled project finishes, critical counts and milestone finishes, one public deterministic
+/// projection per sample.
+struct Sampled {
+    finishes: Vec<f64>,
+    counts: BTreeMap<WorkItemId, usize>,
+    milestones: BTreeMap<WorkItemId, Vec<f64>>,
+}
+
 fn sampled_projections(
     plan: &Plan,
     config: SimulationConfig,
     sources: &[(WorkItemId, RemainingDuration)],
-) -> (Vec<f64>, BTreeMap<WorkItemId, usize>) {
+) -> Sampled {
     let mut rng = XorShift64::new(config.seed);
-    let mut finishes = Vec::new();
-    let mut counts: BTreeMap<_, usize> = plan.work_items.keys().map(|id| (*id, 0)).collect();
+    let mut sampled = Sampled {
+        finishes: Vec::new(),
+        counts: plan.work_items.keys().map(|id| (*id, 0)).collect(),
+        milestones: plan
+            .work_items
+            .values()
+            .filter(|w| w.kind == dpm_model::WorkKind::Milestone)
+            .map(|w| (w.id, Vec::new()))
+            .collect(),
+    };
     for _ in 0..config.iterations {
         let durations = sources
             .iter()
             .map(|(id, source)| (*id, source.sample(&mut rng)))
             .collect();
         let schedule = crate::deterministic_with_durations(plan, &durations).expect("cpm");
-        finishes.push(schedule.project_finish_hours);
+        sampled.finishes.push(schedule.project_finish_hours);
         for id in schedule.critical_activities {
-            *counts.entry(id).or_default() += 1;
+            *sampled.counts.entry(id).or_default() += 1;
+        }
+        for (id, finishes) in &mut sampled.milestones {
+            finishes.push(schedule.activities[id].earliest_finish_hours);
         }
     }
-    (finishes, counts)
+    sampled
 }
 
 /// The simulation computed step by step through the public deterministic projection.
@@ -165,17 +184,45 @@ fn reference(
     config: SimulationConfig,
     sources: &[(WorkItemId, RemainingDuration)],
 ) -> SimulationSummary {
-    let (mut finishes, counts) = sampled_projections(plan, config, sources);
-    finishes.sort_by(f64::total_cmp);
+    let sampled = sampled_projections(plan, config, sources);
+    let finishes = SortedSamples::new(sampled.finishes);
     SimulationSummary {
         iterations: config.iterations,
-        p50_finish_hours: percentile(&finishes, 0.50),
-        p80_finish_hours: percentile(&finishes, 0.80),
-        p95_finish_hours: percentile(&finishes, 0.95),
-        criticality: counts
+        p50_finish_hours: finishes.percentile(0.50),
+        p80_finish_hours: finishes.percentile(0.80),
+        p95_finish_hours: finishes.percentile(0.95),
+        criticality: sampled
+            .counts
             .into_iter()
             .map(|(id, n)| (id, n as f64 / config.iterations as f64))
             .collect(),
+        sampled_std_dev_hours: finishes.std_dev(),
+        milestones: sampled
+            .milestones
+            .into_iter()
+            .map(|(id, samples)| (id, MilestoneFinish::new(SortedSamples::new(samples))))
+            .collect(),
+        finishes,
+    }
+}
+
+/// Every reported quantity of two summaries, including what is kept only for horizon queries.
+fn assert_same(fast: &SimulationSummary, slow: &SimulationSummary) {
+    assert_eq!(fast.p50_finish_hours, slow.p50_finish_hours);
+    assert_eq!(fast.p80_finish_hours, slow.p80_finish_hours);
+    assert_eq!(fast.p95_finish_hours, slow.p95_finish_hours);
+    assert_eq!(fast.criticality, slow.criticality);
+    assert_eq!(fast.sampled_std_dev_hours, slow.sampled_std_dev_hours);
+    assert_eq!(fast.finishes, slow.finishes);
+    assert_eq!(
+        fast.milestones.keys().collect::<Vec<_>>(),
+        slow.milestones.keys().collect::<Vec<_>>()
+    );
+    for (id, milestone) in &fast.milestones {
+        let other = &slow.milestones[id];
+        assert_eq!(milestone.p50_finish_hours, other.p50_finish_hours);
+        assert_eq!(milestone.p95_finish_hours, other.p95_finish_hours);
+        assert_eq!(milestone.samples, other.samples);
     }
 }
 
@@ -188,10 +235,7 @@ fn simulation_equals_one_deterministic_projection_per_sample() {
         };
         let fast = simulate(&plan, config).expect("simulate");
         let slow = reference(&plan, config, &baseline(&plan));
-        assert_eq!(fast.p50_finish_hours, slow.p50_finish_hours);
-        assert_eq!(fast.p80_finish_hours, slow.p80_finish_hours);
-        assert_eq!(fast.p95_finish_hours, slow.p95_finish_hours);
-        assert_eq!(fast.criticality, slow.criticality);
+        assert_same(&fast, &slow);
     }
 }
 
@@ -257,8 +301,6 @@ fn remaining_simulation_equals_one_projection_of_the_remaining_graph_per_sample(
             config,
             &remaining.durations().expect("durations"),
         );
-        assert_eq!(fast.p50_finish_hours, slow.p50_finish_hours);
-        assert_eq!(fast.p95_finish_hours, slow.p95_finish_hours);
-        assert_eq!(fast.criticality, slow.criticality);
+        assert_same(&fast, &slow);
     }
 }

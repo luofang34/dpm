@@ -18,11 +18,11 @@ pub(crate) const EPSILON: f64 = 1e-8;
 
 /// One constraint seen from one of its endpoints; `other` is the position of the far endpoint.
 #[derive(Debug, Clone, Copy)]
-struct Edge {
-    id: DependencyId,
-    other: usize,
-    kind: DependencyKind,
-    lag: f64,
+pub(crate) struct Edge {
+    pub(crate) id: DependencyId,
+    pub(crate) other: usize,
+    pub(crate) kind: DependencyKind,
+    pub(crate) lag: f64,
     /// The lag counts working hours of the successor's calendar.
     working: bool,
 }
@@ -161,6 +161,11 @@ impl Network {
     /// Activities in topological order.
     pub(crate) fn order(&self) -> &[WorkItemId] {
         &self.order
+    }
+
+    /// Constraints into the activity at a position, in plan order; empty for an unknown position.
+    pub(crate) fn incoming(&self, position: usize) -> &[Edge] {
+        self.incoming.get(position).map_or(&[], Vec::as_slice)
     }
 
     /// Topological position of an activity of the compiled plan.
