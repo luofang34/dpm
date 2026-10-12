@@ -11,15 +11,24 @@ extension Context {
         print("operations: an answer settles only its own workspace; a request left on the wire is restored and reconciled once")
         let first = try await newStore("operations-first")
         let second = try await newStore("operations-second")
-        // Each send arms a fresh event, so every "on the wire" is the exchange of that send.
-        let armed = LockedBox(false), sent = LockedBox(Event())
+        // Each send arms a fresh event with the helper to stop. The helper is stopped at the first exchange after the send,
+        // before the request is written: a read already on the wire is answered, and the send is the one left unanswered.
+        let armed = LockedBox<Int32>(0), stopped = LockedBox(false), sent = LockedBox(Event())
         let model = try await openGanttModel(.database(first)) { settings in
+            // No background reads: with a helper stopped, a read in flight would make the view stale between the check
+            // that a send is possible and the send. Each workspace is read when it is opened or reconnected.
+            settings.pollInterval = 3600
+            settings.runsRefreshInterval = 3600
             // A replaced helper waits long enough for the lost state to be seen.
             settings.reconnectDelays = [0.5, 1]
             let audited = settings.onBlockingStep
             settings.onBlockingStep = { step in
                 audited?(step)
-                if step == "exchange", armed.withLock({ $0 }) { sent.withLock { $0 }.signal() }
+                guard step == "exchange" else { return }
+                let pid = armed.withLock { pid -> Int32 in defer { pid = 0 }; return pid }
+                guard pid != 0 else { return }
+                stopped.withLock { $0 = stopNow(pid) }
+                sent.withLock { $0 }.signal()
             }
         }
         _ = try await modelExpect(model, "the first workspace to be read", 60) { $0.inventory.basis != nil && $0.freshness.current }
@@ -37,6 +46,8 @@ extension Context {
         let lost = await MainActor.run { (model.applyBlocker, model.operationBlocker) }
         check(lost.0?.contains("not connected") == true && lost.1?.contains("not connected") == true,
               "while the helper is lost, applies and operations are disabled with the reason shown: \(lost)")
+        // With no background reads, the replaced helper is read on request.
+        await MainActor.run { model.reload() }
         _ = try await modelExpect(model, "the helper to be replaced and the view current", 60) { $0.counters.reconnects >= 1 && $0.connection == .connected && $0.freshness.current }
         let released = await MainActor.run { () -> String? in model.acknowledgeChanges(); return model.operationBlocker }
         check(released == nil, "after a reconnect the refused work was read again and the hold released: \(released ?? "none")")
@@ -44,14 +55,17 @@ extension Context {
         // A request left on the wire when another workspace is opened.
         let before = try await historyCount(first)
         guard let helper = await MainActor.run(body: { model.snapshot.helperProcess }) else { throw SuiteError(description: "no helper process") }
-        check(await freeze(helper), "the first workspace's helper is stopped (its stop was awaited as an event)")
         _ = try await modelExpect(model, "operations to be possible before the claim", 30) { _ in MainActor.assumeIsolated { model.operationBlocker == nil } }
         let claimSent = Event()
         sent.withLock { $0 = claimSent }
-        armed.withLock { $0 = true }
-        await MainActor.run { model.operate(.claim, on: a) }
-        check(await claimSent.wait(), "the claim is on the wire, unanswered")
-        armed.withLock { $0 = false }
+        armed.withLock { $0 = helper }
+        let held = await MainActor.run { () -> String? in
+            if let blocker = model.operationBlocker { return blocker }
+            model.operate(.claim, on: a)
+            return nil
+        }
+        if let held { throw SuiteError(description: "the claim was held before it was sent: \(held)") }
+        check(await claimSent.wait() && stopped.withLock({ $0 }), "the claim is on the wire to a stopped helper, unanswered")
         await MainActor.run { model.open(.database(second)) }
         _ = try await modelExpect(model, "the second workspace to be read", 60) { $0.inventory.basis != nil && $0.freshness.current }
         let clean = await MainActor.run { (model.operations.phase == .idle, model.operationBlocker, model.applyBlocker) }
@@ -59,7 +73,12 @@ extension Context {
         kill(helper, SIGKILL)
 
         await MainActor.run { model.open(.database(first)) }
-        _ = try await modelExpect(model, "the first workspace to be read again", 60) { $0.inventory.basis != nil && $0.freshness.current }
+        // Requests left in a workspace are restored once it is shown as that live workspace.
+        _ = try await modelExpect(model, "the first workspace to be read again", 60) {
+            $0.inventory.basis != nil && $0.freshness.current && $0.identity?.source == "live"
+        }
+        // The left request is restored when the workspace is adopted as the one shown, which may be a later snapshot.
+        try await waitOperation(model, "the claim left on the wire to be restored") { $0.unresolved != nil }
         let restored = await MainActor.run { (model.operations.unresolved != nil, model.operationBlocker) }
         check(restored.0 && restored.1?.contains("Reconcile") == true, "coming back restores the claim as unknown, to be reconciled: \(restored)")
         await MainActor.run { model.reconcileOperation() }
@@ -71,7 +90,7 @@ extension Context {
         check(untouched == 0, "the second workspace recorded nothing")
 
         // Close Workspace while an operation is on the wire, then open it again: the request is still to be reconciled.
-        try await leaveWithRequestOnTheWire(model, first, armed: armed, sent: sent, what: "a start", leave: { model.close() }) {
+        try await leaveWithRequestOnTheWire(model, first, armed: armed, stopped: stopped, sent: sent, what: "a start", leave: { model.close() }) {
             model.operate(.start, on: a)
         }
         await MainActor.run { model.reconcileOperation() }
@@ -91,7 +110,7 @@ extension Context {
         try await waitEdit(model, "the draft to be reviewed") { if case .reviewed = $0.phase { return true } else { return false } }
         await MainActor.run { model.setEditReason("Rename C") }
         _ = try await modelExpect(model, "the view to be current before the apply", 30) { $0.freshness.current }
-        try await leaveWithRequestOnTheWire(model, first, armed: armed, sent: sent, what: "an apply", leave: { model.open(.database(second)) }) {
+        try await leaveWithRequestOnTheWire(model, first, armed: armed, stopped: stopped, sent: sent, what: "an apply", leave: { model.open(.database(second)) }) {
             model.applyDraft()
         }
         let draft = await MainActor.run { (model.editing.unresolved != nil, model.editing.draft?.edits.count) }
@@ -103,27 +122,31 @@ extension Context {
         await closeGantt(model)
     }
 
-    /// With the helper stopped, send a request, leave the workspace while it is on the wire, end that helper, and open
-    /// the workspace again until it is current.
-    private func leaveWithRequestOnTheWire(_ model: ObserverModel, _ database: URL, armed: LockedBox<Bool>, sent: LockedBox<Event>, what: String,
+    /// Send a request to a helper stopped as it goes on the wire, leave the workspace while it is unanswered, end that
+    /// helper, and open the workspace again until it is current.
+    private func leaveWithRequestOnTheWire(_ model: ObserverModel, _ database: URL, armed: LockedBox<Int32>, stopped: LockedBox<Bool>, sent: LockedBox<Event>, what: String,
                                            leave: @escaping @MainActor () -> Void, send: @escaping @MainActor () -> Void) async throws {
         // The send must be possible before the helper is stopped, or the guard would rightly hold it.
         _ = try await modelExpect(model, "\(what) to be possible", 30) { _ in
             MainActor.assumeIsolated { model.editing.reviewed != nil ? model.applyBlocker == nil : model.operationBlocker == nil }
         }
         guard let helper = await MainActor.run(body: { model.snapshot.helperProcess }) else { throw SuiteError(description: "no helper process") }
-        check(await freeze(helper), "the helper is stopped before \(what) (its stop was awaited as an event)")
         let onWire = Event()
         sent.withLock { $0 = onWire }
-        armed.withLock { $0 = true }
-        await MainActor.run { send() }
-        check(await onWire.wait(), "\(what) is on the wire, unanswered")
-        armed.withLock { $0 = false }
+        armed.withLock { $0 = helper }
+        let held = await MainActor.run { () -> String? in
+            let blocker = model.editing.reviewed != nil ? model.applyBlocker : model.operationBlocker
+            if blocker == nil { send() }
+            return blocker
+        }
+        if let held { throw SuiteError(description: "\(what) was held before it was sent: \(held)") }
+        check(await onWire.wait() && stopped.withLock({ $0 }), "\(what) is on the wire to a stopped helper, unanswered")
         await MainActor.run { leave() }
         kill(helper, SIGKILL)
         await MainActor.run { model.open(.database(database)) }
         _ = try await modelExpect(model, "the workspace to be shown again after \(what)", 60) {
             $0.connection == .connected && $0.inventory.basis != nil && $0.freshness.current && $0.helperProcess != nil && $0.helperProcess != helper
+                && $0.identity?.source == "live"
         }
     }
 }
