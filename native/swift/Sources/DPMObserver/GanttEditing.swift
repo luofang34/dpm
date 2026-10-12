@@ -121,11 +121,11 @@ struct GanttEditDrag: Equatable {
                 return nil
             }
         case let .resize(work, left, right):
-            let ratio = GanttGesture.ratio(left: Double(left), right: Double(right), to: Double(point.x))
-            guard ratio != 1, let current = model.snapshot.inventory.byIdentity[work]?.estimate else { return nil }
-            model.edit(.estimate(work: work, optimistic: GanttGesture.quarter(current.optimisticHours * ratio), likely: GanttGesture.quarter(current.likelyHours * ratio),
-                                 pessimistic: GanttGesture.quarter(current.pessimisticHours * ratio)))
-            return "estimate \(model.editName(work)) x\(ratio)"
+            guard let current = model.snapshot.inventory.byIdentity[work]?.estimate,
+                  let proposal = GanttGesture.resize(work: work, optimistic: current.optimisticHours, likely: current.likelyHours, pessimistic: current.pessimisticHours,
+                                                     left: Double(left), right: Double(right), to: Double(point.x)) else { return nil }
+            model.edit(proposal)
+            return "estimate \(model.editName(work)) x\(GanttGesture.ratio(left: Double(left), right: Double(right), to: Double(point.x)))"
         case let .progress(work, left, right):
             // Released off its row, or at the share already reported, the drag reports nothing.
             guard point.y >= GanttGeometry.axis, model.ganttRow(atY: point.y - GanttGeometry.axis)?.id == work else { return nil }

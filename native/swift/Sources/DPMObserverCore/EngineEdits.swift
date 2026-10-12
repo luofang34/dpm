@@ -130,4 +130,48 @@ public enum ChangeWords {
         let fields = change["fields"].items.compactMap(\.string)
         return "\(verb) \(collection.replacingOccurrences(of: "_", with: " ")): \(label)\(fields.isEmpty ? "" : " (" + fields.joined(separator: ", ") + ")")"
     }
+
+    /// What a changed entity's fields were and become, one line each, so the review shows the values an apply writes:
+    /// an estimate's hours, a link's lag, a parent named by its key. Nested values are followed to the leaves that
+    /// differ; long text is shortened, and at most `limit` lines are given.
+    public static func values(_ change: JSON, names: (String) -> String, limit: Int = 8) -> [String] {
+        let before = change["before"], after = change["after"]
+        guard before != .null, after != .null else { return [] }
+        var lines: [String] = []
+        func walk(_ path: String, _ old: JSON, _ new: JSON, depth: Int) {
+            guard old != new, lines.count < limit else { return }
+            if case .object(let left) = old, case .object(let right) = new, depth < 3 {
+                for key in Set(left.keys).union(right.keys).sorted() { walk(path + "." + key, left[key] ?? .null, right[key] ?? .null, depth: depth + 1) }
+                return
+            }
+            if case .array(let left) = old, case .array(let right) = new, left.count == right.count {
+                lines.append("  \(path): \(left.count) item\(left.count == 1 ? "" : "s"), edited")
+                return
+            }
+            lines.append("  \(path): \(words(old, field: path, names: names)) → \(words(new, field: path, names: names))")
+        }
+        var more = 0
+        for field in change["fields"].items.compactMap(\.string) {
+            let shown = lines.count
+            walk(field, before[field], after[field], depth: 0)
+            if lines.count == shown, before[field] != after[field] { more += 1 }
+        }
+        return more == 0 ? lines : lines + ["  and \(more) more changed field\(more == 1 ? "" : "s")"]
+    }
+
+    static func words(_ value: JSON, field: String, names: (String) -> String) -> String {
+        switch value {
+        case .null: return "none"
+        case .bool(let flag): return flag ? "yes" : "no"
+        case .integer(let number): return "\(number)"
+        case .unsigned(let number): return "\(number)"
+        case .number(let number): return number.rounded() == number ? String(format: "%.0f", number) : "\(number)"
+        case .string(let text):
+            if field == "parent" || field.hasSuffix("predecessor") || field.hasSuffix("successor") { return names(text) }
+            let flat = text.replacingOccurrences(of: "\n", with: " ⏎ ")
+            return flat.count > 60 ? "“\(flat.prefix(57))…”" : "“\(flat)”"
+        case .array(let items): return "\(items.count) item\(items.count == 1 ? "" : "s")"
+        case .object(let fields): return "\(fields.count) field\(fields.count == 1 ? "" : "s")"
+        }
+    }
 }

@@ -2,7 +2,6 @@
 // selected item by keyboard, the draft of edits, and the review sheet where the application's diff is read and
 // the draft is applied with a reason. Every check is the application's; this only gathers and shows.
 
-
 import AppKit
 import DPMObserverCore
 import SwiftUI
@@ -107,14 +106,14 @@ struct ItemEditor: View {
                     .accessibilityIdentifier("edit.estimate")
             }
             HStack {
-                Button("Outdent") { model.edit(.parent(work: item.identity, parent: model.editParent(of: model.editParent(of: item.identity) ?? ""))) }
+                Button("Outdent") { if let edit = model.outdentEdit(of: item.identity) { model.edit(edit) } }
                     .keyboardShortcut("[", modifiers: .command)
-                    .disabled(model.editParent(of: item.identity) == nil)
-                    .help("Move out of its package (⌘[)")
-                Button("Indent") { if let sibling = previousSibling() { model.edit(.parent(work: item.identity, parent: sibling)) } }
+                    .disabled(model.outdentEdit(of: item.identity) == nil)
+                    .help("Move out of its package (⌘[, or Shift-Tab in the Gantt rows)")
+                Button("Indent") { if let edit = model.indentEdit(of: item.identity) { model.edit(edit) } }
                     .keyboardShortcut("]", modifiers: .command)
-                    .disabled(previousSibling() == nil)
-                    .help("Move under the work package above it (⌘])")
+                    .disabled(model.indentEdit(of: item.identity) == nil)
+                    .help("Move under the work package above it (⌘], or Tab in the Gantt rows)")
             }
             Divider()
             Text("Dependencies").font(.subheadline.weight(.semibold))
@@ -257,14 +256,6 @@ struct ItemEditor: View {
         let (from, to) = linkAsPredecessor ? (other, item.identity) : (item.identity, other)
         model.edit(.link(id: UUID().uuidString.lowercased(), from: from, fromEnd: ends.0, to: to, toEnd: ends.1, lagHours: Double(linkLag).flatMap { $0.isFinite ? $0 : nil } ?? 0))
         linkKey = ""
-    }
-
-    /// The work package listed just above this item under the same parent, which an indent moves it into.
-    private func previousSibling() -> String? {
-        let parent = model.editParent(of: item.identity)
-        let siblings = model.snapshot.inventory.items.filter { model.editParent(of: $0.identity) == parent }
-        guard let at = siblings.firstIndex(where: { $0.identity == item.identity }) else { return nil }
-        return siblings[..<at].last { $0.kind == "WorkPackage" }?.identity
     }
 
     private func load() {
@@ -450,7 +441,8 @@ struct ReviewSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(preview.changeList.enumerated()), id: \.offset) { _, change in
-                    Text(ChangeWords.describe(change, names: model.editName)).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                    Text(([ChangeWords.describe(change, names: model.editName)] + ChangeWords.values(change, names: model.editName)).joined(separator: "\n"))
+                        .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                 }
                 if !preview.affectedWork.isEmpty { Text("Work to reassess: \(preview.affectedWork.joined(separator: ", "))").font(.caption) }
                 if !preview.applicability.isEmpty { Text("Entering or leaving the active graph: \(preview.applicability.joined(separator: ", "))").font(.caption) }

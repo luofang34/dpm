@@ -126,6 +126,14 @@ public enum GanttGesture {
         }
     }
 
+    /// The estimate an Option-drag of a bar's finish from `right` to `x` proposes: all three hours scaled by the ratio of
+    /// the new length to the old, each to a quarter hour; nil when the length is unchanged.
+    public static func resize(work: String, optimistic: Double, likely: Double, pessimistic: Double, left: Double, right: Double, to x: Double) -> PlanEdit? {
+        let factor = ratio(left: left, right: right, to: x)
+        guard factor != 1 else { return nil }
+        return .estimate(work: work, optimistic: quarter(optimistic * factor), likely: quarter(likely * factor), pessimistic: quarter(pessimistic * factor))
+    }
+
     /// How much longer the bar was dragged, as a ratio of lengths rounded to a twentieth, at least a tenth.
     public static func ratio(left: Double, right: Double, to x: Double) -> Double {
         let ratio = max(x - left, 1) / max(right - left, 1)

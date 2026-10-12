@@ -782,9 +782,12 @@ of the new bar length to the old (the review shows the exact hours). A bar never
 are derived: dragging its body offers a lag instead, on the link that bounds its start latest, in
 elapsed quarter hours. A drag between network nodes proposes the kind named by the halves pressed
 and dropped on (the left half is the start, the right half the finish), and a drop on a work
-package is refused in the view. The inspector edits title, objective, acceptance, estimate,
-nesting (⌘] and ⌘[), dependencies with their kind, direction and lag (⌥⌘1 to ⌥⌘4, ⌥⌘X, ⌥⌘E),
-decision gates and new tasks by keyboard. Reviewing the draft is the read-only
+package is refused in the view. While editing, Tab and Shift-Tab in the Gantt rows propose indenting
+the cursor row under the nearest work package drawn above it at its level and outdenting it beside its parent, and
+Control-Tab moves the keyboard on; without editing, Tab moves it as usual. The inspector edits
+title, objective, acceptance, estimate, nesting (⌘] and ⌘[), dependencies with their kind,
+direction and lag (⌥⌘1 to ⌥⌘4, ⌥⌘X, ⌥⌘E), decision gates and new tasks by keyboard. The review
+lists each changed field with the value it has and the value an apply writes. Reviewing the draft is the read-only
 `propose_change` query against the pinned basis, which returns the entity changes, the affected work
 and applicability changes and records nothing; applying sends those changes as one `ApplyChange`
 command with the actor (`kind:name`, attribution rather than authentication), a reason, a request

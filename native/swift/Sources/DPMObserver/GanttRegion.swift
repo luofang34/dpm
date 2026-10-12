@@ -76,7 +76,10 @@ final class GanttRegionView: NSView {
     override func accessibilityRole() -> NSAccessibility.Role? { .group }
     override func accessibilityLabel() -> String? { "Gantt" }
     override func accessibilityValue() -> Any? { cursor ?? "" }
-    override func accessibilityHelp() -> String? { "Arrow keys move the cursor row, Space selects it, Return opens it in Detail. The rows beside it carry their full text." }
+    override func accessibilityHelp() -> String? {
+        "Arrow keys move the cursor row, Space selects it, Return opens it in Detail. While editing, Tab and Shift-Tab propose "
+            + "indenting and outdenting the row, and Control-Tab moves to the next control. The rows beside it carry their full text."
+    }
     override func accessibilityIdentifier() -> String { "gantt.region" }
 
     override func layout() {
