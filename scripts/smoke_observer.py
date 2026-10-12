@@ -2365,8 +2365,9 @@ def inspector_keyboard_route(bundle, directory):
     gate field) enter the draft, are reviewed with Command-Return, a pasted reason applies
     them with Command-Return, and the keyboard is back in the link field it was opened from; a review opened there and
     cancelled gives it back there too. Option-Command-C claims, Option-Command-S starts, Option-Command-V is refused and
-    Option-Command-K, once the work was read again, releases the hold; the keyboard never moves. Only the complete route
-    passes; an interrupted one is NOT ASSESSED."""
+    Option-Command-K, once the work was read again, releases the hold; the keyboard never moves. A typed percent is
+    reported with Return, Option-Command-B, -U and -Return block, unblock and submit, and another actor's Option-Command-J
+    rejects. Only the complete route passes; an interrupted one is NOT ASSESSED."""
     case = 'inspector_keyboard_route'
     if not accessibility_trusted():
         not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so CGEventPostToPid would be ignored; no key was sent')
@@ -2488,15 +2489,37 @@ def inspector_keyboard_route(bundle, directory):
         guarded_wait(app, front, lambda s: s['operations']['blocker'] is None, 20, 'the hold to be released')
         kept = front.focused_facts()[1]
         assert kept == 'Other work key', f'an operation moved the keyboard: {kept}'
+
+        def operation(code, name, step, flags=COMMAND_FLAG | OPTION_FLAG):
+            guarded_wait(app, front, lambda s: s['operations']['blocker'] is None, 20, f'operations to be possible before {name}')
+            guarded_key(app, front, step, code, flags)
+            guarded_wait(app, front, lambda s, name=name: (s['operations']['phase'], s['operations']['operation']) == ('accepted', name), 20, f'{name} to be accepted')
+
+        # Progress typed and reported with Return, then block, unblock and submit by their shortcuts, and an
+        # independent reviewer's reject: every operation of the panel by the keyboard alone.
+        field('Progress percent', '60', 'Command-V a percent')
+        operation(KEY_CODES['return'], 'report 60%', 'Return to report the percent', 0)
+        assert front.focused_facts()[1] == 'Progress percent', f'reporting moved the keyboard: {front.focused_facts()}'
+        field('Reason (block or reject)', 'Fixture missing', 'Command-V a reason')
+        operation(11, 'block', 'Option-Command-B to block TEST-A')
+        operation(32, 'unblock', 'Option-Command-U to unblock TEST-A')
+        operation(KEY_CODES['return'], 'submit', 'Option-Command-Return to submit TEST-A')
+        field('Acting as (kind:name)', 'human:reviewer', 'Command-V an independent reviewer')
+        # An accepted block used its reason; the reject is given its own.
+        field('Reason (block or reject)', 'Report incomplete', 'Command-V the reject reason')
+        operation(38, 'reject', 'Option-Command-J to reject TEST-A as the reviewer')
+        last = front.focused_facts()[1]
+        assert last == 'Reason (block or reject)', f'an operation moved the keyboard: {last}'
         uninterrupted(front, 'the route is complete')
         entries = run_cli(database, 'history')['entries'][operations:]
         kinds = [next(iter(e['operation']['command'])) for e in entries]
-        assert kinds == ['ApplyChange', 'Decide', 'Claim', 'Start'], kinds
+        assert kinds == ['ApplyChange', 'Decide', 'Claim', 'Start', 'ReportProgress', 'Block', 'Unblock', 'Submit', 'Reject'], kinds
         assert app.quit() == 0
         return (f'the inspector by keyboard alone: a defined focus order of {len(first)} stops, every one labelled, the same on two walks; '
                 f'a title, an estimate and a gate entered by keys were reviewed and applied, the keyboard back in the link field; a review '
                 f'cancelled from the link field gave the keyboard back to it; claim, start, a refused verify and its acknowledgement by '
-                f'shortcuts left the keyboard in place; recorded {kinds}')
+                f'shortcuts left the keyboard in place; progress typed and reported with Return, block, unblock, submit and an independent '
+                f'reject by shortcuts, the keyboard where it was typed; recorded {kinds}')
     except NotAssessed as interruption:
         not_assessed(case, interruption_or_death(app.process, interruption))
         return None
