@@ -58,8 +58,9 @@ struct GanttView: View {
         .accessibilityIdentifier("gantt")
         .onAppear { report() }
         .onChange(of: model.focusTarget) {
-            // The shared handler (or the pointer) put the cursor on a row: the region takes the keyboard.
-            if let target = model.focusTarget, target.hasPrefix("gantt.row.") { keyboardRequest &+= 1 }
+            // The shared handler (or the pointer) put the cursor on a row: the region takes the keyboard, unless a field
+            // other than the filter is being edited (a row named again when a newer plan is read must not take it).
+            if let target = model.focusTarget, target.hasPrefix("gantt.row."), !RegionFocus.fieldHoldsKeyboard { keyboardRequest &+= 1 }
             report()
         }
         .onChange(of: model.gantt.editingFilter) { report() }

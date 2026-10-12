@@ -360,7 +360,8 @@ public final class StateReporter {
             "search_focused": model.searchFocused,
             "editing": ["enabled": model.editing.enabled, "edits": model.editing.draft?.edits.count ?? 0, "notice": model.editing.notice ?? NSNull(),
                         "reviewing": model.editing.reviewing, "phase": Self.words(model.editing.phase)] as [String: Any],
-            "operations": ["phase": Self.words(model.operations.phase), "blocker": model.operationBlocker ?? NSNull()] as [String: Any],
+            "operations": ["phase": Self.words(model.operations.phase), "operation": orNull(Self.operation(model.operations.phase)),
+                           "blocker": model.operationBlocker ?? NSNull()] as [String: Any],
             "helper_pid": orNull(snapshot.helperProcess.map { Int($0) }),
             "gantt": gantt(model, layout: layout),
             "network": network(model),
@@ -411,6 +412,15 @@ public final class StateReporter {
         case .accepted: return "accepted"
         case .refused: return "refused"
         case .unknown: return "unknown"
+        }
+    }
+
+    /// The operation the phase is about, so a reader can tell one accepted operation from the next; nil when idle.
+    static func operation(_ phase: OperationState.Phase) -> String? {
+        switch phase {
+        case .idle: return nil
+        case .sending(let sent), .unknown(let sent, _): return sent.operation.words
+        case .accepted(_, let operation, _), .refused(_, let operation, _, _): return operation.words
         }
     }
 

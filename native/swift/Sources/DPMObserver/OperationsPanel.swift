@@ -21,21 +21,20 @@ struct OperationsPanel: View {
                 action("Start", .start, id: "ops.start")
                 action("Unblock", .unblock, id: "ops.unblock")
             }
-            .disabled(blocker != nil)
             TextField("Reason (block or reject)", text: Binding(get: { model.operations.reason }, set: { model.setOperationReason($0) }))
                 .textFieldStyle(.roundedBorder).modifier(InspectorFocus(model: model, name: "ops-reason")).accessibilityLabel("Reason for a block or a reject").accessibilityIdentifier("ops.reason")
             TextField("Note (submit or verify)", text: Binding(get: { model.operations.note }, set: { model.setOperationNote($0) }))
                 .textFieldStyle(.roundedBorder).modifier(InspectorFocus(model: model, name: "ops-note")).accessibilityLabel("Note for a submit or a verify").accessibilityIdentifier("ops.note")
             HStack {
                 action("Block", .block(reason: model.operations.reason), id: "ops.block")
-                    .disabled(blocker != nil || model.operations.reason.trimmingCharacters(in: .whitespaces).isEmpty)
-                action("Submit", .submit(note: model.operations.note), id: "ops.submit").disabled(blocker != nil)
+                    .disabled(model.operations.reason.trimmingCharacters(in: .whitespaces).isEmpty)
+                action("Submit", .submit(note: model.operations.note), id: "ops.submit")
             }
             Text("Independent review").font(.caption.weight(.semibold)).padding(.top, 2)
             HStack {
-                action("Verify", .verify(note: model.operations.note), id: "ops.verify").disabled(blocker != nil)
+                action("Verify", .verify(note: model.operations.note), id: "ops.verify")
                 action("Reject", .reject(reason: model.operations.reason), id: "ops.reject")
-                    .disabled(blocker != nil || model.operations.reason.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(model.operations.reason.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .help("A reviewer other than the work's holders and evidence authors; the application refuses anyone else")
             outcome
@@ -46,7 +45,8 @@ struct OperationsPanel: View {
     }
 
     /// Every operation has a shortcut, so it is reachable by keyboard whether or not the system's keyboard navigation
-    /// lets Tab reach buttons; a shortcut leaves the keyboard where it was.
+    /// lets Tab reach buttons; a shortcut leaves the keyboard where it was. A hold is the model's alone: `operate`
+    /// refuses with the hold's words, so a press made as the hold lifts is never lost to a button not yet redrawn.
     private static let shortcuts: [String: (KeyEquivalent, String)] = [
         "ops.claim": ("c", "⌥⌘C"), "ops.start": ("s", "⌥⌘S"), "ops.unblock": ("u", "⌥⌘U"), "ops.block": ("b", "⌥⌘B"),
         "ops.submit": (.return, "⌥⌘↩"), "ops.verify": ("v", "⌥⌘V"), "ops.reject": ("j", "⌥⌘J"),
