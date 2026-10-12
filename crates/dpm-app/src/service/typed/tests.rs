@@ -55,7 +55,7 @@ fn typed_results_serialize_to_the_json_adapters_return() {
     let work = plan.find_work_by_key("TEST-A").expect("work").id;
     let lineage = app.lineage_blocking().expect("lineage");
 
-    let status = app.status_blocking(false).expect("status");
+    let status = app.status_blocking(false, None).expect("status");
     let mut expected =
         serde_json::to_value(dpm_engine::status(&plan, false, pinned()).expect("s")).expect("json");
     expected["lineage_id"] = json!(lineage);
@@ -66,6 +66,7 @@ fn typed_results_serialize_to_the_json_adapters_return() {
             Query::Status {
                 probabilistic: false,
                 calibrated: false,
+                horizon_hours: None,
             }
         ),
         expected

@@ -45,6 +45,7 @@ pub(crate) fn default_command(
         return Ok(Commands::Status {
             no_simulation: false,
             calibrated: false,
+            horizon: None,
         });
     }
     Ok(match opening(probe(), macos)? {

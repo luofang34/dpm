@@ -109,7 +109,8 @@ fn run_open_blocking(
         Commands::Status {
             no_simulation,
             calibrated,
-        } => crate::calibration::status_blocking(app, !no_simulation, calibrated, json),
+            horizon,
+        } => crate::calibration::status_blocking(app, !no_simulation, calibrated, horizon, json),
         Commands::Store(StoreCommand::Schedule { no_simulation }) => query_blocking(
             app,
             Query::Schedule {

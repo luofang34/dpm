@@ -7,16 +7,19 @@ use dpm_engine::{
 };
 use serde::Serialize;
 
-/// `status`, with measured factors applied when `calibrated`.
+/// `status`, with measured factors applied when `calibrated` and horizon probabilities when a
+/// horizon is given.
 pub(crate) fn status_blocking(
     app: &Application,
     probabilistic: bool,
     calibrated: bool,
+    horizon_hours: Option<f64>,
     json: bool,
 ) -> Result<(), CliError> {
     let response = app.query_blocking(Query::Status {
         probabilistic,
         calibrated,
+        horizon_hours,
     })?;
     if json {
         return output::response_blocking(response, true);

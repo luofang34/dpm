@@ -62,6 +62,7 @@ fn views(app: &mut Application, at: DateTime<Utc>) -> Value {
         "status": query(Query::Status {
             probabilistic: false,
             calibrated: false,
+            horizon_hours: None,
         }),
         "revision": app.plan_blocking().expect("plan").revision,
     });

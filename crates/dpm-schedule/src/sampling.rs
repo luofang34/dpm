@@ -131,6 +131,16 @@ impl BetaPert {
         (hours - self.optimistic) / self.range
     }
 
+    /// Classical PERT variance `((P − O′) / 6)²` of what remains possible after `elapsed` hours,
+    /// where `O′` is the optimistic bound raised to the elapsed hours that already rule it out.
+    ///
+    /// This is the analytic approximation's input, not the variance of [`Self::sample`]: a
+    /// beta-PERT with these shapes has a different, shape-dependent variance.
+    pub(crate) fn pert_variance_after(&self, elapsed: f64) -> f64 {
+        let spread = (self.pessimistic - self.optimistic.max(elapsed)).max(0.0) / 6.0;
+        spread * spread
+    }
+
     /// Density at `fraction` of the range, up to a constant factor.
     pub(crate) fn relative_density(&self, fraction: f64) -> f64 {
         libm::pow(fraction, self.alpha - 1.0) * libm::pow(1.0 - fraction, self.beta - 1.0)

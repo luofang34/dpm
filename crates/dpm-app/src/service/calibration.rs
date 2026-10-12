@@ -28,6 +28,7 @@ impl Application {
     pub fn status_calibrated_blocking(
         &self,
         probabilistic: bool,
+        horizon_hours: Option<f64>,
     ) -> Result<Observed<StatusView>, AppError> {
         let (plan, history) = self.plan_with_history_blocking()?;
         let now = self.clock.now();
@@ -37,7 +38,13 @@ impl Application {
             revision: plan.revision,
             lineage_id,
             data: StatusView {
-                summary: dpm_engine::status_calibrated(&plan, probabilistic, now, &report)?,
+                summary: dpm_engine::status_calibrated_at_horizon(
+                    &plan,
+                    probabilistic,
+                    now,
+                    &report,
+                    horizon_hours,
+                )?,
                 lineage_id,
             },
         })

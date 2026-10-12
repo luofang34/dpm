@@ -1,4 +1,4 @@
-use crate::network::{EPSILON, Network};
+use crate::network::Network;
 use crate::placement::Placement;
 use crate::remaining_duration::RemainingDuration;
 use crate::sampling::XorShift64;
@@ -6,6 +6,10 @@ use crate::{RemainingOptions, ScheduleError};
 use dpm_model::{Plan, WorkItemId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+mod samples;
+use samples::{Samples, SortedSamples};
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 /// Reproducible Monte Carlo sampling configuration.
 pub struct SimulationConfig {
@@ -37,6 +41,72 @@ pub struct SimulationSummary {
     pub p95_finish_hours: f64,
     /// Fraction of sampled schedules in which each activity is critical.
     pub criticality: BTreeMap<WorkItemId, f64>,
+    /// Sample standard deviation of the project finish in elapsed hours: the sampled spread,
+    /// which includes every near-critical path.
+    #[serde(default)]
+    pub sampled_std_dev_hours: f64,
+    /// Sampled finish percentiles of every milestone in the projection.
+    #[serde(default)]
+    pub milestones: BTreeMap<WorkItemId, MilestoneFinish>,
+    /// Every sampled project finish, kept for horizon probabilities rather than serialized.
+    #[serde(skip)]
+    finishes: SortedSamples,
+}
+
+impl SimulationSummary {
+    /// Fraction of sampled schedules whose project finish is at or before `horizon_hours`.
+    #[must_use]
+    pub fn probability_by(&self, horizon_hours: f64) -> f64 {
+        self.finishes.probability_by(horizon_hours)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Sampled finish percentiles of one milestone, in elapsed hours.
+pub struct MilestoneFinish {
+    /// Median sampled finish.
+    pub p50_finish_hours: f64,
+    /// 80th percentile sampled finish.
+    pub p80_finish_hours: f64,
+    /// 95th percentile sampled finish.
+    pub p95_finish_hours: f64,
+    /// Every sampled finish, kept for horizon probabilities rather than serialized.
+    #[serde(skip)]
+    samples: SortedSamples,
+}
+
+impl MilestoneFinish {
+    fn new(samples: SortedSamples) -> Self {
+        Self {
+            p50_finish_hours: samples.percentile(0.50),
+            p80_finish_hours: samples.percentile(0.80),
+            p95_finish_hours: samples.percentile(0.95),
+            samples,
+        }
+    }
+
+    /// Fraction of sampled schedules in which the milestone is reached by `horizon_hours`.
+    #[must_use]
+    pub fn probability_by(&self, horizon_hours: f64) -> f64 {
+        self.samples.probability_by(horizon_hours)
+    }
+}
+
+/// Milestones of a compiled plan with their topological positions.
+fn milestone_positions(
+    plan: &Plan,
+    network: &Network,
+) -> Result<Vec<(WorkItemId, usize)>, ScheduleError> {
+    plan.work_items
+        .values()
+        .filter(|work| work.kind == dpm_model::WorkKind::Milestone)
+        .map(|work| {
+            let at = network
+                .position(&work.id)
+                .ok_or(ScheduleError::MissingWorkItem(work.id))?;
+            Ok((work.id, at))
+        })
+        .collect()
 }
 
 /// Linearly interpolated percentile `p` (0..=1) of ascending values; 0 for no values.
@@ -72,7 +142,8 @@ pub fn simulate(plan: &Plan, config: SimulationConfig) -> Result<SimulationSumma
         .map(|(id, work)| Ok((*id, RemainingDuration::of(*id, work, false, 0.0)?)))
         .collect::<Result<Vec<_>, ScheduleError>>()?;
     let network = Network::compile(plan)?;
-    simulate_inner(&network, config, &durations, None)
+    let milestones = milestone_positions(plan, &network)?;
+    simulate_inner(&network, config, &durations, milestones, None)
 }
 
 /// Monte Carlo projection of remaining applicable work from the execution state at a clock reading.
@@ -111,7 +182,11 @@ pub fn simulate_remaining_with(
     let network = Network::compile(&remaining.plan)?;
     let expected: Vec<f64> = durations.iter().map(|(_, d)| d.expected()).collect();
     let mut placement = remaining.placement(&network, timeline, &expected, options)?;
-    let mut summary = simulate_inner(&network, config, &durations, placement.as_mut())?;
+    let milestones = milestone_positions(&remaining.plan, &network)?
+        .into_iter()
+        .filter(|(id, _)| !remaining.excluded.contains(id))
+        .collect();
+    let mut summary = simulate_inner(&network, config, &durations, milestones, placement.as_mut())?;
     summary
         .criticality
         .retain(|id, _| !remaining.excluded.contains(id));
@@ -123,14 +198,14 @@ fn simulate_inner(
     network: &Network,
     config: SimulationConfig,
     durations_by_id: &[(WorkItemId, RemainingDuration)],
+    milestones: Vec<(WorkItemId, usize)>,
     mut placement: Option<&mut Placement>,
 ) -> Result<SimulationSummary, ScheduleError> {
     if config.iterations == 0 {
         return Err(ScheduleError::NoSimulationIterations);
     }
     let mut rng = XorShift64::new(config.seed);
-    let mut finishes = Vec::with_capacity(config.iterations);
-    let mut critical_counts = vec![0_usize; network.order().len()];
+    let mut samples = Samples::new(network, config.iterations, milestones);
     let mut durations = vec![0.0; network.order().len()];
     // Sampling follows work-item id order, so a seed draws the same numbers for the same plan.
     let mut sampled = Vec::with_capacity(durations_by_id.len());
@@ -154,29 +229,9 @@ fn simulate_inner(
             Some(placement) => network.times_placed(&durations, placement)?,
             None => network.times(&durations)?,
         };
-        finishes.push(times.finish);
-        for (at, count) in critical_counts.iter_mut().enumerate() {
-            if network.total_float(&times, at)? <= EPSILON {
-                *count = count.wrapping_add(1);
-            }
-        }
+        samples.record(network, &durations, &times)?;
     }
-
-    finishes.sort_by(f64::total_cmp);
-    let criticality = network
-        .order()
-        .iter()
-        .zip(critical_counts)
-        .map(|(id, count)| (*id, count as f64 / config.iterations as f64))
-        .collect();
-
-    Ok(SimulationSummary {
-        iterations: config.iterations,
-        p50_finish_hours: percentile(&finishes, 0.50),
-        p80_finish_hours: percentile(&finishes, 0.80),
-        p95_finish_hours: percentile(&finishes, 0.95),
-        criticality,
-    })
+    Ok(samples.summarize(network, config.iterations))
 }
 
 #[cfg(test)]

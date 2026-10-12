@@ -48,7 +48,7 @@ fn mean_sampled_finish(plan: &Plan, sources: &[(WorkItemId, RemainingDuration)])
         iterations: 20_000,
         seed: 40,
     };
-    let (finishes, _) = sampled_projections(plan, config, sources);
+    let finishes = sampled_projections(plan, config, sources).finishes;
     finishes.iter().sum::<f64>() / finishes.len() as f64
 }
 

@@ -41,6 +41,7 @@ fn every_view_names_only_shared_queries_and_known_feeds() {
         Query::Status {
             probabilistic: false,
             calibrated: false,
+            horizon_hours: None,
         },
         Query::Schedule {
             probabilistic: false,

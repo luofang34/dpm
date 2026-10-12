@@ -1,6 +1,8 @@
 //! Temporal-constraint contract for the deterministic CPM projection, exercised via the public API.
 #![cfg(test)]
 
+#[path = "temporal_contract/drag.rs"]
+mod drag;
 #[path = "temporal_contract/examples.rs"]
 mod examples;
 #[path = "temporal_contract/properties.rs"]
