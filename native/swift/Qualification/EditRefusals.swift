@@ -2,8 +2,8 @@
 // an estimate out of order and a link to a work package are refused at review with the draft kept, and a request
 // from another lineage is refused as stale by the application (the model's handling of a stale refusal, which keeps
 // the draft and requires a re-read, is exercised with a revision conflict in edit-review-apply). A view that is not
-// current holds apply with its reason until the plan is read again. Closing the review
-// signals the page to take the keyboard back; the views act on that signal.
+// current holds apply with its reason until the plan is read again. Closing the review signals the page to take the
+// keyboard back; the views act on that signal.
 
 import DPMNative
 import DPMObserverCore
@@ -13,11 +13,11 @@ extension Context {
     func editRefusalsKeepTheDraft() async throws {
         print("edit: agent applies, missing reasons, out-of-order estimates and package links are refused with the draft kept; another lineage is refused as stale")
         let database = try await newStore("edit-refusals", plan: try requirePlan(tools.ganttPlan, "--gantt-plan"))
-        // One schedule read can be failed on demand, so the view is shown stale while a newer plan is owed.
-        let failSchedule = Flag()
+        // Schedule reads fail while armed, so the view stays stale while a newer plan is owed.
+        let failSchedule = LockedBox(false)
         let model = try await openGanttModel(.database(database)) { settings in
             settings.fault = { query in
-                guard query["query"].string == "schedule", failSchedule.take() else { return nil }
+                guard query["query"].string == "schedule", failSchedule.withLock({ $0 }) else { return nil }
                 return BridgeError.refused(NativeError(code: .workspaceChanging, message: "the project changed under a read", details: nil))
             }
         }
@@ -80,11 +80,12 @@ extension Context {
         check(historyAfter == history && revisionAfter == revision, "every refusal left the history and the revision as they were")
 
         // A view that is not current holds apply with the reason shown, until the newer plan is read.
-        failSchedule.arm()
+        failSchedule.withLock { $0 = true }
         _ = try await cliJSON(database, ["decide", "TEST-GATE", "Proceed", "--actor", "human:lead"])
         _ = try await modelExpect(model, "the view to be stale after a failed read", 30) { !$0.freshness.current && $0.freshness.lastError != nil }
         let held = await MainActor.run { model.applyBlocker }
         check(held?.contains("refreshing") == true, "while the view is not current, apply is held with the reason shown: \(held ?? "none")")
+        failSchedule.withLock { $0 = false }
         _ = try await modelExpect(model, "the view to be current again", 30) { $0.freshness.current }
         let released = await MainActor.run { model.applyBlocker }
         check(released?.contains("refreshing") != true, "once the plan is read again, apply is no longer held as refreshing: \(released ?? "none")")

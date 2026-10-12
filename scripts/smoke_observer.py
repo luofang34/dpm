@@ -2536,10 +2536,12 @@ def inspector_keyboard_route(bundle, directory):
 def inspector_edit_keyboard_route(bundle, directory):
     """Every kind of plan edit by keyboard alone on TEST-F, whose title is 500 characters: its title (Return, and Return
     again leaves one edit), objective (Return), acceptance criteria (Option-Command-A), estimate (Return in an hours
-    field), a new dependency after TEST-B (Return in the link field), the removal of its finish-to-start link from TEST-E
-    (Option-Command-L) and a gate on TEST-GATE (Return in the gate field). Command-Return reviews them, a pasted reason and
-    Command-Return apply them as one change, and Escape gives the keyboard back to the gate field. Only the complete route
-    passes; an interrupted one is NOT ASSESSED."""
+    field), a start-to-start dependency before TEST-M1 (Option-Command-X and -2, then Return in the link field), the removal
+    of its finish-to-start link from TEST-E (Option-Command-X and -1 back, then Option-Command-L), a gate on TEST-GATE (Return
+    in the gate field) and a new task (Option-Command-N, then Return). Command-Return reviews them; another actor's claim
+    makes the apply stale, the refusal keeps the edits, Shift-Command-R reads the plan again and reviews them, and
+    Command-Return applies them as one change; Escape gives the keyboard back to the field the review was opened from.
+    Only the complete route passes; an interrupted one is NOT ASSESSED."""
     case = 'inspector_edit_keyboard_route'
     if not accessibility_trusted():
         not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so CGEventPostToPid would be ignored; no key was sent')
@@ -2593,13 +2595,13 @@ def inspector_edit_keyboard_route(bundle, directory):
             field(label, value)
         guarded_key(app, front, 'Return in an hours field to set the estimate', KEY_CODES['return'])
         edits(4, 'the estimate')
-        # A start-to-start link before TEST-M1: Option-Command-D for the direction, Option-Command-2 for the kind.
+        # A start-to-start link before TEST-M1: Option-Command-X for the direction, Option-Command-2 for the kind.
         field('Other work key', 'TEST-M1')
-        guarded_key(app, front, 'Option-Command-D for before', 2, COMMAND_FLAG | OPTION_FLAG)
+        guarded_key(app, front, 'Option-Command-X for before', 7, COMMAND_FLAG | OPTION_FLAG)
         guarded_key(app, front, 'Option-Command-2 for start to start', 19, COMMAND_FLAG | OPTION_FLAG)
         guarded_key(app, front, 'Return to add the SS link before TEST-M1', KEY_CODES['return'])
         edits(5, 'the new link')
-        guarded_key(app, front, 'Option-Command-D back to after', 2, COMMAND_FLAG | OPTION_FLAG)
+        guarded_key(app, front, 'Option-Command-X back to after', 7, COMMAND_FLAG | OPTION_FLAG)
         guarded_key(app, front, 'Option-Command-1 back to finish to start', 18, COMMAND_FLAG | OPTION_FLAG)
         field('Other work key', 'TEST-E')
         guarded_key(app, front, 'Option-Command-L to remove the finish-to-start link from TEST-E', 37, COMMAND_FLAG | OPTION_FLAG)
@@ -2619,8 +2621,8 @@ def inspector_edit_keyboard_route(bundle, directory):
         # Someone else changes the plan meanwhile: the apply is refused as stale, Shift-Command-R reads the plan again and reviews
         # the kept edits, and Command-Return applies them.
         run_cli(database, 'claim', 'TEST-A', '--actor', 'agent:worker')
-        decided = run_cli(database, 'export')['revision']
-        guarded_wait(app, front, lambda s: (s['revision'] or 0) >= decided and s['freshness']['current'], 20, 'the other change to be read')
+        moved = run_cli(database, 'export')['revision']
+        guarded_wait(app, front, lambda s: (s['revision'] or 0) >= moved and s['freshness']['current'], 20, 'the other change to be read')
         guarded_key(app, front, 'Command-Return to apply against the older plan', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['phase'] == 'refused' and (s['editing']['refusal'] or {}).get('stale') is True and s['editing']['edits'] == 8, 20,
                      'the stale apply to be refused as stale with the edits kept')
@@ -2651,7 +2653,7 @@ def inspector_edit_keyboard_route(bundle, directory):
         assert len(shown['title']) > 400 and shown['contract']['objective'] == 'Prove every plan edit works by keyboard', shown['title'][:60]
         assert app.quit() == 0
         return (f'every plan edit by keyboard on the 500-character TEST-F: title (a second Return left one edit), objective, criteria, '
-                f'estimate, an SS link before TEST-M1 (Option-Command-D, -2) added and an FS link removed, a gate and a new task (Option-'
+                f'estimate, an SS link before TEST-M1 (Option-Command-X, -2) added and an FS link removed, a gate and a new task (Option-'
                 f'Command-N), reviewed; a stale apply refused with the edits kept, Shift-Command-R re-read and reviewed them, and they applied as '
                 f'one change of {len(changes)} entities; the keyboard back in the field the review was opened from')
     except NotAssessed as interruption:

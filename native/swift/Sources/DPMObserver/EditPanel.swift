@@ -134,7 +134,7 @@ struct ItemEditor: View {
                 }
                 .labelsHidden().frame(width: 80)
                 .accessibilityLabel("Link direction")
-                .help("after KEY: KEY is the predecessor; before KEY: KEY is the successor (⌥⌘D switches)")
+                .help("after KEY: KEY is the predecessor; before KEY: KEY is the successor (⌥⌘X exchanges)")
                 .background(LinkKeys(kind: $linkKind, asPredecessor: $linkAsPredecessor))
                 TextField("Other work key", text: $linkKey).textFieldStyle(.roundedBorder).onSubmit(addLink)
                     .help("Return adds the link; Option-Command-L removes the link with this key").modifier(InspectorFocus(model: model, name: "link-key")).accessibilityLabel("Other work key").accessibilityIdentifier("edit.link-key")
@@ -301,7 +301,7 @@ struct NewTaskEditor: View {
             .padding(.top, 4)
         }
         .help("A new task, Proposed until ratified (⌥⌘N opens or closes)")
-        .background(Button("") { expanded.toggle() }.keyboardShortcut("n", modifiers: [.command, .option]).opacity(0).accessibilityHidden(true))
+        .background(Button("") { expanded.toggle() }.keyboardShortcut("n", modifiers: [.command, .option]).focusable(false).opacity(0).accessibilityHidden(true))
     }
 
     private func add() {
@@ -399,7 +399,7 @@ struct ReviewSheet: View {
                     Text("Your edits are kept. Read the current plan and review them again before applying.").font(.callout)
                     Button("Re-read and review again") { model.rebaseDraft() }
                         .keyboardShortcut("r", modifiers: [.command, .shift])
-                        .help("Read the current plan and review the kept edits against it (⇧⌘R here; ⌘R Read Again once the review is closed)")
+                        .help("Read the current plan and review the kept edits against it (⇧⌘R)")
                         .accessibilityIdentifier("edit.rebase")
                 }
             case .applying:

@@ -17,8 +17,9 @@ struct InspectorFocus: ViewModifier {
     }
 }
 
-/// The link row's choices by keyboard: Option-Command-1 to -4 pick FS, SS, FF or SF and Option-Command-D switches between
-/// after and before, so a link of any kind and direction is entered without the pointer, as Tab reaches only fields.
+/// The link row's choices by keyboard: Option-Command-1 to -4 pick FS, SS, FF or SF and Option-Command-X exchanges after
+/// and before, so a link of any kind and direction is entered without the pointer, as Tab reaches only fields. The
+/// buttons are no Tab stops and no accessibility elements; the chords are named in the row's help.
 struct LinkKeys: View {
     @Binding var kind: String
     @Binding var asPredecessor: Bool
@@ -27,9 +28,9 @@ struct LinkKeys: View {
     var body: some View {
         ZStack {
             ForEach(Self.kinds, id: \.1) { key, value in
-                Button("") { kind = value }.keyboardShortcut(key, modifiers: [.command, .option])
+                Button("") { kind = value }.keyboardShortcut(key, modifiers: [.command, .option]).focusable(false)
             }
-            Button("") { asPredecessor.toggle() }.keyboardShortcut("d", modifiers: [.command, .option])
+            Button("") { asPredecessor.toggle() }.keyboardShortcut("x", modifiers: [.command, .option]).focusable(false)
         }
         .opacity(0)
         .accessibilityHidden(true)

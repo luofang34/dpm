@@ -177,12 +177,6 @@ extension ObserverModel {
         }
     }
 
-    /// Read the workspace again (Read Again, ⌘R); a draft refused as stale is then reviewed against what is read, so the
-    /// re-read and review it needs are one command from the keyboard.
-    public func readAgain() {
-        if case .refused(let refusal) = editing.phase, refusal.stale, editing.draft != nil { rebaseDraft() } else { reload() }
-    }
-
     /// Keep the draft's edits, read the plan again, and review them against it: at once if a newer plan is
     /// already shown, otherwise when the re-read arrives.
     public func rebaseDraft() {
