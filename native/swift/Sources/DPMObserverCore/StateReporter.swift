@@ -327,6 +327,10 @@ public final class StateReporter {
                 return out
             }(),
             "view_sequence": view.sequence,
+            // The draft's links as the canvas draws them, with their kind and the ends they join (bounded).
+            "drafted": model.networkDraftLinks.prefix(20).map { link -> [String: Any] in
+                ["kind": link.kind, "from": model.editName(link.from), "to": model.editName(link.to), "corners": link.points.count]
+            },
         ]
     }
 

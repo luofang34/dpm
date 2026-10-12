@@ -111,6 +111,7 @@ struct Qualify {
             ("edit-refusals", context.editRefusalsKeepTheDraft),
             ("edit-gestures", context.ganttGesturesProposeAndTheApplicationJudges),
             ("edit-nesting", context.nestingAndEstimatesAreReviewedEdits),
+            ("network-draft-links", context.networkDraftLinksAreDrawn),
             ("task-operations", context.taskOperationsGoThroughTheApplication),
             ("operations-switch", context.operationsSettleOnlyTheirWorkspace),
             ("gantt-axis-labels", context.ganttAxisLabelsDoNotCollide),
