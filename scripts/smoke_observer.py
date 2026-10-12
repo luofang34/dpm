@@ -2650,9 +2650,20 @@ def network_keyboard_route(bundle, directory):
         back = guarded_wait(app, front, lambda s: network_shown(s) and s['network']['focus_target'] == node and s['network']['focus_reported'] == node, 15,
                             'Escape to return to the network with the originating node reported as focused')
         guarded_key(app, front, 'slash to focus the filter', KEY_CODES['slash'])
-        guarded_wait(app, front, lambda s: s['network']['filter']['editing'] is True, 10, 'the actual filter field to report the keyboard after /')
+        # The field's own editor, read from the window, holds the keyboard before a letter is typed: the model's flag can
+        # turn on a moment before the window hands its editor the keyboard.
+        guarded_wait(app, front, lambda s: s['network']['filter']['editing'] is True
+                     and ((((s.get('host') or {}).get('network_filter_editor') or {}).get('current') or {}).get('first_responder') is True),
+                     10, 'the actual filter field to report the keyboard after /')
+        def network_editor(s):
+            return (((s.get('host') or {}).get('network_filter_editor') or {}).get('current') or {})
         guarded_key(app, front, 'a letter typed into the filter', KEY_CODES['a'])
-        typed = guarded_wait(app, front, lambda s: s['network']['filter']['text'] == 'a', 10, 'the typed letter to be filter text')
+        typed = guarded_wait(app, front, lambda s: network_editor(s).get('length', 0) > 0, 10, 'the typed letter in the filter\'s real editor')
+        # An input source that composes holds the letter as marked text until Return commits it; a plain one commits it.
+        if network_editor(typed).get('has_marked_text') is True:
+            guarded_key(app, front, 'Return to commit the composition', KEY_CODES['return'])
+        typed = guarded_wait(app, front, lambda s: network_editor(s).get('has_marked_text') is False and network_editor(s).get('length', 0) > 0
+                             and s['network']['filter']['text'] == network_editor(s).get('string'), 10, 'the typed letter to be filter text')
         guarded_key(app, front, 'Escape to leave the filter', KEY_CODES['escape'])
         left = guarded_wait(app, front, lambda s: s['network']['filter']['editing'] is False and (s['network']['focus_reported'] or '').startswith('network.node.'), 10,
                             'Escape to hand the keyboard back to the network region')
