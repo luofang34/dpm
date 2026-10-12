@@ -122,6 +122,12 @@ for name, package in manifests.items():
                               or licence.read_bytes() != (ROOT / 'LICENSE').read_bytes()):
             failures.append(f'{name}: a published crate carries a plain copy of LICENSE (links are not archived)')
 
+# crates.io renders the README away from the repository, so its images are absolute links to main;
+# each must name a file that is checked in.
+for linked in re.findall(r'https://raw\.githubusercontent\.com/luofang34/dpm/main/([^)\s]+)', (ROOT / 'README.md').read_text()):
+    if not (ROOT / linked).is_file():
+        failures.append(f'README.md links {linked}, which is not in the repository')
+
 if failures:
     sys.exit('\n'.join(failures))
 print(f'PASS: self-host inventory, publication hygiene, the crates.io set, ignore rules and documentation links ({len(paths)} files)')
