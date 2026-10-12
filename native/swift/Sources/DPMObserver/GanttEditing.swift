@@ -28,7 +28,7 @@ struct GanttEditDrag: Equatable {
     /// Where a bar of `row` is drawn on the timeline now, if it is a scheduled task or milestone.
     @MainActor static func bar(_ row: GanttOutlineRow, model: ObserverModel) -> (left: CGFloat, right: CGFloat, top: CGFloat)? {
         guard let span = row.row.span, !row.row.isPackage else { return nil }
-        let top = GanttGeometry.axis + Double(row.position) * GanttLayout.rowHeight - model.gantt.panY
+        let top = CGFloat(GanttGeometry.axis + Double(row.position) * GanttLayout.rowHeight - model.gantt.panY)
         // Verified work has no remaining bar; its mark at the origin is still a link end.
         if row.row.status == "Verified" { return (6 - model.gantt.panX, 12 - model.gantt.panX, top) }
         let (x, width) = GanttLayout.bar(span, scale: model.gantt.scale)
