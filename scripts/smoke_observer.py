@@ -460,6 +460,7 @@ KEY_CODES = {'down': 125, 'up': 126, 'left': 123, 'right': 124, 'space': 49, 're
              'slash': 44, 'c': 8, 'a': 0, 'delete': 51}
 SHIFT_FLAG = 0x20000
 COMMAND_FLAG = 0x100000
+CONTROL_FLAG = 0x40000
 OPTION_FLAG = 0x80000
 
 
@@ -1692,6 +1693,12 @@ def guarded_key(app, front, step, code, flags=0):
     post_key(app.process.pid, code, flags)
 
 
+def next_stop(app, front, step):
+    """The next control by keyboard: Tab, or Control-Tab from the Gantt rows, where Tab proposes an indent while editing."""
+    rows = front.focused_facts()[1] == 'Gantt'
+    guarded_key(app, front, ('Control-' if rows else '') + step, KEY_CODES['tab'], CONTROL_FLAG if rows else 0)
+
+
 def guarded_wait(app, front, predicate, timeout, what):
     """`app.wait`, where a missed deadline after the guard stopped holding is an interruption, not a failure. A process
     exit, or a missed deadline while the guard still holds, stays a failure. A satisfied wait counts only if no
@@ -2302,7 +2309,8 @@ def network_page(bundle, directory):
 
 def edit_keyboard_route(bundle, directory):
     """Reviewed plan editing by keyboard alone in the packaged app, with real key events: with editing on and the
-    Gantt holding the keyboard on the nested TEST-C, Command-[ proposes moving it out of its package (a draft edit),
+    Gantt holding the keyboard on the nested TEST-C, Shift-Tab proposes moving it out of its package (a draft edit) and
+    the keyboard stays on the row,
     Command-Return opens the review with the reason field holding the keyboard, a pasted reason and Command-Return
     apply it, and Escape closes the review and gives the keyboard back to TEST-C's row. One ApplyChange is recorded,
     with the reason. Only the complete route passes; an interrupted one is NOT ASSESSED."""
@@ -2326,8 +2334,9 @@ def edit_keyboard_route(bundle, directory):
         front.arm()
         row = 'gantt.row.TEST-C'
         guarded_wait(app, front, lambda s: s['gantt']['focus_reported'] == row, 15, 'the Gantt region to hold the keyboard on TEST-C')
-        guarded_key(app, front, 'Command-[ to move TEST-C out of its package', 33, COMMAND_FLAG)
-        guarded_wait(app, front, lambda s: s['editing']['edits'] == 1, 10, 'Command-[ to add one edit to the draft')
+        guarded_key(app, front, 'Shift-Tab to move TEST-C out of its package', KEY_CODES['tab'], SHIFT_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 1 and s['gantt']['focus_reported'] == row, 10,
+                     'Shift-Tab to add one edit to the draft, the keyboard still on the row')
         guarded_key(app, front, 'Command-Return to review the draft', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the application\'s review to be shown')
         guarded_key(app, front, 'Command-V to paste the reason into the focused reason field', 9, COMMAND_FLAG)
@@ -2343,7 +2352,7 @@ def edit_keyboard_route(bundle, directory):
         assert command.get('ApplyChange', {}).get('reason') == reason, command
         parent = run_cli(database, 'show', 'TEST-C')['parent']
         assert app.quit() == 0
-        return (f'reviewed plan editing by keyboard alone: Command-[ drafted the outdent, Command-Return reviewed it, a pasted reason and '
+        return (f'reviewed plan editing by keyboard alone: Shift-Tab drafted the outdent, Command-Return reviewed it, a pasted reason and '
                 f'Command-Return applied it as one ApplyChange with that reason (TEST-C parent now {parent}), and Escape gave the keyboard back to '
                 f"{back['gantt']['focus_reported']}")
     except NotAssessed as interruption:
@@ -2388,7 +2397,7 @@ def inspector_keyboard_route(bundle, directory):
         stops = []
         start = front.focused_facts()[0]
         for _ in range(limit):
-            guarded_key(app, front, 'Tab to the next control', KEY_CODES['tab'])
+            next_stop(app, front, 'Tab to the next control')
             front.wait_focus_change(2.0)
             facts = front.focused_facts()
             if facts[0] == start:
@@ -2401,7 +2410,7 @@ def inspector_keyboard_route(bundle, directory):
         for _ in range(limit):
             if front.focused_facts()[1] == label:
                 return
-            guarded_key(app, front, f'Tab towards {label}', KEY_CODES['tab'])
+            next_stop(app, front, f'Tab towards {label}')
             front.wait_focus_change(2.0)
         raise AssertionError(f'Tab never reached {label}')
 
@@ -2690,7 +2699,7 @@ def inspector_edit_keyboard_route(bundle, directory):
         for _ in range(limit):
             if front.focused_facts()[1] == label:
                 return
-            guarded_key(app, front, f'Tab towards {label}', KEY_CODES['tab'])
+            next_stop(app, front, f'Tab towards {label}')
             front.wait_focus_change(2.0)
         raise AssertionError(f'Tab never reached {label}')
 

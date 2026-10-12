@@ -528,6 +528,39 @@ def drag_proposal_smoke(directory):
     print('PASS: drag proposals (an SS link, a new lag) through MCP propose_change equal CLI plan diff; agents may not apply them')
 
 
+def nesting_proposal_smoke(directory):
+    """What resizing and indenting propose in the native app, an agent can propose too: a scaled three-point estimate and
+    a parent change through MCP propose_change give the same reviewed diff as CLI plan diff; the agent's apply_change is
+    refused and records nothing, and a human applies it as one ApplyChange that the application can revert."""
+    import measure_gantt
+    database = directory / 'nesting.sqlite'
+    run_cli(database, 'import', str(measure_gantt.write_plan(directory / 'nesting-plan.json', measure_gantt.fx_gantt(False))))
+    drafter = Agent(database, 'agent:drafter')
+    planner = Agent(database, 'human:planner')
+    try:
+        plan = run_cli(database, 'export')
+        items = {w['key']: w for w in plan['work_items'].values()}
+        moved, package = items['TEST-D'], items['TEST-PKG']
+        moved['parent'] = package['id']
+        moved['schedule']['estimate'] = {k: v * 1.5 for k, v in moved['schedule']['estimate'].items()}
+        candidate = directory / 'nesting.json'
+        candidate.write_text(json.dumps(plan))
+        preview = drafter.call('propose_change', {'plan': plan})['data']
+        assert preview == run_cli(database, 'plan', 'diff', str(candidate)), 'CLI and MCP review the same resize and indent'
+        assert [(c['collection'], c['id'], sorted(c['fields'])) for c in preview['changes']] == [('work_items', moved['id'], ['parent', 'schedule'])], preview['changes']
+        revision = run_cli(database, 'export')['revision']
+        refused = drafter.call('apply_change', {'plan': plan, 'reason': 'indent', 'base_revision': revision}, error='invalid_command')
+        assert 'approve plan scope' in refused['message'] and run_cli(database, 'export')['revision'] == revision, refused
+        applied = planner.call('apply_change', {'plan': plan, 'reason': 'Group D and widen it', 'base_revision': revision})['data']
+        inverse = drafter.call('propose_revert', {'operation': applied['id']})['data']
+        assert inverse == run_cli(database, 'plan', 'revert-preview', applied['id'])
+        assert [(c['id'], sorted(c['fields'])) for c in inverse['changes']] == [(moved['id'], ['parent', 'schedule'])], inverse['changes']
+    finally:
+        drafter.close()
+        planner.close()
+    print('PASS: a resize and an indent through MCP propose_change equal CLI plan diff; agents may not apply them; the revert is previewed alike')
+
+
 def owner_endpoint_refusal(database, edge):
     """A human owning either endpoint cannot waive the edge, identically through CLI and MCP."""
     owner = Agent(database, 'human:owner')
@@ -635,6 +668,7 @@ if __name__ == '__main__':
         dependency_smoke(Path(directory))
         revert_smoke(Path(directory))
         drag_proposal_smoke(Path(directory))
+        nesting_proposal_smoke(Path(directory))
         timing_smoke(Path(directory))
         # Conditional-work parity lives in its own module, which reuses this module's helpers.
         from smoke_conditional import smoke as conditional_smoke
