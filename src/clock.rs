@@ -1,7 +1,7 @@
 //! Which commands a pinned `--clock` applies to.
 
 use crate::{
-    args::{Commands, PlanCommand, RunCommand, StoreCommand},
+    args::{Commands, OpenCommand, PlanCommand, RunCommand, StoreCommand},
     error::CliError,
 };
 use chrono::{DateTime, Utc};
@@ -9,7 +9,8 @@ use dpm_app::QueryClock;
 
 /// The query clock a command runs with; a pinned reading is refused by anything but a workspace
 /// query, because a mutation records the time it commits, and plan validation and the schema read
-/// neither a workspace nor a clock.
+/// neither a workspace nor a clock. The MCP server accepts one for the queries its tools answer;
+/// its mutations still record the time they commit.
 pub(crate) fn for_command(
     command: &Commands,
     clock: Option<DateTime<Utc>>,
@@ -34,6 +35,7 @@ fn is_query(command: &Commands) -> bool {
             | Commands::Show { .. }
             | Commands::Explain { .. }
             | Commands::Export
+            | Commands::Open(OpenCommand::Mcp { .. })
             | Commands::Store(
                 StoreCommand::History { .. }
                     | StoreCommand::Revision

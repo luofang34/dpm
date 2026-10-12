@@ -9,6 +9,7 @@ mod console;
 mod error;
 mod interchange;
 mod launch;
+mod mcp;
 mod output;
 mod ownership;
 mod plan;

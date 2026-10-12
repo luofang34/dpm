@@ -21,7 +21,7 @@ fn started() -> (McpServer, u64) {
 
 #[test]
 fn run_tools_take_no_base_revision_or_operation_id_and_declare_their_cli_command() {
-    let tools = crate::tools::definitions();
+    let tools = crate::mcp::tools::definitions();
     let run_tools: Vec<_> = tools
         .iter()
         .filter(|tool| {

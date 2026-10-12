@@ -54,7 +54,7 @@ def bootstrap_smoke(directory):
     empty = directory / 'empty-directory'
     empty.mkdir()
     for selection in (['--db', str(empty / 'absent.sqlite')], ['--project', str(empty)], []):
-        started = subprocess.run([str(MCP), *selection, '--actor', 'agent:bootstrap'], cwd=empty,
+        started = subprocess.run([*MCP, *selection, '--actor', 'agent:bootstrap'], cwd=empty,
                                  stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
         assert started.returncode != 0, (selection, started)
         assert list(empty.iterdir()) == [], (selection, list(empty.iterdir()))

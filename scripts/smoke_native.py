@@ -132,13 +132,14 @@ def negative_controls(suite, arguments, directory):
 
 
 def bundled_adapters(bundle):
-    """DPMObserver.app carries every adapter: the helper, the CLI and the agent server, and its CLI offers `gui`."""
+    """DPMObserver.app carries every adapter: the helper and the CLI, whose `mcp` is the agent server, and its CLI offers `gui`."""
     helpers = bundle / 'Contents/Helpers'
-    for name in ('dpm', 'dpm-mcp', 'dpm-native'):
+    for name in ('dpm', 'dpm-native'):
         assert (helpers / name).is_file(), f'{name} is missing from {helpers}'
     usage = subprocess.run([str(helpers / 'dpm'), '--help'], capture_output=True, text=True, timeout=60, check=True).stdout
-    assert any(line.split()[:1] == ['gui'] for line in usage.splitlines() if line.startswith('  ')), usage
-    print(f'PASS: {bundle.name} carries dpm, dpm-mcp and dpm-native, and its dpm offers gui')
+    offered = {line.split()[0] for line in usage.splitlines() if line.startswith('  ') and line.split()}
+    assert {'gui', 'mcp'} <= offered, usage
+    print(f'PASS: {bundle.name} carries dpm and dpm-native, and its dpm offers gui and mcp')
 
 
 def main():

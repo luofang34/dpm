@@ -33,7 +33,6 @@ workspace = true
 resolver = "3"
 default-members = ["."]
 members = [
-    "crates/dpm-sdk",
     "crates/dpm-model",
     "crates/dpm-schedule",
     "crates/dpm-engine",
@@ -41,7 +40,6 @@ members = [
     ".",
     "crates/dpm-tui",
     "crates/dpm-app",
-    "crates/dpm-mcp",
     "crates/dpm-native",
     "crates/dpm-claude",
     "crates/dpm-interchange",

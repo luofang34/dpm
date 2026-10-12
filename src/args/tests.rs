@@ -142,3 +142,29 @@ fn run_commands_refuse_malformed_arguments() {
         assert!(parse(&arguments).is_err(), "{arguments:?}");
     }
 }
+
+#[test]
+fn mcp_takes_the_global_selection_and_names_its_principal() {
+    let cli = parse(&["--db", "x.sqlite", "mcp", "--actor", "agent:coder"]).expect("parses");
+    assert_eq!(cli.database, Some(PathBuf::from("x.sqlite")));
+    assert!(
+        matches!(cli.command, Some(Commands::Open(OpenCommand::Mcp { ref actor })) if actor == "agent:coder"),
+        "{:?}",
+        cli.command
+    );
+    assert!(parse(&["mcp"]).is_err(), "a server without a principal");
+    let cli = parse(&["mcp", "--project", "here", "--actor", "human:ada"]).expect("parses");
+    assert_eq!(cli.project, Some(PathBuf::from("here")));
+    let mut command = Cli::command();
+    let help = command
+        .find_subcommand_mut("mcp")
+        .expect("mcp")
+        .render_help()
+        .to_string();
+    for fragment in [
+        "--actor <KIND:NAME>",
+        "human:NAME, agent:NAME or service:NAME",
+    ] {
+        assert!(help.contains(fragment), "missing {fragment:?} in\n{help}");
+    }
+}

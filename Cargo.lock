@@ -528,20 +528,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dpm-mcp"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap",
- "dpm-app",
- "dpm-engine",
- "dpm-model",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "dpm-model"
 version = "0.1.0"
 dependencies = [
@@ -581,16 +567,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
-]
-
-[[package]]
-name = "dpm-sdk"
-version = "0.1.0"
-dependencies = [
- "dpm-app",
- "dpm-engine",
- "dpm-model",
- "dpm-schedule",
 ]
 
 [[package]]

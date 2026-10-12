@@ -31,7 +31,7 @@ regression test or guard that protects it. Run the full local pipeline before su
 ```
 
 The smoke scripts run the release binaries from `CARGO_TARGET_DIR` (default `target/`). Set
-`DPM_BIN` or `DPM_MCP_BIN` to review other builds without copying or linking them.
+`DPM_BIN` to review another build without copying or linking them.
 
 State in the pull request which checks you ran and their result. If your environment cannot run a
 check, say so instead of claiming it passed.

@@ -1,4 +1,4 @@
-use crate::tools::{call_tool_blocking, definitions};
+use super::tools::{call_tool_blocking, definitions};
 use dpm_app::Application;
 use dpm_model::ActorId;
 use serde_json::{Value, json};

@@ -13,6 +13,12 @@ pub(crate) enum CliError {
     Terminal(#[from] dpm_tui::TuiError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Mcp(#[from] crate::mcp::TransportError),
+    /// A failure before the MCP server speaks: stderr is the client's only channel, so the stable
+    /// code leads the message.
+    #[error("{code}: {inner}", code = .0.code(), inner = .0)]
+    McpStartup(Box<CliError>),
     #[error("{action} at {path}: {source}")]
     Io {
         action: &'static str,
@@ -42,7 +48,11 @@ impl CliError {
         serde_json::json!({ "error": dpm_app::ErrorResponse {
             api_version: dpm_app::API_VERSION,
             code: self.code(),
-            message: self.to_string(),
+            // The envelope names the code itself, so a startup failure's message does not repeat it.
+            message: match self {
+                Self::McpStartup(error) => error.to_string(),
+                error => error.to_string(),
+            },
             details: self.details(),
         }})
     }
@@ -50,6 +60,7 @@ impl CliError {
     pub(crate) fn details(&self) -> Option<serde_json::Value> {
         match self {
             Self::Application(error) => error.details(),
+            Self::McpStartup(error) => error.details(),
             _ => None,
         }
     }
@@ -61,6 +72,8 @@ impl CliError {
             Self::Engine(_) => "invalid_command",
             Self::Validation(_) => "invalid_plan",
             Self::Terminal(_) => "terminal_error",
+            Self::Mcp(_) => "transport_error",
+            Self::McpStartup(error) => error.code(),
             Self::Json(_) | Self::Input(_) => "invalid_request",
         }
     }

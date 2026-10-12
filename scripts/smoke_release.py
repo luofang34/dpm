@@ -48,13 +48,13 @@ def exercise(root, manifest, directory):
     project.mkdir()
     env = {**os.environ, 'HOME': str(home), 'DPM_CONFIG_DIR': str(home / 'dpm'),
            'XDG_CONFIG_HOME': str(home / 'config')}
-    cli, mcp = root / 'bin/dpm', root / 'bin/dpm-mcp'
+    cli = root / 'bin/dpm'
 
     def run(*args, binary=cli):
         return subprocess.check_output([str(binary), *args], cwd=project, env=env, timeout=30).decode()
 
-    for binary in [cli, mcp]:
-        assert run('--version', binary=binary).strip().endswith(manifest['version'])
+    assert run('--version').strip().endswith(manifest['version'])
+    assert '--actor <KIND:NAME>' in run('mcp', '--help')
     run('init', 'Release qualification', '--json')
     plan = json.loads(run('plan', 'template', '--json'))['data']
     candidate = directory / 'candidate.json'
@@ -75,7 +75,7 @@ def exercise(root, manifest, directory):
         {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {
             'name': 'project_status', 'arguments': {'probabilistic': False}}},
     ]
-    result = subprocess.run([str(mcp), '--actor', 'agent:package-reader'], cwd=project, env=env,
+    result = subprocess.run([str(cli), 'mcp', '--actor', 'agent:package-reader'], cwd=project, env=env,
                             input=''.join(json.dumps(r) + '\n' for r in requests),
                             capture_output=True, text=True, check=True, timeout=30)
     responses = [json.loads(line) for line in result.stdout.splitlines()]
@@ -100,7 +100,7 @@ def gui_smoke(root, directory, env):
     """On macOS the archive carries DPMObserver.app beside dpm with every adapter, and `dpm gui` opens it on the project:
     the archived app's own process starts with that database. It is then asked to quit."""
     app = root / 'bin/DPMObserver.app'
-    for name in ('dpm', 'dpm-mcp', 'dpm-native'):
+    for name in ('dpm', 'dpm-native'):
         assert (app / 'Contents/Helpers' / name).is_file(), f'the archived app lacks {name}'
     database = directory / 'gui.sqlite'
     subprocess.run([str(root / 'bin/dpm'), '--database', str(database), 'init', 'GUI qualification', '--json'],
@@ -126,7 +126,7 @@ def verify(archive):
         opened = sys.platform == 'darwin' and (root / 'bin/DPMObserver.app').is_dir()
         if opened:
             gui_smoke(root, directory, env)
-        env.update(DPM_BIN=str(root / 'bin/dpm'), DPM_MCP_BIN=str(root / 'bin/dpm-mcp'))
+        env.update(DPM_BIN=str(root / 'bin/dpm'))
         subprocess.run([sys.executable, str(root / 'source/scripts/smoke_terminal.py')],
                        cwd=directory, env=env, check=True, timeout=120)
         corrupt = directory / 'corrupt.tar.gz'

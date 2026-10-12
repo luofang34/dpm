@@ -1,11 +1,9 @@
 use super::*;
-use crate::serve_blocking;
+use crate::mcp::serve_blocking;
 
 fn server() -> McpServer {
-    let plan = serde_json::from_str(include_str!(
-        "../../../../tests/support/execution-plan.json"
-    ))
-    .expect("plan");
+    let plan = serde_json::from_str(include_str!("../../../tests/support/execution-plan.json"))
+        .expect("plan");
     McpServer::new(
         Application::in_memory_blocking(&plan).expect("app"),
         ActorId::agent("mcp-worker"),
@@ -91,10 +89,9 @@ mod runs;
 fn validate_plan_reads_no_workspace_and_matches_the_shared_validation() {
     let mut server = server();
     initialize(&mut server);
-    let plan: Value = serde_json::from_str(include_str!(
-        "../../../../tests/support/execution-plan.json"
-    ))
-    .expect("plan");
+    let plan: Value =
+        serde_json::from_str(include_str!("../../../tests/support/execution-plan.json"))
+            .expect("plan");
     let result = call(&mut server, "validate_plan", json!({"plan": plan.clone()}));
     assert_eq!(result["isError"], false);
     let expected = dpm_app::validate_plan(plan.clone()).expect("valid");
@@ -141,10 +138,8 @@ fn get_schedule_is_the_shared_schedule_query_and_writes_nothing() {
     let at = chrono::DateTime::parse_from_rfc3339("2030-01-02T03:04:05Z")
         .expect("time")
         .with_timezone(&chrono::Utc);
-    let plan = serde_json::from_str(include_str!(
-        "../../../../tests/support/execution-plan.json"
-    ))
-    .expect("plan");
+    let plan = serde_json::from_str(include_str!("../../../tests/support/execution-plan.json"))
+        .expect("plan");
     let app = Application::in_memory_blocking(&plan)
         .expect("app")
         .with_query_clock(dpm_app::QueryClock::Fixed(at));
@@ -191,7 +186,7 @@ fn get_schedule_is_the_shared_schedule_query_and_writes_nothing() {
 /// existing store, so no tool call can bootstrap one.
 #[test]
 fn no_tool_bootstraps_a_workspace() {
-    for tool in crate::tools::definitions() {
+    for tool in crate::mcp::tools::definitions() {
         let name = tool["name"].as_str().expect("name");
         let read_only = tool["annotations"]["readOnlyHint"] == true;
         let required = tool["inputSchema"]["required"]

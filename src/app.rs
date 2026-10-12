@@ -37,6 +37,9 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
         )?,
     };
     let query_clock = crate::clock::for_command(&command, clock)?;
+    if matches!(command, Commands::Open(OpenCommand::Mcp { .. })) {
+        crate::mcp::refuse_process_preconditions(preconditions)?;
+    }
     let root = project.as_deref().unwrap_or(&cwd);
     match command {
         Commands::Workspace { command } => {
@@ -70,6 +73,15 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
         Commands::Open(OpenCommand::Gui) => {
             crate::launch::gui_blocking(project.as_deref(), database.as_deref(), &cwd)
         }
+        Commands::Open(OpenCommand::Mcp { actor: who }) => crate::mcp::serve_stdio_blocking(
+            || {
+                Ok(
+                    open_workspace_blocking(&cwd, project.as_deref(), database.as_deref())?
+                        .with_query_clock(query_clock),
+                )
+            },
+            &who,
+        ),
         Commands::Store(StoreCommand::Restore { from, to }) => {
             crate::recovery::restore_blocking(&from, &to, json)
         }

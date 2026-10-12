@@ -135,7 +135,7 @@ def bindings(directory):
     (unbound / '.dpm/project.toml').write_text(f"version = 3\nworkspace = '{workspace}'\nasset = 'TEST-REPO'\n")
     missing = local('--project', unbound, 'status', error='workspace_not_bound')['error']['message']
     assert workspace in missing and 'workspace register' in missing
-    started = subprocess.run([str(MCP), '--project', str(unbound), '--actor', 'agent:unbound'], cwd=directory, env=env,
+    started = subprocess.run([*MCP, '--project', str(unbound), '--actor', 'agent:unbound'], cwd=directory, env=env,
                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
     assert started.returncode != 0 and f'workspace_not_bound: {missing}' in started.stderr, started.stderr
     actor = Agent(None, 'human:device', project=ROOT, env=env)
@@ -174,7 +174,7 @@ def stale_bindings(directory):
         assert (result.returncode != 0 and value['error']['code'] == error) if error else result.returncode == 0, (args, value)
         return value if error else unwrap(value)
     def mcp_start(project):
-        return subprocess.run([str(MCP), '--project', str(project), '--actor', 'agent:stale'], cwd=directory, env=env,
+        return subprocess.run([*MCP, '--project', str(project), '--actor', 'agent:stale'], cwd=directory, env=env,
                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
     store = directory / 'stale.sqlite'
     local('--database', store, 'import', ROOT / 'tests/support/execution-plan.json')
