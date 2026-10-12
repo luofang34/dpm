@@ -130,6 +130,7 @@ extension ObserverModel {
         if let unavailable = editUnavailable { return unavailable }
         if operations.unresolved != nil || editing.unresolved != nil { return "Reconcile the last request first: its outcome is unknown." }
         if case .sending = operations.phase { return "The last operation is still being sent." }
+        if editing.reviewing { return "Close the review of the plan changes first." }
         if editing.phase == .applying { return "A plan change is being applied." }
         if operations.staleObservation != nil { return "The last operation was refused; read the work again and look at its changes first." }
         if let awaited = operations.awaitedRevision, let basis = snapshot.inventory.basis, basis.lineage == operations.awaitedLineage, basis.revision < awaited {
@@ -184,13 +185,15 @@ extension ObserverModel {
         editing.actor = keep.1
         operations = OperationState()
         writesKey = ""
+        leftGeneration = snapshot.generation
     }
 
     /// Called with every installed snapshot: once a workspace is shown, its requests become the current ones, and any
     /// it left unresolved are restored, with an apply's draft, to be reconciled.
     func adoptWrites() {
         let shown = Self.writesKey(of: snapshot.identity)
-        guard !shown.isEmpty, shown != writesKey else { return }
+        // A late snapshot of the workspace just left is not a workspace being shown.
+        guard !shown.isEmpty, shown != writesKey, !writesKey.isEmpty || snapshot.generation > leftGeneration else { return }
         if !writesKey.isEmpty { leaveWrites() }
         writesKey = shown
         guard let restored = parkedWrites.removeValue(forKey: shown) else { return }

@@ -49,7 +49,9 @@ struct NetworkView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .inspector(isPresented: Binding(get: { model.editing.enabled }, set: { model.setEditing($0) })) { EditPanel(model: model) }
-        .sheet(isPresented: Binding(get: { model.editing.reviewing }, set: { if !$0 { model.closeReview() } })) { ReviewSheet(model: model) }
+        .sheet(isPresented: Binding(get: { model.editing.reviewing }, set: { if !$0 { model.closeReview() } }), onDismiss: { model.reviewDismissed() }) {
+            ReviewSheet(model: model)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("network")
         .onAppear { model.reconcileNetworkFocus() }

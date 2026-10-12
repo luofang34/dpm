@@ -73,6 +73,8 @@ public final class ObserverModel: ObservableObject {
     /// The workspace whose requests and drafts are the current ones: the identity of the workspace shown, and empty
     /// from the moment another is opened or it is closed until a workspace is shown again.
     var writesKey = ""
+    /// The engine generation of the workspace last left; only a later one's snapshot shows a workspace again.
+    var leftGeneration = 0
     /// The newest snapshot accepted, whether installed or still waiting for its turn. Anything
     /// older than it, from an earlier generation or an earlier publication, is dropped.
     private var newest: (generation: Int, sequence: UInt64)?
