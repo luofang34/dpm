@@ -57,11 +57,13 @@ impl Application {
             Query::Status {
                 probabilistic,
                 calibrated: false,
-            } => respond(self.status_blocking(probabilistic)?),
+                horizon_hours,
+            } => respond(self.status_blocking(probabilistic, horizon_hours)?),
             Query::Status {
                 probabilistic,
                 calibrated: true,
-            } => respond(self.status_calibrated_blocking(probabilistic)?),
+                horizon_hours,
+            } => respond(self.status_calibrated_blocking(probabilistic, horizon_hours)?),
             Query::Schedule { probabilistic } => respond(self.schedule_blocking(probabilistic)?),
             Query::Calibration => respond(self.calibration_blocking()?),
             Query::Next {

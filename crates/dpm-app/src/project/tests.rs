@@ -19,6 +19,7 @@ fn a_preview_answers_queries_in_every_feature_set() {
         .query_blocking(Query::Status {
             probabilistic: false,
             calibrated: false,
+            horizon_hours: None,
         })
         .expect("status");
     assert_eq!(status.data["total_work"], 7);

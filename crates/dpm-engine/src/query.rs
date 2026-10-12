@@ -1,12 +1,12 @@
 use crate::{EngineError, Transition, gates};
 use chrono::{DateTime, Utc};
 use dpm_model::{
-    Applicability, BasisStatus, DecisionStatus, Plan, Priority, Timeline, WorkItem, WorkItemId,
-    WorkStatus, basis_status,
+    Applicability, BasisStatus, DecisionStatus, Plan, Timeline, WorkItem, WorkItemId, WorkStatus,
+    basis_status,
 };
 use dpm_schedule::{
-    RemainingOptions, SimulationConfig, deterministic_remaining_at, deterministic_remaining_with,
-    simulate_remaining_at, simulate_remaining_with,
+    RemainingOptions, SimulationConfig, SimulationSummary, deterministic_remaining_with,
+    simulate_remaining_with,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -27,6 +27,12 @@ pub use calibration::{
     MIN_APPLIED_RATIO, MIN_SAMPLES, REVIEW_FLOOR_SECONDS, RatioGroup, ReasonCount, WaitGroup,
     WaitReport, calibration, min_applied_ratio,
 };
+mod forecast;
+pub use forecast::{
+    ForecastSpread, MilestoneForecast, PathStep, PertApproximationReport, RiskForecast,
+};
+mod next;
+pub use next::{CriticalityBasis, NextWorkCandidate, NextWorkQuery, next_work};
 mod flow;
 pub use flow::{
     AgingWork, ClaimOutcomes, Durations, FlowReport, HolderOutcomes, Reliability, THROUGHPUT_WEEKS,
@@ -74,6 +80,10 @@ pub struct StatusSummary {
     pub p80_finish_hours: Option<f64>,
     /// 95th percentile sampled completion time in elapsed hours; withheld while choices are open.
     pub p95_finish_hours: Option<f64>,
+    /// Milestone percentiles, horizon probabilities and the analytic PERT approximation; null
+    /// whenever the percentiles are withheld.
+    #[serde(default)]
+    pub forecast: Option<RiskForecast>,
     /// Tasks the headline forecast counts as 0 h because they have no estimate, in key order
     /// ([`is_unestimated`](crate::is_unestimated)); the forecast is optimistic by their durations.
     #[serde(default)]
@@ -111,7 +121,18 @@ pub fn status(
     probabilistic: bool,
     now: DateTime<Utc>,
 ) -> Result<StatusSummary, EngineError> {
-    status_with(plan, probabilistic, now, None)
+    status_with(plan, probabilistic, now, None, None)
+}
+
+/// [`status`] whose forecast also states the probability of finishing the project, and of
+/// reaching each milestone, within `horizon_hours` elapsed hours of `now`.
+pub fn status_at_horizon(
+    plan: &Plan,
+    probabilistic: bool,
+    now: DateTime<Utc>,
+    horizon_hours: Option<f64>,
+) -> Result<StatusSummary, EngineError> {
+    status_with(plan, probabilistic, now, None, horizon_hours)
 }
 
 /// [`status`] whose forecasts scale each unfinished task's estimate by its executor kind's
@@ -124,7 +145,42 @@ pub fn status_calibrated(
     now: DateTime<Utc>,
     report: &CalibrationReport,
 ) -> Result<StatusSummary, EngineError> {
-    status_with(plan, probabilistic, now, Some(report))
+    status_with(plan, probabilistic, now, Some(report), None)
+}
+
+/// [`status_calibrated`] with the horizon probabilities of [`status_at_horizon`].
+pub fn status_calibrated_at_horizon(
+    plan: &Plan,
+    probabilistic: bool,
+    now: DateTime<Utc>,
+    report: &CalibrationReport,
+    horizon_hours: Option<f64>,
+) -> Result<StatusSummary, EngineError> {
+    status_with(plan, probabilistic, now, Some(report), horizon_hours)
+}
+
+/// The seeded simulation of `forecast`, unless it is not requested, no work of `plan` is
+/// estimated, or open choices leave mutually exclusive branches without a probability model.
+fn sampled(
+    (plan, forecast): (&Plan, &Plan),
+    timeline: &Timeline,
+    options: RemainingOptions,
+    probabilistic: bool,
+    open_choices: Option<&OpenChoices>,
+) -> Result<Option<SimulationSummary>, EngineError> {
+    let estimated = plan
+        .work_items
+        .values()
+        .any(|w| w.schedule.estimate.is_some());
+    if !probabilistic || open_choices.is_some() || !estimated {
+        return Ok(None);
+    }
+    Ok(Some(simulate_remaining_with(
+        forecast,
+        simulation_config(),
+        timeline,
+        options,
+    )?))
 }
 
 fn status_with(
@@ -132,8 +188,10 @@ fn status_with(
     probabilistic: bool,
     now: DateTime<Utc>,
     report: Option<&CalibrationReport>,
+    horizon_hours: Option<f64>,
 ) -> Result<StatusSummary, EngineError> {
     plan.validate()?;
+    forecast::validate_horizon(horizon_hours)?;
     let timeline = Timeline::at(plan, now);
     let calibrated = report.map(|r| calibration::calibrated_forecast(plan, r));
     let (forecast, options) = match &calibrated {
@@ -143,23 +201,20 @@ fn status_with(
     let forecast_timeline = Timeline::at(forecast, now);
     let schedule = deterministic_remaining_with(forecast, &forecast_timeline, options)?;
     let open_choices = choices::open_choices(forecast, probabilistic, now, options)?;
-    // Mutually exclusive branches have no probability model, so no single percentile is given.
-    let simulation = if probabilistic
-        && open_choices.is_none()
-        && plan
-            .work_items
-            .values()
-            .any(|w| w.schedule.estimate.is_some())
-    {
-        Some(simulate_remaining_with(
-            forecast,
-            simulation_config(),
-            &forecast_timeline,
-            options,
-        )?)
-    } else {
-        None
-    };
+    let simulation = sampled(
+        (plan, forecast),
+        &forecast_timeline,
+        options,
+        probabilistic,
+        open_choices.as_ref(),
+    )?;
+    let risk = simulation
+        .as_ref()
+        .map(|sampled| {
+            let inputs = (forecast, &forecast_timeline, options);
+            forecast::risk_forecast(plan, inputs, sampled, horizon_hours)
+        })
+        .transpose()?;
     let gates = claim_reports(plan, &timeline);
 
     Ok(StatusSummary {
@@ -192,6 +247,7 @@ fn status_with(
         p50_finish_hours: simulation.as_ref().map(|s| s.p50_finish_hours),
         p80_finish_hours: simulation.as_ref().map(|s| s.p80_finish_hours),
         p95_finish_hours: simulation.as_ref().map(|s| s.p95_finish_hours),
+        forecast: risk,
         unestimated: unestimated(plan, &timeline),
         not_applicable: choices::not_applicable(plan, &timeline),
         open_choices,
@@ -274,192 +330,4 @@ fn downstream_counts(
         result.insert(start, seen.len());
     }
     result
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-/// Ready task with a reproducible priority score and its explanation.
-pub struct NextWorkCandidate {
-    /// Work-item projection represented by this result.
-    pub work: WorkItem,
-    /// Ranking score composed from criticality, priority, downstream work, and float.
-    pub score: f64,
-    /// Whether total float is within numerical tolerance of zero.
-    pub critical: bool,
-    /// Fraction of sampled schedules in which each activity is critical.
-    pub criticality: Option<f64>,
-    /// Delay available without postponing project completion.
-    pub total_float_hours: f64,
-    /// Count of distinct transitively dependent work items.
-    pub downstream_count: usize,
-    /// Whether this work fits the requested capability set.
-    pub capability_match: bool,
-    /// Human-readable factors contributing to this recommendation.
-    pub reasons: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-/// Eligibility and scheduling inputs for a work recommendation.
-pub struct NextWorkQuery {
-    /// Required capabilities the caller provides; an empty set disables capability filtering.
-    pub capabilities: BTreeSet<String>,
-    /// Whether ranking should use sampled criticality instead of deterministic criticality.
-    pub use_probabilistic_criticality: bool,
-}
-
-impl Default for NextWorkQuery {
-    fn default() -> Self {
-        Self {
-            capabilities: BTreeSet::new(),
-            use_probabilistic_criticality: true,
-        }
-    }
-}
-
-/// Recommend only tasks claimable at an adapter-supplied time and compatible with capabilities.
-pub fn next_work(
-    plan: &Plan,
-    query: &NextWorkQuery,
-    now: DateTime<Utc>,
-) -> Result<Vec<NextWorkCandidate>, EngineError> {
-    plan.validate()?;
-    let timeline = Timeline::at(plan, now);
-    let schedule = deterministic_remaining_at(plan, &timeline)?;
-    let simulation = if query.use_probabilistic_criticality
-        && plan
-            .work_items
-            .values()
-            .any(|w| w.schedule.estimate.is_some())
-    {
-        Some(simulate_remaining_at(plan, simulation_config(), &timeline)?)
-    } else {
-        None
-    };
-    let reports = claim_reports(plan, &timeline);
-    let downstream = downstream_counts(
-        plan,
-        &timeline,
-        reports
-            .iter()
-            .filter(|(_, r)| r.ready)
-            .filter_map(|(id, _)| plan.work_items.get(id))
-            .filter(|w| {
-                query.capabilities.is_empty()
-                    || w.contract.capabilities.is_subset(&query.capabilities)
-            })
-            .map(|w| w.id),
-    );
-
-    let mut candidates = plan
-        .work_items
-        .values()
-        .filter_map(|work| reports.get(&work.id).filter(|r| r.ready).map(|r| (work, r)))
-        .filter(|(work, _)| {
-            query.capabilities.is_empty() || work.contract.capabilities.is_subset(&query.capabilities)
-        })
-        // Claimable work is applicable, so the active-graph schedule always covers it.
-        .filter_map(|(work, claim)| {
-            let finish = gates::evaluate(plan, work, Transition::Submit, &timeline);
-            let activity = schedule.activities.get(&work.id)?;
-            let mut candidate = candidate(
-                work,
-                query,
-                (claim, &finish),
-                activity,
-                &downstream,
-                simulation.as_ref(),
-            );
-            if is_unestimated(&timeline, work) {
-                candidate.reasons.push(explain::UNESTIMATED_REASON.into());
-            }
-            Some(candidate)
-        })
-        .collect::<Vec<_>>();
-
-    candidates.sort_by(|a, b| {
-        b.score
-            .total_cmp(&a.score)
-            .then_with(|| a.work.key.natural_cmp(&b.work.key))
-    });
-    Ok(candidates)
-}
-
-fn candidate(
-    work: &WorkItem,
-    query: &NextWorkQuery,
-    (claim, finish): (&crate::GateReport, &crate::GateReport),
-    activity: &dpm_schedule::ActivitySchedule,
-    downstream: &BTreeMap<WorkItemId, usize>,
-    simulation: Option<&dpm_schedule::SimulationSummary>,
-) -> NextWorkCandidate {
-    let downstream_count = downstream.get(&work.id).copied().unwrap_or(0);
-    let criticality = simulation.and_then(|summary| summary.criticality.get(&work.id).copied());
-    let capability_match = work.contract.capabilities.is_empty()
-        || work.contract.capabilities.is_subset(&query.capabilities)
-        || query.capabilities.is_empty();
-
-    // Explicit components keep recommendation scores independently explainable.
-    let critical_component = criticality.unwrap_or(if activity.critical { 1.0 } else { 0.0 });
-    let capability_component = if capability_match { 15.0 } else { -100.0 };
-    let priority_component = f64::from(work.schedule.priority.rank()) * 8.0;
-    let downstream_component = libm::log(downstream_count as f64 + 1.0) * 6.0;
-    let float_penalty = activity.total_float_hours.min(100.0) * 0.05;
-    let score = critical_component * 100.0
-        + capability_component
-        + priority_component
-        + downstream_component
-        - float_penalty;
-
-    let mut reasons = Vec::new();
-    reasons.push(
-        "start gates are satisfied: every FS/SS predecessor event and positive lag has elapsed"
-            .into(),
-    );
-    reasons.extend(
-        claim
-            .provisional
-            .iter()
-            .map(crate::ProvisionalRelease::describe),
-    );
-    let pending_finish = finish
-        .unmet
-        .iter()
-        .filter(|g| matches!(g, crate::UnmetGate::Dependency { .. }))
-        .count();
-    if pending_finish > 0 {
-        reasons.push(format!(
-            "submission additionally waits for {pending_finish} FF/SF prerequisite(s); see explain transitions.submit"
-        ));
-    }
-    if let Some(value) = criticality {
-        reasons.push(format!(
-            "critical in {:.0}% of schedule simulations",
-            value * 100.0
-        ));
-    } else if activity.critical {
-        reasons.push("on the deterministic critical path".into());
-    }
-    if downstream_count > 0 {
-        reasons.push(format!("unblocks {downstream_count} downstream work items"));
-    }
-    if work.schedule.priority <= Priority::P1 {
-        reasons.push(format!("human priority is {:?}", work.schedule.priority));
-    }
-    if !work.contract.capabilities.is_empty() {
-        reasons.push(if capability_match {
-            "requested capabilities match".into()
-        } else {
-            "requested capabilities do not fully match".into()
-        });
-    }
-
-    NextWorkCandidate {
-        work: work.clone(),
-        score,
-        critical: activity.critical,
-        criticality,
-        total_float_hours: activity.total_float_hours,
-        downstream_count,
-        capability_match,
-        reasons,
-    }
 }
