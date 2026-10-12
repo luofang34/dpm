@@ -2348,10 +2348,10 @@ def edit_keyboard_route(bundle, directory):
 def inspector_keyboard_route(bundle, directory):
     """The edit inspector and its task operations by keyboard alone, with real key events and the system's keyboard
     navigation as it is (Tab reaches fields; buttons are reached by shortcuts). Tab walks a defined focus order, the same
-    twice, every stop read with a label. A title (Return), an estimate (Return in an hours field) and the removal of a
-    link (Option-Command-L with its key in the link field) enter the draft, are reviewed with Command-Return, a pasted reason applies
-    them with Command-Return, and the keyboard is on the rows. A review opened from the link field and cancelled gives
-    the keyboard back to that field. Option-Command-C claims, Option-Command-S starts, Option-Command-V is refused and
+    twice, every stop read with a label. A title (Return), an estimate (Return in an hours field) and a gate (Return in the
+    gate field) enter the draft, are reviewed with Command-Return, a pasted reason applies
+    them with Command-Return, and the keyboard is back in the link field it was opened from; a review opened there and
+    cancelled gives it back there too. Option-Command-C claims, Option-Command-S starts, Option-Command-V is refused and
     Option-Command-K, once the work was read again, releases the hold; the keyboard never moves. Only the complete route
     passes; an interrupted one is NOT ASSESSED."""
     case = 'inspector_keyboard_route'
@@ -2423,19 +2423,20 @@ def inspector_keyboard_route(bundle, directory):
             field(label, value, f'Command-V into {label}')
         guarded_key(app, front, 'Return in an hours field to set the estimate', KEY_CODES['return'])
         guarded_wait(app, front, lambda s: s['editing']['edits'] == 2, 10, 'the estimate edit to enter the draft')
-        field('Other work key', 'TEST-B', 'Command-V the key of a linked task')
-        guarded_key(app, front, 'Option-Command-L to remove the link with TEST-B', 37, COMMAND_FLAG | OPTION_FLAG)
-        guarded_wait(app, front, lambda s: s['editing']['edits'] == 3, 10, 'the link removal to enter the draft')
+        field('Decision key to gate on', 'TEST-GATE', 'Command-V a decision key')
+        guarded_key(app, front, 'Return to gate on TEST-GATE', KEY_CODES['return'])
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 3, 10, 'the gate to enter the draft')
+        tab_to('Other work key')
         guarded_key(app, front, 'Command-Return to review from the inspector', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the review to be shown')
-        paste('Retitle, re-estimate and unlink A by keyboard', 'Command-V to paste the reason')
+        paste('Retitle, re-estimate and gate A by keyboard', 'Command-V to paste the reason')
         guarded_key(app, front, 'Command-Return to apply', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edits to be applied')
         guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
         guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close after the apply')
         front.wait_focus_change(3.0)
-        after_apply = front.focused_facts()
-        assert after_apply[0] == 'gantt.region', f'the keyboard did not go to the rows after the apply rebuilt the inspector: {after_apply}'
+        after_apply = front.focused_facts()[1]
+        assert after_apply == 'Other work key', f'the keyboard did not go back to the link field after the apply: {after_apply}'
 
         # A review opened from the link field and cancelled gives the keyboard back to that field.
         field('Title', 'Contract A, not applied', 'Command-V to paste another title')
@@ -2470,9 +2471,115 @@ def inspector_keyboard_route(bundle, directory):
         assert kinds == ['ApplyChange', 'Claim', 'Start'], kinds
         assert app.quit() == 0
         return (f'the inspector by keyboard alone: a defined focus order of {len(first)} stops, every one labelled, the same on two walks; '
-                f'a title, an estimate and a link removal entered by keys were reviewed and applied, the keyboard then on the rows; a review '
+                f'a title, an estimate and a gate entered by keys were reviewed and applied, the keyboard back in the link field; a review '
                 f'cancelled from the link field gave the keyboard back to it; claim, start, a refused verify and its acknowledgement by '
                 f'shortcuts left the keyboard in place; recorded {kinds}')
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption))
+        return None
+    except AssertionError as error:
+        kept = keep_failure(case, app, front, {'error': str(error)[:4000]})
+        raise AssertionError(f'{error} (complete failing state kept at {kept})') from None
+    finally:
+        subprocess.run(['/usr/bin/pbcopy'], input=clipboard, check=False, timeout=15)
+        if front:
+            front.close()
+        app.close()
+
+
+def inspector_edit_keyboard_route(bundle, directory):
+    """Every kind of plan edit by keyboard alone on TEST-F, whose title is 500 characters: its title (Return, and Return
+    again leaves one edit), objective (Return), acceptance criteria (Option-Command-A), estimate (Return in an hours
+    field), a new dependency after TEST-B (Return in the link field), the removal of its finish-to-start link from TEST-E
+    (Option-Command-L) and a gate on TEST-GATE (Return in the gate field). Command-Return reviews them, a pasted reason and
+    Command-Return apply them as one change, and Escape gives the keyboard back to the gate field. Only the complete route
+    passes; an interrupted one is NOT ASSESSED."""
+    case = 'inspector_edit_keyboard_route'
+    if not accessibility_trusted():
+        not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so CGEventPostToPid would be ignored; no key was sent')
+        return None
+    database = gantt_store(directory, 'inspector-edit-keys')
+    operations = len(run_cli(database, 'history')['entries'])
+    clipboard = subprocess.run(['/usr/bin/pbpaste'], capture_output=True, timeout=15).stdout
+    app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'gantt', '--select-key', 'TEST-F', '--window-size', '1400x900'])
+    front = None
+
+    def paste(text, step):
+        subprocess.run(['/usr/bin/pbcopy'], input=text, text=True, check=True, timeout=15)
+        guarded_key(app, front, step, 9, COMMAND_FLAG)
+
+    def tab_to(label, limit=90):
+        for _ in range(limit):
+            if front.focused_facts()[1] == label:
+                return
+            guarded_key(app, front, f'Tab towards {label}', KEY_CODES['tab'])
+            front.wait_focus_change(2.0)
+        raise AssertionError(f'Tab never reached {label}')
+
+    def field(label, text):
+        tab_to(label)
+        guarded_key(app, front, f'Command-A in {label}', 0, COMMAND_FLAG)
+        paste(text, f'Command-V into {label}')
+
+    def edits(count, what):
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == count, 10, f'{what}: {count} edits in the draft')
+
+    try:
+        app.wait(lambda s: gantt_loaded(s) and s['gantt']['selected_key'] == 'TEST-F' and s['editing']['enabled'], 30,
+                 'the Gantt with TEST-F selected and editing on')
+        front = Foreground(app.process.pid)
+        front.allow_sheets = True
+        front.activate(app.process)
+        front.arm()
+        guarded_wait(app, front, lambda s: s['gantt']['focus_reported'] == 'gantt.row.TEST-F', 15, 'the rows to hold the keyboard on TEST-F')
+        field('Title', 'Contract F, retitled by keyboard: ' + 'a long title stays whole. ' * 15)
+        guarded_key(app, front, 'Return to set the title', KEY_CODES['return'])
+        edits(1, 'the title')
+        guarded_key(app, front, 'Return again on the same title', KEY_CODES['return'])
+        edits(1, 'the same title set twice')
+        field('Objective', 'Prove every plan edit works by keyboard')
+        guarded_key(app, front, 'Return to set the objective', KEY_CODES['return'])
+        edits(2, 'the objective')
+        field('Acceptance criteria, one per line', 'Every edit kind is entered by keys.\nThe review shows them all.')
+        guarded_key(app, front, 'Option-Command-A to set the criteria', 0, COMMAND_FLAG | OPTION_FLAG)
+        edits(3, 'the criteria')
+        for label, value in (('Optimistic hours', '1'), ('Likely hours', '2'), ('Pessimistic hours', '5')):
+            field(label, value)
+        guarded_key(app, front, 'Return in an hours field to set the estimate', KEY_CODES['return'])
+        edits(4, 'the estimate')
+        field('Other work key', 'TEST-B')
+        guarded_key(app, front, 'Return to add the link after TEST-B', KEY_CODES['return'])
+        edits(5, 'the new link')
+        field('Other work key', 'TEST-E')
+        guarded_key(app, front, 'Option-Command-L to remove the finish-to-start link from TEST-E', 37, COMMAND_FLAG | OPTION_FLAG)
+        edits(6, 'the link removal')
+        field('Decision key to gate on', 'TEST-GATE')
+        guarded_key(app, front, 'Return to gate on TEST-GATE', KEY_CODES['return'])
+        edits(7, 'the gate')
+        guarded_key(app, front, 'Command-Return to review every edit', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the review of every edit')
+        paste('Every plan edit by keyboard', 'Command-V to paste the reason')
+        guarded_key(app, front, 'Command-Return to apply', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edits to be applied')
+        guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
+        guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close')
+        front.wait_focus_change(3.0)
+        back = front.focused_facts()[1]
+        assert back == 'Decision key to gate on', f'the keyboard did not go back to the gate field after the apply: {back}'
+        uninterrupted(front, 'the route is complete')
+        entries = run_cli(database, 'history')['entries'][operations:]
+        assert len(entries) == 1, f'one change was recorded: {len(entries)}'
+        changes = entries[0]['operation']['command']['ApplyChange']['changes']
+        fields = {field for c in changes if c['collection'] == 'work_items' for field in c['fields']}
+        assert {'title', 'contract', 'schedule'} <= fields, fields
+        collections = sorted(c['collection'] for c in changes)
+        assert collections.count('dependencies') == 2 and 'decisions' in collections, collections
+        shown = run_cli(database, 'show', 'TEST-F')
+        assert len(shown['title']) > 400 and shown['contract']['objective'] == 'Prove every plan edit works by keyboard', shown['title'][:60]
+        assert app.quit() == 0
+        return (f'every plan edit by keyboard on the 500-character TEST-F: title (a second Return left one edit), objective, criteria, '
+                f'estimate, a link added and one removed, and a gate, reviewed and applied as one change of {len(changes)} entities; the '
+                f'keyboard back in the gate field')
     except NotAssessed as interruption:
         not_assessed(case, interruption_or_death(app.process, interruption))
         return None
@@ -3129,7 +3236,7 @@ def main(bundle):
         for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
                          edit_flag_first, gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
                          filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
-                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route):
+                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route, inspector_edit_keyboard_route):
             result = scenario(packaged, directory)
             # A case that was skipped or not assessed says so itself, loudly, and returns nothing: it is never a pass.
             if result is not None:

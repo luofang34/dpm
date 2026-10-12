@@ -45,6 +45,7 @@ extension Context {
         let before = try await historyCount(first)
         guard let helper = await MainActor.run(body: { model.snapshot.helperProcess }) else { throw SuiteError(description: "no helper process") }
         check(await freeze(helper), "the first workspace's helper is stopped (its stop was awaited as an event)")
+        _ = try await modelExpect(model, "operations to be possible before the claim", 30) { _ in MainActor.assumeIsolated { model.operationBlocker == nil } }
         let claimSent = Event()
         sent.withLock { $0 = claimSent }
         armed.withLock { $0 = true }
@@ -106,6 +107,10 @@ extension Context {
     /// the workspace again until it is current.
     private func leaveWithRequestOnTheWire(_ model: ObserverModel, _ database: URL, armed: LockedBox<Bool>, sent: LockedBox<Event>, what: String,
                                            leave: @escaping @MainActor () -> Void, send: @escaping @MainActor () -> Void) async throws {
+        // The send must be possible before the helper is stopped, or the guard would rightly hold it.
+        _ = try await modelExpect(model, "\(what) to be possible", 30) { _ in
+            MainActor.assumeIsolated { model.editing.reviewed != nil ? model.applyBlocker == nil : model.operationBlocker == nil }
+        }
         guard let helper = await MainActor.run(body: { model.snapshot.helperProcess }) else { throw SuiteError(description: "no helper process") }
         check(await freeze(helper), "the helper is stopped before \(what) (its stop was awaited as an event)")
         let onWire = Event()

@@ -25,6 +25,19 @@ public enum PlanEdit: Equatable, Sendable {
     case newTask(NewTask)
     case gate(decision: String, work: String, blocks: Bool)
 
+    /// The field an edit sets, for those that set one value: a later edit of the same target replaces it.
+    var target: String? {
+        switch self {
+        case .estimate(let work, _, _, _): return "estimate:" + work
+        case .parent(let work, _): return "parent:" + work
+        case .title(let work, _): return "title:" + work
+        case .objective(let work, _): return "objective:" + work
+        case .acceptance(let work, _): return "acceptance:" + work
+        case .gate(let decision, let work, _): return "gate:\(decision):\(work)"
+        default: return nil
+        }
+    }
+
     /// The relation kind the plan names for a pair of ends.
     public static func kind(from: PlanEnd, to: PlanEnd) -> String {
         switch (from, to) {
@@ -86,7 +99,15 @@ public struct PlanDraft: Equatable, Sendable {
 
     public var isEmpty: Bool { edits.isEmpty }
 
-    public mutating func add(_ edit: PlanEdit) { edits.append(edit) }
+    /// Add an edit; one that sets the same field of the same item again, or the same gate, replaces the earlier one,
+    /// so pressing Return twice leaves one edit.
+    public mutating func add(_ edit: PlanEdit) {
+        if let target = edit.target, let index = edits.firstIndex(where: { $0.target == target }) {
+            edits[index] = edit
+        } else {
+            edits.append(edit)
+        }
+    }
 
     public mutating func remove(at index: Int) {
         guard edits.indices.contains(index) else { return }

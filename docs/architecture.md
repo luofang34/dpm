@@ -803,9 +803,9 @@ at before anything is sent again, and after an accepted operation nothing more i
 is read at its revision. Every operation, Reconcile, reading the changes, setting criteria, removing
 a link or gate and discarding the draft has an Option-Command shortcut, and the title, objective,
 estimate, link, gate and new-task fields commit on Return, so the inspector works by keyboard whether
-or not the system's keyboard navigation reaches buttons; an operation leaves the keyboard where it was. Closing a review gives the keyboard back
-to the field or region it was opened from; after an apply from the inspector, whose fields are
-rebuilt, the region takes it.
+or not the system's keyboard navigation reaches buttons; an operation leaves the keyboard where it was. Closing a review, after an apply or a cancel, gives the keyboard back
+to the inspector field or the Gantt or network region it was opened from. Setting the same field of
+the same item again replaces the earlier edit in the draft.
 
 Progress is not a plan edit. For started work, the inspector's progress slider sends the acting
 actor's `ReportProgress` through the same command boundary when Report is pressed; dragging the edge

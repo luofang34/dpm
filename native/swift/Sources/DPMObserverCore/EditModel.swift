@@ -115,12 +115,9 @@ extension ObserverModel {
     public func closeReview() {
         guard editing.reviewing else { return }
         editing.reviewing = false
-        // Closing a sheet gives the keyboard back to the control that had it. A review opened from the Gantt or network
-        // region, and an apply from the inspector (which rebuilds the fields it was opened from), give it to the region
-        // once the sheet is gone.
-        var applied = false
-        if case .applied = editing.phase { applied = true }
-        editing.returnToRegion = !editing.reviewFromInspector || applied
+        // Once the sheet is gone, the keyboard goes back to where the review was opened: the Gantt or network region, or
+        // the inspector field.
+        editing.returnToRegion = !editing.reviewFromInspector
     }
 
     /// The parent of a work item as the draft's basis records it.

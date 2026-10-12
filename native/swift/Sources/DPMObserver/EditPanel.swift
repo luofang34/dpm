@@ -89,9 +89,10 @@ struct ItemEditor: View {
                     .modifier(InspectorFocus(model: model, name: "acceptance"))
                     .accessibilityLabel("Acceptance criteria, one per line").accessibilityIdentifier("edit.acceptance")
                 Button("Set criteria") {
-                    model.edit(.acceptance(work: item.identity, criteria: acceptance.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }))
+                    model.edit(.acceptance(work: item.identity, criteria: criteria))
                 }
                 .keyboardShortcut("a", modifiers: [.command, .option])
+                .disabled(criteria == item.acceptance)
                 .help("Set criteria (⌥⌘A)")
             }
             if item.status == "InProgress" || item.status == "Blocked" { ProgressEditor(model: model, item: item) }
@@ -166,6 +167,7 @@ struct ItemEditor: View {
                 Button("Gate on") { gate(true) }
                 Button("Remove gate") { gate(false) }
                     .keyboardShortcut("g", modifiers: [.command, .option])
+                    .disabled(!gatesThisItem)
                     .help("Remove the gate of the keyed decision (⌥⌘G)")
                     .accessibilityIdentifier("edit.remove-gate")
                 .disabled(model.snapshot.inventory.decision(key: gateKey.trimmingCharacters(in: .whitespaces)) == nil)
@@ -188,12 +190,26 @@ struct ItemEditor: View {
     /// Remove this item's dependency with the work keyed in the link field; whether any was removed.
     @discardableResult
     private func removeLink() -> Bool {
-        guard let other = otherIdentity,
-              let relation = model.snapshot.inventory.relations(of: item.identity).first(where: { $0.predecessor == other || $0.successor == other })
+        // The relation the pickers name: this item after or before the keyed work, of the chosen kind.
+        let (predecessor, successor) = linkAsPredecessor ? (otherIdentity, item.identity) : (item.identity, otherIdentity)
+        guard otherIdentity != nil,
+              let relation = model.snapshot.inventory.relations(of: item.identity).first(where: {
+                  $0.predecessor == predecessor && $0.successor == successor && $0.kind == linkKind
+              })
         else { return false }
         model.edit(.unlink(dependency: relation.id))
         linkKey = ""
         return true
+    }
+
+    /// The criteria as typed, one per line.
+    private var criteria: [String] {
+        acceptance.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    /// Whether the decision keyed in the gate field gates this item now.
+    private var gatesThisItem: Bool {
+        model.snapshot.inventory.decision(key: gateKey.trimmingCharacters(in: .whitespaces))?.blocks.contains(item.identity) == true
     }
 
     /// Gate this item on the decision keyed in the gate field, or remove that gate; whether a decision was found.
