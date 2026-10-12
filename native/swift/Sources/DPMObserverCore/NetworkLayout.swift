@@ -116,6 +116,13 @@ public enum NetworkLayout {
         hit(graph, shown: shown, at: point, pan: pan, scale: scale(level))
     }
 
+    /// The end of `node` a point over it names, as on a Gantt bar: its left half is the start, its right half the finish.
+    public static func end(of node: NetworkNode, in graph: NetworkGraph, at point: (x: Double, y: Double), pan: (x: Double, y: Double), scale: Double) -> PlanEnd {
+        guard let place = graph.place[node.identity] else { return .finish }
+        let r = rect(place)
+        return (point.x + pan.x) / scale < r.x + r.width / 2 ? .start : .finish
+    }
+
     public static func hit(_ graph: NetworkGraph, shown: [NetworkNode], at point: (x: Double, y: Double), pan: (x: Double, y: Double), scale: Double) -> NetworkNode? {
         let x = (point.x + pan.x) / scale, y = (point.y + pan.y) / scale
         return shown.first { node in

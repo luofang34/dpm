@@ -24,6 +24,7 @@ import copy
 import ctypes
 import hashlib
 import json
+import math
 import os
 import re
 import select
@@ -2533,11 +2534,140 @@ def inspector_keyboard_route(bundle, directory):
         app.close()
 
 
+def gantt_drag_route(bundle, directory):
+    """Linking and lag by real pointer drags on the Gantt while editing, with real HID events: TEST-D's finish dropped on
+    TEST-F's right half drafts an FF link; TEST-B's body dragged along the timeline moves nothing and drafts a lag on the
+    link from TEST-A that drives it; TEST-C's finish dropped on the work package is refused in the view with the reason
+    and drafts nothing. No bar moves before the apply. Command-Return reviews, a pasted reason and Command-Return apply
+    one ApplyChange holding the FF link and the new lag. Only the complete route passes; an interrupted one is NOT
+    ASSESSED."""
+    case = 'gantt_drag_route'
+    if not accessibility_trusted():
+        not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so no pointer event was posted')
+        return None
+    database = gantt_store(directory, 'gantt-drag')
+    operations = len(run_cli(database, 'history')['entries'])
+    clipboard = subprocess.run(['/usr/bin/pbpaste'], capture_output=True, timeout=15).stdout
+    app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'gantt', '--window-size', '1400x900'])
+    front = None
+
+    def bars(state):
+        return {b['key']: b for b in state['gantt']['bars']}
+
+    aim = [0.0, 0.0]
+
+    def receipts(state):
+        return [e for e in ((state.get('host') or {}).get('gantt_pointer') or {}).get('events', []) if e.get('event') in ('edit_drag', 'drag_end')]
+
+    def drag(start, end, step):
+        """One real press, eight drags and a release, from `start` to `end` in timeline points; the timeline's own receipt
+        of the finished drag, which says what it proposed."""
+        state = app.state()
+        seen = len(receipts(state))
+        timeline = state['gantt']['layout']['frames']['timeline']
+        ox, oy = content_origin(state['gantt']['layout'])
+        place = lambda p: (ox + timeline[0] + p[0] + aim[0], oy + timeline[1] + p[1] + aim[1])
+        post_mouse(app, front, 'moved', place(start), step=step)
+        post_mouse(app, front, 'down', place(start), step=step)
+        for i in range(1, 9):
+            post_mouse(app, front, 'dragged', place((start[0] + (end[0] - start[0]) * i / 8, start[1] + (end[1] - start[1]) * i / 8)), step=step)
+        post_mouse(app, front, 'up', place(end), step=step)
+        done = guarded_wait(app, front, lambda s: len(receipts(s)) > seen, 10, f'the timeline to receive {step}')
+        return receipts(done)[-1]
+
+    try:
+        shown = app.wait(lambda s: gantt_loaded(s) and s['editing']['enabled'] and {'TEST-B', 'TEST-C', 'TEST-D', 'TEST-F'} <= set(bars(s)), 30,
+                         'the Gantt with its bars and editing on')
+        front = Foreground(app.process.pid)
+        front.allow_sheets = True
+        front.activate(app.process)
+        front.arm()
+        before = bars(shown)
+        package = next((b for b in shown['gantt']['bars'] if b['kind'] == 'WorkPackage'), None)
+        assert package, f'the work package has no drawn bar to drop on: {shown["gantt"]["bars"]}'
+        d, f, b, c = before['TEST-D'], before['TEST-F'], before['TEST-B'], before['TEST-C']
+        assert b['right'] - b['left'] > 16, f'TEST-B is too narrow at this zoom for a body drag clear of its ends: {b}'
+        # The aim is checked with a real click on TEST-D: the timeline's receipt says where it landed, and every drag is
+        # corrected by the difference, so a press meant for a bar's end takes that end.
+        layout = shown['gantt']['layout']
+        ox, oy = content_origin(layout)
+        timeline = layout['frames']['timeline']
+        target = ((d['left'] + d['right']) / 2, d['mid'])
+        post_click(app, front, (ox + timeline[0] + target[0], oy + timeline[1] + target[1]), step='a click on TEST-D to check the aim')
+        clicked = guarded_wait(app, front, lambda s: any(e.get('event') == 'click' for e in ((s.get('host') or {}).get('gantt_pointer') or {}).get('events', [])), 10,
+                               'the timeline to receive the aiming click')
+        receipt = [e for e in clicked['host']['gantt_pointer']['events'] if e.get('event') == 'click'][-1]
+        assert receipt.get('hit') == 'TEST-D', f'the aiming click on TEST-D landed elsewhere: {receipt}'
+        aim[0], aim[1] = target[0] - receipt['point'][0], target[1] - receipt['point'][1]
+        # Selecting TEST-D fills the inspector, and the fitted timeline follows its new width: bars are read again, once
+        # the selection is shown, and before every drag, as a person aims at what is drawn now.
+        settled = guarded_wait(app, front, lambda s: s['gantt']['selected_key'] == 'TEST-D' and s['detail'] and not s['detail']['loading'], 10,
+                               'the selection of TEST-D to be shown')
+        before = bars(settled)
+        d, f = before['TEST-D'], before['TEST-F']
+        linked = drag((d['right'] - 1, d['mid']), (f['right'] - 2, f['mid']), "a drag from TEST-D's finish to TEST-F's right half")
+        began = [e for e in app.state()['host']['gantt_pointer']['events'] if e.get('event') == 'drag_begin']
+        assert linked.get('event') == 'edit_drag' and 'FinishFinish' in (linked.get('proposed') or ''), (
+            f'the drag from TEST-D proposed no FF link: {linked}; aimed at {d["right"] - 1, d["mid"]} with correction {aim}; '
+            f'click receipt {receipt}; bar {d}; began {began}')
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 1, 10, 'the FF link to enter the draft')
+        now = app.state()
+        b, scale = bars(now)['TEST-B'], now['gantt']['scale']
+        middle = (b['left'] + b['right']) / 2
+        shifted = drag((middle, b['mid']), (middle + 60, b['mid']), "a drag of TEST-B's body along the timeline")
+        assert shifted.get('event') == 'edit_drag' and (shifted.get('proposed') or '').startswith('lag'), f'the body drag proposed no lag: {shifted}'
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 2, 10, 'the lag to enter the draft')
+        # In hours, since a fitted timeline rescales as the inspector's draft grows: no bar starts or ends elsewhere.
+        after = app.state()
+        hours = lambda bar, state: (bar['left'] / state['gantt']['scale'], bar['right'] / state['gantt']['scale'])
+        moved = [k for k, bar in bars(after).items() if before.get(k) and k != package['key']
+                 and max(abs(x - y) for x, y in zip(hours(bar, after), hours(before[k], settled))) > 0.05]
+        assert not moved, f'a drag moved bars before any apply: {moved}'
+        now = bars(app.state())
+        c, package = now['TEST-C'], now[package['key']]
+        drag((c['right'] - 1, c['mid']), ((package['left'] + package['right']) / 2, package['mid']), "a drag from TEST-C's finish onto the work package")
+        refused = guarded_wait(app, front, lambda s: 'work package' in (s['editing']['notice'] or ''), 10, 'the drop on the package to be refused in the view')
+        assert refused['editing']['edits'] == 2, f'a drop on a package entered the draft: {refused["editing"]}'
+        guarded_key(app, front, 'Command-Return to review the drafted link and lag', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the review of the drag proposals')
+        subprocess.run(['/usr/bin/pbcopy'], input='Link D to F and wait after A', text=True, check=True, timeout=15)
+        guarded_key(app, front, 'Command-V to paste the reason', 9, COMMAND_FLAG)
+        guarded_key(app, front, 'Command-Return to apply', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the drag proposals to be applied')
+        guarded_key(app, front, 'Escape to close the review', KEY_CODES['escape'])
+        guarded_wait(app, front, lambda s: not s['editing']['reviewing'], 15, 'the review to close')
+        uninterrupted(front, 'the route is complete')
+        entries = run_cli(database, 'history')['entries'][operations:]
+        assert [next(iter(e['operation']['command'])) for e in entries] == ['ApplyChange'], entries
+        plan = run_cli(database, 'export')
+        keys = {w['id']: w['key'] for w in plan['work_items'].values()}
+        edges = {(keys[e['predecessor']], e['kind'], keys[e['successor']]): e for e in plan['dependencies']}
+        assert ('TEST-D', 'FinishFinish', 'TEST-F') in edges, f'no FF link from TEST-D to TEST-F: {sorted(edges)}'
+        lag = edges[('TEST-A', 'FinishStart', 'TEST-B')]['lag_hours']
+        expected = math.floor(60 / scale * 4 + 0.5) / 4
+        assert lag == expected, f'the 60 pt drag at {scale} pt an hour drafted {lag} h on A to B, not {expected} h'
+        assert app.quit() == 0
+        return (f"linking and lag by real pointer drags: TEST-D's finish to TEST-F's right half drafted an FF link; TEST-B's body dragged 60 pt "
+                f"moved no bar and drafted a {lag} h lag on A to B; a drop on {package['key']} was refused in the view ({refused['editing']['notice']}); "
+                f"reviewed and applied by keys as one ApplyChange")
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption))
+        return None
+    except AssertionError as error:
+        kept = keep_failure(case, app, front, {'error': str(error)[:4000]})
+        raise AssertionError(f'{error} (complete failing state kept at {kept})') from None
+    finally:
+        subprocess.run(['/usr/bin/pbcopy'], input=clipboard, check=False, timeout=15)
+        if front:
+            front.close()
+        app.close()
+
+
 def inspector_edit_keyboard_route(bundle, directory):
     """Every kind of plan edit by keyboard alone on TEST-F, whose title is 500 characters: its title (Return, and Return
     again leaves one edit), objective (Return), acceptance criteria (Option-Command-A), estimate (Return in an hours
     field), a start-to-start dependency before TEST-M1 (Option-Command-X and -2, then Return in the link field), the removal
-    of its finish-to-start link from TEST-E (Option-Command-X and -1 back, then Option-Command-L), a gate on TEST-GATE (Return
+    of its finish-to-start link from TEST-E (Option-Command-1 and -X back, then Option-Command-L) after a 3 h lag on the FS link before TEST-M1 (Option-Command-E), a gate on TEST-GATE (Return
     in the gate field) and a new task (Option-Command-N, then Return). Command-Return reviews them; another actor's claim
     makes the apply stale, the refusal keeps the edits, Shift-Command-R reads the plan again and reviews them, and
     Command-Return applies them as one change; Escape gives the keyboard back to the field the review was opened from.
@@ -2601,20 +2731,25 @@ def inspector_edit_keyboard_route(bundle, directory):
         guarded_key(app, front, 'Option-Command-2 for start to start', 19, COMMAND_FLAG | OPTION_FLAG)
         guarded_key(app, front, 'Return to add the SS link before TEST-M1', KEY_CODES['return'])
         edits(5, 'the new link')
+        # The lag a whole-bar drag offers, by keys: 3 h on the existing finish-to-start link before TEST-M1.
+        guarded_key(app, front, 'Option-Command-1 for finish to start', 18, COMMAND_FLAG | OPTION_FLAG)
+        field('Lag in hours (negative for a lead)', '3')
+        field('Other work key', 'TEST-M1')
+        guarded_key(app, front, 'Option-Command-E to set the lag of the FS link before TEST-M1', 14, COMMAND_FLAG | OPTION_FLAG)
+        edits(6, 'the lag')
         guarded_key(app, front, 'Option-Command-X back to after', 7, COMMAND_FLAG | OPTION_FLAG)
-        guarded_key(app, front, 'Option-Command-1 back to finish to start', 18, COMMAND_FLAG | OPTION_FLAG)
         field('Other work key', 'TEST-E')
         guarded_key(app, front, 'Option-Command-L to remove the finish-to-start link from TEST-E', 37, COMMAND_FLAG | OPTION_FLAG)
-        edits(6, 'the link removal')
+        edits(7, 'the link removal')
         field('Decision key to gate on', 'TEST-GATE')
         guarded_key(app, front, 'Return to gate on TEST-GATE', KEY_CODES['return'])
-        edits(7, 'the gate')
+        edits(8, 'the gate')
         # A new task from the collapsed group, opened by Option-Command-N.
         guarded_key(app, front, 'Option-Command-N to open New task', 45, COMMAND_FLAG | OPTION_FLAG)
         field('New task key, e.g. VIS-70', 'KB-1')
         field('New task title', 'Added by keyboard')
         guarded_key(app, front, 'Return to add the new task', KEY_CODES['return'])
-        edits(8, 'the new task')
+        edits(9, 'the new task')
         guarded_key(app, front, 'Command-Return to review every edit', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the review of every edit')
         paste('Every plan edit by keyboard', 'Command-V to paste the reason')
@@ -2624,7 +2759,7 @@ def inspector_edit_keyboard_route(bundle, directory):
         moved = run_cli(database, 'export')['revision']
         guarded_wait(app, front, lambda s: (s['revision'] or 0) >= moved and s['freshness']['current'], 20, 'the other change to be read')
         guarded_key(app, front, 'Command-Return to apply against the older plan', KEY_CODES['return'], COMMAND_FLAG)
-        guarded_wait(app, front, lambda s: s['editing']['phase'] == 'refused' and (s['editing']['refusal'] or {}).get('stale') is True and s['editing']['edits'] == 8, 20,
+        guarded_wait(app, front, lambda s: s['editing']['phase'] == 'refused' and (s['editing']['refusal'] or {}).get('stale') is True and s['editing']['edits'] == 9, 20,
                      'the stale apply to be refused as stale with the edits kept')
         guarded_key(app, front, 'Shift-Command-R to read the plan again and review', 15, COMMAND_FLAG | SHIFT_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['phase'] == 'reviewed' and s['editing']['reviewing'], 20, 'the kept edits reviewed against the current plan')
@@ -2644,16 +2779,17 @@ def inspector_edit_keyboard_route(bundle, directory):
         fields = {field for c in changes if c['collection'] == 'work_items' for field in c['fields']}
         assert {'title', 'contract', 'schedule'} <= fields, fields
         collections = sorted(c['collection'] for c in changes)
-        assert collections.count('dependencies') == 2 and 'decisions' in collections, collections
+        assert collections.count('dependencies') == 3 and 'decisions' in collections, collections
         plan = run_cli(database, 'export')
         keys = {w['id']: w['key'] for w in plan['work_items'].values()}
         assert any((keys[d['predecessor']], d['kind'], keys[d['successor']]) == ('TEST-F', 'StartStart', 'TEST-M1') for d in plan['dependencies']), 'no SS link before TEST-M1'
+        assert any((keys[d['predecessor']], d['kind'], keys[d['successor']], d['lag_hours']) == ('TEST-F', 'FinishStart', 'TEST-M1', 3.0) for d in plan['dependencies']), 'no 3 h lag'
         assert 'KB-1' in keys.values(), 'the new task was not added'
         shown = run_cli(database, 'show', 'TEST-F')
         assert len(shown['title']) > 400 and shown['contract']['objective'] == 'Prove every plan edit works by keyboard', shown['title'][:60]
         assert app.quit() == 0
         return (f'every plan edit by keyboard on the 500-character TEST-F: title (a second Return left one edit), objective, criteria, '
-                f'estimate, an SS link before TEST-M1 (Option-Command-X, -2) added and an FS link removed, a gate and a new task (Option-'
+                f'estimate, an SS link before TEST-M1 (Option-Command-X, -2) added, a 3 h lag set on the FS link (Option-Command-E) and an FS link removed, a gate and a new task (Option-'
                 f'Command-N), reviewed; a stale apply refused with the edits kept, Shift-Command-R re-read and reviewed them, and they applied as '
                 f'one change of {len(changes)} entities; the keyboard back in the field the review was opened from')
     except NotAssessed as interruption:
@@ -3323,7 +3459,7 @@ def main(bundle):
         for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
                          edit_flag_first, gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
                          filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
-                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route, inspector_edit_keyboard_route):
+                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route, inspector_edit_keyboard_route, gantt_drag_route):
             result = scenario(packaged, directory)
             # A case that was skipped or not assessed says so itself, loudly, and returns nothing: it is never a pass.
             if result is not None:

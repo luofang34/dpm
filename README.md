@@ -92,8 +92,9 @@ The app carries `dpm`, `dpm-mcp` and `dpm-native`. `dpm` alone opens the termina
 terminal and the app otherwise; `dpm tui` and `dpm gui` choose explicitly.
 
 It shows what to do now, live agent runs, review, details, a Gantt chart and a dependency network.
-With Edit on (⌘E), dragging from a bar's end to another bar links them, Option-dragging a bar's
-finish changes its estimate, and an inspector edits the selected item and runs its task operations.
+With Edit on (⌘E), dragging from a bar's end to another bar links them, dragging a whole bar offers
+a lag on the link that drives it, Option-dragging a bar's finish changes its estimate, and an
+inspector edits the selected item and runs its task operations.
 Plan edits gather in a draft and apply only after the application's diff is reviewed, with a reason.
 
 ## Development

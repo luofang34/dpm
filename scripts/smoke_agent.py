@@ -492,6 +492,42 @@ def revert_smoke(directory):
     print('PASS: a plan change is reverted through review with CLI/MCP parity; agents may not apply it; conflicts name the entity')
 
 
+def drag_proposal_smoke(directory):
+    """What a drag proposes in the native app, an agent can propose too: a start-to-start link and a new lag on an
+    existing link, through MCP propose_change, give the same reviewed diff as CLI plan diff; the agent's apply_change is
+    refused and records nothing, and a human applies the reviewed diff as one ApplyChange."""
+    database = directory / 'drag.sqlite'
+    run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
+    drafter = Agent(database, 'agent:drafter')
+    planner = Agent(database, 'human:planner')
+    try:
+        plan = run_cli(database, 'export')
+        keys = {w['key']: w['id'] for w in plan['work_items'].values()}
+        edge = next(d for d in plan['dependencies'] if d['predecessor'] == keys['TEST-A'] and d['successor'] == keys['TEST-B'])
+        edge['lag_hours'] = 4.0
+        link = {'id': str(uuid.uuid4()), 'predecessor': keys['TEST-B'], 'successor': keys['TEST-D'], 'kind': 'StartStart',
+                'lag_hours': 0.0, 'policy': 'Hard'}
+        plan['dependencies'].append(link)
+        candidate = directory / 'drag.json'
+        candidate.write_text(json.dumps(plan))
+        preview = drafter.call('propose_change', {'plan': plan})['data']
+        assert preview == run_cli(database, 'plan', 'diff', str(candidate)), 'CLI and MCP review the same drag proposal'
+        assert sorted((c['collection'], c['id'], tuple(c['fields'])) for c in preview['changes']) == sorted([
+            ('dependencies', edge['id'], ('lag_hours',)), ('dependencies', link['id'], ())]), preview['changes']
+        revision = run_cli(database, 'export')['revision']
+        refused = drafter.call('apply_change', {'plan': plan, 'reason': 'drag', 'base_revision': revision}, error='invalid_command')
+        assert 'approve plan scope' in refused['message'], refused
+        assert run_cli(database, 'export')['revision'] == revision, 'a refused apply records nothing'
+        applied = planner.call('apply_change', {'plan': plan, 'reason': 'Link B to D and wait after A', 'base_revision': revision})['data']
+        entry = run_cli(database, 'history')['entries'][-1]['operation']
+        assert entry['id'] == applied['id'] and entry['command']['ApplyChange']['changes'] == preview['changes'], entry
+        assert run_cli(database, 'export')['revision'] == revision + 1
+    finally:
+        drafter.close()
+        planner.close()
+    print('PASS: drag proposals (an SS link, a new lag) through MCP propose_change equal CLI plan diff; agents may not apply them')
+
+
 def owner_endpoint_refusal(database, edge):
     """A human owning either endpoint cannot waive the edge, identically through CLI and MCP."""
     owner = Agent(database, 'human:owner')
@@ -598,6 +634,7 @@ if __name__ == '__main__':
         scope_smoke(Path(directory))
         dependency_smoke(Path(directory))
         revert_smoke(Path(directory))
+        drag_proposal_smoke(Path(directory))
         timing_smoke(Path(directory))
         # Conditional-work parity lives in its own module, which reuses this module's helpers.
         from smoke_conditional import smoke as conditional_smoke

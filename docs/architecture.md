@@ -778,10 +778,13 @@ from: a drag from either end of a bar draws an elbow connector, and its drop on 
 dependency whose kind follows the ends joined (finish to start FS, start to start SS, finish to finish
 FF, start to finish SF); the draft's links are drawn on the chart until applied or discarded. An
 Option-drag of the finish of a task not yet started scales its own three-point estimate by the ratio
-of the new bar length to the old (the review shows the exact hours), a drag between network nodes
-proposes FS, and the inspector edits
-title, objective, acceptance, estimate, nesting (⌘] and ⌘[), dependencies, decision gates and
-new tasks by keyboard. A bar never moves: dates are derived. Reviewing the draft is the read-only
+of the new bar length to the old (the review shows the exact hours). A bar never moves, since dates
+are derived: dragging its body offers a lag instead, on the link that bounds its start latest, in
+elapsed quarter hours. A drag between network nodes proposes the kind named by the halves pressed
+and dropped on (the left half is the start, the right half the finish), and a drop on a work
+package is refused in the view. The inspector edits title, objective, acceptance, estimate,
+nesting (⌘] and ⌘[), dependencies with their kind, direction and lag (⌥⌘1 to ⌥⌘4, ⌥⌘X, ⌥⌘E),
+decision gates and new tasks by keyboard. Reviewing the draft is the read-only
 `propose_change` query against the pinned basis, which returns the entity changes, the affected work
 and applicability changes and records nothing; applying sends those changes as one `ApplyChange`
 command with the actor (`kind:name`, attribution rather than authentication), a reason, a request

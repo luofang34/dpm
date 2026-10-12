@@ -129,6 +129,12 @@ final class NetworkRegionView: NSView {
         return (p.x, isFlipped ? p.y : bounds.height - p.y)
     }
 
+    /// The end of `node` a point over it names: its left half is the start, its right half the finish.
+    @MainActor private func end(of node: NetworkNode, at point: (x: Double, y: Double)) -> PlanEnd {
+        guard let model else { return .finish }
+        return NetworkLayout.end(of: node, in: model.networkGraph, at: point, pan: (model.network.panX, model.network.panY), scale: model.network.scale)
+    }
+
     @MainActor private func node(at point: (x: Double, y: Double)) -> NetworkNode? {
         guard let model else { return nil }
         let state = model.network
@@ -220,9 +226,16 @@ final class NetworkRegionView: NSView {
         dragOrigin = now
         let point = canvasPoint(event)
         MainActor.assumeIsolated {
-            // While editing, a drag from a work item draws a finish-to-start link instead of panning; nothing moves.
-            if let model, model.editing.enabled, let press = pressed, let start = pressPoint, model.networkGraph.node(press.identity)?.isDecision == false {
-                model.setNetworkLink(NetworkLinkDrag(from: press.identity, origin: NetworkPoint(x: start.x, y: start.y), point: NetworkPoint(x: point.x, y: point.y)))
+            // While editing, a drag from a task or milestone draws a link from the half of the node pressed (its start or
+            // finish, as on a Gantt bar) instead of panning; nothing moves. A work package's span comes from its tasks.
+            if let model, model.editing.enabled, let press = pressed, let start = pressPoint, let node = model.networkGraph.node(press.identity), !node.isDecision {
+                if node.kind == .package {
+                    model.setEditNotice("A work package's span comes from its tasks: link one of its tasks instead of \(node.key).")
+                    return
+                }
+                let current = model.network.linking.flatMap { $0.from == press.identity ? $0.fromEnd : nil }
+                let fromEnd = current ?? end(of: node, at: start)
+                model.setNetworkLink(NetworkLinkDrag(from: press.identity, fromEnd: fromEnd, origin: NetworkPoint(x: start.x, y: start.y), point: NetworkPoint(x: point.x, y: point.y)))
                 return
             }
             // The content follows the pointer: the pan grows as the pointer moves left or up (window y grows upwards).
@@ -236,8 +249,14 @@ final class NetworkRegionView: NSView {
             if let model, let link = model.network.linking {
                 model.setNetworkLink(nil)
                 if let target = node(at: point), target.identity != link.from, !target.isDecision {
-                    model.edit(.link(id: UUID().uuidString.lowercased(), from: link.from, fromEnd: .finish, to: target.identity, toEnd: .start, lagHours: 0))
-                    note("edit_link", ["from": model.editName(link.from), "to": target.key])
+                    if target.kind == .package {
+                        model.setEditNotice("A link joins tasks and milestones; \(target.key) is a work package.")
+                        note("edit_link_refused", ["from": model.editName(link.from), "to": target.key])
+                    } else {
+                        let toEnd = end(of: target, at: point)
+                        model.edit(.link(id: UUID().uuidString.lowercased(), from: link.from, fromEnd: link.fromEnd, to: target.identity, toEnd: toEnd, lagHours: 0))
+                        note("edit_link", ["from": model.editName(link.from), "to": target.key, "kind": PlanEdit.kind(from: link.fromEnd, to: toEnd)])
+                    }
                 }
             } else if dragged {
                 note("drag_end", ["pan": model.map { [$0.network.panX, $0.network.panY] } ?? []])
@@ -343,7 +362,7 @@ struct NetworkLinkView: View {
                 path.addLine(to: CGPoint(x: link.point.x, y: link.point.y))
                 context.stroke(path, with: .color(Palette.relationEmphasis), style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
             }
-            Text("FS link from \(model.editName(link.from)): drop on another task or milestone").font(.caption).padding(5)
+            Text("Link from \(model.editName(link.from))'s \(link.fromEnd.rawValue): drop on a task or milestone, its left half for its start, its right half for its finish").font(.caption).padding(5)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
                 .offset(x: link.point.x + 12, y: link.point.y + 12)
         }
