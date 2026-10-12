@@ -101,6 +101,10 @@ for path in files:
             failures.append(f'{name}: {declaration[2]} has {members} members, exceeds 30')
     if re.search(r'\b(?:eprintln|println)!', masked):
         failures.append(f'{name}: use tracing for diagnostics')
+    # The CLI's human output is pretty JSON; Rust's debug layout of a value is not an interface.
+    relative = Path(name).as_posix()
+    if relative.startswith('src/') and not relative.endswith('tests.rs') and '/tests/' not in relative and ':#?}' in source:
+        failures.append(f'{name}: print values as JSON, not with debug formatting')
     # Panicking code stays denied everywhere; tests are exempted by clippy.toml, not by attributes.
     waived = waivers(masked)
     if waived:
