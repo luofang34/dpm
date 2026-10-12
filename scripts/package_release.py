@@ -2,6 +2,8 @@
 """Build a native qualification archive with exact committed source and SHA-256 checksums."""
 import argparse
 import gzip
+import os
+import sys
 import hashlib
 import io
 import json
@@ -37,6 +39,22 @@ def write_archive(path, prefix, files, epoch):
                 archive.addfile(entry, io.BytesIO(data))
 
 
+def observer_bundle():
+    """DPMObserver.app as scripts/build_native.py builds it, carrying dpm, dpm-mcp and dpm-native, for bin/DPMObserver.app
+    beside bin/dpm, where `dpm gui` looks first."""
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    import build_native
+    app = build_native.build(rust=True)['observer']
+    files = {}
+    for path in sorted(app.rglob('*')):
+        if path.is_symlink():
+            raise SystemExit(f'The app bundle holds a link, which the archive does not carry: {path}')
+        if path.is_file():
+            mode = 0o755 if os.access(path, os.X_OK) else 0o644
+            files[f'bin/DPMObserver.app/{path.relative_to(app).as_posix()}'] = (path.read_bytes(), mode)
+    return files
+
+
 def package(output):
     revision = clean_revision()
     config = tomllib.loads((ROOT / 'Cargo.toml').read_text())['workspace']['package']
@@ -56,9 +74,11 @@ def package(output):
             binaries[item['target']['name']] = Path(item['executable']).read_bytes()
     if set(binaries) != {'dpm', 'dpm-mcp'}:
         raise SystemExit(f'Expected dpm and dpm-mcp artifacts; got {sorted(binaries)}')
+    files = {f'bin/{name}': (data, 0o755) for name, data in binaries.items()}
+    if 'apple-darwin' in target:
+        files.update(observer_bundle())
     if clean_revision() != revision:
         raise SystemExit('The checkout changed while building; no archive was written.')
-    files = {f'bin/{name}': (data, 0o755) for name, data in binaries.items()}
     with tarfile.open(fileobj=io.BytesIO(source)) as archive:
         for entry in archive:
             if entry.isfile():
@@ -71,6 +91,8 @@ def package(output):
 This is a qualification build, not a published or signed installer.
 Verify the adjacent .sha256 file before extracting the archive.
 Put bin/dpm and bin/dpm-mcp together in a directory on your PATH.
+On macOS, bin/DPMObserver.app is the app and carries its own dpm, dpm-mcp and
+dpm-native; run dpm gui, or dpm alone outside a terminal, to open it.
 In a new project directory, run: dpm init "My project"
 Run dpm to open the console, or dpm status --json for the machine view.
 For a local MCP client, use dpm-mcp --project /absolute/project --actor agent:NAME.

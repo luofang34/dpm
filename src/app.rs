@@ -30,17 +30,11 @@ pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
     let cwd = std::env::current_dir().map_err(io_error("read current directory", "."))?;
     let command = match command {
         Some(command) => command,
-        None if json => Commands::Status {
-            no_simulation: false,
-            calibrated: false,
-        },
-        None => match crate::launch::opening(
-            crate::launch::Terminal::probe(),
+        None => crate::launch::default_command(
+            json,
+            crate::launch::Terminal::probe,
             cfg!(target_os = "macos"),
-        )? {
-            crate::launch::Opening::Console => Commands::Open(OpenCommand::Tui),
-            crate::launch::Opening::App => Commands::Open(OpenCommand::Gui),
-        },
+        )?,
     };
     let query_clock = crate::clock::for_command(&command, clock)?;
     let root = project.as_deref().unwrap_or(&cwd);
