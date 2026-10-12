@@ -236,7 +236,7 @@ struct NetworkInspector: View {
                         .help("Open the node in Detail (Return or ⌘D); closing Detail returns here")
                         .accessibilityIdentifier("network.openDetail")
                     DisclosureGroup("Keys and pointer") {
-                        Prose(text: "Keys: ↑ ↓ move, Space selects, Return opens Detail; p, s, g, b walk to predecessors, successors, decision gates and blockers; 1 2 3 show or hide each edge kind; = and - zoom; f fits, l locates the selected node, 0 resets; Shift-arrows pan; / filters. Pointer: a click selects a node, a double click opens Detail, a drag on the background or a scroll pans, a pinch zooms; nothing moves a plan item.", font: .caption2)
+                        Prose(text: "Keys: ↑ ↓ move, Space selects, Return opens Detail; p, s, g, b walk to predecessors, successors, decision gates and blockers; 1 2 3 show or hide each edge kind; = and - zoom; f fits, l locates the selected node, 0 resets; Shift-arrows pan; / filters. Pointer: a click selects a node, a double click opens Detail, a drag on the background or a scroll pans, a pinch zooms; nothing moves a plan item. While editing, a drag from a task or milestone proposes a link from the half pressed (start or finish) to the half it is dropped on, reviewed before it applies.", font: .caption2)
                     }
                     .font(.caption)
                     .accessibilityIdentifier("network.keys")

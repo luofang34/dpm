@@ -24,6 +24,8 @@ public enum PlanEdit: Equatable, Sendable {
     case acceptance(work: String, criteria: [String])
     case newTask(NewTask)
     case gate(decision: String, work: String, blocks: Bool)
+    /// A new lag, in elapsed hours (negative for a lead), on an existing dependency; the dates follow from it.
+    case lag(dependency: String, hours: Double)
 
     /// The field an edit sets, for those that set one value: a later edit of the same target replaces it.
     var target: String? {
@@ -34,6 +36,7 @@ public enum PlanEdit: Equatable, Sendable {
         case .objective(let work, _): return "objective:" + work
         case .acceptance(let work, _): return "acceptance:" + work
         case .gate(let decision, let work, _): return "gate:\(decision):\(work)"
+        case .lag(let dependency, _): return "lag:" + dependency
         default: return nil
         }
     }
@@ -150,6 +153,9 @@ public struct PlanDraft: Equatable, Sendable {
             return plan.setting(["work_items", work, "contract", "acceptance"], to: .array(criteria.map { .object(["text": .string($0)]) }))
         case let .newTask(task):
             return plan.setting(["work_items", task.id], to: newItem(task, in: plan))
+        case let .lag(dependency, hours):
+            let edited = plan["dependencies"].items.map { $0["id"].string == dependency ? $0.setting(["lag_hours"], to: .number(hours)) : $0 }
+            return plan.setting(["dependencies"], to: .array(edited))
         case let .gate(decision, work, blocks):
             var listed = plan["decisions"][decision]["blocks"].items.compactMap(\.string).filter { $0 != work }
             if blocks { listed.append(work) }
@@ -198,6 +204,12 @@ public struct PlanDraft: Equatable, Sendable {
         case let .objective(work, _): return "Change the objective of \(names(work))"
         case let .acceptance(work, criteria): return "Set \(criteria.count) acceptance criteria of \(names(work))"
         case let .newTask(task): return "New task \(task.key): \(task.title)"
+        case let .lag(dependency, hours):
+            let edge = basis.plan["dependencies"].items.first { $0["id"].string == dependency }
+            let kind = GanttRelation.abbreviation(edge?["kind"].string ?? "")
+            let was = edge?["lag_hours"].double ?? 0
+            return "Lag of \(kind) \(names(edge?["predecessor"].string ?? "?")) → \(names(edge?["successor"].string ?? "?")): "
+                + "\(GanttWords.hours(was)) → \(GanttWords.hours(hours))"
         case let .gate(decision, work, blocks): return blocks ? "Gate \(names(work)) on \(names(decision))" : "Stop gating \(names(work)) on \(names(decision))"
         }
     }

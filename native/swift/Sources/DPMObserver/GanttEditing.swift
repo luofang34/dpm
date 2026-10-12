@@ -3,7 +3,8 @@
 //
 // - Either end of a bar is a link handle: dragging from it draws an elbow connector, and dropping it on another bar's
 //   left or right half joins that bar's start or finish, which names FS, SS, FF or SF.
-// - Dragging the body of a task not yet started draws a link from its finish.
+// - Dragging the body of a bar does not move it, since its dates are derived: it says so, and a drop along the timeline
+//   offers a lag on the link that drives the bar, proposed to the draft like any other edit.
 // - Dragging the edge of a started task's reported share sets a new share, in steps of 5%, in the inspector; its
 //   Report button sends it, so the drag itself changes nothing.
 // - Option-dragging the finish end of a task not yet started scales its own three-point estimate by the ratio of the
@@ -18,12 +19,13 @@ struct GanttEditDrag: Equatable {
         case link(from: String, fromEnd: PlanEnd)
         case resize(work: String, left: CGFloat, right: CGFloat)
         case progress(work: String, left: CGFloat, right: CGFloat)
+        case shift(work: String)
     }
     let mode: Mode
     let origin: CGPoint
     var point: CGPoint
 
-    static let handle: CGFloat = 7
+    static let handle = CGFloat(GanttGesture.handle)
 
     /// Where a bar of `row` is drawn on the timeline now, if it is a scheduled task or milestone.
     @MainActor static func bar(_ row: GanttOutlineRow, model: ObserverModel) -> (left: CGFloat, right: CGFloat, top: CGFloat)? {
@@ -44,68 +46,86 @@ struct GanttEditDrag: Equatable {
         return (bar.left, bar.right, bar.top + GanttLayout.rowHeight / 2)
     }
 
+    /// The bar of `row` as a gesture sees it, if it is drawn.
+    @MainActor static func gestureBar(_ row: GanttOutlineRow, model: ObserverModel) -> GestureBar? {
+        let item = model.snapshot.inventory.byIdentity[row.id]
+        let drawn = bar(row, model: model)
+        guard row.row.isPackage || drawn != nil else { return nil }
+        return GestureBar(id: row.id, name: model.editName(row.id), kind: row.row.kind, status: row.row.status,
+                          left: Double(drawn?.left ?? 0), right: Double(drawn?.right ?? 0), hasEstimate: item?.estimate != nil,
+                          reportedProgress: item?.reportedProgress ?? 0)
+    }
+
     @MainActor static func begin(at point: CGPoint, model: ObserverModel) -> GanttEditDrag? {
-        guard point.y >= GanttGeometry.axis, let row = model.ganttRow(atY: point.y - GanttGeometry.axis) else { return nil }
-        if row.row.isPackage {
-            model.setEditNotice("A work package's span comes from its tasks: link or change a task, or edit \(model.editName(row.id)) in the inspector.")
-            return nil
-        }
-        guard let bar = bar(row, model: model), point.x >= bar.left - handle, point.x <= bar.right + handle else { return nil }
+        guard point.y >= GanttGeometry.axis, let row = model.ganttRow(atY: point.y - GanttGeometry.axis),
+              let gesture = gestureBar(row, model: model), let bar = bar(row, model: model) ?? (row.row.isPackage ? (0, 0, 0) : nil) else { return nil }
         let mid = bar.top + GanttLayout.rowHeight / 2
-        let unstarted = ["Proposed", "Planned", "Claimed"].contains(row.row.status)
-        // On a bar too narrow for two handles, the side of its middle pressed names the end.
-        let narrow = bar.right - bar.left < 2 * handle
-        let atStart = narrow ? point.x < (bar.left + bar.right) / 2 : abs(point.x - bar.left) <= handle
-        let atFinish = narrow ? !atStart : abs(point.x - bar.right) <= handle
-        if atFinish, NSEvent.modifierFlags.contains(.option) {
-            guard row.row.kind == "Task", unstarted, model.snapshot.inventory.byIdentity[row.id]?.estimate != nil, bar.right - bar.left >= 12 else {
-                model.setEditNotice("Only a task not yet started, with an estimate and a bar wide enough to drag, can have its estimate dragged; use the inspector.")
-                return nil
-            }
-            return GanttEditDrag(mode: .resize(work: row.id, left: bar.left, right: bar.right), origin: point, point: point)
-        }
-        if atStart { return GanttEditDrag(mode: .link(from: row.id, fromEnd: .start), origin: CGPoint(x: bar.left, y: mid), point: point) }
-        if atFinish { return GanttEditDrag(mode: .link(from: row.id, fromEnd: .finish), origin: CGPoint(x: bar.right, y: mid), point: point) }
-        if row.row.status == "InProgress" {
-            // Progress moves only from its own handle, the edge of the reported share, so a press elsewhere on the bar
-            // never records a report.
-            let reported = CGFloat(model.snapshot.inventory.byIdentity[row.id]?.reportedProgress ?? 0) / 100
-            let edge = bar.left + (bar.right - bar.left) * reported
-            guard abs(point.x - edge) <= handle else { return nil }
+        switch GanttGesture.press(gesture, x: Double(point.x), option: NSEvent.modifierFlags.contains(.option)) {
+        case nil: return nil
+        case .refused(let words)?:
+            model.setEditNotice(words)
+            return nil
+        case .resize?: return GanttEditDrag(mode: .resize(work: row.id, left: bar.left, right: bar.right), origin: point, point: point)
+        case .link(let end)?:
+            return GanttEditDrag(mode: .link(from: row.id, fromEnd: end), origin: CGPoint(x: end == .start ? bar.left : bar.right, y: mid), point: point)
+        case .progress(let edge)?:
             return GanttEditDrag(mode: .progress(work: row.id, left: bar.left, right: bar.right), origin: CGPoint(x: edge, y: mid), point: point)
+        case .shift?:
+            model.setEditNotice(GanttGesture.ShiftRefusal.unmoved.words)
+            return GanttEditDrag(mode: .shift(work: row.id), origin: point, point: point)
         }
-        return GanttEditDrag(mode: .link(from: row.id, fromEnd: .finish), origin: CGPoint(x: bar.right, y: mid), point: point)
+    }
+
+    /// The links into `work` with where each predecessor's awaited event is drawn: its finish for FS and FF, its start
+    /// for SS and SF.
+    @MainActor static func drivers(of work: String, model: ObserverModel) -> [GanttGesture.Driver] {
+        model.snapshot.inventory.relations(of: work).filter { $0.successor == work }.map { relation in
+            let predecessor = bar(of: relation.predecessor, model: model)
+            let atStart = relation.kind == "StartStart" || relation.kind == "StartFinish"
+            let x = predecessor.map { Double(atStart ? $0.left : $0.right) } ?? -.infinity
+            return GanttGesture.Driver(relation: relation, eventX: x)
+        }
     }
 
     /// The bar and end a link dropped at `point` would join, if any.
     @MainActor static func target(at point: CGPoint, excluding from: String, model: ObserverModel) -> (id: String, end: PlanEnd, x: CGFloat, mid: CGFloat)? {
-        guard point.y >= GanttGeometry.axis, let row = model.ganttRow(atY: point.y - GanttGeometry.axis), row.id != from,
+        guard point.y >= GanttGeometry.axis, let row = model.ganttRow(atY: point.y - GanttGeometry.axis),
+              case let .join(id, end) = GanttGesture.drop(on: gestureBar(row, model: model), x: Double(point.x), from: from),
               let bar = bar(row, model: model) else { return nil }
-        let end: PlanEnd = point.x < (bar.left + bar.right) / 2 ? .start : .finish
-        return (row.id, end, end == .start ? bar.left : bar.right, bar.top + GanttLayout.rowHeight / 2)
+        return (id, end, end == .start ? bar.left : bar.right, bar.top + GanttLayout.rowHeight / 2)
     }
 
     /// Add the proposed edit to the draft, or send the progress report; the words of what was done, or nil.
     @MainActor func finish(at point: CGPoint, model: ObserverModel) -> String? {
         switch mode {
         case let .link(from, fromEnd):
-            if point.y >= GanttGeometry.axis, let row = model.ganttRow(atY: point.y - GanttGeometry.axis), row.row.isPackage {
-                model.setEditNotice("A link joins tasks and milestones; \(model.editName(row.id)) is a work package.")
+            if point.y >= GanttGeometry.axis, let row = model.ganttRow(atY: point.y - GanttGeometry.axis),
+               case .refused(let words) = GanttGesture.drop(on: Self.gestureBar(row, model: model), x: Double(point.x), from: from) {
+                model.setEditNotice(words)
                 return nil
             }
             guard let target = Self.target(at: point, excluding: from, model: model) else { return nil }
             model.edit(.link(id: UUID().uuidString.lowercased(), from: from, fromEnd: fromEnd, to: target.id, toEnd: target.end, lagHours: 0))
             return "\(PlanEdit.kind(from: fromEnd, to: target.end)) \(model.editName(from))>\(model.editName(target.id))"
+        case let .shift(work):
+            switch GanttGesture.lag(drivers: Self.drivers(of: work, model: model), dx: Double(point.x - origin.x), pointsPerHour: model.gantt.scale) {
+            case .success(let edit):
+                model.edit(edit)
+                return "lag \(model.editName(work))"
+            case .failure(let refusal):
+                model.setEditNotice(refusal.words)
+                return nil
+            }
         case let .resize(work, left, right):
-            let ratio = Self.ratio(left: left, right: right, to: point.x)
+            let ratio = GanttGesture.ratio(left: Double(left), right: Double(right), to: Double(point.x))
             guard ratio != 1, let current = model.snapshot.inventory.byIdentity[work]?.estimate else { return nil }
-            model.edit(.estimate(work: work, optimistic: Self.quarter(current.optimisticHours * ratio), likely: Self.quarter(current.likelyHours * ratio),
-                                 pessimistic: Self.quarter(current.pessimisticHours * ratio)))
+            model.edit(.estimate(work: work, optimistic: GanttGesture.quarter(current.optimisticHours * ratio), likely: GanttGesture.quarter(current.likelyHours * ratio),
+                                 pessimistic: GanttGesture.quarter(current.pessimisticHours * ratio)))
             return "estimate \(model.editName(work)) x\(ratio)"
         case let .progress(work, left, right):
             // Released off its row, or at the share already reported, the drag reports nothing.
             guard point.y >= GanttGeometry.axis, model.ganttRow(atY: point.y - GanttGeometry.axis)?.id == work else { return nil }
-            let percent = Self.percent(left: left, right: right, at: point.x)
+            let percent = GanttGesture.percent(left: Double(left), right: Double(right), at: Double(point.x))
             guard percent != model.snapshot.inventory.byIdentity[work]?.reportedProgress else { return nil }
             // A drag only sets the share; the inspector's Report sends it, so no drag changes anything by itself.
             model.stageProgress(work: work, percent: percent)
@@ -113,20 +133,6 @@ struct GanttEditDrag: Equatable {
             return "staged progress \(model.editName(work)) \(percent)%"
         }
     }
-
-    /// How much longer the bar was dragged, as a ratio of lengths rounded to a twentieth, at least a tenth.
-    static func ratio(left: CGFloat, right: CGFloat, to x: CGFloat) -> Double {
-        let ratio = Double(max(x - left, 1) / max(right - left, 1))
-        return max(0.1, (ratio * 20).rounded() / 20)
-    }
-
-    /// The share of the bar left of `x`, in steps of 5%.
-    static func percent(left: CGFloat, right: CGFloat, at x: CGFloat) -> Int {
-        let share = Double((x - left) / max(right - left, 1))
-        return Int((min(1, max(0, share)) * 20).rounded()) * 5
-    }
-
-    static func quarter(_ hours: Double) -> Double { (hours * 4).rounded() / 4 }
 
     /// An elbow connector from an end of a bar to `to`, as links are drawn: out from the bar's end, and into the target
     /// from the side its end faces, so the last run never crosses the target bar. Ends facing each other with room
@@ -190,13 +196,18 @@ struct GanttEditDragView: View {
                                        style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
                     }
                     context.fill(Path(ellipseIn: CGRect(x: drag.origin.x - 4, y: drag.origin.y - 4, width: 8, height: 8)), with: .color(Palette.relationEmphasis))
+                case .shift:
+                    var path = Path()
+                    path.move(to: CGPoint(x: drag.origin.x, y: drag.origin.y))
+                    path.addLine(to: CGPoint(x: drag.point.x, y: drag.origin.y))
+                    context.stroke(path, with: .color(Palette.relationEmphasis), style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
                 case .resize:
                     var path = Path()
                     path.move(to: CGPoint(x: drag.point.x, y: drag.origin.y - 12))
                     path.addLine(to: CGPoint(x: drag.point.x, y: drag.origin.y + 12))
                     context.stroke(path, with: .color(Palette.relationEmphasis), lineWidth: 2)
                 case let .progress(_, left, right):
-                    let share = CGFloat(GanttEditDrag.percent(left: left, right: right, at: drag.point.x)) / 100
+                    let share = CGFloat(GanttGesture.percent(left: Double(left), right: Double(right), at: Double(drag.point.x))) / 100
                     let x = left + (right - left) * share
                     var path = Path()
                     path.move(to: CGPoint(x: x, y: drag.origin.y - 11))
@@ -218,11 +229,16 @@ struct GanttEditDragView: View {
                 return "Link from \(model.editName(from))'s \(fromEnd.rawValue): drop on a bar's left half for its start, right half for its finish"
             }
             return "\(GanttRelation.abbreviation(PlanEdit.kind(from: fromEnd, to: target.end))) \(model.editName(from)) → \(model.editName(target.id)); set a lag in the inspector"
+        case let .shift(work):
+            switch GanttGesture.lag(drivers: GanttEditDrag.drivers(of: work, model: model), dx: Double(drag.point.x - drag.origin.x), pointsPerHour: model.gantt.scale) {
+            case .success(let edit): return "Dates are derived; drop to propose: \(model.snapshot.inventory.basis.map { PlanDraft(basis: $0).words(edit, names: model.editName) } ?? "a new lag")"
+            case .failure(let refusal): return refusal.words
+            }
         case let .resize(work, left, right):
-            let ratio = GanttEditDrag.ratio(left: left, right: right, to: drag.point.x)
+            let ratio = GanttGesture.ratio(left: Double(left), right: Double(right), to: Double(drag.point.x))
             return "Scale \(model.editName(work))'s three-point estimate by \(String(format: "%.2f", ratio))×; the review shows the exact hours"
         case let .progress(work, left, right):
-            return "Set \(GanttEditDrag.percent(left: left, right: right, at: drag.point.x))% for \(model.editName(work)); Report in the inspector sends it"
+            return "Set \(GanttGesture.percent(left: Double(left), right: Double(right), at: Double(drag.point.x)))% for \(model.editName(work)); Report in the inspector sends it"
         }
     }
 }

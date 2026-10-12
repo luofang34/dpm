@@ -270,6 +270,7 @@ public final class StateReporter {
             // The whole timeline as drawn now, in timeline points (pan applied), and the timeline's measured width.
             "timeline_extent": orNull(model.snapshot.gantt.map { [-view.panX, GanttLayout.timelineWidth($0, scale: view.scale)] }),
             "viewport_width": view.viewportWidth,
+            "bars": bars(model),
             "locate_note": orNull(view.locateNote),
             "view_sequence": view.sequence,
             "revision": orNull(model.snapshot.gantt?.revision.map { Int($0) }),
@@ -422,6 +423,29 @@ public final class StateReporter {
         case .sending(let sent), .unknown(let sent, _): return sent.operation.words
         case .accepted(_, let operation, _), .refused(_, let operation, _, _): return operation.words
         }
+    }
+
+    /// Where each visible row's bar is drawn now, in the timeline's points from its top left (the axis above the first
+    /// row included), as the edit gestures read them: the geometry a pointer aims at (bounded).
+    static func bars(_ model: ObserverModel) -> [[String: Any]] {
+        let view = model.gantt, rowHeight = GanttLayout.rowHeight, axis = 30.0
+        var out: [[String: Any]] = []
+        for row in model.outline where out.count < 60 {
+            guard let span = row.row.span else { continue }
+            let mid = axis + Double(row.position) * rowHeight - view.panY + rowHeight / 2
+            guard mid > axis, mid < axis + Double(view.viewportRows) * rowHeight else { continue }
+            var left: Double, right: Double
+            if row.row.status == "Verified" {
+                (left, right) = (6 - view.panX, 12 - view.panX)
+            } else {
+                let (x, width) = GanttLayout.bar(span, scale: view.scale)
+                let half = row.row.isMilestone ? 8.0 : 0
+                (left, right) = (x - view.panX - half, x - view.panX + max(width, 3) + half)
+            }
+            guard right > 0, left < view.viewportWidth else { continue }
+            out.append(["key": row.row.key, "kind": row.row.kind, "left": left, "right": right, "mid": mid])
+        }
+        return out
     }
 
     /// A refused review or apply: the application's words and whether it was refused as stale; null otherwise.

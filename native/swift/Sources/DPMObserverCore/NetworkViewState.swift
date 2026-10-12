@@ -31,11 +31,14 @@ public struct NetworkFilter: Equatable, Sendable {
 /// A dependency being drawn while editing: from the node pressed to where the pointer is, in canvas coordinates.
 public struct NetworkLinkDrag: Equatable, Sendable {
     public let from: String
+    /// The end of the node the link leaves from: the half of the node pressed.
+    public let fromEnd: PlanEnd
     public let origin: NetworkPoint
     public var point: NetworkPoint
 
-    public init(from: String, origin: NetworkPoint, point: NetworkPoint) {
+    public init(from: String, fromEnd: PlanEnd = .finish, origin: NetworkPoint, point: NetworkPoint) {
         self.from = from
+        self.fromEnd = fromEnd
         self.origin = origin
         self.point = point
     }

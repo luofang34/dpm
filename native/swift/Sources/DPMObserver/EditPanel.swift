@@ -147,6 +147,11 @@ struct ItemEditor: View {
                 .help("Finish to start, start to start, finish to finish or start to finish (⌥⌘1 to ⌥⌘4)")
                 TextField("Lag in hours (negative for a lead)", text: $linkLag).textFieldStyle(.roundedBorder).onSubmit(addLink).modifier(InspectorFocus(model: model, name: "link-lag")).frame(width: 120).accessibilityLabel("Lag in hours, negative for lead").accessibilityIdentifier("edit.link-lag")
                 Button("Add link") { addLink() }.disabled(otherIdentity == nil).accessibilityIdentifier("edit.add-link")
+                Button("Set lag") { setLag() }
+                    .keyboardShortcut("e", modifiers: [.command, .option])
+                    .disabled(otherIdentity == nil)
+                    .help("Set the typed lag on this item's existing link with the keyed work (⌥⌘E)")
+                    .accessibilityLabel("Set lag of the existing link").accessibilityIdentifier("edit.set-lag")
                 Button("Remove link") { removeLink() }
                     .keyboardShortcut("l", modifiers: [.command, .option])
                     .disabled(otherIdentity == nil)
@@ -189,19 +194,36 @@ struct ItemEditor: View {
         }
     }
 
+    /// The plan's relation the link row names: this item after or before the keyed work, of the chosen kind.
+    private var namedRelation: GanttRelation? {
+        let (predecessor, successor) = linkAsPredecessor ? (otherIdentity, item.identity) : (item.identity, otherIdentity)
+        guard otherIdentity != nil else { return nil }
+        return model.snapshot.inventory.relations(of: item.identity).first {
+            $0.predecessor == predecessor && $0.successor == successor && $0.kind == linkKind
+        }
+    }
+
     /// Remove this item's dependency with the work keyed in the link field; whether any was removed.
     @discardableResult
     private func removeLink() -> Bool {
-        // The relation the pickers name: this item after or before the keyed work, of the chosen kind.
-        let (predecessor, successor) = linkAsPredecessor ? (otherIdentity, item.identity) : (item.identity, otherIdentity)
-        guard otherIdentity != nil,
-              let relation = model.snapshot.inventory.relations(of: item.identity).first(where: {
-                  $0.predecessor == predecessor && $0.successor == successor && $0.kind == linkKind
-              })
-        else { return false }
+        guard let relation = namedRelation else { return false }
         model.edit(.unlink(dependency: relation.id))
         linkKey = ""
         return true
+    }
+
+    /// Propose the lag typed for the existing link the row names, as a whole-bar drag on the Gantt does.
+    private func setLag() {
+        guard let relation = namedRelation else {
+            model.setEditNotice("No \(GanttRelation.abbreviation(linkKind)) link \(linkAsPredecessor ? "after" : "before") \(linkKey) to set a lag on.")
+            return
+        }
+        guard let hours = Double(linkLag.trimmingCharacters(in: .whitespaces)) else {
+            model.setEditNotice("Type the lag in hours, negative for a lead.")
+            return
+        }
+        model.edit(.lag(dependency: relation.id, hours: hours))
+        linkKey = ""
     }
 
     /// The criteria as typed, one per line.
