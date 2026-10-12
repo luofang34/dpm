@@ -110,6 +110,7 @@ struct Qualify {
             ("edit-progress-owner", context.editProgressIsTheOwnersReport),
             ("edit-refusals", context.editRefusalsKeepTheDraft),
             ("edit-gestures", context.ganttGesturesProposeAndTheApplicationJudges),
+            ("edit-nesting", context.nestingAndEstimatesAreReviewedEdits),
             ("task-operations", context.taskOperationsGoThroughTheApplication),
             ("operations-switch", context.operationsSettleOnlyTheirWorkspace),
             ("gantt-axis-labels", context.ganttAxisLabelsDoNotCollide),

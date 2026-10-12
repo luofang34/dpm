@@ -30,6 +30,8 @@ public enum GanttIntent: String, CaseIterable, Sendable {
     case zoomIn, zoomOut
     case panLeft, panRight, panUp, panDown
     case toggleCritical, cycleStatus, clearFilter, focusFilter
+    /// Tab and Shift-Tab while editing: a proposed parent change, reviewed before it applies.
+    case indent, outdent
 }
 
 public enum KeyOutcome: Equatable, Sendable {
@@ -70,6 +72,8 @@ public enum KeyDecoder {
         case "c": return .toggleCritical
         case "s": return .cycleStatus
         case "x": return .clearFilter
+        case "\t": return input.shift ? .outdent : .indent
+        case "\u{19}": return .outdent
         case ",": return .collapseAll
         case ".": return .expandAll
         default: return nil

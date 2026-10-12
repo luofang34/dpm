@@ -120,6 +120,8 @@ extension ObserverModel {
         case .gantt:
             if gantt.editingFilter { return intent == .closeDetail }
             if intent == .closeDetail { return false }
+            // Without editing, Tab and Shift-Tab are the window's: they move the keyboard to the next control.
+            if intent == .indent || intent == .outdent { return editing.enabled && focusedRow != nil }
             return snapshot.gantt != nil || intent == .focusFilter
         case .detail:
             return intent == .closeDetail && canReturn
@@ -167,6 +169,8 @@ extension ObserverModel {
         case .focusFilter:
             gantt.editingFilter = true
             updateFocusTarget()
+        case .indent: nest(true)
+        case .outdent: nest(false)
         }
     }
 
