@@ -783,7 +783,7 @@ are derived: dragging its body offers a lag instead, on the link that bounds its
 elapsed quarter hours. A drag between network nodes proposes the kind named by the halves pressed
 and dropped on (the left half is the start, the right half the finish), and a drop on a work
 package is refused in the view. While editing, Tab and Shift-Tab in the Gantt rows propose indenting
-the cursor row under the work package drawn just above it and outdenting it beside its parent, and
+the cursor row under the nearest work package drawn above it at its level and outdenting it beside its parent, and
 Control-Tab moves the keyboard on; without editing, Tab moves it as usual. The inspector edits
 title, objective, acceptance, estimate, nesting (⌘] and ⌘[), dependencies with their kind,
 direction and lag (⌥⌘1 to ⌥⌘4, ⌥⌘X, ⌥⌘E), decision gates and new tasks by keyboard. The review

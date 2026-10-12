@@ -2,7 +2,6 @@
 // selected item by keyboard, the draft of edits, and the review sheet where the application's diff is read and
 // the draft is applied with a reason. Every check is the application's; this only gathers and shows.
 
-
 import AppKit
 import DPMObserverCore
 import SwiftUI
@@ -258,7 +257,6 @@ struct ItemEditor: View {
         model.edit(.link(id: UUID().uuidString.lowercased(), from: from, fromEnd: ends.0, to: to, toEnd: ends.1, lagHours: Double(linkLag).flatMap { $0.isFinite ? $0 : nil } ?? 0))
         linkKey = ""
     }
-
 
     private func load() {
         title = item.title

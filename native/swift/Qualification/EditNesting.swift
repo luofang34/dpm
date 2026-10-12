@@ -50,6 +50,16 @@ extension Context {
             return model.editing.draft?.edits ?? []
         }
         check(indented == [.parent(work: work, parent: into)], "Tab proposes the row under the package drawn above it: \(indented)")
+        // The draft counts: Shift-Tab right after Tab takes the row back out, and Tab puts it in again.
+        let undone = await MainActor.run { () -> ([PlanEdit], [PlanEdit]) in
+            model.focusRow(work)
+            _ = model.handleKey(KeyInput(characters: "\t", shift: true))
+            let out = model.editing.draft?.edits ?? []
+            _ = model.handleKey(KeyInput(characters: "\t"))
+            return (out, model.editing.draft?.edits ?? [])
+        }
+        check(undone.0 == [.parent(work: work, parent: nil)] && undone.1 == [.parent(work: work, parent: into)],
+              "Shift-Tab after Tab proposes the row back at its level, and Tab again under the package: \(undone)")
         let outdented = await MainActor.run { () -> PlanEdit? in
             model.focusRow(a)
             _ = model.handleKey(KeyInput(characters: "\t", shift: true))
