@@ -29,7 +29,8 @@ def release_binary(name, override):
 
 
 CLI = release_binary('dpm', 'DPM_BIN')
-MCP = release_binary('dpm-mcp', 'DPM_MCP_BIN')
+# The MCP server is the dpm binary's `mcp` subcommand, so tools and commands share one build.
+MCP = [str(CLI), 'mcp']
 
 
 class Agent:
@@ -39,7 +40,7 @@ class Agent:
             selection = ['--project', str(project)]
         pinned = ['--clock', clock] if clock is not None else []
         self.process = subprocess.Popen(
-            [str(MCP), *selection, '--actor', actor, *pinned],
+            [*MCP, *selection, '--actor', actor, *pinned],
             cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True,
         )
@@ -133,8 +134,8 @@ def run_cli(database, *args, error=None):
 
 
 def smoke(database):
-    usage = subprocess.run([str(MCP), '--help'], capture_output=True, text=True, timeout=15, check=True).stdout
-    assert all(f in usage for f in ('--database <PATH>', '--project <DIR>', '--actor <KIND:NAME>', 'human:NAME, agent:NAME or service:NAME')), usage
+    usage = subprocess.run([*MCP, '--help'], capture_output=True, text=True, timeout=15, check=True).stdout
+    assert all(f in usage for f in ('--database <DATABASE>', '--project <PROJECT>', '--clock <RFC3339>', '--actor <KIND:NAME>', 'human:NAME, agent:NAME or service:NAME')), usage
     run_cli(database, 'import', str(ROOT / 'tests/support/execution-plan.json'))
     worker = Agent(database, 'agent:parity')
     reviewer = Agent(database, 'human:reviewer')

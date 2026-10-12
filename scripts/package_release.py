@@ -40,7 +40,7 @@ def write_archive(path, prefix, files, epoch):
 
 
 def observer_bundle():
-    """DPMObserver.app as scripts/build_native.py builds it, carrying dpm, dpm-mcp and dpm-native, for bin/DPMObserver.app
+    """DPMObserver.app as scripts/build_native.py builds it, carrying dpm and dpm-native, for bin/DPMObserver.app
     beside bin/dpm, where `dpm gui` looks first."""
     sys.path.insert(0, str(ROOT / 'scripts'))
     import build_native
@@ -66,14 +66,14 @@ def package(output):
     epoch = int(command('git', 'show', '-s', '--format=%ct', revision))
     source = command('git', 'archive', '--format=tar', revision)
     built = command('cargo', 'build', '--locked', '--release', '--target', target,
-                    '-p', 'dpm', '-p', 'dpm-mcp', '--bins', '--message-format=json')
+                    '-p', 'dpm', '--bins', '--message-format=json')
     binaries = {}
     for line in built.splitlines():
         item = json.loads(line)
         if item.get('reason') == 'compiler-artifact' and item.get('executable'):
             binaries[item['target']['name']] = Path(item['executable']).read_bytes()
-    if set(binaries) != {'dpm', 'dpm-mcp'}:
-        raise SystemExit(f'Expected dpm and dpm-mcp artifacts; got {sorted(binaries)}')
+    if set(binaries) != {'dpm'}:
+        raise SystemExit(f'Expected the dpm artifact alone; got {sorted(binaries)}')
     files = {f'bin/{name}': (data, 0o755) for name, data in binaries.items()}
     if 'apple-darwin' in target:
         files.update(observer_bundle())
@@ -90,12 +90,12 @@ def package(output):
 
 This is a qualification build, not a published or signed installer.
 Verify the adjacent .sha256 file before extracting the archive.
-Put bin/dpm and bin/dpm-mcp together in a directory on your PATH.
-On macOS, bin/DPMObserver.app is the app and carries its own dpm, dpm-mcp and
+Put bin/dpm in a directory on your PATH.
+On macOS, bin/DPMObserver.app is the app and carries its own dpm and
 dpm-native; run dpm gui, or dpm alone outside a terminal, to open it.
 In a new project directory, run: dpm init "My project"
 Run dpm to open the console, or dpm status --json for the machine view.
-For a local MCP client, use dpm-mcp --project /absolute/project --actor agent:NAME.
+For a local MCP client, use dpm mcp --project /absolute/project --actor agent:NAME.
 Actor names are local identities, not authenticated accounts.
 
 The source/ directory contains the corresponding committed source, Cargo.lock,

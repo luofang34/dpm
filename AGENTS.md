@@ -58,9 +58,8 @@ The v0.1 product question is:
 - `crates/dpm-engine`: validated commands, queries, readiness, `next`, and `explain`.
 - `crates/dpm-store`: persistence adapters. SQLite is the v0.1 implementation.
 - `crates/dpm-interchange`: MSPDI import to reviewed plan candidates and export; never writes state.
-- `src/` (root `dpm` package): human CLI and machine-readable JSON adapter.
+- `src/` (root `dpm` package): human CLI, machine-readable JSON adapter and `dpm mcp` agent server.
 - `crates/dpm-tui`: Ratatui operator console; it owns no business rules.
-- `crates/dpm-sdk`: small public facade for stable library consumers.
 - `examples/self-host/`: the sole user-facing example, a prepared unstarted roadmap.
 - `tests/support/`: minimal synthetic regression input, never real project completion evidence.
 

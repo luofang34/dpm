@@ -662,7 +662,7 @@ return local configuration without a project revision.
 
 ## Native and web clients
 
-`dpm-sdk` re-exports `dpm-app` as `dpm_sdk::app`, so a native or web client calls the same
+A native or web client depends on `dpm-app` and so calls the same
 application layer as the CLI and MCP instead of reimplementing rules. Besides the JSON
 `query_blocking`, `Application` returns the engine's result types directly: `status_blocking`,
 `next_blocking`, `show_blocking`, `explain_blocking`, `export_blocking`,
@@ -681,10 +681,10 @@ no global instance; several applications, in one process or many, coordinate thr
 revision and lineage checks.
 
 Queries read "now" from a query clock, the system clock by default. A client that must reproduce a
-view pins it (`set_query_clock`, CLI `--clock`, `dpm-mcp --clock`); mutations never read it, so an
+view pins it (`set_query_clock`, CLI and `dpm mcp` `--clock`); mutations never read it, so an
 operation's timestamp is always when it was committed.
 
-The `sqlite`, `registry` and `git` features of `dpm-app` and `dpm-sdk` are on by default, and CI
+The `sqlite`, `registry` and `git` features of `dpm-app` are on by default, and CI
 checks the application layer without them for `aarch64-apple-ios` and `wasm32-unknown-unknown`.
 Without `sqlite` an application opens previews only: queries answer and mutations are refused as
 read-only. A request needing a left-out feature fails with the code `unsupported`, which the CLI

@@ -19,6 +19,7 @@ fn queries_take_a_pinned_clock_and_mutations_refuse_it() {
         &["dpm", "--clock", at, "revision"],
         &["dpm", "--clock", at, "history"],
         &["dpm", "--clock", at, "plan", "diff", "candidate.json"],
+        &["dpm", "--clock", at, "mcp", "--actor", "agent:a"],
     ] {
         let clock = clock_for(query).expect("query");
         assert_eq!(clock, QueryClock::Fixed(instant), "{query:?}");

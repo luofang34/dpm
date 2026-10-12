@@ -268,13 +268,21 @@ pub(crate) enum Commands {
     },
 }
 
-/// The interactive views, flattened into the top-level command list.
+/// The long-running ways into a workspace (the console, the app and the agent server), flattened
+/// into the top-level command list.
 #[derive(Debug, Subcommand)]
 pub(crate) enum OpenCommand {
     /// Open the Ratatui operator console.
     Tui,
     /// Open the macOS app (DPMObserver.app) on this project.
     Gui,
+    /// Serve the agent tools over MCP (newline-delimited JSON-RPC on stdin/stdout); every mutation
+    /// is recorded as --actor, and a pinned --clock applies to the tools' queries only.
+    Mcp {
+        /// Principal recorded on every mutation: human:NAME, agent:NAME or service:NAME.
+        #[arg(long, value_name = "KIND:NAME")]
+        actor: String,
+    },
 }
 
 /// Operation log, run and store-file commands, flattened into the top-level command list.

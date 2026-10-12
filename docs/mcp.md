@@ -1,6 +1,6 @@
 # Agent tools and CLI contract
 
-Run `dpm-mcp --actor agent:coder` as a stdio subprocess inside a configured project.
+Run `dpm mcp --actor agent:coder` as a stdio subprocess inside a configured project.
 Use `--project DIR` for an exact project, or `--database PATH` (`--db` alias) for a SQLite file.
 The same [project discovery](projects.md) rules apply to CLI and MCP; the repository preview rejects
 project mutations with `read_only_project` and never creates a project database.
@@ -28,10 +28,10 @@ Presentation text is not the API contract.
 
 Queries measure lag gates, the remaining hours of started work and `next` penalties from the
 current time, so two reads of one revision may differ by the time between them. The CLI's global
-`--clock RFC3339` and the `dpm-mcp --clock RFC3339` launch option evaluate queries at that instant
+`--clock RFC3339`, also given to `dpm mcp`, evaluate queries at that instant
 instead, which makes CLI and tool results comparable exactly. The CLI refuses `--clock` on every
 command except workspace queries (`invalid_request`, also for `validate` and `plan schema`, which
-read no clock), and in `dpm-mcp` mutation tools ignore it: an operation's timestamp is always the
+read no clock), and in `dpm mcp` mutation tools ignore it: an operation's timestamp is always the
 time it was committed. A pinned clock is for comparing and replaying reads, not for acting on them:
 readiness that `explain_work` reports at a pinned instant can differ from the gates a mutation
 checks at the time it commits, so agents that act run without `--clock`.
@@ -47,6 +47,7 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | import FILE | CLI-only: bootstrap | Human/service initializes an absent store from a validated plan |
 | validate FILE | validate_plan | Decode and check every graph invariant without a workspace; `revision` is `null` |
 | tui | CLI-only: interactive terminal | Read-only operator console over the same queries |
+| mcp | CLI-only: the agent server | Serves every tool in this table over stdio as the `--actor` principal; a startup failure prints its stable code on stderr |
 | gui | CLI-only: local app launch | Opens DPMObserver.app on the selected or discovered project; `dpm` alone opens the console in a terminal and the app on macOS without one |
 | backup --to PATH | CLI-only: store file administration | Operator copies the store file with its whole history, and the [run store](#runs-and-activity) beside it if there is one |
 | restore --from PATH --to PATH | CLI-only: store file administration | Operator restores a backup into a new store file, and its run store into a new lineage-bound run store |
@@ -109,7 +110,7 @@ guard compares these values with live output.
 | `schema_version` | 4 | SQLite `user_version`; `verify-store` reports it | The local store layout; newer and retired stores are refused unchanged |
 
 Bootstrapping is local administration by a human or service through the CLI: `init`, `demo` and
-`import` create a workspace, and no agent tool does. `dpm-mcp` opens only an existing store or
+`import` create a workspace, and no agent tool does. `dpm mcp` opens only an existing store or
 project and never creates one, every tool that writes changes an existing workspace at an observed
 revision (or binds an existing store), and `apply_change` refuses agent actors. An agent that needs a
 new workspace drafts the plan, checks it with `validate_plan`, and asks a human or service to import
@@ -446,8 +447,8 @@ DPM has received something from the run within 300 seconds of the query clock, `
 recorded under another lineage, and otherwise the recorded end. Freshness uses only the time DPM
 received a lifecycle fact or activity record, on its own clock; the `observed_at` an executor reports
 is kept as a claim and never consulted, so a dead run cannot stay fresh by reporting a future time.
-`stale_at` is the instant a fresh run turns stale, for views that refresh on a timer. `--clock` /
-`dpm-mcp --clock` pin the reading for run queries like every other query. An unfinished run whose
+`stale_at` is the instant a fresh run turns stale, for views that refresh on a timer. `--clock`, on the CLI
+or `dpm mcp`, pins the reading for run queries like every other query. An unfinished run whose
 task changed owner or is no longer claimed or started is reported with an `orphan` reason
 (`owner_changed`, `not_executing`, `work_missing`); runs never move ownership themselves. Only the
 run's executor, a human or a service may report on it, so an operator can record that a stale run was
