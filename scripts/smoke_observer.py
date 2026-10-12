@@ -2442,6 +2442,9 @@ def inspector_keyboard_route(bundle, directory):
         tab_to('Other work key')
         guarded_key(app, front, 'Command-Return to review from the inspector', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the review to be shown')
+        # The review gives its reason field the keyboard, read with its full label; Command-Return below is its Apply.
+        reason = front.settle_focus('Reason (recorded with the change)', 3.0)
+        assert reason == 'Reason (recorded with the change)', f'the review did not give its labelled reason field the keyboard: {reason}'
         paste('Retitle, re-estimate and gate A by keyboard', 'Command-V to paste the reason')
         guarded_key(app, front, 'Command-Return to apply', KEY_CODES['return'], COMMAND_FLAG)
         guarded_wait(app, front, lambda s: s['editing']['phase'] == 'applied', 20, 'the edits to be applied')
