@@ -138,7 +138,7 @@ struct GanttToolbar: View {
                     .font(.caption).monospacedDigit()
                     .accessibilityLabel("Zoom: \(Self.scaleWords(state.scale)) points per elapsed hour")
                 tool("Zoom in", "plus.magnifyingglass", "gantt.zoom-in", help: "Zoom in (+)", disabled: state.zoomLevel == GanttLayout.zoomSteps.count - 1 && state.fitScale == nil) { model.perform(.zoomIn) }
-                tool("Fit timeline", "arrow.left.and.right.square", "gantt.fit", help: "Fit timeline: zoom so the whole plan, hour 0 to its last finish or p95, fills the timeline. Changes only the view.") { model.fitTimeline() }
+                tool("Fit timeline", "arrow.left.and.right.square", "gantt.fit", help: "Fit timeline: zoom so the whole plan, from its earliest recorded start to its last finish or p95, fills the timeline. Changes only the view.") { model.fitTimeline() }
                 tool("Locate selected", "scope", "gantt.locate", help: "Locate selected: put the cursor on the selected task and scroll its bar into view") { model.locateSelected() }
                 Divider().frame(height: 16)
                 Text("\(frame.outline.count) of \(frame.schedule?.rows.count ?? 0) rows · \(state.filter.words)")

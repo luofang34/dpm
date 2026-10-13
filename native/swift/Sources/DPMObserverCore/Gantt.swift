@@ -46,6 +46,8 @@ public struct GanttRow: Identifiable, Equatable, Sendable {
     /// The human priority. It is never criticality and is shown apart from it.
     public let priority: String
     public let span: GanttSpan?
+    /// Recorded start and finish before the clock reading, beside the remaining `span`.
+    public let actual: GanttActual?
     public let times: GanttTimes?
     /// The fraction of seeded simulations in which the work is critical; nil when the query gave none.
     public let criticality: Double?
@@ -73,6 +75,7 @@ public struct GanttRow: Identifiable, Equatable, Sendable {
         } else {
             self.span = nil
         }
+        actual = GanttActual(json["actual"])
         let times = json["times"]
         if let early = times["earliest_start_hours"].double, let earlyFinish = times["earliest_finish_hours"].double,
            let late = times["latest_start_hours"].double, let lateFinish = times["latest_finish_hours"].double,
@@ -451,10 +454,10 @@ public enum GanttLayout {
         max(schedule.projectFinishHours, schedule.uncertainty?.p95 ?? 0, schedule.rows.compactMap { $0.span?.finish }.max() ?? 0)
     }
 
-    /// The scale at which the whole timeline, its trailing room included, is exactly as wide as `width`: geometry only.
-    /// Nil when there is no width or no hour to fit.
+    /// The scale at which the whole timeline, recorded history and trailing room included, is exactly as wide as
+    /// `width`: geometry only. Nil when there is no width or no hour to fit.
     public static func fitScale(_ schedule: GanttSchedule, width: Double) -> Double? {
-        let hours = planHours(schedule)
+        let hours = planHours(schedule) - historyHours(schedule)
         guard width > timelineMargin + 1, hours > 0 else { return nil }
         return (width - timelineMargin) / hours
     }
