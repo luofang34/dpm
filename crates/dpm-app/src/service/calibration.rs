@@ -1,7 +1,8 @@
 //! Calibration and calibrated forecasts, which read the operation log beside the snapshot.
 
-use super::{Application, Observed, StatusView};
+use super::{Application, Observed, QueryClock, StatusView};
 use crate::AppError;
+use chrono::{DateTime, Utc};
 use dpm_engine::{CalibrationReport, Operation};
 use dpm_model::Plan;
 
@@ -14,8 +15,7 @@ const PAGE: u16 = 1000;
 impl Application {
     /// Calibration of estimates and waits, and flow metrics, from the snapshot and its whole log.
     pub fn calibration_blocking(&self) -> Result<Observed<CalibrationReport>, AppError> {
-        let (plan, history) = self.plan_with_history_blocking()?;
-        let now = self.clock.now();
+        let (plan, history, now) = self.calibration_inputs_blocking()?;
         Ok(Observed {
             revision: plan.revision,
             lineage_id: self.lineage_blocking()?,
@@ -30,8 +30,7 @@ impl Application {
         probabilistic: bool,
         horizon_hours: Option<f64>,
     ) -> Result<Observed<StatusView>, AppError> {
-        let (plan, history) = self.plan_with_history_blocking()?;
-        let now = self.clock.now();
+        let (plan, history, now) = self.calibration_inputs_blocking()?;
         let report = dpm_engine::calibration(&plan, &history, now)?;
         let lineage_id = self.lineage_blocking()?;
         Ok(Observed {
@@ -48,6 +47,21 @@ impl Application {
                 lineage_id,
             },
         })
+    }
+
+    /// The observed plan, the operations behind it and the reading; a look back at a pinned
+    /// reading calibrates only from events that had occurred by then.
+    fn calibration_inputs_blocking(
+        &self,
+    ) -> Result<(Plan, Vec<Operation>, DateTime<Utc>), AppError> {
+        let (plan, mut history) = self.plan_with_history_blocking()?;
+        match self.query_clock() {
+            QueryClock::Pinned(at) => {
+                history.retain(|operation| operation.occurred_at() <= at);
+                Ok((plan.as_of(at), history, at))
+            }
+            clock => Ok((plan, history, clock.now())),
+        }
     }
 
     /// The snapshot and every operation that produced it, read through the same path `history`

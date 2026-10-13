@@ -200,7 +200,10 @@ impl Application {
         self.check_attached_blocking(attached, true)?;
         let evaluated_at = self.clock.now();
         let previous = self.clock;
-        self.clock = QueryClock::Fixed(evaluated_at);
+        // A caller's pinned reading stays pinned, so the view looks back like any other query.
+        if previous == QueryClock::System {
+            self.clock = QueryClock::Fixed(evaluated_at);
+        }
         let read = self.read_view_blocking(&query, evaluated_at, || {});
         self.clock = previous;
         read
@@ -222,7 +225,8 @@ impl Application {
             after_anchor();
             let response = self.query_blocking(query.clone())?;
             let release = if reads_gates(query) {
-                let plan = self.plan_blocking()?;
+                // The plan the query observed: at a caller's earlier reading, as it stood then.
+                let (plan, _) = self.observed_plan_blocking()?;
                 (plan.revision == response.revision)
                     .then(|| Timeline::at(&plan, evaluated_at).next_release(&plan))
             } else {

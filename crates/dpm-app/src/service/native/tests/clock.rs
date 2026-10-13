@@ -186,3 +186,22 @@ fn run_staleness_is_announced_as_a_deadline_and_a_heartbeat_moves_only_the_activ
     let status = view_blocking(&mut app, json!({"query": "status", "probabilistic": false}));
     assert_eq!(status.refresh_at, Some(started + TimeDelta::seconds(1800)));
 }
+
+#[test]
+fn a_callers_pinned_reading_shows_the_workspace_as_it_stood_then() {
+    let (mut app, started) = lagged_blocking();
+    let before = started - TimeDelta::hours(1);
+    app.set_query_clock(crate::QueryClock::Pinned(before));
+    let view = view_blocking(&mut app, json!({"query": "show", "key": "TEST-A"}));
+    assert_eq!(view.evaluated_at, before);
+    assert_eq!(
+        view.envelope.data["execution"]["status"], "Planned",
+        "the start had not occurred"
+    );
+    assert_eq!(view.envelope.data["execution"]["owner"], json!(null));
+    assert_eq!(
+        app.query_clock(),
+        crate::QueryClock::Pinned(before),
+        "the view keeps the caller's reading"
+    );
+}

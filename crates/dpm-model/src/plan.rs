@@ -1,3 +1,4 @@
+mod as_of;
 mod decode;
 
 use crate::*;
