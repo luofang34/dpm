@@ -265,3 +265,29 @@ fn reaffirming_a_choice_does_not_move_a_reached_join_or_reclose_claimed_work() {
         start.reasons()
     );
 }
+
+#[test]
+fn a_look_back_before_the_replacement_sees_the_first_choice_still_standing() {
+    let (plan, replacement) = switched_under_started_work();
+    let supplier = plan
+        .find_decision_by_key("DEC-SUPPLIER")
+        .expect("decision")
+        .id;
+    let quote = id(&plan, "SUP-A-QUOTE");
+    for hour in 0..6 {
+        plan.as_of(t(hour))
+            .validate()
+            .unwrap_or_else(|e| panic!("the plan at +{hour}h: {e}"));
+    }
+    let then = plan.as_of(t(3) + TimeDelta::minutes(30));
+    assert_eq!(then.decisions[&supplier].status, DecisionStatus::Decided);
+    assert_eq!(then.decisions[&replacement].supersedes, None);
+    assert!(then.decisions[&replacement].blocks.is_empty());
+    assert!(
+        then.applicability()
+            .get(&quote)
+            .is_none_or(|a| a.is_applicable()),
+        "supplier A's quote was in the plan and started"
+    );
+    assert!(!plan.applicability()[&quote].is_applicable());
+}
