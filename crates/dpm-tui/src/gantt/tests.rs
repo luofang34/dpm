@@ -26,7 +26,8 @@ fn renders_critical_bars_milestones_and_units_without_changing_plan() {
     assert!(text.contains("Gantt"));
     assert!(text.contains("TEST-A"));
     assert!(text.contains("TEST-M1"));
-    assert!(text.contains("####"));
+    assert!(text.contains("████"));
+    assert!(text.contains("❯ TEST-A") && !text.contains("@ "));
     assert!(text.contains("hours from now"));
     assert!(text.contains("Selected TEST-A"));
     assert_eq!(plan, before);
@@ -76,7 +77,7 @@ fn panning_clips_bars_without_pinning_offscreen_milestones() {
     gantt.viewport.start = 12.0;
     gantt.viewport.span = 24.0;
     assert_eq!(
-        gantt.bar(0.0, 10.0, 12, '#', WorkKind::Task),
+        gantt.bar(0.0, 10.0, 12, palette::CRITICAL, WorkKind::Task),
         "            "
     );
     assert_eq!(
@@ -84,8 +85,8 @@ fn panning_clips_bars_without_pinning_offscreen_milestones() {
         "            "
     );
     assert_eq!(
-        gantt.bar(0.0, 50.0, 12, '#', WorkKind::Task),
-        "<##########>"
+        gantt.bar(0.0, 50.0, 12, palette::CRITICAL, WorkKind::Task),
+        "<██████████>"
     );
     assert_eq!(
         gantt.bar(12.0, 12.0, 12, '◇', WorkKind::Milestone),
@@ -244,12 +245,87 @@ fn work_that_ran_draws_its_recorded_range_and_remaining_work_follows() {
     assert!(bar.starts_with('░') && !bar.contains('.'), "{bar:?}");
     let b = &plan.work_items[&plan.find_work_by_key("TEST-B").expect("b").id];
     let bounds = gantt.bounds(&plan, b).expect("bounds");
-    let bar = gantt.row_bar(b, (bounds.0, bounds.1), false, 40, '#');
-    assert!(!bar.contains('░') && bar.contains('#'), "{bar:?}");
+    let bar = gantt.row_bar(b, (bounds.0, bounds.1), false, 40, palette::CRITICAL);
+    assert!(!bar.contains('░') && bar.contains('█'), "{bar:?}");
     let text = render(&plan, 110, 20);
     assert!(text.contains("░░░") && text.contains("now"), "{text}");
-    assert!(
-        text.contains("░ Recorded"),
-        "the legend names the recorded symbol"
+}
+
+#[test]
+fn bar_kinds_differ_by_shape_without_colour() {
+    let plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let mono = crate::theme::Theme { enabled: false };
+    let task = plan.find_work_by_key("TEST-A").expect("task");
+    let glyph =
+        |work: &WorkItem, verified, critical| palette::activity(mono, work, verified, critical).0;
+    assert_eq!(glyph(task, false, true), '█');
+    assert_eq!(glyph(task, false, false), '━');
+    assert_eq!(glyph(task, true, true), '.');
+    let mut package = task.clone();
+    package.kind = WorkKind::WorkPackage;
+    assert_eq!(glyph(&package, false, true), '─');
+    let mut milestone = task.clone();
+    milestone.kind = WorkKind::Milestone;
+    assert_eq!(
+        (
+            glyph(&milestone, false, true),
+            glyph(&milestone, true, true)
+        ),
+        ('◇', '◆')
     );
+    let shapes = [palette::CRITICAL, palette::TASK, palette::PACKAGE, RECORDED];
+    for (index, shape) in shapes.iter().enumerate() {
+        assert!(!shapes.iter().skip(index + 1).any(|other| other == shape));
+    }
+}
+
+#[test]
+fn help_holds_the_legend_and_the_chart_no_longer_does() {
+    let plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let mut gantt = Gantt::new(&plan, chrono::Utc::now()).expect("gantt");
+    let work = plan.work_items.values().cloned().collect::<Vec<_>>();
+    let mut terminal = Terminal::new(TestBackend::new(160, 50)).expect("terminal");
+    let mut screen = |gantt: &mut Gantt| -> String {
+        terminal
+            .draw(|frame| gantt.render(frame, frame.area(), &plan, &work, Some(0)))
+            .expect("draw");
+        terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect()
+    };
+    let chart = screen(&mut gantt);
+    assert!(!chart.contains("░ recorded") && !chart.contains("█ critical"));
+    assert_eq!(gantt.shortcut_context(), crate::shortcuts::Context::Chart);
+    assert!(gantt.navigate(crossterm::event::KeyCode::Char('?')));
+    assert_eq!(gantt.shortcut_context(), crate::shortcuts::Context::Help);
+    let help = screen(&mut gantt);
+    for pair in [
+        "█ critical",
+        "━ task",
+        "─ package",
+        "░ recorded",
+        "! blocked",
+        "? review",
+        ". verified",
+        "◇/◆ [M] milestone",
+        "<P predecessor",
+        ">S successor",
+        "❯ selected",
+        "~ hover",
+    ] {
+        assert!(help.contains(pair), "{pair} missing from help");
+    }
+    for row in crate::shortcuts::help() {
+        assert!(help.contains(row.trim()), "{row} missing from help");
+    }
 }

@@ -1,10 +1,10 @@
+use crate::theme::{Role, Theme};
 use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Modifier, Style},
     text::Text,
-    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
 #[derive(Default)]
@@ -42,14 +42,10 @@ impl TextPanel {
         text: Text<'_>,
         title: &str,
         focused: bool,
+        theme: Theme,
     ) {
         self.area = area;
-        let style = if focused {
-            Style::default().add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-        };
-        let block = Block::bordered().border_style(style);
+        let block = theme.pane(focused);
         let inner = block.inner(area);
         let rows = crate::wrap::rows(text, inner.width);
         let count = rows.len();
@@ -67,14 +63,14 @@ impl TextPanel {
         } else {
             title.into()
         };
-        frame.render_widget(block.title(caption), area);
+        frame.render_widget(block.title(format!(" {caption} ")), area);
         frame.render_widget(paragraph.scroll((self.offset as u16, 0)), inner);
         if self.maximum > 0 {
             let mut state = ScrollbarState::new(count)
                 .position(self.offset)
                 .viewport_content_length(self.height);
             frame.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                Scrollbar::new(ScrollbarOrientation::VerticalRight).style(theme.style(Role::Dim)),
                 area,
                 &mut state,
             );

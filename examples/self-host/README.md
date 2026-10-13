@@ -40,7 +40,7 @@ the authorization gates keep `next` empty. Qualification contracts link immutabl
 and regression sources and ask reviewers to reproduce behavior and repair demonstrated gaps.
 Those sources establish what can be inspected, not independent acceptance. Re-scoped and proposed
 work has no duration estimate until assessed; forecasts expose it as unestimated.
-The console labels the source `PREVIEW read-only`; CLI/MCP execution commands return
+The console labels the source `⏸ read-only preview`; CLI/MCP execution commands return
 `read_only_project` and create no SQLite state.
 
 An explicitly authorized live self-host cycle requires a separate operational workspace. `demo` or

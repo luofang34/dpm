@@ -44,7 +44,7 @@ fn a_long_reload_error_never_hides_the_revision_and_retry_hint() {
             "{width}:\n{text}"
         );
         assert!(
-            rows[0].starts_with('┌') && rows[5].starts_with('└'),
+            rows[0].starts_with('╭') && rows[5].starts_with('╰'),
             "{width}:\n{text}"
         );
     }

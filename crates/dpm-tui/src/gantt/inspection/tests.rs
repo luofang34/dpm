@@ -1,7 +1,7 @@
 use super::*;
 use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use dpm_model::{ActorId, WorkStatus};
-use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, style::Color};
 
 fn fixture() -> Plan {
     serde_json::from_str(include_str!(
@@ -63,9 +63,9 @@ fn hover_reveals_full_title_and_links_without_moving_selection_or_rows() {
     assert!(screen.contains(
         "Hover TEST-B — A full task title that is wider than the chart label column 标题尾部"
     ));
-    assert!(screen.contains("Predecessors ← (1)"));
+    assert!(screen.contains("⎿  predecessors ←  (1)"));
     assert!(screen.contains("TEST-A --FS+0.0h→TEST-B"));
-    assert!(screen.contains("Successors → (1)"));
+    assert!(screen.contains("⎿  successors →  (1)"));
     assert!(screen.contains("TEST-B --FS+0.0h→TEST-C"));
     assert_eq!(gantt.row_area, area);
     assert!(
@@ -142,7 +142,7 @@ fn wrapped_unicode_title_and_all_offscreen_links_can_be_read_by_scrolling() {
 fn hit_testing_tracks_vertical_scroll_resize_and_wheel_focus() {
     let plan = fixture();
     let mut gantt = Gantt::new(&plan, chrono::Utc::now()).expect("gantt");
-    draw(&mut gantt, &plan, 6, 80, 16);
+    draw(&mut gantt, &plan, 6, 80, 13);
     assert!(gantt.first_row > 0);
     let area = gantt.row_area;
     assert_eq!(
@@ -180,7 +180,7 @@ fn hit_testing_tracks_vertical_scroll_resize_and_wheel_focus() {
 #[test]
 fn status_colors_and_symbols_win_over_criticality_and_monochrome_retains_meaning() {
     for (status, expected, color) in [
-        (WorkStatus::Planned, "#", Color::Red),
+        (WorkStatus::Planned, "█", Color::Red),
         (WorkStatus::Blocked, "!", Color::Yellow),
         (WorkStatus::Submitted, "?", Color::Magenta),
         (WorkStatus::Verified, ".", Color::Green),
@@ -212,7 +212,19 @@ fn status_colors_and_symbols_win_over_criticality_and_monochrome_retains_meaning
                 .all(|cell| cell.fg == Color::Reset && cell.bg == Color::Reset)
         );
         assert!((0..100).any(|x| mono[(x, y)].symbol() == expected));
-        assert!(text(&mono).contains("<P Predecessor"));
+        assert!(gantt.navigate(KeyCode::Char('?')));
+        let help = draw(&mut gantt, &plan, 0, 100, 30);
+        assert!(help.content.iter().all(|cell| cell.fg == Color::Reset));
+        let legend = text(&help);
+        for pair in [
+            "█ critical",
+            "! blocked",
+            "? review",
+            ". verified",
+            "<P predecessor",
+        ] {
+            assert!(legend.contains(pair), "{pair} in {legend}");
+        }
     }
 }
 
@@ -413,7 +425,7 @@ fn inspector_lists_decision_gates_with_their_state() {
     plan.dependencies.retain(|d| d.successor == b);
     let screen = inspect(&plan, b, at(1));
     assert!(
-        screen.contains("Decision gates: TEST-GATE open"),
+        screen.contains("⎿  decision gates  TEST-GATE open"),
         "{screen}"
     );
 }

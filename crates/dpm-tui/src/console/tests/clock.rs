@@ -171,14 +171,14 @@ fn the_gantt_inspector_keeps_focus_and_scroll_across_a_clock_refresh() {
     console.key(KeyCode::Down, 1792);
     console.key(KeyCode::Down, 1792);
     let before = screen(&mut console.view, 100, 30);
-    assert_eq!(lines_from(&before, "Inspector FOCUS"), "3", "{before}");
+    assert_eq!(lines_from(&before, "Inspector · focus"), "3", "{before}");
     console.tick(1, 1800);
     assert_eq!(console.view.evaluated_at(), at(1800));
     let after = screen(&mut console.view, 100, 30);
-    assert_eq!(lines_from(&after, "Inspector FOCUS"), "3", "{after}");
+    assert_eq!(lines_from(&after, "Inspector · focus"), "3", "{after}");
     console.key(KeyCode::Up, 1801);
     let moved = screen(&mut console.view, 100, 30);
-    assert_eq!(lines_from(&moved, "Inspector FOCUS"), "2", "{moved}");
+    assert_eq!(lines_from(&moved, "Inspector · focus"), "2", "{moved}");
 }
 
 /// Ways the source can stop matching the display; each must outlive a clock refresh.

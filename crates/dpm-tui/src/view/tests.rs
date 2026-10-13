@@ -170,7 +170,10 @@ fn self_host_roadmap_renders_without_starting_its_contracts() {
     .expect("self-host");
     let before = plan.clone();
     let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
-    assert!(render(&mut view).contains("DEC-EXECUTE"));
+    let mut now = render(&mut view);
+    view.handle_key(KeyCode::PageDown);
+    now.push_str(&render(&mut view));
+    assert!(now.contains("DEC-EXECUTE"));
     view.handle_key(KeyCode::Char('g'));
     let screen = render(&mut view);
     assert!(screen.contains("M0-MVP") && screen.contains("MVP-10"));
@@ -192,7 +195,7 @@ fn inspector_focus_routes_arrows_and_escape_without_changing_work() {
     assert!(!view.handle_key(KeyCode::Tab));
     assert!(!view.handle_key(KeyCode::Down));
     assert_eq!(view.state.selected(), selected);
-    assert!(render(&mut view).contains("Inspector FOCUS"));
+    assert!(render(&mut view).contains("Inspector · focus"));
     assert!(!view.handle_key(KeyCode::Esc));
     assert!(!view.handle_key(KeyCode::Down));
     assert_eq!(view.state.selected(), Some(1));
@@ -212,16 +215,6 @@ fn work_list_marks_milestone_kind_without_inferring_it_from_the_key() {
     let screen = render(&mut view);
     assert!(screen.contains("◇[M] RELEASE"));
     assert!(!screen.contains("[M] M-TASK"));
-}
-
-#[test]
-fn file_preview_is_labeled_separately_from_database_snapshot() {
-    let plan = fixture();
-    let mut view = View::new(&plan, chrono::Utc::now()).expect("view");
-    view.preview = true;
-    assert!(render(&mut view).contains("PREVIEW read-only revision 0"));
-    view.preview = false;
-    assert!(render(&mut view).contains("snapshot revision 0"));
 }
 
 #[test]
@@ -495,4 +488,5 @@ fn gantt_minimum_size_message_states_the_terminal_size_it_needs() {
     assert!(screen.contains("18 rows"), "{screen}");
 }
 
+mod hints;
 mod order;

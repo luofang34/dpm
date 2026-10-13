@@ -260,7 +260,7 @@ def smoke(directory):
     looking_back = Console(database, clock=early)
     try:
         deadline = time.monotonic() + 15
-        while not re.search(rf"read-only\s+revision\s+{final['revision']}\s", ''.join(replay(whole_frames(looking_back.output))[1:2])):
+        while not re.search(rf"snapshot\s+revision\s+{final['revision']}\s.*read-only preview", ''.join(replay(whole_frames(looking_back.output))[1:2])):
             assert time.monotonic() < deadline, replay(whole_frames(looking_back.output))[:3]
             looking_back.read_some(0.5)
         looking_back.key(b'g', b'Gantt')

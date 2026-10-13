@@ -69,11 +69,11 @@ impl Relation {
             Self::Successor => ">S ",
         }
     }
-    pub(super) fn color(self) -> ratatui::style::Color {
+    pub(super) fn role(self) -> crate::theme::Role {
         match self {
-            Self::None => ratatui::style::Color::Reset,
-            Self::Predecessor => ratatui::style::Color::Cyan,
-            Self::Successor => ratatui::style::Color::Magenta,
+            Self::None => crate::theme::Role::Text,
+            Self::Predecessor => crate::theme::Role::RelationPredecessor,
+            Self::Successor => crate::theme::Role::RelationSuccessor,
         }
     }
 }
