@@ -1,6 +1,6 @@
 //! Run queries: runs with their derived observation, and the two independent feeds.
 
-use super::super::{Application, Observed};
+use super::super::{Application, Observed, QueryClock};
 use crate::AppError;
 use dpm_model::{ActivityPage, LifecyclePage, RunId, RunView};
 use serde::{Deserialize, Serialize};
@@ -33,6 +33,7 @@ impl Application {
         let snapshot = self
             .run_snapshot_blocking(id)?
             .ok_or(dpm_store::RunStoreError::UnknownRun(id))?;
+        self.check_run_look_back(std::slice::from_ref(&snapshot))?;
         self.observe_blocking(|plan, now, lineage| {
             Ok(dpm_engine::project_run(snapshot, Some(plan), lineage, now))
         })
@@ -46,6 +47,7 @@ impl Application {
             .map(|key| self.work_id_blocking(key))
             .transpose()?;
         let snapshots = self.run_snapshots_blocking(work, query.limit.min(LIST_LIMIT))?;
+        self.check_run_look_back(&snapshots)?;
         self.observe_blocking(|plan, now, lineage| {
             Ok(RunList {
                 runs: snapshots
@@ -54,6 +56,32 @@ impl Application {
                     .collect(),
             })
         })
+    }
+
+    /// Refuse a caller's pinned reading earlier than something a run reported. A run snapshot
+    /// keeps only its latest lifecycle fact and activity tally, so unlike the plan it cannot be
+    /// observed as recorded at an earlier instant.
+    fn check_run_look_back(&self, snapshots: &[dpm_model::RunSnapshot]) -> Result<(), AppError> {
+        let QueryClock::Pinned(at) = self.query_clock() else {
+            return Ok(());
+        };
+        let latest = snapshots
+            .iter()
+            .map(|s| {
+                s.activity.latest.as_ref().map_or(s.last.recorded_at, |a| {
+                    a.recorded_at.max(s.last.recorded_at)
+                })
+            })
+            .max();
+        match latest {
+            Some(latest) if latest > at => Err(AppError::InvalidRequest(format!(
+                "the query clock {} precedes {}, when a run last reported; run views keep only \
+                 their latest state, so they are not observed at an earlier instant",
+                at.to_rfc3339(),
+                latest.to_rfc3339()
+            ))),
+            _ => Ok(()),
+        }
     }
 
     /// The lifecycle feed after a cursor: every run's durable facts in the order they were

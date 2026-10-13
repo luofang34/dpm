@@ -166,9 +166,9 @@ impl Application {
         &self,
         view: impl FnOnce(&Plan, DateTime<Utc>, Option<LineageId>) -> Result<T, AppError>,
     ) -> Result<Observed<T>, AppError> {
-        let plan = self.plan_blocking()?;
+        let (plan, now) = self.observed_plan_blocking()?;
         let lineage_id = self.lineage_blocking()?;
-        let data = view(&plan, self.clock.now(), lineage_id)?;
+        let data = view(&plan, now, lineage_id)?;
         Ok(Observed {
             revision: plan.revision,
             lineage_id,

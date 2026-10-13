@@ -209,6 +209,28 @@ pub struct Operation {
     pub command: Command,
 }
 
+impl Operation {
+    /// When the event this operation records occurred: the earlier time the command named, else
+    /// the commit time.
+    #[must_use]
+    pub fn occurred_at(&self) -> DateTime<Utc> {
+        self.command.occurred_at().unwrap_or(self.timestamp)
+    }
+}
+
+impl Command {
+    /// The occurrence time a command named because it was recorded after the fact.
+    #[must_use]
+    pub fn occurred_at(&self) -> Option<DateTime<Utc>> {
+        match self {
+            Self::Start { occurred_at, .. }
+            | Self::Submit { occurred_at, .. }
+            | Self::Verify { occurred_at, .. } => *occurred_at,
+            _ => None,
+        }
+    }
+}
+
 /// A rejected command or failed execution projection.
 #[derive(Debug, Error)]
 pub enum EngineError {

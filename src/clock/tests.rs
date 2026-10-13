@@ -22,7 +22,7 @@ fn queries_take_a_pinned_clock_and_mutations_refuse_it() {
         &["dpm", "--clock", at, "mcp", "--actor", "agent:a"],
     ] {
         let clock = clock_for(query).expect("query");
-        assert_eq!(clock, QueryClock::Fixed(instant), "{query:?}");
+        assert_eq!(clock, QueryClock::Pinned(instant), "{query:?}");
     }
     for refused in [
         &[

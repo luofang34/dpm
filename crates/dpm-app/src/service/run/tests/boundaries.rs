@@ -298,3 +298,29 @@ fn artifact_sources_must_be_exact_attached_evidence_and_are_captured_in_the_run(
     );
     assert_eq!(captured[0].artifact, Some(exact));
 }
+
+#[test]
+fn a_look_back_before_a_runs_latest_report_is_refused_and_after_it_answered() {
+    let mut app = started();
+    let run = start(&mut app);
+    let began = app.run_blocking(run).expect("run").data.run.started_at;
+    app.set_query_clock(QueryClock::Pinned(began - TimeDelta::hours(1)));
+    for refused in [
+        app.run_blocking(run).map(drop),
+        app.runs_blocking(&RunQuery {
+            key: None,
+            limit: 10,
+        })
+        .map(drop),
+    ] {
+        assert!(
+            matches!(&refused, Err(AppError::InvalidRequest(m)) if m.contains("run last reported")),
+            "{refused:?}"
+        );
+    }
+    app.set_query_clock(QueryClock::Pinned(began + TimeDelta::seconds(10)));
+    assert_eq!(
+        app.run_blocking(run).expect("run").data.status,
+        ObservedStatus::Working
+    );
+}

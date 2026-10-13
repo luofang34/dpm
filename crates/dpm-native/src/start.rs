@@ -62,7 +62,7 @@ pub fn start_blocking(options: &Options) -> Result<Application, StartError> {
         options.database.as_deref(),
     )
     .and_then(|app| app.plan_blocking().map(|_| app))
-    .map(|app| app.with_query_clock(options.clock.map_or(QueryClock::System, QueryClock::Fixed)))
+    .map(|app| app.with_query_clock(options.clock.map_or(QueryClock::System, QueryClock::Pinned)))
     .map_err(|error| StartError::Workspace(Box::new(error)))
 }
 

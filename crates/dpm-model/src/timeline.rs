@@ -48,7 +48,7 @@ impl Timeline {
                         .get(&w.id)
                         .is_none_or(Applicability::condition_selected)
                 })
-                .filter_map(|w| task_event(w, Endpoint::Finish).map(|at| (w.id, at)))
+                .filter_map(|w| task_event(w, Endpoint::Finish, now).map(|at| (w.id, at)))
                 .collect(),
             applicability: states,
             choice_at,
@@ -104,7 +104,7 @@ impl Timeline {
     pub fn event(&self, plan: &Plan, work: WorkItemId, endpoint: Endpoint) -> Option<EventTime> {
         let item = plan.work_items.get(&work)?;
         if item.is_executable() {
-            task_event(item, endpoint)
+            task_event(item, endpoint, self.now)
         } else {
             self.completed_at(work)
         }
@@ -248,9 +248,10 @@ pub fn completion(plan: &Plan, now: DateTime<Utc>) -> BTreeSet<WorkItemId> {
     Timeline::at(plan, now).completed()
 }
 
-/// A task's own event: its recorded time, or unknown when its lifecycle shows it occurred earlier.
-fn task_event(work: &WorkItem, endpoint: Endpoint) -> Option<EventTime> {
-    match endpoint {
+/// A task's own event by `now`: its recorded time, or unknown when its lifecycle shows it occurred
+/// earlier. An event recorded after `now` has not happened at that reading.
+fn task_event(work: &WorkItem, endpoint: Endpoint, now: DateTime<Utc>) -> Option<EventTime> {
+    let event = match endpoint {
         Endpoint::Start => work.start_event(),
         Endpoint::Finish => match work.execution.events.verified_at {
             Some(at) => Some(EventTime::Recorded(at)),
@@ -260,7 +261,8 @@ fn task_event(work: &WorkItem, endpoint: Endpoint) -> Option<EventTime> {
                 .satisfies_dependency()
                 .then_some(EventTime::Unrecorded),
         },
-    }
+    };
+    event.filter(|e| !matches!(e, EventTime::Recorded(at) if *at > now))
 }
 
 /// A gate is released once it is no longer open, whether decided or superseded.

@@ -247,6 +247,17 @@ def smoke(database):
         assert summary == run_cli(database, '--clock', at, 'status') and summary['progress']['percent_complete'] > 0
         assert scheduled == run_cli_envelope(database, '--clock', at, 'schedule', '--no-simulation')
         assert datetime.fromisoformat(scheduled['data']['evaluated_at']) == datetime.fromisoformat(at), scheduled['data']['evaluated_at']
+        # A clock before the work began observes the workspace as it stood then.
+        early = (datetime.fromisoformat(started['timestamp']) - timedelta(hours=1)).isoformat()
+        local = run_cli_envelope(database, '--clock', early, 'status')
+        observer = Agent(database, 'agent:parity', clock=early)
+        try:
+            remote = observer.call('project_status', {})
+        finally:
+            observer.close()
+        assert remote == local and local['revision'] == 4 and local['data']['progress']['percent_complete'] == 0, local
+        then = run_cli(database, '--clock', early, 'show', 'TEST-A')['execution']
+        assert then['status'] == 'Planned' and then['owner'] is None and 'events' not in then, then
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
         worker.call('attach_git_head', {'key': 'TEST-A', 'asset': 'TEST-REPO', 'base_revision': 4})
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')

@@ -98,15 +98,10 @@ pub(crate) fn target(command: &Command) -> Option<WorkItemId> {
 
 /// When a lifecycle event occurred: its backfilled occurrence time, else the commit time.
 pub(crate) fn occurred(operation: &Operation) -> DateTime<Utc> {
-    backfilled(&operation.command).unwrap_or(operation.timestamp)
+    operation.occurred_at()
 }
 
-/// The occurrence time a start, submit or verify named, if it was recorded after the fact.
+/// The occurrence time a command named, if it was recorded after the fact.
 pub(crate) fn backfilled(command: &Command) -> Option<DateTime<Utc>> {
-    match command {
-        Command::Start { occurred_at, .. }
-        | Command::Submit { occurred_at, .. }
-        | Command::Verify { occurred_at, .. } => *occurred_at,
-        _ => None,
-    }
+    command.occurred_at()
 }

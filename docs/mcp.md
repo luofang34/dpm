@@ -34,7 +34,13 @@ command except workspace queries (`invalid_request`, also for `validate` and `pl
 read no clock), and in `dpm mcp` mutation tools ignore it: an operation's timestamp is always the
 time it was committed. A pinned clock is for comparing and replaying reads, not for acting on them:
 readiness that `explain_work` reports at a pinned instant can differ from the gates a mutation
-checks at the time it commits, so agents that act run without `--clock`.
+checks at the time it commits, so agents that act run without `--clock`. A clock earlier than the
+workspace's latest operation observes the workspace as recorded at that instant: the genesis plan
+with every operation committed by then, so `revision`, states, progress, calibration and forecasts
+are those of that moment. Recording time decides, so a start backfilled with an earlier
+`occurred_at` is absent at clocks before it was recorded. Events an imported plan already carried
+cannot be rewound; a clock before them is refused (`invalid_request`), and so is a run view at a
+clock before that run's latest report, because a run keeps only its latest state.
 
 This table lists every `dpm` command with its tool, or why it has none. Each tool also declares its
 command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a row differs from

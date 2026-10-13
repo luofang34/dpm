@@ -19,7 +19,7 @@ pub(crate) fn for_command(
         return Ok(QueryClock::System);
     };
     if is_query(command) {
-        Ok(QueryClock::Fixed(at))
+        Ok(QueryClock::Pinned(at))
     } else {
         Err(CliError::Input(
             "--clock applies only to queries; a mutation records the time it commits".into(),
