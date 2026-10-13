@@ -20,8 +20,10 @@ pub struct ActualSpan {
     pub finish_hours: Option<f64>,
 }
 
-/// Every work item with at least one recorded start or finish.
-pub(super) fn actuals(plan: &Plan, timeline: &Timeline) -> BTreeMap<WorkItemId, ActualSpan> {
+/// Recorded start and finish of every work item with at least one, measured from the timeline's
+/// clock reading.
+#[must_use]
+pub fn actual_spans(plan: &Plan, timeline: &Timeline) -> BTreeMap<WorkItemId, ActualSpan> {
     let mut started: BTreeMap<WorkItemId, DateTime<Utc>> = BTreeMap::new();
     for item in plan.work_items.values().filter(|w| w.is_executable()) {
         let Some(EventTime::Recorded(at)) = timeline.event(plan, item.id, Endpoint::Start) else {

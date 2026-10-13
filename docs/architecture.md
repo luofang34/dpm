@@ -695,7 +695,10 @@ read-only. A request needing a left-out feature fails with the code `unsupported
 and MCP, built with every feature, never return. On `wasm32-unknown-unknown` identities are drawn
 from the Web Crypto source (`uuid`'s `js` feature), so a browser build needs a JavaScript host.
 
-The Gantt page renders `deterministic_remaining` as a read-only hour-axis chart. Work packages
+The Gantt page renders `deterministic_remaining` as a read-only hour-axis chart, with each item's
+recorded range (`actual_spans`) drawn in `░` before the clock reading: the axis extends back to the
+earliest recorded start, marks `now`, and opens on the remaining work with a quarter of the window
+on recent history, or on the history alone once nothing remains. Work packages
 roll up descendant ranges for display; a row that the `Timeline` marks not applicable shows its
 applicability state instead of a bar, read from the timeline rather than inferred from the schedule; milestones remain zero-duration points, and selecting a row
 opens the same work context used by other views. Nothing in navigation or rendering updates state.

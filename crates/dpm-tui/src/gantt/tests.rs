@@ -27,7 +27,7 @@ fn renders_critical_bars_milestones_and_units_without_changing_plan() {
     assert!(text.contains("TEST-A"));
     assert!(text.contains("TEST-M1"));
     assert!(text.contains("####"));
-    assert!(text.contains("remaining hours"));
+    assert!(text.contains("hours from now"));
     assert!(text.contains("Selected TEST-A"));
     assert_eq!(plan, before);
 }
@@ -125,7 +125,7 @@ fn dependency_indications_cover_all_relationships_and_signed_lag() {
 #[test]
 fn viewport_navigation_is_bounded_for_zero_and_large_horizons() {
     for finish in [0.0, 0.5, 200.0, f64::MAX] {
-        let mut view = Viewport::new(finish);
+        let mut view = Viewport::new(0.0, finish);
         for _ in 0..10 {
             view.pan(true);
             view.zoom(false);
@@ -162,4 +162,94 @@ fn dependency_lines_mark_soft_and_waived_edges() {
     assert!(lines[0].ends_with(" [soft]"), "{}", lines[0]);
     assert!(lines[1].ends_with(" [soft, waived]"), "{}", lines[1]);
     assert!(!lines[2].contains('['), "{}", lines[2]);
+}
+
+#[test]
+fn recorded_history_extends_the_timeline_before_the_clock_reading() {
+    let mut view = Viewport::new(-30.0, 10.0);
+    assert_eq!(
+        view.start, -10.0,
+        "remaining work opens the view with a quarter of it on recent history"
+    );
+    for _ in 0..10 {
+        view.pan(false);
+    }
+    assert_eq!(
+        view.start, -30.0,
+        "panning back stops at the earliest record"
+    );
+    view.fit();
+    assert_eq!((view.start, view.end()), (-30.0, 10.0));
+    let finished = Viewport::new(-30.0, 0.0);
+    assert_eq!(
+        (finished.start, finished.end()),
+        (-30.0, 0.0),
+        "with nothing remaining the view opens on the history"
+    );
+}
+
+#[test]
+fn work_that_ran_draws_its_recorded_range_and_remaining_work_follows() {
+    let mut plan: Plan = serde_json::from_str(include_str!(
+        "../../../../tests/support/execution-plan.json"
+    ))
+    .expect("fixture");
+    let now = chrono::Utc::now();
+    let ago = |hours: i64| now - chrono::Duration::hours(hours);
+    let a = plan.find_work_by_key("TEST-A").expect("a").id;
+    let worker = dpm_model::ActorId::agent("worker");
+    let steps = [
+        (worker.clone(), dpm_engine::Command::Claim { work: a }, 10),
+        (
+            worker.clone(),
+            dpm_engine::Command::Start {
+                work: a,
+                occurred_at: None,
+            },
+            8,
+        ),
+        (
+            worker,
+            dpm_engine::Command::Submit {
+                work: a,
+                note: None,
+                occurred_at: None,
+            },
+            4,
+        ),
+        (
+            dpm_model::ActorId::human("reviewer"),
+            dpm_engine::Command::Verify {
+                work: a,
+                note: None,
+                occurred_at: None,
+            },
+            2,
+        ),
+    ];
+    for (actor, command, hours) in steps {
+        dpm_engine::apply_command(
+            &mut plan,
+            actor,
+            command,
+            ago(hours),
+            dpm_model::OperationId::new(),
+        )
+        .expect("command");
+    }
+    let gantt = Gantt::new(&plan, now).expect("gantt");
+    let item = &plan.work_items[&a];
+    let bounds = gantt.bounds(&plan, item).expect("bounds");
+    let bar = gantt.row_bar(item, (bounds.0, bounds.1), true, 40, '.');
+    assert!(bar.starts_with('░') && !bar.contains('.'), "{bar:?}");
+    let b = &plan.work_items[&plan.find_work_by_key("TEST-B").expect("b").id];
+    let bounds = gantt.bounds(&plan, b).expect("bounds");
+    let bar = gantt.row_bar(b, (bounds.0, bounds.1), false, 40, '#');
+    assert!(!bar.contains('░') && bar.contains('#'), "{bar:?}");
+    let text = render(&plan, 110, 20);
+    assert!(text.contains("░░░") && text.contains("now"), "{text}");
+    assert!(
+        text.contains("░ Recorded"),
+        "the legend names the recorded symbol"
+    );
 }

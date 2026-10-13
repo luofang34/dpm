@@ -1,5 +1,5 @@
 use crate::text_panel::TextPanel;
-use dpm_engine::{EngineError, ProgressSummary, progress, schedule_span};
+use dpm_engine::{EngineError, ProgressSummary, actual_spans, progress, schedule_span};
 use dpm_model::{Plan, Timeline, WorkItem, WorkItemId, WorkKind};
 use dpm_schedule::{Schedule, deterministic_remaining};
 use ratatui::{layout::Rect, text::Span};
@@ -12,12 +12,15 @@ mod interaction;
 mod palette;
 mod release;
 mod viewport;
-use palette::Palette;
+use palette::{Palette, RECORDED};
 use viewport::Viewport;
 
-/// Read-only remaining-work timeline; dates and progress never enter the stored graph.
+/// Read-only timeline of recorded history before the clock reading and remaining work after it;
+/// dates and progress never enter the stored graph.
 pub(crate) struct Gantt {
     schedule: Schedule,
+    /// Recorded range of work that started or finished, in hours from the clock reading.
+    history: BTreeMap<WorkItemId, (f64, f64)>,
     timeline: Timeline,
     progress: BTreeMap<WorkItemId, ProgressSummary>,
     viewport: Viewport,
@@ -37,10 +40,21 @@ impl Gantt {
         clock: chrono::DateTime<chrono::Utc>,
     ) -> Result<Self, EngineError> {
         let schedule = deterministic_remaining(plan, clock)?;
-        let viewport = Viewport::new(schedule.project_finish_hours);
+        let timeline = Timeline::at(plan, clock);
+        // Outstanding work ran up to the clock reading; a milestone is reached at one instant.
+        let history: BTreeMap<_, _> = actual_spans(plan, &timeline)
+            .into_iter()
+            .filter_map(|(id, actual)| {
+                let finish = actual.finish_hours.unwrap_or(0.0);
+                Some((id, (actual.start_hours.or(actual.finish_hours)?, finish)))
+            })
+            .collect();
+        let earliest = history.values().map(|range| range.0).fold(0.0, f64::min);
+        let viewport = Viewport::new(earliest, schedule.project_finish_hours);
         Ok(Self {
             schedule,
-            timeline: Timeline::at(plan, clock),
+            history,
+            timeline,
             progress: progress(plan, clock)?.work,
             viewport,
             palette: Palette { enabled: true },
@@ -97,6 +111,57 @@ impl Gantt {
             }
         }
         bar.into_iter().collect()
+    }
+    /// A row's bar: the recorded range drawn with `RECORDED` (a milestone with its own symbol),
+    /// then the remaining range over it. Complete work with a recorded range draws only that, so
+    /// its zero-length remaining bar at the clock reading does not hide when it happened.
+    fn row_bar(
+        &self,
+        item: &WorkItem,
+        remaining: (f64, f64),
+        complete: bool,
+        width: usize,
+        symbol: char,
+    ) -> String {
+        let recorded = self.history.get(&item.id).copied();
+        let (start, end) = match recorded {
+            Some(range) if complete => range,
+            Some(range) => (range.0.min(remaining.0), range.1.max(remaining.1)),
+            None => remaining,
+        };
+        let mut cells: Vec<char> = self
+            .bar(start, end, width, ' ', item.kind)
+            .chars()
+            .collect();
+        if let Some((from, to)) = recorded.filter(|r| width > 0 && self.viewport.contains(r.0, r.1))
+        {
+            let past = if item.kind == WorkKind::Milestone {
+                symbol
+            } else {
+                RECORDED
+            };
+            let (left, right) = (
+                self.viewport.cell(from, width),
+                self.viewport.cell(to, width),
+            );
+            for cell in cells.iter_mut().take(right + 1).skip(left) {
+                if *cell == ' ' {
+                    *cell = past;
+                }
+            }
+        }
+        if !(complete && recorded.is_some()) && self.viewport.contains(remaining.0, remaining.1) {
+            let (left, right) = (
+                self.viewport.cell(remaining.0, width),
+                self.viewport.cell(remaining.1, width),
+            );
+            for cell in cells.iter_mut().take(right + 1).skip(left) {
+                if *cell == ' ' || *cell == RECORDED {
+                    *cell = symbol;
+                }
+            }
+        }
+        cells.into_iter().collect()
     }
     /// Scheduled range of work, or `None` for work the timeline places outside the active graph;
     /// packages span their applicable descendants.

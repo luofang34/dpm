@@ -22,7 +22,7 @@ impl Gantt {
     ) {
         self.row_area = Rect::default();
         self.inspector.area = Rect::default();
-        let block = Block::bordered().title("Gantt · remaining hours · [?] Help");
+        let block = Block::bordered().title("Gantt · hours from now · [?] Help");
         let inner = block.inner(area);
         frame.render_widget(block, area);
         if work.is_empty() && inner.width >= 36 && inner.height > 0 {
@@ -107,13 +107,10 @@ impl Gantt {
         self.first_row = self.first_row.min(work.len().saturating_sub(visible));
         let count = work.len().saturating_sub(self.first_row).min(visible);
         self.row_area = Rect::new(area.x, area.y + 1, area.width, count as u16);
-        let left = format!("{:.1}h", self.viewport.start);
-        let right = format!("{:.1}h", self.viewport.end());
-        let space = width.saturating_sub(left.len() + right.len());
         let label = truncate(&format!("Work {}/{}", current + 1, work.len()), label_width);
         let mut lines = vec![Line::from(format!(
-            "{label:<label_width$}    % |{left}{}{right}",
-            " ".repeat(space)
+            "{label:<label_width$}    % |{}",
+            self.axis(width)
         ))];
         for (index, item) in work.iter().enumerate().skip(self.first_row).take(count) {
             let relation = dependencies::relation(plan, focused.id, item.id);
@@ -169,7 +166,9 @@ impl Gantt {
             Span::styled(label, label_style),
             Span::styled(
                 match bounds {
-                    Some((start, end, _)) => self.bar(start, end, width, symbol, item.kind),
+                    Some((start, end, _)) => {
+                        self.row_bar(item, (start, end), progress.verified, width, symbol)
+                    }
                     None => format!("{:<width$}", truncate(&self.outside_graph(item), width)),
                 },
                 bar_style.add_modifier(if selected || marker == "~ " {
@@ -184,6 +183,28 @@ impl Gantt {
 }
 
 impl Gantt {
+    /// The hour axis: the window's first and last hour, and `now` where the clock reading falls
+    /// inside it with history before, so the recorded and the remaining sides are told apart.
+    fn axis(&self, width: usize) -> String {
+        let left = format!("{:.1}h", self.viewport.start);
+        let right = format!("{:.1}h", self.viewport.end());
+        let mut axis: Vec<char> = format!(
+            "{left}{}{right}",
+            " ".repeat(width.saturating_sub(left.len() + right.len()))
+        )
+        .chars()
+        .collect();
+        if self.viewport.start < 0.0 && self.viewport.end() > 0.0 {
+            let at = self.viewport.cell(0.0, width);
+            let free = |cell: usize| axis.get(cell).is_some_and(|c| *c == ' ');
+            if (at.saturating_sub(1)..at + 4).all(free) {
+                for (cell, mark) in axis.iter_mut().skip(at).zip("now".chars()) {
+                    *cell = mark;
+                }
+            }
+        }
+        axis.into_iter().collect()
+    }
     /// Bar text naming why the timeline keeps work out of the remaining schedule.
     fn outside_graph(&self, item: &WorkItem) -> String {
         let state = self.timeline.applicability(item.id);

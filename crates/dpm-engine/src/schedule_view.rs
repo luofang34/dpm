@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 mod actual;
 mod span;
-pub use actual::ActualSpan;
+pub use actual::{ActualSpan, actual_spans};
 pub use span::{ScheduleSpan, schedule_span};
 
 #[cfg(test)]
@@ -154,7 +154,7 @@ pub fn schedule_projection(
         None
     };
     let spans = span::spans(plan, &timeline, &schedule);
-    let actuals = actual::actuals(plan, &timeline);
+    let actuals = actual_spans(plan, &timeline);
     let leaves = span::package_leaves(plan, &timeline, &schedule);
     let mut work: Vec<ScheduledWork> = plan
         .work_items
