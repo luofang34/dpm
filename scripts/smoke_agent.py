@@ -153,9 +153,14 @@ def smoke(database):
             ('get_schedule', {}, ('schedule',)),
             ('get_schedule', {'probabilistic': False}, ('schedule', '--no-simulation')),
         ]
-        for tool, arguments, command in pairs:
-            # The whole result is shared: version, observed revision and data.
-            assert worker.call(tool, arguments) == run_cli_envelope(database, *command)
+        at = pinned_clock()
+        reader = Agent(database, 'agent:parity', clock=at)
+        try:
+            for tool, arguments, command in pairs:
+                # The whole result is shared at one clock reading: version, observed revision and data.
+                assert reader.call(tool, arguments) == run_cli_envelope(database, '--clock', at, *command)
+        finally:
+            reader.close()
         # The horizon parity case must compare real probabilities, not two nulls.
         forecast = worker.call('project_status', {'horizon_hours': 80})['data']['forecast']
         assert forecast['probability_by_horizon'] is not None and forecast['pert_approximation']['probability_by_horizon'] is not None, forecast
@@ -241,6 +246,7 @@ def smoke(database):
             observer.close()
         assert summary == run_cli(database, '--clock', at, 'status') and summary['progress']['percent_complete'] > 0
         assert scheduled == run_cli_envelope(database, '--clock', at, 'schedule', '--no-simulation')
+        assert datetime.fromisoformat(scheduled['data']['evaluated_at']) == datetime.fromisoformat(at), scheduled['data']['evaluated_at']
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
         worker.call('attach_git_head', {'key': 'TEST-A', 'asset': 'TEST-REPO', 'base_revision': 4})
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')
