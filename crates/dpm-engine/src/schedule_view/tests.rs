@@ -404,3 +404,69 @@ fn completed_work_neither_widens_nor_floats_its_package() {
     assert_eq!(row(finished).times, None);
     assert_eq!(row(finished).criticality, None);
 }
+
+#[test]
+fn recorded_work_reports_its_actual_times_before_the_clock_reading() {
+    let mut plan = fixture();
+    let child = plan.find_work_by_key("TEST-A").expect("child").id;
+    let package = add_package(&mut plan, "WP", None);
+    plan.work_items.get_mut(&child).expect("child").parent = Some(package);
+    let hours_ago = |h: i64| now() - chrono::Duration::hours(h);
+    let worker = dpm_model::ActorId::agent("worker");
+    for (actor, command, at) in [
+        (worker.clone(), crate::Command::Claim { work: child }, 5),
+        (
+            worker.clone(),
+            crate::Command::Start {
+                work: child,
+                occurred_at: None,
+            },
+            4,
+        ),
+        (
+            worker,
+            crate::Command::Submit {
+                work: child,
+                note: None,
+                occurred_at: None,
+            },
+            2,
+        ),
+        (
+            dpm_model::ActorId::human("reviewer"),
+            crate::Command::Verify {
+                work: child,
+                note: None,
+                occurred_at: None,
+            },
+            1,
+        ),
+    ] {
+        crate::apply_command(
+            &mut plan,
+            actor,
+            command,
+            hours_ago(at),
+            dpm_model::OperationId::new(),
+        )
+        .expect("command");
+    }
+    let projection = schedule_projection(&plan, false, now()).expect("projection");
+    let actual = |key: &str| {
+        projection
+            .work
+            .iter()
+            .find(|w| w.key.to_string() == key)
+            .expect("row")
+            .actual
+    };
+    let worked = Some(ActualSpan {
+        started_at: Some(hours_ago(4)),
+        finished_at: Some(hours_ago(1)),
+        start_hours: Some(-4.0),
+        finish_hours: Some(-1.0),
+    });
+    assert_eq!(actual("TEST-A"), worked, "start to verification");
+    assert_eq!(actual("WP"), worked, "a package spans its recorded work");
+    assert_eq!(actual("TEST-B"), None, "nothing recorded, nothing inferred");
+}

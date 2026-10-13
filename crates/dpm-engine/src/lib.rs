@@ -24,8 +24,8 @@ pub use run::{
 };
 mod schedule_view;
 pub use schedule_view::{
-    ScheduleProjection, ScheduleSpan, ScheduleUncertainty, ScheduledRelation, ScheduledTimes,
-    ScheduledWork, schedule_projection, schedule_span,
+    ActualSpan, ScheduleProjection, ScheduleSpan, ScheduleUncertainty, ScheduledRelation,
+    ScheduledTimes, ScheduledWork, schedule_projection, schedule_span,
 };
 mod scope;
 pub use scope::{

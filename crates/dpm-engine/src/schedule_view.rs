@@ -14,7 +14,9 @@ use dpm_schedule::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+mod actual;
 mod span;
+pub use actual::ActualSpan;
 pub use span::{ScheduleSpan, schedule_span};
 
 #[cfg(test)]
@@ -73,6 +75,8 @@ pub struct ScheduledWork {
     pub criticality: Option<f64>,
     /// Calendar placement, present only when the plan has calendars.
     pub calendar: Option<ActivityCalendar>,
+    /// What was recorded: when the work started and finished; absent before either happened.
+    pub actual: Option<ActualSpan>,
 }
 
 /// Seeded Monte Carlo completion percentiles, in elapsed hours.
@@ -150,12 +154,14 @@ pub fn schedule_projection(
         None
     };
     let spans = span::spans(plan, &timeline, &schedule);
+    let actuals = actual::actuals(plan, &timeline);
     let leaves = span::package_leaves(plan, &timeline, &schedule);
     let mut work: Vec<ScheduledWork> = plan
         .work_items
         .values()
         .map(|item| {
             let mut scheduled = row(&timeline, &schedule, simulation.as_ref(), &spans, item);
+            scheduled.actual = actuals.get(&item.id).copied();
             if let Some(leaves) = leaves.get(&item.id) {
                 roll_up(&mut scheduled, &schedule, simulation.as_ref(), leaves);
             }
@@ -254,5 +260,6 @@ fn row(
         times: activity.map(times),
         criticality: simulation.and_then(|s| s.criticality.get(&item.id).copied()),
         calendar: activity.and_then(|a| a.calendar.clone()),
+        actual: None,
     }
 }
