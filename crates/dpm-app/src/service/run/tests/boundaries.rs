@@ -72,7 +72,7 @@ fn restored_app(directory: &std::path::Path) -> (Application, RunId, dpm_model::
         Application::initialize_blocking(&directory.join("state.sqlite"), &fixture_plan())
             .expect("app");
     let id = work(&app);
-    project(&mut app, &worker(), Command::Claim { work: id });
+    project(&mut app, &worker(), Command::claim(id));
     let run = start(&mut app);
     let original = app.lineage_blocking().expect("lineage").expect("lineage");
     let backup = directory.join("backup.sqlite");
@@ -181,7 +181,7 @@ fn a_run_observed_at_the_last_revision_survives_the_wrap_backup_verify_and_resto
     let path = directory.path().join("state.sqlite");
     let mut app = Application::initialize_blocking(&path, &plan).expect("app at the edge");
     let id = work(&app);
-    project(&mut app, &worker(), Command::Claim { work: id });
+    project(&mut app, &worker(), Command::claim(id));
     assert_eq!(
         app.revision_blocking().expect("revision").revision,
         u64::MAX
@@ -252,7 +252,7 @@ fn attach(app: &mut Application, artifact: Artifact) -> ArtifactId {
 fn artifact_sources_must_be_exact_attached_evidence_and_are_captured_in_the_run() {
     let mut app = Application::in_memory_blocking(&fixture_plan()).expect("app");
     let id = work(&app);
-    project(&mut app, &worker(), Command::Claim { work: id });
+    project(&mut app, &worker(), Command::claim(id));
     let asset = *app
         .plan_blocking()
         .expect("plan")

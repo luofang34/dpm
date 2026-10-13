@@ -83,7 +83,7 @@ impl<'a> HistoryIndex<'a> {
 /// The work item a lifecycle or ownership command names.
 pub(crate) fn target(command: &Command) -> Option<WorkItemId> {
     match command {
-        Command::Claim { work }
+        Command::Claim { work, .. }
         | Command::Release { work, .. }
         | Command::Handoff { work, .. }
         | Command::Start { work, .. }

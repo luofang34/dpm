@@ -307,7 +307,7 @@ fn run(plan: &mut Plan, commands: Vec<dpm_engine::Command>, hour: u32) {
 
 fn begin(work: WorkItemId) -> Vec<dpm_engine::Command> {
     vec![
-        dpm_engine::Command::Claim { work },
+        dpm_engine::Command::claim(work),
         dpm_engine::Command::Start {
             work,
             occurred_at: None,

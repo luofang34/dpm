@@ -30,7 +30,7 @@ fn lagged() -> (Plan, WorkItemId) {
     edge.lag_hours = 0.5;
     let agent = ActorId::agent("maintainer");
     for command in [
-        Command::Claim { work: a },
+        Command::claim(a),
         Command::Start {
             work: a,
             occurred_at: None,

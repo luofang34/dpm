@@ -33,7 +33,7 @@ fn run(plan: &mut Plan, actor: &str, command: Command, at: DateTime<Utc>) {
 fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
     let work = id(plan, key);
     for command in [
-        Command::Claim { work },
+        Command::claim(work),
         Command::Start {
             work,
             occurred_at: None,
@@ -99,7 +99,11 @@ fn a_package_of_only_unselected_work_is_excluded_in_every_view_and_does_not_bloc
     run(
         &mut plan,
         "lead",
-        Command::Decide { decision, outcome },
+        Command::Decide {
+            decision,
+            outcome,
+            occurred_at: None,
+        },
         t(1),
     );
     for (key, hours) in [

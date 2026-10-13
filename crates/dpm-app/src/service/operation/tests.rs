@@ -28,7 +28,7 @@ fn a_resent_identity_returns_the_recorded_operation_and_other_content_is_refused
     let mut app = Application::in_memory_blocking(&fixture()).expect("app");
     let work = app.work_id_blocking("TEST-A").expect("work");
     let id = OperationId::new();
-    let claim = request(&app, "worker", Command::Claim { work }, id);
+    let claim = request(&app, "worker", Command::claim(work), id);
     let first = app.execute_blocking(claim.clone()).expect("claim");
     assert_eq!(first.operation.id, id);
     // The resend carries the revision the first attempt has since moved past.
@@ -64,13 +64,13 @@ fn only_version_7_identities_are_accepted_and_absent_ones_are_minted() {
     let work = app.work_id_blocking("TEST-A").expect("work");
     let random = OperationId(dpm_model::WorkspaceId::new().0);
     let refused = app
-        .execute_blocking(request(&app, "worker", Command::Claim { work }, random))
+        .execute_blocking(request(&app, "worker", Command::claim(work), random))
         .expect_err("version 4");
     assert_eq!(refused.code(), "invalid_request");
     let minted = app
         .execute_blocking(CommandRequest {
             operation_id: None,
-            ..request(&app, "worker", Command::Claim { work }, random)
+            ..request(&app, "worker", Command::claim(work), random)
         })
         .expect("minted");
     assert!(minted.operation.id.is_time_ordered());
@@ -97,7 +97,7 @@ fn a_resent_plan_change_is_compared_with_the_state_it_was_applied_to() {
     app.execute_blocking(request(
         &app,
         "worker",
-        Command::Claim { work },
+        Command::claim(work),
         OperationId::new(),
     ))
     .expect("later operation");
@@ -129,7 +129,7 @@ fn restores_start_a_new_lineage_and_still_answer_recorded_identities() {
     let mut app = Application::initialize_blocking(&live, &fixture()).expect("app");
     let source = app.lineage_blocking().expect("lineage").expect("store");
     let work = app.work_id_blocking("TEST-A").expect("work");
-    let claim = request(&app, "worker", Command::Claim { work }, OperationId::new());
+    let claim = request(&app, "worker", Command::claim(work), OperationId::new());
     let first = app.execute_blocking(claim.clone()).expect("claim");
     assert_eq!(first.lineage_id, source);
     app.backup_blocking(&backup).expect("backup");
@@ -195,7 +195,7 @@ fn a_store_locked_past_its_timeout_answers_a_retryable_busy_code() {
     let holder = rusqlite::Connection::open(&path).expect("raw connection");
     holder.execute_batch("BEGIN IMMEDIATE").expect("lock");
     let work = app.work_id_blocking("TEST-A").expect("work");
-    let claim = request(&app, "worker", Command::Claim { work }, OperationId::new());
+    let claim = request(&app, "worker", Command::claim(work), OperationId::new());
     let refused = app.execute_blocking(claim.clone()).expect_err("busy");
     assert_eq!(refused.code(), "store_busy", "{refused}");
     holder.execute_batch("ROLLBACK").expect("unlock");

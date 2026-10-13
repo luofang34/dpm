@@ -29,7 +29,7 @@ fn an_imported_hard_float_replays_after_lifecycle_commands() {
     let dir = tempfile::tempdir().expect("directory");
     let mut r = Recorder::with_plan(dir.path(), &with_lag("1.929842284342272e-18"));
     let a = r.id("TEST-A");
-    r.run(lead(), Command::Claim { work: a });
+    r.run(lead(), Command::claim(a));
     r.run(
         lead(),
         Command::Start {
@@ -50,7 +50,7 @@ fn a_hard_float_introduced_by_a_plan_change_replays_and_stays_fresh() {
     // The next change's `before` is read back from the stored snapshot and log text.
     r.change(|plan| plan.dependencies[last].lag_hours = HARD_LAG * 3.0);
     let a = r.id("TEST-A");
-    r.run(lead(), Command::Claim { work: a });
+    r.run(lead(), Command::claim(a));
     let lag = r.plan().dependencies[last].lag_hours;
     assert_eq!(lag.to_bits(), (HARD_LAG * 3.0).to_bits());
 }

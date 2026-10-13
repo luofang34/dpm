@@ -51,7 +51,7 @@ pub(super) fn work(app: &Application) -> WorkItemId {
 pub(super) fn started() -> Application {
     let mut app = Application::in_memory_blocking(&fixture_plan()).expect("app");
     let work = work(&app);
-    project(&mut app, &worker(), Command::Claim { work });
+    project(&mut app, &worker(), Command::claim(work));
     project(
         &mut app,
         &worker(),

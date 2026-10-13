@@ -234,10 +234,7 @@ fn out_of_scope_dependency_never_satisfies_in_scope_work() {
     assert!(outside(&result).contains(&"W-B".to_string()));
     let predecessor = plan.find_work_by_key("W-B").expect("W-B").id;
     for (actor, command) in [
-        (
-            ActorId::agent("worker"),
-            Command::Claim { work: predecessor },
-        ),
+        (ActorId::agent("worker"), Command::claim(predecessor)),
         (
             ActorId::agent("worker"),
             Command::Start {

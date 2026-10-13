@@ -111,7 +111,7 @@ fn views_agree(plan: &Plan, work: WorkItemId, hour: i64) {
 
 /// Drive the predecessor to its required event; returns that event's hour.
 fn predecessor_event(plan: &mut Plan, a: WorkItemId, kind: DependencyKind) -> i64 {
-    ok(plan, &worker(), Command::Claim { work: a }, 0);
+    ok(plan, &worker(), Command::claim(a), 0);
     ok(plan, &worker(), start(a), 0);
     if kind.predecessor_endpoint() == Endpoint::Start {
         return 0;
@@ -132,7 +132,7 @@ fn each_relation_gates_its_own_transition_until_24h_have_elapsed() {
         views_agree(&plan, b, open - 1);
         views_agree(&plan, b, open);
         if kind.successor_endpoint() == Endpoint::Start {
-            let release = refused(&mut plan, &other, Command::Claim { work: b }, open - 1);
+            let release = refused(&mut plan, &other, Command::claim(b), open - 1);
             assert_eq!(
                 release,
                 Release::Elapsing {
@@ -141,11 +141,11 @@ fn each_relation_gates_its_own_transition_until_24h_have_elapsed() {
                 },
                 "{kind:?}"
             );
-            ok(&mut plan, &other, Command::Claim { work: b }, open);
+            ok(&mut plan, &other, Command::claim(b), open);
             ok(&mut plan, &other, start(b), open);
             ok(&mut plan, &other, submit(b), open);
         } else {
-            ok(&mut plan, &other, Command::Claim { work: b }, 0);
+            ok(&mut plan, &other, Command::claim(b), 0);
             ok(&mut plan, &other, start(b), 0);
             let release = refused(&mut plan, &other, submit(b), open - 1);
             assert!(
@@ -178,7 +178,7 @@ fn restored_edges_gate_start_and_verification_of_work_reserved_or_submitted_whil
             reason: "prototype failed".into(),
         };
         ok(&mut plan, &lead, waive, 0);
-        ok(&mut plan, &other, Command::Claim { work: b }, 0);
+        ok(&mut plan, &other, Command::claim(b), 0);
         let finish_gate = kind.successor_endpoint() == Endpoint::Finish;
         if finish_gate {
             ok(&mut plan, &other, start(b), 0);
@@ -207,17 +207,12 @@ fn restored_edges_gate_start_and_verification_of_work_reserved_or_submitted_whil
 #[test]
 fn a_claim_reserves_work_but_only_a_start_releases_start_to_start_successors() {
     let (mut plan, a, b) = pair(DependencyKind::StartStart, 0.0, DependencyPolicy::Hard);
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &worker(), Command::claim(a), 0);
     assert_eq!(plan.work_items[&a].execution.status, WorkStatus::Claimed);
     assert!(plan.work_items[&a].execution.events.started_at.is_none());
     views_agree(&plan, b, 5);
     assert_eq!(
-        refused(
-            &mut plan,
-            &ActorId::agent("other"),
-            Command::Claim { work: b },
-            5
-        ),
+        refused(&mut plan, &ActorId::agent("other"), Command::claim(b), 5),
         Release::AwaitingEvent
     );
     for command in [
@@ -239,12 +234,7 @@ fn a_claim_reserves_work_but_only_a_start_releases_start_to_start_successors() {
     ok(&mut plan, &worker(), start(a), 6);
     assert_eq!(plan.work_items[&a].execution.events.started_at, Some(t(6)));
     views_agree(&plan, b, 6);
-    ok(
-        &mut plan,
-        &ActorId::agent("other"),
-        Command::Claim { work: b },
-        6,
-    );
+    ok(&mut plan, &ActorId::agent("other"), Command::claim(b), 6);
 }
 
 #[test]
@@ -280,7 +270,7 @@ fn unknown_event_times_block_only_positive_lag_with_an_actionable_reason() {
             refused(
                 &mut plan,
                 &ActorId::agent("other"),
-                Command::Claim { work: b },
+                Command::claim(b),
                 10_000
             ),
             Release::UnrecordedEventTime
@@ -340,12 +330,7 @@ fn a_lead_shapes_the_schedule_but_never_releases_work_before_the_event() {
             < schedule.activities[&a].earliest_finish_hours
     );
     assert_eq!(
-        refused(
-            &mut plan,
-            &ActorId::agent("other"),
-            Command::Claim { work: b },
-            100
-        ),
+        refused(&mut plan, &ActorId::agent("other"), Command::claim(b), 100),
         Release::AwaitingEvent
     );
     let why = explain_work(&plan, b, t(100))
@@ -357,12 +342,7 @@ fn a_lead_shapes_the_schedule_but_never_releases_work_before_the_event() {
         "{why}"
     );
     let open = predecessor_event(&mut plan, a, DependencyKind::FinishStart);
-    ok(
-        &mut plan,
-        &ActorId::agent("other"),
-        Command::Claim { work: b },
-        open,
-    );
+    ok(&mut plan, &ActorId::agent("other"), Command::claim(b), open);
 }
 
 fn start(work: WorkItemId) -> Command {
@@ -392,7 +372,7 @@ fn verify(work: WorkItemId) -> Command {
 fn event_times_are_the_command_times_and_cannot_be_backdated() {
     let (mut plan, a, _) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
     let reviewer = ActorId::human("reviewer");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 3);
+    ok(&mut plan, &worker(), Command::claim(a), 3);
     ok(&mut plan, &worker(), start(a), 5);
     let before = plan.clone();
     assert!(run(&mut plan, &worker(), submit(a), 4).is_err());
@@ -409,5 +389,6 @@ fn event_times_are_the_command_times_and_cannot_be_backdated() {
     );
 }
 
+mod history;
 mod occurrence;
 mod timing;

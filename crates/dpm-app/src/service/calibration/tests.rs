@@ -34,7 +34,7 @@ fn run(app: &mut Application, actor: ActorId, command: Command) {
 fn started() -> Application {
     let mut app = Application::in_memory_blocking(&fixture()).expect("app");
     let work = app.work_id_blocking("TEST-A").expect("work");
-    run(&mut app, ActorId::agent("worker"), Command::Claim { work });
+    run(&mut app, ActorId::agent("worker"), Command::claim(work));
     let start = Command::Start {
         work,
         occurred_at: None,

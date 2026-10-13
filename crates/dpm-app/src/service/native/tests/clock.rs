@@ -17,7 +17,7 @@ fn ready(view: &View) -> bool {
 fn lagged_blocking() -> (Application, DateTime<Utc>) {
     let mut app = Application::in_memory_blocking(&lagged_plan()).expect("app");
     let task = task_blocking(&app);
-    commit_blocking(&mut app, &worker(), Command::Claim { work: task });
+    commit_blocking(&mut app, &worker(), Command::claim(task));
     commit_blocking(
         &mut app,
         &worker(),

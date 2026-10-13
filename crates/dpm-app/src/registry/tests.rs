@@ -51,7 +51,7 @@ fn two_entry_points_observe_one_claim_without_copying_or_resetting_history() {
         base_revision: 0,
         base_lineage: None,
         operation_id: None,
-        command: Command::Claim { work },
+        command: Command::claim(work),
     })
     .expect("claim");
     let snapshot = second
@@ -73,7 +73,7 @@ fn two_entry_points_observe_one_claim_without_copying_or_resetting_history() {
                 base_revision: 0,
                 base_lineage: None,
                 operation_id: None,
-                command: Command::Claim { work }
+                command: Command::claim(work)
             })
             .is_err()
     );

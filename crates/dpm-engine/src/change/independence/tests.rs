@@ -60,7 +60,7 @@ fn owned_predecessor() -> (Plan, DependencyId) {
     edge(&mut proposal, "TEST-A", "TEST-B").lag_hours = 24.0;
     apply(&mut plan, reviewer(), proposal).expect("reviewer sets the lag");
     let work = id(&plan, "TEST-A");
-    run(&mut plan, owner(), Command::Claim { work }, t(1));
+    run(&mut plan, owner(), Command::claim(work), t(1));
     let dependency = edge(&mut plan, "TEST-A", "TEST-B").id;
     (plan, dependency)
 }
@@ -159,10 +159,11 @@ fn excluded_in_flight() -> (Plan, DecisionId) {
     let decide = Command::Decide {
         decision: supplier,
         outcome: "A".into(),
+        occurred_at: None,
     };
     run(&mut plan, reviewer(), decide, t(0));
     let design = id(&plan, "SUP-DESIGN");
-    run(&mut plan, owner(), Command::Claim { work: design }, t(0));
+    run(&mut plan, owner(), Command::claim(design), t(0));
     run(
         &mut plan,
         owner(),
@@ -185,7 +186,7 @@ fn excluded_in_flight() -> (Plan, DecisionId) {
     };
     run(&mut plan, reviewer(), verify, t(1));
     let quote = id(&plan, "SUP-A-QUOTE");
-    run(&mut plan, owner(), Command::Claim { work: quote }, t(2));
+    run(&mut plan, owner(), Command::claim(quote), t(2));
     run(
         &mut plan,
         owner(),
@@ -312,7 +313,7 @@ fn an_owner_cannot_relax_the_result_it_hands_on_through_a_milestone() {
         .dependencies
         .push(Dependency::new(m2, c, DependencyKind::FinishStart, 5.0));
     apply(&mut plan, reviewer(), proposal).expect("reviewer adds the milestone");
-    run(&mut plan, owner(), Command::Claim { work: a }, t(1));
+    run(&mut plan, owner(), Command::claim(a), t(1));
     let removed = {
         let mut proposal = plan.clone();
         proposal
@@ -365,7 +366,7 @@ fn other_inputs_into_a_downstream_milestone_are_not_the_owners_result() {
             .push(Dependency::new(from, to, DependencyKind::FinishStart, 0.0));
     }
     apply(&mut plan, reviewer(), proposal).expect("reviewer adds the milestone");
-    run(&mut plan, owner(), Command::Claim { work: a }, t(1));
+    run(&mut plan, owner(), Command::claim(a), t(1));
     let mut proposal = plan.clone();
     proposal
         .dependencies

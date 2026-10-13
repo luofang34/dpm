@@ -30,12 +30,12 @@ fn release_and_handoff_are_recorded_operations_that_survive_restart() {
     let mut app = Application::initialize_blocking(&path, &fixture()).expect("app");
     let work = app.work_id_blocking("TEST-A").expect("work");
     let (first, lead) = (ActorId::agent("first"), ActorId::human("lead"));
-    execute(&mut app, first.clone(), Command::Claim { work });
+    execute(&mut app, first.clone(), Command::claim(work));
     let release = app
         .release_command_blocking("TEST-A", "claimed by mistake".into())
         .expect("release");
     execute(&mut app, first.clone(), release);
-    execute(&mut app, first.clone(), Command::Claim { work });
+    execute(&mut app, first.clone(), Command::claim(work));
     execute(
         &mut app,
         first.clone(),

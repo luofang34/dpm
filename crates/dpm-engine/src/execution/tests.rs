@@ -27,7 +27,7 @@ fn apply(plan: &mut Plan, actor: &str, command: Command) -> Operation {
 }
 
 fn finish(plan: &mut Plan, work: WorkItemId) {
-    apply(plan, "owner", Command::Claim { work });
+    apply(plan, "owner", Command::claim(work));
     apply(
         plan,
         "owner",
@@ -60,7 +60,7 @@ fn finish(plan: &mut Plan, work: WorkItemId) {
 fn failed_commands_are_atomic_and_self_verification_is_rejected() {
     let mut plan = fixture();
     let work = task(&plan);
-    apply(&mut plan, "owner", Command::Claim { work });
+    apply(&mut plan, "owner", Command::claim(work));
     apply(
         &mut plan,
         "owner",
@@ -134,7 +134,7 @@ fn failed_commands_are_atomic_and_self_verification_is_rejected() {
 fn blocking_and_resuming_preserve_the_owner() {
     let mut plan = fixture();
     let work = task(&plan);
-    apply(&mut plan, "owner", Command::Claim { work });
+    apply(&mut plan, "owner", Command::claim(work));
     apply(
         &mut plan,
         "owner",
@@ -182,7 +182,7 @@ fn revision_wraps_during_a_real_command() {
     let mut plan = fixture();
     plan.revision = u64::MAX;
     let work = task(&plan);
-    let operation = apply(&mut plan, "owner", Command::Claim { work });
+    let operation = apply(&mut plan, "owner", Command::claim(work));
     assert_eq!(operation.base_revision, u64::MAX);
     assert_eq!(operation.resulting_revision, 0);
     assert_eq!(plan.revision, 0);
@@ -253,6 +253,7 @@ fn only_humans_and_services_resolve_gating_or_contextual_decisions() {
     let decide = |decision| Command::Decide {
         decision,
         outcome: "proceed".into(),
+        occurred_at: None,
     };
     for decision in [gate, contextual] {
         let before = plan.clone();
@@ -302,6 +303,7 @@ fn empty_commands_and_invalid_plans_do_not_change_state() {
         Command::Decide {
             decision,
             outcome: " ".into(),
+            occurred_at: None,
         },
     ] {
         let before = plan.clone();
@@ -328,7 +330,7 @@ fn empty_commands_and_invalid_plans_do_not_change_state() {
         apply_command(
             &mut plan,
             ActorId::agent("owner"),
-            Command::Claim { work },
+            Command::claim(work),
             Utc::now(),
             dpm_model::OperationId::new()
         )
@@ -352,7 +354,7 @@ fn execution_commands(work: WorkItemId) -> Vec<(ActorId, Command)> {
     let agent = ActorId::agent("owner");
     let reviewer = ActorId::human("reviewer");
     vec![
-        (agent.clone(), Command::Claim { work }),
+        (agent.clone(), Command::claim(work)),
         (
             agent.clone(),
             Command::Start {
@@ -442,7 +444,7 @@ fn replaying_a_recorded_operation_reproduces_its_identity_and_result() {
     let recorded = apply_command(
         &mut plan,
         ActorId::agent("owner"),
-        Command::Claim { work },
+        Command::claim(work),
         Utc::now(),
         id,
     )

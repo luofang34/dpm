@@ -60,6 +60,10 @@ pub(super) fn decisions(plan: &Plan, index: &HistoryIndex<'_>) -> WaitReport {
             match (decision.resolved_at, index.opened(decision.id)) {
                 (None, _) => Err(ExclusionReason::ResolutionUnrecorded),
                 (Some(_), None) => Err(ExclusionReason::OpenedBeforeHistory),
+                // Decided before the change that recorded it, so it was raised before history.
+                (Some(resolved), Some(opened)) if resolved < opened.timestamp => {
+                    Err(ExclusionReason::OpenedBeforeHistory)
+                }
                 (Some(resolved), Some(opened)) => index
                     .decided(decision.id)
                     .map(|decided| {

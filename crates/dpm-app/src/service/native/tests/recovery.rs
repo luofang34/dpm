@@ -9,7 +9,7 @@ use dpm_model::{ActivityKind, Observation, RunId};
 fn followed_blocking(directory: &Path) -> (Application, Consumer, Watermark) {
     let mut app = live_blocking(directory);
     let task = task_blocking(&app);
-    commit_blocking(&mut app, &worker(), Command::Claim { work: task });
+    commit_blocking(&mut app, &worker(), Command::claim(task));
     commit_blocking(
         &mut app,
         &worker(),
@@ -149,7 +149,7 @@ fn a_source_rolled_back_to_an_older_state_of_the_same_history_is_a_cursor_ahead_
     let directory = tempfile::tempdir().expect("directory");
     let mut app = live_blocking(directory.path());
     let task = task_blocking(&app);
-    commit_blocking(&mut app, &worker(), Command::Claim { work: task });
+    commit_blocking(&mut app, &worker(), Command::claim(task));
     let archive = directory.path().join("archive.sqlite");
     app.backup_blocking(&archive).expect("backup");
     commit_blocking(
@@ -204,7 +204,7 @@ fn revisions_that_wrap_never_decide_order_and_history_still_hands_over() {
     let snapshot = attach_blocking(&mut app);
     assert_eq!(snapshot.watermark.project.revision, u64::MAX - 1);
     let mut client = Consumer::seeded(&snapshot.watermark);
-    commit_blocking(&mut app, &worker(), Command::Claim { work: task });
+    commit_blocking(&mut app, &worker(), Command::claim(task));
     commit_blocking(
         &mut app,
         &worker(),

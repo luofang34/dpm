@@ -49,6 +49,7 @@ fn inherited_decision_gates_block_children_and_explain_the_gate_key() {
         Command::Decide {
             decision,
             outcome: "approved".into(),
+            occurred_at: None,
         },
         Utc::now(),
         dpm_model::OperationId::new(),
@@ -68,7 +69,7 @@ fn nested_packages_complete_from_children_without_persisting_completion() {
     plan.work_items.insert(outer_id, outer);
     plan.work_items.get_mut(&parent).expect("package").parent = Some(outer_id);
     for (actor, command) in [
-        ("worker", Command::Claim { work: task }),
+        ("worker", Command::claim(task)),
         (
             "worker",
             Command::Start {
@@ -153,7 +154,7 @@ fn readiness_rejects_foreign_stale_or_invalid_contracts() {
     apply_command(
         &mut plan,
         ActorId::agent("owner"),
-        Command::Claim { work: work.id },
+        Command::claim(work.id),
         Utc::now(),
         dpm_model::OperationId::new(),
     )
@@ -170,7 +171,7 @@ fn readiness_rejects_foreign_stale_or_invalid_contracts() {
         apply_command(
             &mut plan,
             ActorId::agent("owner"),
-            Command::Claim { work: work.id },
+            Command::claim(work.id),
             Utc::now(),
             dpm_model::OperationId::new()
         )
@@ -207,7 +208,7 @@ fn gated_milestone() -> (Plan, [WorkItemId; 3], dpm_model::DecisionId) {
     let gate = gate.id;
     let (worker, reviewer) = (ActorId::agent("worker"), ActorId::human("reviewer"));
     for (actor, command, hour) in [
-        (&worker, Command::Claim { work: a }, 0),
+        (&worker, Command::claim(a), 0),
         (
             &worker,
             Command::Start {
@@ -257,6 +258,7 @@ fn a_decision_approved_after_every_verification_sets_the_milestone_time_in_every
     let decide = Command::Decide {
         decision: gate,
         outcome: "accepted".into(),
+        occurred_at: None,
     };
     apply_command(
         &mut plan,
@@ -286,7 +288,7 @@ fn a_decision_approved_after_every_verification_sets_the_milestone_time_in_every
     let refused = apply_command(
         &mut plan,
         worker.clone(),
-        Command::Claim { work: b },
+        Command::claim(b),
         at(33),
         dpm_model::OperationId::new(),
     );
@@ -300,7 +302,7 @@ fn a_decision_approved_after_every_verification_sets_the_milestone_time_in_every
     apply_command(
         &mut plan,
         worker,
-        Command::Claim { work: b },
+        Command::claim(b),
         at(34),
         dpm_model::OperationId::new(),
     )

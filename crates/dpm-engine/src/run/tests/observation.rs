@@ -273,6 +273,7 @@ fn operations_of_every_command_are_classified_by_the_task_they_act_on() {
     let decide = crate::Command::Decide {
         decision: dpm_model::DecisionId::new(),
         outcome: "go".into(),
+        occurred_at: None,
     };
     let operation = crate::Operation {
         command: decide,

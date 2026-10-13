@@ -98,7 +98,7 @@ fn initialization_is_explicit_and_preserves_existing_state_and_history() {
         base_revision: 0,
         base_lineage: None,
         operation_id: None,
-        command: Command::Claim { work },
+        command: Command::claim(work),
     })
     .expect("persist claim");
     let current = app.plan_blocking().expect("snapshot");
@@ -153,7 +153,7 @@ fn preview_reads_are_identical_and_all_mutations_are_rejected_without_files() {
             base_revision: 0,
             base_lineage: None,
             operation_id: None,
-            command: Command::Claim { work },
+            command: Command::claim(work),
         })
         .expect_err("preview must reject even eligible work");
     assert_eq!(error.code(), "read_only_project");

@@ -31,7 +31,7 @@ fn reports_and_submission_do_not_bypass_verification_or_milestone_conditions() {
         DependencyKind::FinishStart,
         0.0,
     ));
-    apply(&mut plan, Command::Claim { work });
+    apply(&mut plan, Command::claim(work));
     apply(&mut plan, start_command(work));
     // One clock reading for both forecasts: started work's remaining duration depends on it, and
     // only the progress report may differ between them.
@@ -117,7 +117,7 @@ fn report_validation_is_atomic_and_blocked_corrections_preserve_the_blocker() {
         .is_err()
     );
     assert_eq!(plan, before);
-    apply(&mut plan, Command::Claim { work });
+    apply(&mut plan, Command::claim(work));
     apply(&mut plan, start_command(work));
     for (actor, command) in [
         ("other", report.clone()),
@@ -190,7 +190,7 @@ fn nested_packages_average_leaf_tasks_once_and_legacy_submissions_show_100_perce
     plan.work_items.insert(nested, package);
     plan.work_items.get_mut(&a).expect("a").parent = Some(parent);
     plan.work_items.get_mut(&b).expect("b").parent = Some(nested);
-    apply(&mut plan, Command::Claim { work: a });
+    apply(&mut plan, Command::claim(a));
     apply(&mut plan, start_command(a));
     apply(
         &mut plan,
@@ -200,7 +200,7 @@ fn nested_packages_average_leaf_tasks_once_and_legacy_submissions_show_100_perce
             note: None,
         },
     );
-    apply(&mut plan, Command::Claim { work: b });
+    apply(&mut plan, Command::claim(b));
     apply(&mut plan, start_command(b));
     apply(&mut plan, submit_command(b));
     assert_eq!(plan.work_items[&b].execution.reported_progress_percent, 0);

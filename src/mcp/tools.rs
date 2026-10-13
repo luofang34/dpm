@@ -181,7 +181,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 properties.insert("percent".into(),json!({"type":"integer","minimum":0,"maximum":100}));
                 properties.insert("note".into(),json!({"type":"string"})); required.push("percent");
             },
-            "start_work"|"submit_work"|"verify_work" => lifecycle::schema(name, &mut properties),
+            "claim_work"|"start_work"|"submit_work"|"verify_work" => lifecycle::schema(name, &mut properties),
             "attach_git_head" => { properties.insert("asset".into(),json!({"type":"string"})); },
             "add_artifact" => { properties.insert("artifact".into(),schemas::artifact()); required.push("artifact"); },
             "link_external"|"unlink_external" => {
@@ -204,6 +204,7 @@ pub(crate) fn definitions() -> Vec<Value> {
             },
             "decide_gate" => {
                 properties.insert("decision".into(),json!({"type":"string"})); properties.insert("outcome".into(),json!({"type":"string","minLength":1,"description":"Outcome text, or exactly one option key when the decision lists options"})); required.extend(["decision","outcome"]);
+                lifecycle::schema(name, &mut properties);
             },
             _ => {},
         }
@@ -390,6 +391,7 @@ fn mutation_blocking(
         return Ok(Command::Decide {
             decision,
             outcome: required(args.outcome, "outcome")?,
+            occurred_at: args.at,
         });
     }
     if matches!(
@@ -427,7 +429,6 @@ fn mutation_blocking(
             work,
             reason: required(args.reason, "reason")?,
         }),
-        "claim_work" => Ok(Command::Claim { work }),
         "report_blocker" => Ok(Command::Block {
             work,
             reason: required(args.blocker, "blocker")?,

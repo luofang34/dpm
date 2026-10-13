@@ -33,6 +33,7 @@ fn decide(plan: &mut Plan, option: &str, at: DateTime<Utc>) {
     let command = Command::Decide {
         decision,
         outcome: option.into(),
+        occurred_at: None,
     };
     apply_command(
         plan,
@@ -48,7 +49,7 @@ fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
     let work = id(plan, key);
     let worker = ActorId::agent("worker");
     for command in [
-        Command::Claim { work },
+        Command::claim(work),
         Command::Start {
             work,
             occurred_at: None,

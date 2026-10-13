@@ -131,7 +131,7 @@ fn a_revalidation_stays_valid_after_the_successor_is_handed_to_its_reviewer() {
 fn a_releaser_that_attached_evidence_cannot_verify_the_result() {
     let (mut plan, a, _, _) = fs();
     let releaser = first();
-    ok(&mut plan, &releaser, Command::Claim { work: a }, 0);
+    ok(&mut plan, &releaser, Command::claim(a), 0);
     ok(&mut plan, &releaser, attach(&releaser, a, 0), 0);
     ok(&mut plan, &releaser, release(a), 1);
     start(&mut plan, &second(), a, 2);
@@ -149,7 +149,7 @@ fn a_releaser_that_attached_evidence_cannot_verify_the_result() {
 fn a_releaser_that_attached_nothing_is_still_a_former_holder() {
     let (mut plan, a, _, _) = fs();
     let releaser = ActorId::human("releaser");
-    ok(&mut plan, &releaser, Command::Claim { work: a }, 0);
+    ok(&mut plan, &releaser, Command::claim(a), 0);
     ok(&mut plan, &releaser, release(a), 1);
     let recorded = &plan.work_items[&a].execution.releases;
     assert_eq!(recorded.len(), 1);
@@ -214,7 +214,7 @@ fn evidence_is_attached_to_a_task_only_by_its_current_owner() {
         attach(&author(), a, 0),
         0
     )));
-    ok(&mut plan, &second(), Command::Claim { work: a }, 1);
+    ok(&mut plan, &second(), Command::claim(a), 1);
     assert!(matches!(
         refused(&mut plan, &author(), attach(&author(), a, 1), 1),
         EngineError::OwnedByAnother { .. }
@@ -254,7 +254,7 @@ fn a_planning_source_author_may_still_review_the_task() {
 #[test]
 fn evidence_cannot_be_attached_as_a_planning_source() {
     let (mut plan, a, _, _) = fs();
-    ok(&mut plan, &second(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &second(), Command::claim(a), 0);
     let mut disguised = artifact(second(), t(1));
     disguised
         .metadata

@@ -40,10 +40,11 @@ fn switched_with_blocked_work() -> Plan {
     let decide = Command::Decide {
         decision: supplier,
         outcome: "A".into(),
+        occurred_at: None,
     };
     run(&mut plan, "lead", decide, 0);
     let design = id(&plan, "SUP-DESIGN");
-    run(&mut plan, "worker", Command::Claim { work: design }, 0);
+    run(&mut plan, "worker", Command::claim(design), 0);
     run(
         &mut plan,
         "worker",
@@ -66,7 +67,7 @@ fn switched_with_blocked_work() -> Plan {
     };
     run(&mut plan, "lead", verify, 1);
     let quote = id(&plan, "SUP-A-QUOTE");
-    run(&mut plan, "worker", Command::Claim { work: quote }, 2);
+    run(&mut plan, "worker", Command::claim(quote), 2);
     run(
         &mut plan,
         "worker",
@@ -86,7 +87,7 @@ fn switched_with_blocked_work() -> Plan {
             .expect("delta");
     run(&mut plan, "lead", change, 4);
     let b_quote = id(&plan, "SUP-B-QUOTE");
-    run(&mut plan, "other", Command::Claim { work: b_quote }, 5);
+    run(&mut plan, "other", Command::claim(b_quote), 5);
     run(
         &mut plan,
         "other",

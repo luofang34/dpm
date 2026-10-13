@@ -48,13 +48,22 @@ fn run(plan: &mut Plan, actor: ActorId, command: Command, at: DateTime<Utc>) {
 fn decide(plan: &mut Plan, option: &str, at: DateTime<Utc>) {
     let decision = supplier(plan);
     let outcome = option.into();
-    run(plan, lead(), Command::Decide { decision, outcome }, at);
+    run(
+        plan,
+        lead(),
+        Command::Decide {
+            decision,
+            outcome,
+            occurred_at: None,
+        },
+        at,
+    );
 }
 
 fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
     let work = id(plan, key);
     for command in [
-        Command::Claim { work },
+        Command::claim(work),
         Command::Start {
             work,
             occurred_at: None,
@@ -133,7 +142,7 @@ fn supplier_a_happy_path_joins_only_the_selected_verified_branch() {
 
     // The unselected branch cannot be claimed, and the refusal changes no state.
     let b_quote = id(&plan, "SUP-B-QUOTE");
-    refused(&mut plan, "SUP-B-QUOTE", Command::Claim { work: b_quote });
+    refused(&mut plan, "SUP-B-QUOTE", Command::claim(b_quote));
     complete(&mut plan, "SUP-BUILD", t(7));
     complete(&mut plan, "SUP-A-AUDIT", t(7));
     let report = progress(&plan, t(8)).expect("progress");
@@ -147,7 +156,7 @@ fn an_unknown_choice_is_not_completion_and_its_branches_cannot_be_claimed() {
     let mut plan = fixture();
     complete(&mut plan, "SUP-DESIGN", t(1));
     let quote = id(&plan, "SUP-A-QUOTE");
-    let unmet = refused(&mut plan, "SUP-A-QUOTE", Command::Claim { work: quote });
+    let unmet = refused(&mut plan, "SUP-A-QUOTE", Command::claim(quote));
     assert!(unmet.iter().any(|g| matches!(
         g,
         UnmetGate::Applicability {
@@ -173,7 +182,7 @@ fn a_skipped_predecessor_does_not_release_ordinary_downstream_work() {
     decide(&mut plan, "B", t(1));
     complete(&mut plan, "SUP-DESIGN", t(2));
     let audit = id(&plan, "SUP-A-AUDIT");
-    let unmet = refused(&mut plan, "SUP-A-AUDIT", Command::Claim { work: audit });
+    let unmet = refused(&mut plan, "SUP-A-AUDIT", Command::claim(audit));
     assert!(unmet.iter().any(|g| matches!(
         g,
         UnmetGate::Dependency {
@@ -183,13 +192,7 @@ fn a_skipped_predecessor_does_not_release_ordinary_downstream_work() {
     )));
     // Nested packages pass the exclusion to their tasks.
     let qualification = id(&plan, "SUP-A-QUAL");
-    refused(
-        &mut plan,
-        "SUP-A-QUAL",
-        Command::Claim {
-            work: qualification,
-        },
-    );
+    refused(&mut plan, "SUP-A-QUAL", Command::claim(qualification));
     complete(&mut plan, "SUP-B-QUOTE", t(3));
     complete(&mut plan, "SUP-B-QUAL", t(4));
     let report = progress(&plan, t(5)).expect("progress");
@@ -250,6 +253,7 @@ fn decide_requires_a_declared_option_atomically() {
         Command::Decide {
             decision,
             outcome: "Supplier A".into(),
+            occurred_at: None,
         },
         t(1),
         dpm_model::OperationId::new(),
@@ -278,7 +282,11 @@ fn a_choice_that_would_exclude_started_work_is_refused_by_decide() {
     let error = apply_command(
         &mut plan,
         lead(),
-        Command::Decide { decision, outcome },
+        Command::Decide {
+            decision,
+            outcome,
+            occurred_at: None,
+        },
         t(1),
         dpm_model::OperationId::new(),
     )
@@ -294,7 +302,7 @@ fn changing_a_choice_after_work_starts_requires_a_reviewed_change_and_keeps_the_
     decide(&mut plan, "A", t(1));
     complete(&mut plan, "SUP-DESIGN", t(2));
     let quote = id(&plan, "SUP-A-QUOTE");
-    run(&mut plan, worker(), Command::Claim { work: quote }, t(3));
+    run(&mut plan, worker(), Command::claim(quote), t(3));
     run(
         &mut plan,
         worker(),
@@ -311,6 +319,7 @@ fn changing_a_choice_after_work_starts_requires_a_reviewed_change_and_keeps_the_
         Command::Decide {
             decision,
             outcome: "B".into(),
+            occurred_at: None,
         },
         t(4),
         dpm_model::OperationId::new(),

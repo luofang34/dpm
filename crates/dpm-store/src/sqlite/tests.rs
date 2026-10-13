@@ -15,7 +15,7 @@ fn claim(plan: &mut Plan, actor: &str) -> Operation {
     apply_command(
         plan,
         ActorId::agent(actor),
-        Command::Claim { work },
+        Command::claim(work),
         Utc::now(),
         dpm_model::OperationId::new(),
     )

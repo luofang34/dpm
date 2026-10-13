@@ -47,6 +47,10 @@ pub enum Command {
     Claim {
         /// Task to reserve.
         work: WorkItemId,
+        /// When the task was actually reserved, if before the commit; absent means the commit
+        /// time.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        occurred_at: Option<DateTime<Utc>>,
     },
     /// Give up the caller's own unstarted claim, returning the task to Planned without an owner.
     Release {
@@ -157,6 +161,10 @@ pub enum Command {
         decision: DecisionId,
         /// Non-empty outcome.
         outcome: String,
+        /// When the decision was actually made, if before the commit; absent means the commit
+        /// time.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        occurred_at: Option<DateTime<Utc>>,
     },
     /// Link work to an external tracker object without granting it local authority.
     LinkExternal(ExternalLinkRequest),
@@ -219,11 +227,22 @@ impl Operation {
 }
 
 impl Command {
+    /// A claim that occurs when its operation commits.
+    #[must_use]
+    pub fn claim(work: WorkItemId) -> Self {
+        Self::Claim {
+            work,
+            occurred_at: None,
+        }
+    }
+
     /// The occurrence time a command named because it was recorded after the fact.
     #[must_use]
     pub fn occurred_at(&self) -> Option<DateTime<Utc>> {
         match self {
-            Self::Start { occurred_at, .. }
+            Self::Claim { occurred_at, .. }
+            | Self::Decide { occurred_at, .. }
+            | Self::Start { occurred_at, .. }
             | Self::Submit { occurred_at, .. }
             | Self::Verify { occurred_at, .. } => *occurred_at,
             _ => None,

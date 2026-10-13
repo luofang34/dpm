@@ -48,7 +48,7 @@ fn fixture() -> (Plan, DecisionId) {
     apply_command(
         &mut plan,
         ActorId::agent("worker"),
-        Command::Claim { work: task },
+        Command::claim(task),
         Utc::now(),
         dpm_model::OperationId::new(),
     )

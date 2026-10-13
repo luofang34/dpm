@@ -275,7 +275,7 @@ fn a_run_observed_before_the_revision_counter_wrapped_is_a_consistent_pair() {
             .expect("persist");
         operation
     };
-    commit(&mut plan, Command::Claim { work });
+    commit(&mut plan, Command::claim(work));
     assert_eq!(plan.revision, u64::MAX);
     let mut runs = RunStore::open_or_create_blocking(
         &RunStore::sidecar_path(&path),

@@ -177,7 +177,7 @@ fn proposals_cannot_record_or_remove_waivers_or_change_started_prerequisites() {
     let (a, b) = (key(&plan, "TEST-A"), key(&plan, "TEST-B"));
     let gate = plan.find_decision_by_key("TEST-GATE").expect("gate").id;
     for (actor, command) in [
-        (ActorId::agent("w"), Command::Claim { work: a }),
+        (ActorId::agent("w"), Command::claim(a)),
         (ActorId::agent("w"), start_command(a)),
         (ActorId::agent("w"), submit_command(a)),
         (ActorId::human("r"), verify_command(a)),
@@ -186,9 +186,10 @@ fn proposals_cannot_record_or_remove_waivers_or_change_started_prerequisites() {
             Command::Decide {
                 decision: gate,
                 outcome: "go".into(),
+                occurred_at: None,
             },
         ),
-        (ActorId::agent("w"), Command::Claim { work: b }),
+        (ActorId::agent("w"), Command::claim(b)),
     ] {
         run(&mut plan, actor, command).expect("execution step");
     }

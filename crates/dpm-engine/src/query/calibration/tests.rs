@@ -55,7 +55,7 @@ impl Log {
 
     pub(crate) fn claim(&mut self, who: &str, key: &str, hours: f64) {
         let work = self.id(key);
-        self.run(who, Command::Claim { work }, hours);
+        self.run(who, Command::claim(work), hours);
     }
 
     /// Start committed at `hours`, optionally backfilled to an earlier occurrence.
@@ -99,7 +99,15 @@ impl Log {
             .expect("gate")
             .id;
         let outcome = "Proceed".into();
-        self.run("human:lead", Command::Decide { decision, outcome }, hours);
+        self.run(
+            "human:lead",
+            Command::Decide {
+                decision,
+                outcome,
+                occurred_at: None,
+            },
+            hours,
+        );
     }
 
     /// Human A (2 h of a 4 h estimate, reviewed by an agent), agent B (rejected once, 2 h 50 min
@@ -319,6 +327,7 @@ fn decision_waits_run_from_the_reviewed_change_that_opened_them() {
     let decide = Command::Decide {
         decision: question.id,
         outcome: "Ship".into(),
+        occurred_at: None,
     };
     log.run("service:ci", decide, 55.0);
 

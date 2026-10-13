@@ -44,7 +44,7 @@ fn command_work(command: &Command) -> Option<WorkItemId> {
     match command {
         Command::RatifyContract { work }
         | Command::Reject { work, .. }
-        | Command::Claim { work }
+        | Command::Claim { work, .. }
         | Command::Release { work, .. }
         | Command::Handoff { work, .. }
         | Command::Start { work, .. }

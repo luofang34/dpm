@@ -3,12 +3,12 @@ use super::*;
 #[test]
 fn a_plan_change_cannot_move_owners_or_rewrite_handoffs() {
     let (mut plan, a, _, _) = fs();
-    ok(&mut plan, &first(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &first(), Command::claim(a), 0);
     ok(&mut plan, &lead(), handoff(a, first(), second()), 1);
     ok(&mut plan, &second(), release(a), 2);
     reviewed_edit_refused(&mut plan, a, |w| w.execution.handoffs.clear());
     reviewed_edit_refused(&mut plan, a, |w| w.execution.releases.clear());
-    ok(&mut plan, &first(), Command::Claim { work: a }, 3);
+    ok(&mut plan, &first(), Command::claim(a), 3);
     reviewed_edit_refused(&mut plan, a, |w| {
         w.execution.owner = Some(ActorId::agent("third"))
     });

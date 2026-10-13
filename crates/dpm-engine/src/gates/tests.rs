@@ -56,7 +56,7 @@ fn structured_gates_report_every_constraint_and_inherited_decision() {
         apply_command(
             &mut plan,
             ActorId::agent("worker"),
-            Command::Claim { work },
+            Command::claim(work),
             Utc::now(),
             dpm_model::OperationId::new()
         )
@@ -137,7 +137,7 @@ fn the_hard_edge_remedy_names_the_claim_that_already_locks_its_lag() {
     legacy.execution.status = WorkStatus::Verified;
     legacy.execution.owner = Some(ActorId::agent("legacy"));
     let now = Utc::now();
-    let claim = Command::Claim { work: b };
+    let claim = Command::claim(b);
     apply_command(
         &mut plan,
         ActorId::agent("worker"),

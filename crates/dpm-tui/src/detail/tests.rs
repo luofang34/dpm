@@ -38,6 +38,7 @@ fn detail_states_applicability_in_words_with_keys() {
         Command::Decide {
             decision,
             outcome: "B".into(),
+            occurred_at: None,
         },
         chrono::Utc::now(),
         dpm_model::OperationId::new(),
@@ -84,7 +85,7 @@ fn detail_shows_the_rejected_basis_and_affected_successor_from_the_shared_report
             .expect("time")
     };
     let steps = [
-        (ActorId::agent("author"), Command::Claim { work: a }),
+        (ActorId::agent("author"), Command::claim(a)),
         (
             ActorId::agent("author"),
             Command::Start {
@@ -100,7 +101,7 @@ fn detail_shows_the_rejected_basis_and_affected_successor_from_the_shared_report
                 occurred_at: None,
             },
         ),
-        (ActorId::agent("builder"), Command::Claim { work: b }),
+        (ActorId::agent("builder"), Command::claim(b)),
         (
             ActorId::agent("builder"),
             Command::Start {
