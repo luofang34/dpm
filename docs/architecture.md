@@ -682,10 +682,11 @@ revision and lineage checks.
 
 Queries read "now" from a query clock, the system clock by default. A client that must reproduce a
 view pins it (`set_query_clock`); mutations never read it, so an operation's timestamp is always
-when it was committed. A caller's reading (`QueryClock::Pinned`: CLI and `dpm mcp` `--clock`, the native
-host) observes the plan replayed from genesis through the
-operations committed by then, so a look back sees that moment's revision and state; the
-application's own `Fixed` reading for one native view evaluates the snapshot.
+when it was committed. A caller's reading (`QueryClock::Pinned`: CLI and `dpm mcp` `--clock`, the
+`as_of` tool argument, the native host) observes `Plan::as_of`: the current plan with every
+execution, decision and waiver fact whose event time is later withdrawn, so backfilled and imported
+history looks back to when it occurred; the application's own `Fixed` reading for one native view
+evaluates the snapshot.
 
 The `sqlite`, `registry` and `git` features of `dpm-app` are on by default, and CI
 checks the application layer without them for `aarch64-apple-ios` and `wasm32-unknown-unknown`.

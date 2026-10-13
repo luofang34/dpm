@@ -258,6 +258,11 @@ def smoke(database):
         assert remote == local and local['revision'] == 4 and local['data']['progress']['percent_complete'] == 0, local
         then = run_cli(database, '--clock', early, 'show', 'TEST-A')['execution']
         assert then['status'] == 'Planned' and then['owner'] is None and 'events' not in then, then
+        # The same look back per call, from a server on the present clock, which it keeps after.
+        assert worker.call('project_status', {'as_of': early}) == local
+        assert worker.call('get_schedule', {'as_of': early, 'probabilistic': False}) == run_cli_envelope(database, '--clock', early, 'schedule', '--no-simulation')
+        assert worker.call('project_status', {})['revision'] > 0
+        worker.call('report_progress', {'key': 'TEST-A', 'percent': 50, 'base_revision': 4, 'as_of': early}, error='invalid_request')
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
         worker.call('attach_git_head', {'key': 'TEST-A', 'asset': 'TEST-REPO', 'base_revision': 4})
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')

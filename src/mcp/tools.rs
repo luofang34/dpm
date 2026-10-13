@@ -6,6 +6,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
+mod as_of;
 mod cli;
 mod forecast;
 mod interchange;
@@ -206,6 +207,7 @@ pub(crate) fn definitions() -> Vec<Value> {
             },
             _ => {},
         }
+        as_of::schema(name, &mut properties);
         json!({"name":name,"description":description,"inputSchema":{"type":"object","properties":properties,"required":required,"additionalProperties":false},"annotations":{"readOnlyHint":read,"destructiveHint":!read,"openWorldHint":false},"_meta":{"dpm/cli":cli::command(name)}})
     }).collect()
 }
@@ -270,7 +272,10 @@ pub(crate) fn call_tool_blocking(
     name: &str,
     mut value: Value,
 ) -> Result<Value, AppError> {
-    validate_argument_names(name, &value)?;
+    schemas::validate_argument_names(name, &value)?;
+    if let Some(at) = as_of::take(&mut value)? {
+        return as_of::observe_blocking(app, at, |app| call_tool_blocking(app, actor, name, value));
+    }
     let preconditions = preconditions::take(&mut value)?;
     if runs::handles(name) {
         return runs::call_blocking(app, actor, name, value, preconditions);
@@ -462,27 +467,6 @@ fn dependency_command(app: &Application, name: &str, args: Arguments) -> Result<
     })
 }
 
-fn validate_argument_names(name: &str, value: &Value) -> Result<(), AppError> {
-    let definition = definitions()
-        .into_iter()
-        .find(|d| d.get("name").and_then(Value::as_str) == Some(name))
-        .ok_or_else(|| AppError::InvalidRequest(format!("unknown tool {name}")))?;
-    let fields = value
-        .as_object()
-        .ok_or_else(|| AppError::InvalidRequest("arguments must be an object".into()))?;
-    for key in fields.keys() {
-        if definition
-            .pointer("/inputSchema/properties")
-            .and_then(|properties| properties.get(key))
-            .is_none()
-        {
-            return Err(AppError::InvalidRequest(format!(
-                "unexpected argument {key} for {name}"
-            )));
-        }
-    }
-    Ok(())
-}
 fn registry_tool_blocking(name: &str, args: Arguments) -> Result<Value, AppError> {
     let registry = dpm_app::WorkspaceRegistry::from_environment()?;
     let data = if name == "workspace_list" {
