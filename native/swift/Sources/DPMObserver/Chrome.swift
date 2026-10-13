@@ -1,5 +1,5 @@
 // Shared pieces of the interface: status text paired with symbols (never colour alone), the status
-// bar that always says what is shown and how current it is, and wrapped, scrollable text.
+// bar that says what is not normal about what is shown, and wrapped, scrollable text.
 
 import DPMObserverCore
 import SwiftUI
@@ -123,39 +123,45 @@ struct StatusBar: View {
 
     var body: some View {
         let snapshot = model.snapshot
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                // Only what is not the normal case gets a badge: a live, connected and current workspace shows its
-                // revision alone, and the badge appears when that stops being true.
-                if let source = sourceBadge(snapshot) { source }
-                if let connection = connectionBadge(snapshot.connection) { connection }
-                if !snapshot.freshness.current, snapshot.connection.isLive {
-                    Badge(text: staleWords(snapshot.freshness), symbol: "exclamationmark.triangle", tint: .orange)
+        // The window's subtitle says the revision and how fresh it is, including a refresh under way; this bar only appears
+        // when there is something abnormal to say (a preview or archive source, a connection that is not live, a failed
+        // read), so the normal case gives its height to the page and an ordinary refresh moves nothing. Collapsed, it
+        // stays in the tree at no height.
+        Group {
+            if Self.hasNews(snapshot) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        if let source = sourceBadge(snapshot) { source }
+                        if let connection = connectionBadge(snapshot.connection) { connection }
+                        if !snapshot.freshness.current, snapshot.connection.isLive {
+                            Badge(text: Self.staleWords(snapshot.freshness), symbol: "exclamationmark.triangle", tint: .orange)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    ConnectionBanner(model: model)
                 }
-                if let words = Self.identityWords(snapshot) {
-                    // The revision stays in view; the workspace and lineage identities are in its tooltip, its
-                    // accessibility label and the Observation basis details.
-                    Text("Revision \(snapshot.revision.map { String($0) } ?? "unknown")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .help(words)
-                        .accessibilityLabel(words)
-                        .accessibilityIdentifier("status.revision")
-                }
-                Spacer()
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text(freshnessLine(snapshot, now: context.date))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel(freshnessLine(snapshot, now: context.date))
-                }
+                .padding(.horizontal, Layout.margin)
+                .padding(.vertical, 8)
+            } else {
+                Color.clear.frame(height: 0)
             }
-            ConnectionBanner(model: model)
         }
-        .padding(.horizontal, Layout.margin)
-        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("status.bar")
+    }
+
+    /// Whether anything but the normal case (a live, connected workspace whose reads succeed) is to be said.
+    static func hasNews(_ snapshot: ObserverSnapshot) -> Bool {
+        snapshot.identity?.source != "live" || !snapshot.connection.isLive || snapshot.freshness.lastError != nil
+    }
+
+    /// The window subtitle: the revision and when it was last received, for example "Revision 42 · Updated 9 s ago".
+    static func subtitle(_ snapshot: ObserverSnapshot, now: Date) -> String {
+        let revision = "Revision \(snapshot.revision.map { String($0) } ?? "unknown")"
+        guard let received = snapshot.freshness.receivedAt else { return "\(revision) · Nothing read yet" }
+        if snapshot.connection.isLive, !snapshot.freshness.current { return "\(revision) · \(staleWords(snapshot.freshness))" }
+        return "\(revision) · Updated \(age(received, now: now))"
     }
 
     static func identityWords(_ snapshot: ObserverSnapshot) -> String? {
@@ -183,19 +189,13 @@ struct StatusBar: View {
         }
     }
 
-    private func staleWords(_ freshness: Freshness) -> String {
+    static func staleWords(_ freshness: Freshness) -> String {
         var reasons: [String] = []
         if freshness.projectStale { reasons.append("project changed") }
         if freshness.runsStale { reasons.append("runs changed") }
         if freshness.clockDue { reasons.append("time moved on") }
         if freshness.lastError != nil { reasons.append("last read failed") }
         return "Refreshing: " + (reasons.isEmpty ? "waiting" : reasons.joined(separator: ", "))
-    }
-
-    private func freshnessLine(_ snapshot: ObserverSnapshot, now: Date) -> String {
-        guard let received = snapshot.freshness.receivedAt else { return "Nothing read yet" }
-        let evaluated = snapshot.freshness.evaluatedAt.map { " · evaluated \(displayTime($0))" } ?? ""
-        return "Updated \(age(received, now: now))\(evaluated)"
     }
 }
 

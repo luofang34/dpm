@@ -72,18 +72,18 @@ struct GanttLabel: View {
         HStack(spacing: 4) {
             Color.clear.frame(width: Double(item.depth) * 14)
             if item.children > 0 {
-                Image(systemName: item.expanded ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .bold)).frame(width: 12)
+                Image(systemName: item.expanded ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .bold)).frame(width: 12)
                     .accessibilityHidden(true)
                     .onTapGesture { model?.toggleDisclosure(item.id) }
             } else {
                 Color.clear.frame(width: 12)
             }
-            Image(systemName: GanttGlyph.symbol(row)).font(.system(size: 10)).foregroundStyle(row.status == "Verified" ? .secondary : .primary)
+            Image(systemName: GanttGlyph.symbol(row)).font(.caption2).foregroundStyle(row.status == "Verified" ? .secondary : .primary)
                 .help(row.status).accessibilityHidden(true)
-            Text(row.key).font(.system(size: 11, design: .monospaced))
+            Text(row.key).font(.system(.subheadline, design: .monospaced))
             Text(row.title).font(.system(size: 12, weight: row.isPackage ? .semibold : .regular)).lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 2)
-            Text(row.priority).font(.system(size: 10)).foregroundStyle(.secondary)
+            Text(row.priority).font(.caption2).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 6)
         // The row's band and selection continue across the name, as on the timeline beside it.

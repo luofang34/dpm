@@ -120,7 +120,7 @@ struct RenderedPage: View {
                 if let mark = frame.marked {
                     Badge(text: mark, symbol: "exclamationmark.triangle", tint: .orange).padding(.horizontal, Layout.margin).frame(maxWidth: .infinity, alignment: .leading)
                 }
-                GanttStrip(frame: frame, scrolling: false)
+                GanttStrip(frame: frame)
                 Divider()
                 let height = Double(frame.state.viewportRows) * GanttLayout.rowHeight + GanttGeometry.axis
                 let geometry = GanttGeometry(frame, height: height)

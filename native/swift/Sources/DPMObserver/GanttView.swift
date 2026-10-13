@@ -7,7 +7,7 @@
 // through `GanttKeyboard` to `ObserverModel.handleKey`, the same path the suite drives. The rows are real
 // accessibility elements carrying their full text; the timeline beside them is a drawing and is hidden
 // from assistive technology, its content being the rows.
-// Stale or lost data is marked on the page and in the status bar, and the last reading stays drawn.
+// Stale or lost data is marked on the page and in the window subtitle or the status bar, and the last reading stays drawn.
 
 import AppKit
 import DPMObserverCore
@@ -20,8 +20,11 @@ struct GanttView: View {
     /// Counts the model's requests for a row to have the keyboard; the region takes it on each, if it lacks it.
     @State private var keyboardRequest = 0
     @State private var rowNamed = 0
-    /// Whether the cursor row's complete text is expanded in the strip; compact by default, so the chart is the primary area.
-    @State private var detailsShown = false
+    /// Whether the person opened the inspector. It is also shown while editing is on, as the edit panel always was.
+    @State private var inspectorOpen = false
+    /// The inspector's tab as last chosen; nil follows editing (Edit while editing is on, Info otherwise), so turning
+    /// editing on opens the inspector on Edit.
+    @State private var inspectorChoice: GanttInspectorTab?
 
     var body: some View {
         let frame = GanttFrame(model: model, keyboard: holdsKeyboard)
@@ -34,10 +37,9 @@ struct GanttView: View {
                     .padding(.vertical, 4)
                     .accessibilityIdentifier("gantt.mark")
             }
-            // The cursor row in a compact summary (identity, status, a short schedule line); its complete text scrolls
-            // in the expanded strip, is the row's accessibility text and is in Detail.
-            GanttStrip(frame: frame, scrolling: true, expanded: $detailsShown)
-                .frame(maxHeight: detailsShown ? 170 : 62)
+            // The cursor row in one line (identity, status, a short schedule line); its complete text is the row's
+            // accessibility text, the inspector's Info and Detail.
+            GanttCursorLine(frame: frame) { showInfo() }
             Divider()
             GanttBody(model: model, frame: frame, keyboardRequest: keyboardRequest, rowNamed: rowNamed) { holds in
                 holdsKeyboard = holds
@@ -49,13 +51,18 @@ struct GanttView: View {
             .accessibilityIdentifier("gantt.body")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .inspector(isPresented: Binding(get: { model.editing.enabled }, set: { model.setEditing($0) })) { EditPanel(model: model) }
+        .toolbar { windowTools(frame) }
+        .inspector(isPresented: inspectorShown) {
+            GanttInspector(model: model, frame: frame, tab: Binding(get: { tab }, set: { inspectorChoice = $0 }))
+        }
+        .focusedSceneValue(\.ganttActions, GanttActions(toggleInspector: { toggleInspector() }))
         .sheet(isPresented: Binding(get: { model.editing.reviewing }, set: { if !$0 { model.closeReview() } }), onDismiss: { model.reviewDismissed() }) {
             ReviewSheet(model: model)
         }
         // Closing the review, after an apply or a cancel, gives the keyboard back to the rows it was opened from.
         .onChange(of: model.editing.focusReturns) { keyboardRequest &+= 1 }
         .onChange(of: model.rowRequests) { keyboardRequest &+= 1 }
+        .onChange(of: model.editing.enabled) { inspectorChoice = nil }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("gantt")
         .onAppear { report() }
@@ -66,6 +73,54 @@ struct GanttView: View {
             report()
         }
         .onChange(of: model.gantt.editingFilter) { report() }
+    }
+
+    private var tab: GanttInspectorTab { inspectorChoice ?? (model.editing.enabled ? .edit : .info) }
+
+    /// Shown while the person has it open or while editing is on. Closing it while editing ends editing, as closing the
+    /// edit inspector always did; opening it never turns editing on.
+    private var inspectorShown: Binding<Bool> {
+        Binding(get: { inspectorOpen || model.editing.enabled }, set: { shown in
+            inspectorOpen = shown
+            if !shown, model.editing.enabled { model.setEditing(false) }
+        })
+    }
+
+    private func toggleInspector() {
+        let shown = inspectorShown
+        shown.wrappedValue = !shown.wrappedValue
+    }
+
+    private func showInfo() {
+        inspectorChoice = .info
+        inspectorOpen = true
+    }
+
+    /// The view controls, in the window's toolbar while the Gantt is shown: each acts through the same model call as its key.
+    @ToolbarContentBuilder
+    private func windowTools(_ frame: GanttFrame) -> some ToolbarContent {
+        let state = frame.state
+        ToolbarItemGroup {
+            GanttTool(label: "Zoom out", symbol: "minus.magnifyingglass", id: "gantt.zoom-out", help: "Zoom out (− or ⌘−)",
+                      disabled: state.zoomLevel == 0 && state.fitScale == nil) { model.perform(.zoomOut) }
+            Text("\(GanttToolbar.scaleWords(state.scale)) pt/h")
+                .font(.caption)
+                .monospacedDigit()
+                .accessibilityLabel("Zoom: \(GanttToolbar.scaleWords(state.scale)) points per elapsed hour")
+            GanttTool(label: "Zoom in", symbol: "plus.magnifyingglass", id: "gantt.zoom-in", help: "Zoom in (+ or ⌘=)",
+                      disabled: state.zoomLevel == GanttLayout.zoomSteps.count - 1 && state.fitScale == nil) { model.perform(.zoomIn) }
+            GanttTool(label: "Fit timeline", symbol: "arrow.left.and.right.square", id: "gantt.fit",
+                      help: "Fit timeline (⌘0): zoom so the whole plan, from its earliest recorded start to its last finish or p95, fills the timeline. Changes only the view.") { model.fitTimeline() }
+            GanttTool(label: "Locate selected", symbol: "scope", id: "gantt.locate",
+                      help: "Locate selected: put the cursor on the selected task and scroll its bar into view") { model.locateSelected() }
+        }
+        ToolbarItemGroup {
+            GanttTool(label: "Collapse all", symbol: "rectangle.compress.vertical", id: "gantt.collapse-all", help: "Collapse all work packages (,)") { model.perform(.collapseAll) }
+            GanttTool(label: "Expand all", symbol: "rectangle.expand.vertical", id: "gantt.expand-all", help: "Expand all work packages (.)") { model.perform(.expandAll) }
+            GanttKeysButton()
+            GanttTool(label: "Inspector", symbol: "sidebar.trailing", id: "gantt.inspector-toggle",
+                      help: "Show or hide the inspector: the cursor row in full, or the editor (⌥⌘I)") { toggleInspector() }
+        }
     }
 
     /// The view says what holds the keyboard, as `search_focused` does for the search field: the filter field,
@@ -84,146 +139,80 @@ struct GanttView: View {
     }
 }
 
-// MARK: - Controls
-
-struct GanttToolbar: View {
-    @ObservedObject var model: ObserverModel
+/// The cursor row in one line under the controls: identity, status and a short schedule line, cut for width only here,
+/// with the row's complete text as its accessibility text and Info opening it in full in the inspector.
+struct GanttCursorLine: View {
     let frame: GanttFrame
-    @FocusState private var filtering: Bool
-    @State private var keysShown = false
-
-    static let keys = "Keys: ↑ ↓ move · ← collapse or go to parent · → expand or go in · Space select · Return or ⌘D open Detail · Esc or ⌘[ back from Detail · + − zoom · ⇧ arrows pan · / filter · c critical only · s status · x clear · , . collapse or expand all. Pointer: a click on a bar or row selects it, a double click opens Detail, a drag or a scroll pans."
-
-    /// A compact icon control with its full action as its accessibility label and its tooltip: no clipped meaning.
-    private func tool(_ label: String, _ symbol: String, _ id: String, help: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).frame(minWidth: 18) }
-            .disabled(disabled)
-            .help(help)
-            .accessibilityLabel(label)
-            .accessibilityIdentifier(id)
-    }
+    let showInfo: () -> Void
 
     var body: some View {
-        let state = frame.state
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                TextField(Self.prompt, text: Binding(get: { model.gantt.filter.text }, set: { model.setFilterText($0) }))
-                    .textFieldStyle(.roundedBorder)
-                    .frame(minWidth: 220, maxWidth: 320)
-                    .reportFrame("filter")
-                    .focused($filtering)
-                    .accessibilityLabel("Filter rows")
-                    .accessibilityHint("Matches key, title, status and kind. Escape returns to the rows.")
-                    .accessibilityIdentifier("gantt.filter")
-                Picker("Status", selection: Binding(get: { state.filter.status ?? "Any status" }, set: { model.setFilterStatus($0 == "Any status" ? nil : $0) })) {
-                    ForEach(["Any status"] + (frame.schedule?.statuses ?? []), id: \.self) { Text($0).tag($0) }
-                }
-                .frame(maxWidth: 190)
-                .accessibilityIdentifier("gantt.status")
-                Toggle("Critical only", isOn: Binding(get: { state.filter.criticalOnly }, set: { model.setCriticalOnly($0) }))
-                    .accessibilityHint("Only work the query puts on the critical path, with the packages that contain it")
-                    .accessibilityIdentifier("gantt.critical")
-                Button("Clear filter") { model.perform(.clearFilter) }
-                    .disabled(!state.filter.isActive)
-                    .accessibilityIdentifier("gantt.clear")
-                Spacer(minLength: 0)
-                EditToggle(model: model)
-            }
-            HStack(spacing: 6) {
-                tool("Collapse all", "rectangle.compress.vertical", "gantt.collapse-all", help: "Collapse all work packages (,)") { model.perform(.collapseAll) }
-                tool("Expand all", "rectangle.expand.vertical", "gantt.expand-all", help: "Expand all work packages (.)") { model.perform(.expandAll) }
-                Divider().frame(height: 16)
-                tool("Zoom out", "minus.magnifyingglass", "gantt.zoom-out", help: "Zoom out (−)", disabled: state.zoomLevel == 0 && state.fitScale == nil) { model.perform(.zoomOut) }
-                Text("\(Self.scaleWords(state.scale)) pt/h")
-                    .font(.caption).monospacedDigit()
-                    .accessibilityLabel("Zoom: \(Self.scaleWords(state.scale)) points per elapsed hour")
-                tool("Zoom in", "plus.magnifyingglass", "gantt.zoom-in", help: "Zoom in (+)", disabled: state.zoomLevel == GanttLayout.zoomSteps.count - 1 && state.fitScale == nil) { model.perform(.zoomIn) }
-                tool("Fit timeline", "arrow.left.and.right.square", "gantt.fit", help: "Fit timeline: zoom so the whole plan, from its earliest recorded start to its last finish or p95, fills the timeline. Changes only the view.") { model.fitTimeline() }
-                tool("Locate selected", "scope", "gantt.locate", help: "Locate selected: put the cursor on the selected task and scroll its bar into view") { model.locateSelected() }
-                Divider().frame(height: 16)
-                Text("\(frame.outline.count) of \(frame.schedule?.rows.count ?? 0) rows · \(state.filter.words)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .help("\(frame.outline.count) of \(frame.schedule?.rows.count ?? 0) rows · \(state.filter.words)")
-                    .accessibilityIdentifier("gantt.count")
-                Spacer(minLength: 0)
-                Button { keysShown.toggle() } label: { Label("Keys", systemImage: keysShown ? "keyboard.chevron.compact.down" : "keyboard") }
-                    .help(Self.keys)
-                    .accessibilityLabel("Keys and pointer help")
-                    .accessibilityValue(keysShown ? "shown" : "hidden")
-                    .accessibilityHint(Self.keys)
-                    .accessibilityIdentifier("gantt.keys-toggle")
-            }
-            if let note = state.locateNote {
-                // Why Locate selected did not move: the selected row is filtered out (the selection is kept).
-                Label(note, systemImage: "eye.slash")
-                    .font(.caption)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(note)
-                    .accessibilityIdentifier("gantt.locate-note")
-            }
-            if keysShown {
-                // The legend, shown on request; its complete text is also the toggle's hint and tooltip.
-                Text(Self.keys)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxHeight: 54, alignment: .topLeading)
-                    .accessibilityIdentifier("gantt.keys")
-            }
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            summary
+            Spacer(minLength: 4)
+            // Beside the spoken text, not inside it: a spoken group ignores its children, so a button inside would not be a control.
+            Button("Info", action: showInfo)
+                .controlSize(.small)
+                .help("Show the complete text of the cursor row and the schedule basis in the inspector (⌥⌘I)")
+                .accessibilityIdentifier("gantt.details-toggle")
         }
         .padding(.horizontal, Layout.margin)
-        .padding(.vertical, 8)
-        .reportFrame("toolbar")
-        .onChange(of: filtering) { model.filterFieldFocus(filtering) }
-        .onChange(of: model.focusTarget) {
-            // A row named while the field has the keyboard (Escape) is the region's to take: its one native take ends the
-            // field's editing and gives it the keyboard, and `filtering` follows that, as it does on Tab. Released here as
-            // well, the field would be released a second time, after the region took the keyboard.
-            let row = model.focusTarget?.hasPrefix("gantt.row.") ?? false
-            if model.focusTarget == "gantt.filter" { filtering = true } else if filtering, !row { filtering = false }
-        }
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+        .reportFrame("strip")
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("gantt.strip")
     }
 
-    /// The field's prompt, by which the region also knows the field's editor (see `GanttRegionView.filterField`).
-    static let prompt = "Filter rows by key, title, status or kind"
-
-    static func scaleWords(_ scale: Double) -> String {
-        scale >= 10 ? String(format: "%.0f", scale) : scale >= 1 ? String(format: "%.1f", scale) : String(format: "%.2f", scale)
+    @ViewBuilder
+    private var summary: some View {
+        if let schedule = frame.schedule {
+            if let item = frame.cursor {
+                let row = item.row
+                let said = speech(item, frame: frame)
+                let when = row.span.map { row.isMilestone ? "at \(hoursText($0.start))" : "\(hoursText($0.start)) to \(hoursText($0.finish))" } ?? "not scheduled: \(row.applicability)"
+                let float = row.times.map { " · total float \(hoursText($0.totalFloat))" } ?? ""
+                // The strip follows the cursor, which keys move without selecting; it says which it is.
+                let facts = "\(frame.selected == row.id ? "Selected" : "Cursor, not selected") · \(kindWords(row)) · \(row.status)\(row.priority.isEmpty ? "" : " · priority \(row.priority)")\(row.span?.critical == true ? " · on the critical path" : "") · \(when)\(float) · project finish \(hoursText(schedule.projectFinishHours))"
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(row.key).font(.system(.callout, design: .monospaced).weight(.semibold))
+                    Text(row.title).font(.callout.weight(.semibold)).lineLimit(1).layoutPriority(1)
+                    Text(facts).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+                }
+                .help("\(row.title) · \(facts)")
+                .spoken(said.label, value: said.value)
+                .accessibilityIdentifier("gantt.cursor")
+            } else if frame.outline.isEmpty {
+                let words = "No row matches the filter (\(frame.state.filter.words)). The plan has \(schedule.rows.count) rows; clearing the filter shows them again. The selection is kept."
+                Text(words).font(.callout).lineLimit(1).help(words).accessibilityLabel(words)
+            }
+        } else {
+            ProgressView("Reading the schedule from the application…").controlSize(.small)
+        }
     }
 }
 
-/// The cursor row in full, and the project's forecast: complete text, never cut for width.
+/// The cursor row in full, and the project's forecast: complete text, never cut for width. The inspector's Info shows it,
+/// and so does the still picture.
 struct GanttStrip: View {
     let frame: GanttFrame
-    let scrolling: Bool
-    /// Whether the complete text is shown; the compact summary otherwise. The still picture shows it complete.
-    var expanded: Binding<Bool> = .constant(true)
+    /// The cursor's identifier here; the one-line strip on the page is `gantt.cursor`.
+    var cursorIdentifier = "gantt.cursor"
 
     var body: some View {
-        let content = VStack(alignment: .leading, spacing: 4) { details }
+        VStack(alignment: .leading, spacing: 4) { details }
             .padding(.horizontal, Layout.margin)
             .padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
-        if scrolling {
-            ScrollView { content }.reportFrame("strip").accessibilityIdentifier("gantt.strip")
-        } else {
-            content
-        }
     }
 
     @ViewBuilder
     private var details: some View {
         if let schedule = frame.schedule {
             let spread = schedule.uncertainty.map { "forecast p50 \(hoursText($0.p50)), p80 \(hoursText($0.p80)), p95 \(hoursText($0.p95)) over \($0.iterations) simulations (seed \($0.seed))" } ?? "no finish forecast: the query supplied none (open choices, no estimates, or not requested)"
-            if expanded.wrappedValue {
-                Prose(text: "Elapsed hours are counted from \(displayTime(schedule.evaluatedAt)), when the schedule was evaluated; the query supplies no calendar dates, so none is shown. Project finishes in \(hoursText(schedule.projectFinishHours)); \(spread). \(schedule.milestones) milestones.", font: .caption)
-                    .spoken("Schedule basis", value: "Elapsed hours are counted from \(displayTime(schedule.evaluatedAt)). No calendar dates are supplied. Project finish \(hoursText(schedule.projectFinishHours)); \(spread).")
-            }
+            Prose(text: "Elapsed hours are counted from \(displayTime(schedule.evaluatedAt)), when the schedule was evaluated; the query supplies no calendar dates, so none is shown. Project finishes in \(hoursText(schedule.projectFinishHours)); \(spread). \(schedule.milestones) milestones.", font: .caption)
+                .spoken("Schedule basis", value: "Elapsed hours are counted from \(displayTime(schedule.evaluatedAt)). No calendar dates are supplied. Project finish \(hoursText(schedule.projectFinishHours)); \(spread).")
             if let item = frame.cursor {
-                if expanded.wrappedValue { rowDetail(item, schedule: schedule) } else { compact(item, schedule: schedule, spread: spread) }
+                rowDetail(item, schedule: schedule)
             } else if frame.outline.isEmpty {
                 Prose(text: "No row matches the filter (\(frame.state.filter.words)). The plan has \(schedule.rows.count) rows; clearing the filter shows them again. The selection is kept.", font: .callout)
             }
@@ -232,72 +221,30 @@ struct GanttStrip: View {
         }
     }
 
-    /// The cursor row in two lines: its identity and status, and a short schedule line. Its accessibility text is the
-    /// row's complete text, and `Details` expands the complete wrapped text here. The toggle stands beside the spoken
-    /// text, not inside it: a spoken group ignores its children, so a button inside it would not be a control.
-    @ViewBuilder
-    private func compact(_ item: GanttOutlineRow, schedule: GanttSchedule, spread: String) -> some View {
-        let row = item.row
-        let said = speech(item, frame: frame)
-        let when = row.span.map { row.isMilestone ? "at \(hoursText($0.start))" : "\(hoursText($0.start)) to \(hoursText($0.finish))" } ?? "not scheduled: \(row.applicability)"
-        let float = row.times.map { " · total float \(hoursText($0.totalFloat))" } ?? ""
-        let finish = "project finish \(hoursText(schedule.projectFinishHours))" + (schedule.uncertainty.map { ", p50 \(hoursText($0.p50)), p80 \(hoursText($0.p80)), p95 \(hoursText($0.p95))" } ?? "")
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(row.key).font(.system(.callout, design: .monospaced).weight(.semibold))
-                    Text(row.title).font(.callout.weight(.semibold)).lineLimit(1).help(row.title)
-                    Spacer(minLength: 4)
-                }
-                // The strip follows the cursor, which keys move without selecting; it says which it is.
-                Text("\(frame.selected == row.id ? "Selected" : "Cursor, not selected") · \(kindWords(row)) · \(row.status)\(row.priority.isEmpty ? "" : " · priority \(row.priority)")\(row.span?.critical == true ? " · on the critical path" : "") · \(when)\(float) · \(finish)")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    .help(spread)
-            }
-            .spoken(said.label, value: said.value)
-            .accessibilityIdentifier("gantt.cursor")
-            if scrolling { detailsToggle }
-        }
-    }
-
-    private var detailsToggle: some View {
-        Button(expanded.wrappedValue ? "Less" : "Details") { expanded.wrappedValue.toggle() }
-            .controlSize(.small)
-            .help(expanded.wrappedValue ? "Show the compact summary" : "Show the complete text of the cursor row and the schedule basis")
-            .accessibilityIdentifier("gantt.details-toggle")
-    }
-
     @ViewBuilder
     private func rowDetail(_ item: GanttOutlineRow, schedule: GanttSchedule) -> some View {
         let row = item.row
         let said = speech(item, frame: frame)
-        // The toggle beside the spoken text, as in the compact summary, so it stays a control of its own.
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(row.title).font(.headline).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-                    Spacer(minLength: 4)
-                }
-                HStack(spacing: 6) {
-                    Badge(text: kindWords(row), symbol: row.isMilestone ? "diamond.fill" : (row.isPackage ? "folder" : "circle"))
-                    Badge(text: row.status, symbol: "flag.checkered")
-                    if !row.priority.isEmpty { Badge(text: "Priority \(row.priority)", symbol: "person.fill.questionmark") }
-                    if row.span?.critical == true { Badge(text: "On the critical path", symbol: "flame", tint: Palette.critical) }
-                    Text(row.key).font(.system(.callout, design: .monospaced))
-                }
-                Prose(text: facts(row), font: .caption)
-                ForEach(Array(frame.inventory.relations(of: row.id).prefix(8)), id: \.id) { edge in
-                    let names = { (identity: String) in schedule.row(identity)?.key ?? frame.inventory.key(of: identity) ?? String(identity.prefix(8)) }
-                    Prose(text: "• " + schedule.words(edge, names: names), font: .caption)
-                }
-                if frame.inventory.relations(of: row.id).count > 8 {
-                    Text("and \(frame.inventory.relations(of: row.id).count - 8) more relations are listed in Detail").font(.caption).foregroundStyle(.secondary)
-                }
+        VStack(alignment: .leading, spacing: 3) {
+            Text(row.title).font(.headline).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            HStack(spacing: 6) {
+                Badge(text: kindWords(row), symbol: row.isMilestone ? "diamond.fill" : (row.isPackage ? "folder" : "circle"))
+                Badge(text: row.status, symbol: "flag.checkered")
+                if !row.priority.isEmpty { Badge(text: "Priority \(row.priority)", symbol: "person.fill.questionmark") }
+                if row.span?.critical == true { Badge(text: "On the critical path", symbol: "flame", tint: Palette.critical) }
+                Text(row.key).font(.system(.callout, design: .monospaced))
             }
-            .spoken(said.label, value: said.value)
-            .accessibilityIdentifier("gantt.cursor")
-            if scrolling { detailsToggle }
+            Prose(text: facts(row), font: .caption)
+            ForEach(Array(frame.inventory.relations(of: row.id).prefix(8)), id: \.id) { edge in
+                let names = { (identity: String) in schedule.row(identity)?.key ?? frame.inventory.key(of: identity) ?? String(identity.prefix(8)) }
+                Prose(text: "• " + schedule.words(edge, names: names), font: .caption)
+            }
+            if frame.inventory.relations(of: row.id).count > 8 {
+                Text("and \(frame.inventory.relations(of: row.id).count - 8) more relations are listed in Detail").font(.caption).foregroundStyle(.secondary)
+            }
         }
+        .spoken(said.label, value: said.value)
+        .accessibilityIdentifier(cursorIdentifier)
     }
 
     /// The row's own numbers in one line each way: nothing here is computed from other values.

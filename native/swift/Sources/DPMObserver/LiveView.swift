@@ -17,7 +17,7 @@ struct LiveView: View {
                 let finished = snapshot.runs.filter { $0.finished }
                 Section("Unfinished (\(unfinished.count))") {
                     if unfinished.isEmpty { Text("No unfinished run among \(snapshot.runsCoverage.words).").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-                    ForEach(unfinished) { run in RunRow(run: run).tag(Subject.run(run.identity)) }
+                    ForEach(unfinished) { run in RunRow(run: run, live: true).tag(Subject.run(run.identity)) }
                 }
                 Section("Ended — the executor's own report (\(finished.count))") {
                     ForEach(finished) { run in RunRow(run: run).tag(Subject.run(run.identity)) }
@@ -37,6 +37,7 @@ struct LiveView: View {
 
 struct RunPane: View {
     @ObservedObject var model: ObserverModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let snapshot = model.snapshot
@@ -79,6 +80,7 @@ struct RunPane: View {
                 HStack(spacing: 6) {
                     Badge(text: run.observation.text == "managed" ? "Managed" : "Reported only", symbol: run.observation.text == "managed" ? "gearshape.2" : "text.bubble")
                     RunStatusBadge(run: run)
+                    if run.status == "working" { RunWorkingLine(run: run) }
                     if run.foreignLineage { Badge(text: "Another history", symbol: "arrow.triangle.branch", tint: .orange) }
                 }
                 Prose(text: state)
@@ -115,9 +117,11 @@ struct RunPane: View {
             if let incomplete = window.incomplete { Badge(text: incomplete, symbol: "exclamationmark.triangle", tint: .orange).accessibilityIdentifier("run.incomplete") }
             if window.entries.isEmpty { Text("No activity recorded yet.").foregroundStyle(.secondary) }
             ForEach(window.entries.reversed()) { entry in
-                ActivityRow(entry: entry)
+                ActivityRow(entry: entry).transition(.activityReveal)
             }
         }
+        // A new line fades in out of a soft blur as it arrives; under reduced motion it is simply there.
+        .animation(DPMMotion.unlessReduced(DPMMotion.reveal, reduceMotion: reduceMotion), value: window.entries.last?.sequence)
         .accessibilityIdentifier("run.activity")
     }
 
@@ -189,4 +193,17 @@ struct Unavailable: View {
         .spoken("What this app does not do", value: "This app only observes. " + controls.map(\.plain).joined(separator: " "))
         .accessibilityIdentifier("run.unavailable")
     }
+}
+
+/// How a new activity line arrives: from transparent and blurred to clear.
+private struct ActivityReveal: ViewModifier {
+    let hidden: Bool
+
+    func body(content: Content) -> some View {
+        content.opacity(hidden ? 0 : 1).blur(radius: hidden ? 6 : 0)
+    }
+}
+
+extension AnyTransition {
+    static var activityReveal: AnyTransition { .modifier(active: ActivityReveal(hidden: true), identity: ActivityReveal(hidden: false)) }
 }

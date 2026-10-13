@@ -40,7 +40,8 @@ public enum NetworkLabels {
     /// At most this many labels are tried in one draw; the rest are counted as left off.
     public static let limit = 400
 
-    public static func size(_ text: String) -> (width: Double, height: Double) { (Double(text.count) * 5.2 + 6, 12) }
+    /// A generous estimate of an edge label's plate at the 10-point caption style it is drawn in.
+    public static func size(_ text: String) -> (width: Double, height: Double) { (Double(text.count) * 5.8 + 6, 13) }
 
     public static func place(_ candidates: [Candidate], nodes: [(x: Double, y: Double, width: Double, height: Double)]) -> (placed: [Placed], omitted: Int) {
         let ordered = candidates.enumerated().sorted { a, b in a.element.priority != b.element.priority ? a.element.priority : a.offset < b.offset }.map(\.element)
