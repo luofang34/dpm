@@ -175,7 +175,8 @@ incompatible source code into this repository.
   keep the command/tool table in `docs/mcp.md` complete; the smoke guard compares it with both binaries.
 - `explain` supplies resolved requirements, gates, risks, dependencies and evidence. Read this
   context before claiming the top-ranked eligible work; never infer priority from the Gantt picture.
-- Gantt is a read-only projection of remaining elapsed hours. Navigation must not mutate the plan.
+- Gantt is a read-only projection in elapsed hours from the clock reading: recorded start/finish
+  before it, remaining work after it. Navigation must not mutate the plan.
 - Current scope is Gantt preview plus agent-understandable/operable work. Server/sync/auth and
   larger domain features require a separate accepted plan.
 

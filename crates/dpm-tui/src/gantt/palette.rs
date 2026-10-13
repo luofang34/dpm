@@ -4,6 +4,9 @@ use ratatui::{
     text::{Line, Span},
 };
 
+/// Bar cells of work that already ran, before the clock reading.
+pub(super) const RECORDED: char = '░';
+
 #[derive(Clone, Copy)]
 pub(super) struct Palette {
     pub(super) enabled: bool,
@@ -34,7 +37,7 @@ impl Palette {
             Span::styled("? Review  ", self.style(Color::Magenta)),
             Span::styled(". Verified  ", self.style(Color::Green)),
             Span::styled("= Task  ", self.style(Color::Cyan)),
-            Span::raw("- Package  ◇/◆ [M] Milestone"),
+            Span::raw("- Package  ░ Recorded  ◇/◆ [M] Milestone"),
         ])
     }
 }
