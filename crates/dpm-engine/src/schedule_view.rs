@@ -93,6 +93,9 @@ pub struct ScheduleUncertainty {
 /// The authoritative remaining-work schedule projection of one snapshot at one clock reading.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScheduleProjection {
+    /// Clock reading every hour in this projection is measured from, so a reader can place the
+    /// projection on a calendar.
+    pub evaluated_at: DateTime<Utc>,
     /// Deterministic remaining duration of the active graph, in elapsed hours.
     pub project_finish_hours: f64,
     /// Percentiles; absent for a deterministic-only request, while open choices make them
@@ -161,6 +164,7 @@ pub fn schedule_projection(
         .collect();
     work.sort_by(|a, b| a.key.natural_cmp(&b.key));
     Ok(ScheduleProjection {
+        evaluated_at: now,
         project_finish_hours: schedule.project_finish_hours,
         uncertainty: simulation.map(|s| ScheduleUncertainty {
             iterations: s.iterations,

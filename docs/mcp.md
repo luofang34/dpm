@@ -951,7 +951,7 @@ descendant's, never the float of the package itself.
 this dependency alone requires; a gap in the successor's calendar is not slack), `driving` (it sets
 the successor's earliest start, or on calendars holds its finish) and `critical` (driving between two critical items: a link of the
 critical path); satisfied, waived and inapplicable dependencies are absent. All hours are
-elapsed hours from the clock reading. `calendar` (calendar, executor, `source`, `review_wait_hours`)
+elapsed hours from the clock reading, which `data.evaluated_at` states (RFC 3339). `calendar` (calendar, executor, `source`, `review_wait_hours`)
 is placement only, present when the plan has calendars, and no calendar date is ever inferred.
 
 `criticality` is the fraction of the seeded simulations in which the work is critical, and

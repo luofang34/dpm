@@ -26,6 +26,11 @@ fn deterministic_values_equal_the_engine_projection_and_carry_no_uncertainty() {
         schedule.project_finish_hours
     );
     assert!(projection.uncertainty.is_none());
+    assert_eq!(
+        projection.evaluated_at,
+        now(),
+        "hour zero is the clock reading"
+    );
     assert_eq!(projection.work.len(), plan.work_items.len());
     for row in &projection.work {
         assert_eq!(row.criticality, None, "no zero stands in for unknown");
