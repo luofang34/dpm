@@ -241,6 +241,8 @@ enum GanttDrawing {
         // The markers are lines; their texts share one line under the time axis labels, and a text that would
         // touch one already placed is left off the chart (the facts stay in the Schedule basis and Detail).
         var markers: [(hours: Double, text: String, dash: [CGFloat])] = [(schedule.projectFinishHours, "finish \(hoursText(schedule.projectFinishHours))", [])]
+        // With recorded history to its left, hour 0 is the clock reading: the boundary between what happened and what remains.
+        if GanttLayout.historyHours(schedule) < 0 { markers.insert((0, "now", [1, 2]), at: 0) }
         if let spread = schedule.uncertainty {
             markers += [(spread.p50, "p50", [2, 3]), (spread.p80, "p80", [6, 3]), (spread.p95, "p95", [10, 2, 2, 2])]
         }
@@ -352,13 +354,15 @@ enum GanttDrawing {
         let rowHeight = GanttLayout.rowHeight
         let scale = geometry.pointsPerHour
         let mid = top + rowHeight / 2
+        let recordedEnd = GanttHistoryDrawing.draw(row, top: top, scale: scale, offsetX: geometry.offsetX, in: &context)
         guard let span = row.span else {
+            if recordedEnd != nil { return }
             context.draw(Text("not scheduled: \(row.applicability)").font(.system(size: 10).italic()).foregroundColor(.secondary), at: CGPoint(x: 8, y: mid), anchor: .leading)
             return
         }
-        // Verified work has no remaining duration: a mark at the origin, with no bar and no float.
+        // Verified work has no remaining duration: a mark after its recorded bar, or at the origin, and no float.
         if row.status == "Verified" {
-            context.draw(Text("✓ \(row.key) · done").font(.system(size: 10)).foregroundColor(.secondary), at: CGPoint(x: 6 - geometry.offsetX, y: mid), anchor: .leading)
+            context.draw(Text("✓ \(row.key) · done").font(.system(size: 10)).foregroundColor(.secondary), at: CGPoint(x: (recordedEnd ?? -geometry.offsetX) + 6, y: mid), anchor: .leading)
             return
         }
         let (x, width) = GanttLayout.bar(span, scale: scale)

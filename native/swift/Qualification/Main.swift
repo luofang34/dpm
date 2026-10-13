@@ -105,6 +105,7 @@ struct Qualify {
             ("gantt-content-facts", context.ganttContentFactsAreCompared),
             ("gantt-pan-model-path", context.ganttPanSurvivesAnOffscreenCursor),
             ("gantt-fold-keeps-rows-above", context.ganttFoldKeepsRowsAbove),
+            ("gantt-history", context.ganttHistoryIsReachable),
             ("edit-review-apply", context.editsGoThroughReviewAndApply),
             ("edit-unknown-reconciled", context.editUnknownOutcomeIsReconciled),
             ("edit-progress-owner", context.editProgressIsTheOwnersReport),

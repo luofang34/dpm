@@ -15,6 +15,8 @@ enum Palette {
     static let critical = dynamic(light: 0xD03B3B, dark: 0xD03B3B)
     /// A package's bracket and a milestone's outline: structure, not state.
     static let structure = Color.primary.opacity(0.62)
+    /// Recorded execution before the clock reading; also hatched and said in words ("recorded").
+    static let recorded = Color.secondary.opacity(0.5)
     /// Float after the earliest finish, up to the latest finish.
     static let float = Color.secondary.opacity(0.75)
 

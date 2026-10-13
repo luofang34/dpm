@@ -5,8 +5,9 @@
 import Foundation
 
 extension ObserverModel {
-    /// Fit timeline: the scale at which the whole plan, from hour 0 to its last finish or p95 with the trailing room,
-    /// is exactly the timeline's measured width, scrolled to its start. A view operation only; no hour changes.
+    /// Fit timeline: the scale at which the whole plan, from its earliest recorded start (or hour 0) to its last finish
+    /// or p95 with the trailing room, is exactly the timeline's measured width, scrolled to its start. A view operation
+    /// only; no hour changes.
     public func fitTimeline() {
         applyFit(chosen: true)
     }
@@ -16,7 +17,7 @@ extension ObserverModel {
     /// refreshes and re-entry.
     public func fitTimelineInitially() {
         guard !gantt.viewportChosen, let schedule = snapshot.gantt, let scale = GanttLayout.fitScale(schedule, width: gantt.viewportWidth) else { return }
-        if let current = gantt.fitScale, abs(current - scale) < 1e-9, gantt.panX == 0 { return }
+        if let current = gantt.fitScale, abs(current - scale) < 1e-9, abs(gantt.panX - GanttLayout.firstX(schedule, scale: scale)) < 1e-9 { return }
         applyFit(chosen: false)
     }
 
@@ -26,7 +27,7 @@ extension ObserverModel {
             state.fitScale = scale
             // The zoom step shown beside the fitted scale: the largest one not above it.
             state.zoomLevel = GanttLayout.zoomSteps.lastIndex { $0 <= scale } ?? 0
-            state.panX = 0
+            state.panX = GanttLayout.firstX(schedule, scale: scale)
             if chosen { state.viewportChosen = true }
         }
     }
@@ -52,8 +53,8 @@ extension ObserverModel {
         }
         if !hiding.isEmpty { viewOperation("expand") { $0.collapsed.subtract(hiding) } }
         focusRow(id, selecting: false)
-        guard let start = row.span?.start else { return }
-        let x = max(0, start * gantt.scale - 40)
+        guard let start = row.actual?.hours?.from ?? row.span?.start else { return }
+        let x = max(GanttLayout.firstX(schedule, scale: gantt.scale), start * gantt.scale - 40)
         viewOperation("pan") { $0.panX = x }
     }
 

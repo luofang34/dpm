@@ -47,6 +47,7 @@ public enum GanttWords {
         }
         parts.append(inventory.byIdentity[row.id].map { estimate($0.estimate) } ?? "own estimate not available: the plan snapshot does not list this item")
         parts.append("no calendar date is supplied")
+        if let recorded = GanttLayout.historyWords(row.actual) { parts.append(recorded) }
         if let times = row.times { parts.append("total float \(hours(times.totalFloat)), free float \(hours(times.freeFloat))") }
         parts.append(row.criticality.map { "criticality \(percent($0)) of simulated schedules" } ?? "criticality not supplied")
         if let calendar = row.calendar { parts.append(calendar) }

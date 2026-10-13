@@ -307,11 +307,13 @@ extension ObserverModel {
     private func clampPan(keepingRowsAbove: Bool = false, keptY: Double? = nil) {
         guard let schedule = snapshot.gantt else { return }
         let state = gantt
-        let maxX = max(0, GanttLayout.timelineWidth(schedule, scale: state.scale) - state.viewportWidth)
+        // Recorded history lies left of hour 0, so the pan reaches back to its earliest hour.
+        let minX = GanttLayout.firstX(schedule, scale: state.scale)
+        let maxX = max(minX, GanttLayout.timelineWidth(schedule, scale: state.scale) - state.viewportWidth)
         let fitted = max(0, Double(outline.count - state.viewportRows) * GanttLayout.rowHeight)
         let lastRowAtTop = max(0, Double(outline.count - 1) * GanttLayout.rowHeight)
         let maxY = keepingRowsAbove ? max(fitted, min(state.panY, lastRowAtTop)) : max(fitted, min(keptY ?? 0, lastRowAtTop))
-        let x = max(0, min(maxX, state.panX)), y = max(0, min(maxY, state.panY))
+        let x = max(minX, min(maxX, state.panX)), y = max(0, min(maxY, state.panY))
         if x != state.panX || y != state.panY {
             gantt.panX = x
             gantt.panY = y
