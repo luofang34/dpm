@@ -273,6 +273,9 @@ def smoke(database):
         worker.call('verify_work', {'key': 'TEST-A', 'base_revision': 8}, error='invalid_command')
         run_cli(database, 'verify', 'TEST-A', '--actor', 'agent:parity', error='invalid_command')
         reviewer.call('verify_work', {'key': 'TEST-A', 'base_revision': 8})
+        # Verified work keeps its recorded start and finish beside the remaining schedule.
+        done = next(w for w in worker.call('get_schedule', {'probabilistic': False})['data']['work'] if w['key'] == 'TEST-A')['actual']
+        assert done['started_at'] == started['timestamp'] and done['start_hours'] < done['finish_hours'] <= 0, done
         assert worker.call('next_work', {})['data']['candidates'] == []
         reviewer.call('decide_gate', {'decision': 'TEST-GATE', 'outcome': 'Accept the verified input', 'base_revision': 9})
         next_work = worker.call('next_work', {})['data']
