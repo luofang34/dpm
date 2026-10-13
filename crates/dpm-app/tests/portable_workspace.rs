@@ -72,7 +72,7 @@ fn portable_nested_workspace_keeps_cross_repository_execution_and_history() {
     assert!(!ready(&app, "TEST-B"));
     assert_eq!(app.plan_blocking().expect("read only queries"), portable);
     for command in [
-        Command::Claim { work: a },
+        Command::claim(a),
         Command::Start {
             work: a,
             occurred_at: None,

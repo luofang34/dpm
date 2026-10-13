@@ -43,7 +43,7 @@ fn lead() -> ActorId {
 
 fn complete(plan: &mut Plan, key: &str, at: DateTime<Utc>) {
     let work = id(plan, key);
-    run(plan, &worker(), Command::Claim { work }, at);
+    run(plan, &worker(), Command::claim(work), at);
     run(
         plan,
         &worker(),
@@ -92,11 +92,12 @@ fn switched_under_started_work() -> (Plan, DecisionId) {
     let decide = Command::Decide {
         decision: supplier,
         outcome: "A".into(),
+        occurred_at: None,
     };
     run(&mut plan, &lead(), decide, t(1));
     complete(&mut plan, "SUP-DESIGN", t(2));
     let quote = id(&plan, "SUP-A-QUOTE");
-    run(&mut plan, &worker(), Command::Claim { work: quote }, t(3));
+    run(&mut plan, &worker(), Command::claim(quote), t(3));
     run(
         &mut plan,
         &worker(),
@@ -167,6 +168,7 @@ fn a_proposal_still_cannot_author_a_replacement_resolution_time() {
     let decide = Command::Decide {
         decision: supplier,
         outcome: "A".into(),
+        occurred_at: None,
     };
     run(&mut plan, &lead(), decide, t(1));
     let mut proposed = switch_to_b(&plan, supplier);
@@ -226,12 +228,13 @@ fn merged_and_claimed() -> (Plan, DecisionId) {
     let decide = Command::Decide {
         decision: supplier,
         outcome: "A".into(),
+        occurred_at: None,
     };
     run(&mut plan, &lead(), decide, t(1));
     complete(&mut plan, "SUP-DESIGN", t(2));
     complete(&mut plan, "SUP-A-QUOTE", t(3));
     complete(&mut plan, "SUP-A-QUAL", t(4));
-    run(&mut plan, &worker(), Command::Claim { work: build }, t(8));
+    run(&mut plan, &worker(), Command::claim(build), t(8));
     (plan, supplier)
 }
 

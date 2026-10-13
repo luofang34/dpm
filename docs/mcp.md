@@ -93,7 +93,7 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | explain KEY | explain_work | Readiness, dependencies, resolved requirements/gates/risks/evidence |
 | ratify KEY | ratify_contract | Human/service approves a complete Proposed contract |
 | reject KEY REASON | reject_work | Independent reviewer (never a holder or evidence author) returns Submitted work for rework |
-| claim KEY | claim_work | Reserve only ready tasks; a claim is not a start |
+| claim KEY --at RFC3339 | claim_work | Reserve only ready tasks, optionally when the reservation actually occurred; a claim is not a start |
 | release KEY --reason TEXT | release_work | Owner gives up an unstarted claim; the task returns to Planned without an owner and the release is recorded |
 | handoff KEY --to KIND:NAME --reason TEXT | handoff_work | Human/service moves claimed, started or blocked work to another owner; every recorded fact stays |
 | start KEY --at RFC3339 | start_work | Owner starts claimed work; records the start event SS/SF successors wait for, optionally when it actually occurred |
@@ -102,7 +102,7 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | progress KEY PERCENT --note TEXT | report_progress | Owner reports 0..100 execution; verification remains separate |
 | submit KEY --note TEXT --at RFC3339 | submit_work | Request independent verification of started work once FF/SF gates are released; `at` backfills the submission time |
 | verify KEY --note TEXT --at RFC3339 | verify_work | Refuse holders and evidence authors; re-check every relation and decision; record the finish event, optionally when it actually occurred |
-| decide KEY OUTCOME | decide_gate | Human/service resolves an open decision (agents are refused); with `options`, OUTCOME is exactly one option key |
+| decide KEY OUTCOME --at RFC3339 | decide_gate | Human/service resolves an open decision (agents are refused), optionally when it was actually made; with `options`, OUTCOME is exactly one option key |
 | artifact KEY FILE.json | add_artifact | Owner attaches the same Artifact JSON object to its task |
 | attach-git-head KEY --asset KEY | attach_git_head | Owner captures HEAD for an explicit workspace asset; locator binding is the default |
 | link-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | link_external | Link work to a provider-scoped external object; context only |
@@ -864,10 +864,13 @@ Lifecycle commands record their own operation time: `start_work` sets `work.even
 `decide_gate` sets the decision's `resolved_at`.
 
 Work recorded after the fact passes when it actually happened: the optional RFC 3339 argument `at`
-of `start_work`, `submit_work` and `verify_work` (CLI `start`, `submit`, `verify --at RFC3339`)
-becomes the event time, the time the transition's gates are evaluated at, the submission attempt's
-`submitted_at` or verification's `at`, and the `recorded_at` of any dependency basis the start
-captures. The command records it as `occurred_at` while the operation keeps its own commit
+of `claim_work`, `start_work`, `submit_work` and `verify_work` (CLI `claim`, `start`, `submit`,
+`verify --at RFC3339`) becomes the event time, the time the transition's gates are evaluated at,
+the claim's `claimed_at`, the submission attempt's `submitted_at` or verification's `at`, and the
+`recorded_at` of any dependency basis the start captures. `decide_gate` (CLI `decide --at`) takes
+it as the decision's `resolved_at`; only a time after the commit is refused there, since nothing
+the gate holds can have happened while it was open. Enter a history in event order: a claim is
+refused while a gate it waits for was still open at its `at`, so decide first. The command records it as `occurred_at` while the operation keeps its own commit
 `timestamp`, so `history` shows both; without `at` the operation is exactly as before, with no
 `occurred_at` key. `at` after the commit, or before the latest time the task already records
 (events, attempts and reviews, handoffs, releases, basis, and the claim: an unstarted claim shows

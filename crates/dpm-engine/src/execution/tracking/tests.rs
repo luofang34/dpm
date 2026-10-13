@@ -267,7 +267,7 @@ fn external_state_is_an_observation_and_never_verification_or_evidence() {
     );
     assert_eq!(plan.work_items[&b].execution.status, WorkStatus::Planned);
 
-    run(&mut plan, "worker", Command::Claim { work: a }).expect("claim");
+    run(&mut plan, "worker", Command::claim(a)).expect("claim");
     run(&mut plan, "worker", start_command(a)).expect("start");
     run(&mut plan, "worker", submit_command(a)).expect("submit");
     let observed = chrono::Utc::now();

@@ -54,7 +54,7 @@ fn operated(directory: &Path, name: &str) -> (SqliteStore, PathBuf, WorkItemId) 
         .expect("lineage")
         .lineage_id;
     for command in [
-        Command::Claim { work },
+        Command::claim(work),
         Command::Start {
             work,
             occurred_at: None,

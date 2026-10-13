@@ -188,11 +188,12 @@ fn context_steps(a: WorkItemId, added: WorkItemId, gate: dpm_model::DecisionId) 
             Command::Decide {
                 decision: gate,
                 outcome,
+                occurred_at: None,
             },
         ),
         (lead(), Command::LinkExternal(link)),
         (lead(), Command::UnlinkExternal { work, reference }),
-        (author(), Command::Claim { work }),
+        (author(), Command::claim(work)),
         (
             author(),
             Command::Release {
@@ -200,7 +201,7 @@ fn context_steps(a: WorkItemId, added: WorkItemId, gate: dpm_model::DecisionId) 
                 reason: text("claimed by mistake"),
             },
         ),
-        (author(), Command::Claim { work }),
+        (author(), Command::claim(work)),
         (
             lead(),
             Command::Handoff {
@@ -255,7 +256,7 @@ fn execution_steps(a: WorkItemId, b: WorkItemId) -> Vec<Step> {
                 occurred_at: None,
             },
         ),
-        (successor(), Command::Claim { work: b }),
+        (successor(), Command::claim(b)),
         (
             successor(),
             Command::Start {

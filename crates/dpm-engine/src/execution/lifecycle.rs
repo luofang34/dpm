@@ -1,7 +1,7 @@
 //! Task lifecycle commands. Each relation-gated transition asks the shared gate evaluator at the
-//! time its event occurred and records that time as the transition's event. Start, submit and
-//! verify may name an earlier occurrence time; otherwise the event occurs at the operation's own
-//! timestamp.
+//! time its event occurred and records that time as the transition's event. Claim, start, submit
+//! and verify may name an earlier occurrence time; otherwise the event occurs at the operation's
+//! own timestamp.
 
 use super::occurrence;
 use super::{nonempty, owns, task_mut};
@@ -64,10 +64,12 @@ pub(super) fn claim(
     plan: &mut Plan,
     actor: &ActorId,
     work: WorkItemId,
-    at: DateTime<Utc>,
+    occurred_at: Option<DateTime<Utc>>,
+    committed_at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     // The kind check precedes readiness so a non-task never reports a misleading "not ready".
     task_mut(plan, work)?;
+    let at = occurrence::resolve(plan, work, Transition::Claim, occurred_at, committed_at)?;
     permit(plan, work, Transition::Claim, at)?;
     let item = task_mut(plan, work)?;
     item.execution.owner = Some(actor.clone());

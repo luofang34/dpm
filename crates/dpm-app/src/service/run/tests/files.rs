@@ -9,7 +9,7 @@ fn project(directory: &Path) -> Application {
         Application::initialize_blocking(&directory.join("state.sqlite"), &fixture_plan())
             .expect("app");
     let id = work(&app);
-    super::project(&mut app, &worker(), Command::Claim { work: id });
+    super::project(&mut app, &worker(), Command::claim(id));
     super::project(
         &mut app,
         &worker(),

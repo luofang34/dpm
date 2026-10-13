@@ -92,7 +92,7 @@ fn refusals_of_started_work_name_the_source_task_and_attempted_change() {
         base_revision: 0,
         base_lineage: None,
         operation_id: None,
-        command: Command::Claim { work },
+        command: Command::claim(work),
     })
     .expect("claim");
     let exported = app

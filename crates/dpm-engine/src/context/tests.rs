@@ -64,7 +64,7 @@ fn contextual_decisions_supply_sources_without_gating_or_leaking_to_other_work()
     apply_command(
         &mut plan,
         ActorId::agent("worker"),
-        Command::Claim { work: task },
+        Command::claim(task),
         Utc::now(),
         dpm_model::OperationId::new(),
     )

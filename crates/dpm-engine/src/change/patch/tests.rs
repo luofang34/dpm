@@ -433,7 +433,7 @@ fn logged_commands_and_operations_reject_unknown_fields() {
     let operation = apply_command(
         &mut plan,
         ActorId::agent("owner"),
-        Command::Claim { work },
+        Command::claim(work),
         Utc::now(),
         OperationId::new(),
     )

@@ -13,12 +13,16 @@ use dpm_model::{ActorId, ActorKind, DecisionId, DecisionStatus, Plan, WorkStatus
 /// Only a human or service decides. A gate is how people authorize execution, and even a purely
 /// contextual decision is an organizational record agents read as authoritative; an agent that
 /// could resolve either would be approving its own scope, as ratify, apply and waive forbid.
+///
+/// A decision recorded after the fact names when it was made; that time cannot anticipate the
+/// commit. Nothing gated by an open decision can have occurred, so no earlier event constrains it.
 pub(super) fn decide(
     plan: &mut Plan,
     actor: &ActorId,
     decision: DecisionId,
     outcome: &str,
-    at: DateTime<Utc>,
+    occurred_at: Option<DateTime<Utc>>,
+    committed_at: DateTime<Utc>,
 ) -> Result<(), EngineError> {
     if actor.kind == ActorKind::Agent {
         return Err(EngineError::ActorNotAllowed {
@@ -27,6 +31,7 @@ pub(super) fn decide(
         });
     }
     nonempty(&decision.to_string(), "outcome", outcome)?;
+    let at = occurred_at.unwrap_or(committed_at);
     let before = plan.applicability();
     let gate = plan
         .decisions
@@ -34,6 +39,14 @@ pub(super) fn decide(
         .ok_or(EngineError::MissingDecision(decision))?;
     if gate.status != DecisionStatus::Open {
         return Err(EngineError::DecisionNotOpen(decision));
+    }
+    if at > committed_at {
+        return Err(EngineError::InvalidCommand {
+            entity: gate.key.to_string(),
+            reason: format!(
+                "cannot record the decision at {at}: that is after the operation commits at {committed_at}"
+            ),
+        });
     }
     if !gate.options.is_empty() && !gate.has_option(outcome) {
         let options: Vec<_> = gate.options.iter().map(|o| o.key.as_str()).collect();

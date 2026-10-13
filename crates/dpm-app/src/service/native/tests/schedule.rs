@@ -38,7 +38,7 @@ fn a_live_store_answers_the_shared_schedule_with_its_own_basis() {
     let directory = tempfile::tempdir().expect("directory");
     let mut app = live_blocking(directory.path());
     let task = app.work_id_blocking("TEST-A").expect("task");
-    super::commit_blocking(&mut app, &worker(), Command::Claim { work: task });
+    super::commit_blocking(&mut app, &worker(), Command::claim(task));
     at(&mut app, pinned());
     let plain = assert_parity(&mut app, false);
     assert!(plain["uncertainty"].is_null());

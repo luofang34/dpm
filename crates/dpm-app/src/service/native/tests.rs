@@ -247,7 +247,7 @@ fn attach_names_the_workspace_lineage_and_where_every_feed_stands() {
     assert_eq!(before.watermark.project.history_head, 0);
     assert_eq!(before.watermark.runs, dpm_model::RunFeedHeads::default());
     let task = task_blocking(&app);
-    commit_blocking(&mut app, &worker(), Command::Claim { work: task });
+    commit_blocking(&mut app, &worker(), Command::claim(task));
     commit_blocking(
         &mut app,
         &worker(),
@@ -289,7 +289,7 @@ fn a_preview_is_attachable_read_only_and_refuses_commands_with_the_shared_code()
         base_revision: 0,
         base_lineage: None,
         operation_id: None,
-        command: Command::Claim { work: task },
+        command: Command::claim(task),
     };
     let response = exchange_blocking(&mut app, json!({"type": "command", "request": request}));
     assert_eq!(refusal(&response)["code"], "read_only_project");
@@ -307,7 +307,7 @@ fn a_view_is_the_same_envelope_the_cli_and_tools_return_with_the_identity_to_fol
     let directory = tempfile::tempdir().expect("directory");
     let mut app = live_blocking(directory.path());
     let task = task_blocking(&app);
-    commit_blocking(&mut app, &worker(), Command::Claim { work: task });
+    commit_blocking(&mut app, &worker(), Command::claim(task));
     let when: DateTime<Utc> = "2026-10-02T12:00:00Z".parse().expect("time");
     at(&mut app, when);
     for query in [
@@ -347,7 +347,7 @@ fn commands_keep_the_applications_preconditions_and_typed_refusals() {
     let claim = |revision: u64| {
         json!({"type": "command", "request": CommandRequest {
             actor: worker(), base_revision: revision, base_lineage: None,
-            operation_id: None, command: Command::Claim { work: task },
+            operation_id: None, command: Command::claim(task),
         }})
     };
     let response = exchange_blocking(&mut app, claim(0));
@@ -394,7 +394,7 @@ fn a_backup_archive_is_attachable_readable_and_refuses_commands() {
         base_revision: 0,
         base_lineage: None,
         operation_id: None,
-        command: Command::Claim { work: task },
+        command: Command::claim(task),
     };
     let response = exchange_blocking(
         &mut archived,

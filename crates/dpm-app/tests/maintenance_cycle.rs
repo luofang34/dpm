@@ -113,7 +113,7 @@ fn perform_maintenance_blocking(app: &mut Application, id: WorkItemId) {
         Command::RatifyContract { work: id },
     );
     assert!(ready_blocking(app, "MAINT-CHANGE"));
-    run_blocking(app, &agent, Command::Claim { work: id });
+    run_blocking(app, &agent, Command::claim(id));
     refuse_blocking(app, &agent, submit(id));
     run_blocking(
         app,
@@ -252,7 +252,7 @@ fn elapsed_lag_changes_a_view_without_a_commit_notification() {
     edge.lag_hours = 0.5;
     let mut app = Application::in_memory_blocking(&plan).expect("store");
     let agent = ActorId::agent("maintainer");
-    run_blocking(&mut app, &agent, Command::Claim { work: a });
+    run_blocking(&mut app, &agent, Command::claim(a));
     run_blocking(
         &mut app,
         &agent,

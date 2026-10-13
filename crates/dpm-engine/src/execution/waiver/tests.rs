@@ -31,6 +31,7 @@ fn soft_edge_plan() -> (Plan, DependencyId, WorkItemId) {
         Command::Decide {
             decision: gate,
             outcome: "proceed".into(),
+            occurred_at: None,
         },
         Utc::now(),
         dpm_model::OperationId::new(),
@@ -293,7 +294,7 @@ fn owners_of_either_endpoint_can_neither_waive_nor_restore_the_edge() {
         ActorId::human("bob"),
         ActorId::human("lead"),
     );
-    run(&mut plan, alice.clone(), Command::Claim { work: a }).expect("claim A");
+    run(&mut plan, alice.clone(), Command::claim(a)).expect("claim A");
     refused_to(&mut plan, &alice, waive(edge, "my result is good enough"));
     run(
         &mut plan,
@@ -301,7 +302,7 @@ fn owners_of_either_endpoint_can_neither_waive_nor_restore_the_edge() {
         waive(edge, "prototype of A is sufficient"),
     )
     .expect("waive");
-    run(&mut plan, bob.clone(), Command::Claim { work: b }).expect("claim B");
+    run(&mut plan, bob.clone(), Command::claim(b)).expect("claim B");
     for owner in [&alice, &bob] {
         refused_to(&mut plan, owner, restore(edge, "my own call"));
     }
@@ -334,7 +335,7 @@ fn a_successor_owner_cannot_waive_away_its_own_invalidated_provisional_basis() {
         reason: "acceptance check fails".into(),
     };
     for (actor, command) in [
-        (&author, Command::Claim { work: a }),
+        (&author, Command::claim(a)),
         (
             &author,
             Command::Start {
@@ -350,7 +351,7 @@ fn a_successor_owner_cannot_waive_away_its_own_invalidated_provisional_basis() {
                 occurred_at: None,
             },
         ),
-        (&owner, Command::Claim { work: b }),
+        (&owner, Command::claim(b)),
         (
             &owner,
             Command::Start {
@@ -415,7 +416,7 @@ fn a_successor_owner_may_verify_the_result_it_consumes_but_not_waive_it() {
         .expect("edge")
         .start_basis = dpm_model::StartBasis::Provisional;
     let (alice, bob) = (ActorId::human("alice"), ActorId::human("bob"));
-    run(&mut plan, alice.clone(), Command::Claim { work: a }).expect("claim A");
+    run(&mut plan, alice.clone(), Command::claim(a)).expect("claim A");
     run(
         &mut plan,
         alice.clone(),
@@ -431,7 +432,7 @@ fn a_successor_owner_may_verify_the_result_it_consumes_but_not_waive_it() {
         occurred_at: None,
     };
     run(&mut plan, alice.clone(), submit).expect("submit A");
-    run(&mut plan, bob.clone(), Command::Claim { work: b }).expect("claim B provisionally");
+    run(&mut plan, bob.clone(), Command::claim(b)).expect("claim B provisionally");
     refused_to(&mut plan, &bob, waive(edge, "A is good enough for me"));
     let verify = || Command::Verify {
         work: a,

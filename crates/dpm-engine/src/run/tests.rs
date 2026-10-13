@@ -26,7 +26,7 @@ fn claimed() -> (Plan, WorkItemId) {
     apply_command(
         &mut plan,
         worker(),
-        Command::Claim { work },
+        Command::claim(work),
         Utc::now(),
         OperationId::new(),
     )
@@ -112,7 +112,7 @@ fn a_run_starts_only_on_claimed_or_started_work_its_executor_owns() {
     apply_command(
         &mut plan,
         worker(),
-        Command::Claim { work },
+        Command::claim(work),
         now,
         OperationId::new(),
     )

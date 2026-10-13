@@ -165,7 +165,7 @@ forecast and every lifecycle command read the same result for the same plan and 
 A claim reserves work; it is not a start. The lifecycle commands record event facts on the task
 (`events.started_at`, `submitted_at`, `verified_at`), and `decide` records `Decision.resolved_at`,
 as does applying a reviewed replacement decision. An event occurs at the operation's own timestamp
-unless `start`, `submit` or `verify` names an earlier occurrence time (`occurred_at` in the
+unless `claim`, `start`, `submit`, `verify` or `decide` names an earlier occurrence time (`occurred_at` in the
 command, CLI `--at`, tool argument `at`) for work recorded after the fact. The operation keeps its
 commit timestamp, so history holds both; the task's event, the gates evaluated for the transition,
 its submission attempt or review and any dependency basis it captures all use the occurrence

@@ -153,7 +153,7 @@ pub(crate) fn flow(
             .iter()
             .find(|op| matches!(op.command, Command::Claim { .. }));
         match claim {
-            Some(claim) => lead.hours.push(elapsed_hours(claim.timestamp, at)),
+            Some(claim) => lead.hours.push(elapsed_hours(claim.occurred_at(), at)),
             None => lead.skip(ExclusionReason::ClaimedBeforeHistory, work),
         }
     }
@@ -242,7 +242,7 @@ fn aging(plan: &Plan, index: &HistoryIndex<'_>, now: DateTime<Utc>) -> Vec<Aging
                     .last(w.id, |c| {
                         matches!(c, Command::Claim { .. } | Command::Handoff { .. })
                     })
-                    .map(|op| op.timestamp)
+                    .map(|op| op.occurred_at())
             });
             AgingWork {
                 key: w.key.clone(),
@@ -280,7 +280,7 @@ fn reliability(operations: &[&Operation]) -> Reliability {
     let mut ended: Vec<(ActorKind, Ending)> = Vec::new();
     for operation in operations {
         match &operation.command {
-            Command::Claim { work } => {
+            Command::Claim { work, .. } => {
                 open.insert(*work, (operation.actor.kind, false));
             }
             Command::Handoff { work, to, .. } => {

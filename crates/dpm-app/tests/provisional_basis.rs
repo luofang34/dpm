@@ -103,10 +103,11 @@ fn start_on_rejected_attempt(app: &mut Application, ids: Ids) -> (Value, DateTim
     let decide = Command::Decide {
         decision: app.decision_id_blocking("TEST-GATE").expect("gate"),
         outcome: "Go".into(),
+        occurred_at: None,
     };
     ok(app, &ActorId::human("reviewer"), decide);
     for command in [
-        Command::Claim { work: a },
+        Command::claim(a),
         Command::Start {
             work: a,
             occurred_at: None,
@@ -116,7 +117,7 @@ fn start_on_rejected_attempt(app: &mut Application, ids: Ids) -> (Value, DateTim
         ok(app, &ActorId::agent("author"), command);
     }
     for command in [
-        Command::Claim { work: b },
+        Command::claim(b),
         Command::Start {
             work: b,
             occurred_at: None,

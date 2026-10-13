@@ -320,6 +320,7 @@ fn conditional_work_is_written_unconditionally_and_reported_never_dropped() {
     let command = Command::Decide {
         decision,
         outcome: "B".into(),
+        occurred_at: None,
     };
     apply_command(
         &mut plan,

@@ -63,7 +63,7 @@ fn claim(plan: &mut Plan, key: &str) {
     dpm_engine::apply_command(
         plan,
         dpm_model::ActorId::agent("worker"),
-        dpm_engine::Command::Claim { work },
+        dpm_engine::Command::claim(work),
         chrono::Utc::now(),
         dpm_model::OperationId::new(),
     )

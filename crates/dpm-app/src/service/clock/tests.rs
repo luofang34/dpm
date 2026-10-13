@@ -16,7 +16,7 @@ fn verified() -> (Application, Vec<DateTime<Utc>>) {
     let mut app = Application::in_memory_blocking(&fixture()).expect("app");
     let work = app.work_id_blocking("TEST-A").expect("work");
     let steps = [
-        ("worker", Command::Claim { work }),
+        ("worker", Command::claim(work)),
         (
             "worker",
             Command::Start {

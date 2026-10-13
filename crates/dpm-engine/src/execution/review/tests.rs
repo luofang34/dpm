@@ -89,7 +89,7 @@ fn rejection_retains_owner_and_review_across_resubmission_without_unlocking_depe
     let reviewer = ActorId::human("reviewer");
     let at = Utc::now();
     for command in [
-        Command::Claim { work },
+        Command::claim(work),
         start_command(work),
         submit_command(work),
     ] {

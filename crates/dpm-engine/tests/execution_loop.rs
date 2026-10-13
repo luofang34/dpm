@@ -57,6 +57,7 @@ fn agent_and_human_execution_loop_unlocks_work_semantically() {
         Command::Decide {
             decision,
             outcome: "Accept the verified input".into(),
+            occurred_at: None,
         },
         Utc::now(),
         dpm_model::OperationId::new(),
@@ -101,7 +102,7 @@ fn complete_input(plan: &mut Plan, input: dpm_model::WorkItemId) {
     apply_command(
         plan,
         agent.clone(),
-        Command::Claim { work: input },
+        Command::claim(input),
         Utc::now(),
         dpm_model::OperationId::new(),
     )

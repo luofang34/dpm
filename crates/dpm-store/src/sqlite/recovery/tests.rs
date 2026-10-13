@@ -20,7 +20,7 @@ fn fixture() -> Plan {
 fn next_command(plan: &Plan, step: u64) -> Command {
     let work = plan.find_work_by_key("TEST-A").expect("task").id;
     match step {
-        0 => Command::Claim { work },
+        0 => Command::claim(work),
         n if n % 2 == 1 => Command::Block {
             work,
             reason: format!("waiting {n}"),

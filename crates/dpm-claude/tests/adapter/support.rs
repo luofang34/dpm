@@ -54,7 +54,7 @@ impl Fixture {
         let plan = plan();
         let work = plan.find_work_by_key("TEST-A").expect("TEST-A").id;
         let mut app = Application::initialize_blocking(&database, &plan).expect("store");
-        command(&mut app, &pilot(), Command::Claim { work });
+        command(&mut app, &pilot(), Command::claim(work));
         command(
             &mut app,
             &pilot(),

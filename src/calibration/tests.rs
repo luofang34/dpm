@@ -46,18 +46,19 @@ fn report() -> CalibrationReport {
     let decide = Command::Decide {
         decision: gate,
         outcome: "Proceed".into(),
+        occurred_at: None,
     };
     let steps = [
-        ("agent:coder", Command::Claim { work: a }, 0),
+        ("agent:coder", Command::claim(a), 0),
         ("agent:coder", start(a), 1),
         ("agent:coder", submit(a), 3),
         ("human:bob", verify(a), 4),
         ("human:lead", decide, 4),
-        ("agent:coder", Command::Claim { work: d }, 5),
+        ("agent:coder", Command::claim(d), 5),
         ("agent:coder", start(d), 5),
         ("agent:coder", submit(d), 5),
         ("human:bob", verify(d), 6),
-        ("agent:coder", Command::Claim { work: b }, 7),
+        ("agent:coder", Command::claim(b), 7),
         ("agent:coder", start(b), 8),
     ];
     for (who, command, hours) in steps {

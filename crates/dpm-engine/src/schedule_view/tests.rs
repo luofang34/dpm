@@ -414,7 +414,7 @@ fn recorded_work_reports_its_actual_times_before_the_clock_reading() {
     let hours_ago = |h: i64| now() - chrono::Duration::hours(h);
     let worker = dpm_model::ActorId::agent("worker");
     for (actor, command, at) in [
-        (worker.clone(), crate::Command::Claim { work: child }, 5),
+        (worker.clone(), crate::Command::claim(child), 5),
         (
             worker.clone(),
             crate::Command::Start {

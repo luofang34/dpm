@@ -93,7 +93,7 @@ fn handoff(work: WorkItemId, from: ActorId, to: ActorId) -> Command {
 }
 
 fn start(plan: &mut Plan, actor: &ActorId, work: WorkItemId, hour: i64) {
-    ok(plan, actor, Command::Claim { work }, hour);
+    ok(plan, actor, Command::claim(work), hour);
     ok(plan, actor, begin(work), hour);
 }
 
@@ -126,7 +126,7 @@ fn listed(plan: &Plan, work: WorkItemId, hour: i64) -> bool {
 #[test]
 fn an_agent_releases_its_own_claim_and_the_task_is_ready_again() {
     let (mut plan, a, _, _) = fs();
-    ok(&mut plan, &first(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &first(), Command::claim(a), 0);
     assert!(!listed(&plan, a, 0));
     let revision = plan.revision;
     let operation = apply_command(
@@ -146,7 +146,7 @@ fn an_agent_releases_its_own_claim_and_the_task_is_ready_again() {
     );
     assert!(item.execution.events.is_empty() && item.execution.handoffs.is_empty());
     assert!(is_ready(&plan, item, t(1)) && listed(&plan, a, 1));
-    ok(&mut plan, &second(), Command::Claim { work: a }, 2);
+    ok(&mut plan, &second(), Command::claim(a), 2);
     assert_eq!(plan.work_items[&a].execution.owner, Some(second()));
 }
 
@@ -160,7 +160,7 @@ fn release_is_refused_for_anyone_but_the_owner_of_an_unstarted_claim() {
             ..
         }
     ));
-    ok(&mut plan, &first(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &first(), Command::claim(a), 0);
     let blank = Command::Release {
         work: a,
         reason: " ".into(),
@@ -208,12 +208,12 @@ fn release_is_refused_for_anyone_but_the_owner_of_an_unstarted_claim() {
 fn releasing_an_unstarted_predecessor_never_releases_ss_or_sf_successors() {
     for kind in [DependencyKind::StartStart, DependencyKind::StartFinish] {
         let (mut plan, a, b, _) = pair(kind, StartBasis::Verified);
-        ok(&mut plan, &first(), Command::Claim { work: a }, 0);
+        ok(&mut plan, &first(), Command::claim(a), 0);
         ok(&mut plan, &first(), release(a), 1);
         let transition = if kind == DependencyKind::StartStart {
             Transition::Claim
         } else {
-            ok(&mut plan, &second(), Command::Claim { work: b }, 1);
+            ok(&mut plan, &second(), Command::claim(b), 1);
             ok(&mut plan, &second(), begin(b), 1);
             Transition::Submit
         };
@@ -291,7 +291,7 @@ fn only_humans_and_services_authorize_a_handoff_and_every_fact_stays() {
 #[test]
 fn a_human_may_take_over_work_but_never_review_it_afterwards() {
     let (mut plan, a, _, _) = fs();
-    ok(&mut plan, &first(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &first(), Command::claim(a), 0);
     ok(&mut plan, &lead(), handoff(a, first(), lead()), 1);
     assert_eq!(plan.work_items[&a].execution.status, WorkStatus::Claimed);
     ok(&mut plan, &lead(), begin(a), 2);
@@ -461,7 +461,7 @@ fn start_again(plan: &mut Plan, a: WorkItemId) {
 fn a_former_owner_cannot_waive_or_restore_an_edge_of_the_work_it_held() {
     let (mut plan, a, b, edge) = fs();
     let former = ActorId::human("former");
-    ok(&mut plan, &former, Command::Claim { work: a }, 0);
+    ok(&mut plan, &former, Command::claim(a), 0);
     ok(&mut plan, &lead(), handoff(a, former.clone(), first()), 1);
     let waive = Command::WaiveDependency {
         dependency: edge,

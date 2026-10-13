@@ -181,7 +181,7 @@ fn agree(plan: &Plan, hour: i64) -> Vec<UnmetGate> {
 /// A submits attempt 1 at +1h; B claims and starts on it at +2h/+3h.
 fn started_on_first_attempt(p: &mut Pair) {
     let (a, b) = (p.a, p.b);
-    ok(&mut p.plan, &author(), Command::Claim { work: a }, 0);
+    ok(&mut p.plan, &author(), Command::claim(a), 0);
     ok(&mut p.plan, &author(), begin(a), 0);
     ok(&mut p.plan, &author(), submit(a), 1);
     let claim = gate_report(&p.plan, b, Transition::Claim, t(2)).expect("claim");
@@ -194,7 +194,7 @@ fn started_on_first_attempt(p: &mut Pair) {
             .collect::<Vec<_>>(),
         [1]
     );
-    ok(&mut p.plan, &builder(), Command::Claim { work: b }, 2);
+    ok(&mut p.plan, &builder(), Command::claim(b), 2);
     ok(&mut p.plan, &builder(), begin(b), 3);
     let recorded = &p.plan.work_items[&b].execution.basis;
     assert_eq!(recorded.len(), 1);
@@ -392,17 +392,17 @@ fn a_submission_never_satisfies_the_successors_verification() {
 fn provisional_lag_elapses_from_the_attempt_and_a_verified_basis_needs_no_review() {
     let mut p = provisional(2.0, DependencyPolicy::Hard);
     let (a, b) = (p.a, p.b);
-    ok(&mut p.plan, &author(), Command::Claim { work: a }, 0);
+    ok(&mut p.plan, &author(), Command::claim(a), 0);
     ok(&mut p.plan, &author(), begin(a), 0);
     let awaiting = gate_report(&p.plan, b, Transition::Claim, t(1)).expect("report");
     assert!(awaiting.reasons()[0].contains("pending submission attempt"));
     ok(&mut p.plan, &author(), submit(a), 1);
-    let error = refused(&mut p.plan, &builder(), Command::Claim { work: b }, 2);
+    let error = refused(&mut p.plan, &builder(), Command::claim(b), 2);
     assert!(
         matches!(&error, EngineError::NotReady { unmet, .. } if matches!(unmet.as_slice(), [UnmetGate::Dependency { release: Release::Elapsing { .. }, attempt: Some(1), .. }])),
         "{error:?}"
     );
-    ok(&mut p.plan, &builder(), Command::Claim { work: b }, 3);
+    ok(&mut p.plan, &builder(), Command::claim(b), 3);
     ok(&mut p.plan, &builder(), begin(b), 3);
     ok(&mut p.plan, &reviewer(), verify(a), 4);
     let [status] = basis_status(&p.plan, &p.plan.work_items[&b])
@@ -416,7 +416,7 @@ fn provisional_lag_elapses_from_the_attempt_and_a_verified_basis_needs_no_review
 fn verifying_the_attempt_never_delays_an_elapsing_provisional_start() {
     let mut p = provisional(24.0, DependencyPolicy::Hard);
     let (a, b) = (p.a, p.b);
-    ok(&mut p.plan, &author(), Command::Claim { work: a }, 0);
+    ok(&mut p.plan, &author(), Command::claim(a), 0);
     ok(&mut p.plan, &author(), begin(a), 0);
     ok(&mut p.plan, &author(), submit(a), 1);
     ok(&mut p.plan, &reviewer(), verify(a), 5);
@@ -428,7 +428,7 @@ fn verifying_the_attempt_never_delays_an_elapsing_provisional_start() {
     assert!(agree(&p.plan, 24).is_empty());
     let open = gate_report(&p.plan, b, Transition::Claim, t(25)).expect("report");
     assert!(open.ready && open.provisional.is_empty(), "{open:?}");
-    ok(&mut p.plan, &builder(), Command::Claim { work: b }, 25);
+    ok(&mut p.plan, &builder(), Command::claim(b), 25);
     ok(&mut p.plan, &builder(), begin(b), 25);
     assert!(
         p.plan.work_items[&b].execution.basis.is_empty(),
@@ -441,10 +441,10 @@ fn revalidation_is_an_independent_human_or_service_review() {
     let mut p = provisional(0.0, DependencyPolicy::Hard);
     let (a, b) = (p.a, p.b);
     let (owner_a, owner_b) = (ActorId::human("alice"), ActorId::human("bob"));
-    ok(&mut p.plan, &owner_a, Command::Claim { work: a }, 0);
+    ok(&mut p.plan, &owner_a, Command::claim(a), 0);
     ok(&mut p.plan, &owner_a, begin(a), 0);
     ok(&mut p.plan, &owner_a, submit(a), 1);
-    ok(&mut p.plan, &owner_b, Command::Claim { work: b }, 2);
+    ok(&mut p.plan, &owner_b, Command::claim(b), 2);
     ok(&mut p.plan, &owner_b, begin(b), 2);
     ok(&mut p.plan, &reviewer(), reject(a), 3);
     ok(&mut p.plan, &owner_a, submit(a), 4);

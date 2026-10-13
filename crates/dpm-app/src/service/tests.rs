@@ -18,7 +18,7 @@ fn revision_conflicts_and_independent_verification_are_atomic() {
         base_revision: 0,
         base_lineage: None,
         operation_id: None,
-        command: Command::Claim { work },
+        command: Command::claim(work),
     };
     app.execute_blocking(request.clone()).expect("claim");
     assert!(matches!(
@@ -121,7 +121,7 @@ fn refused_transitions_carry_the_same_unmet_gates_as_explain() {
             base_revision: 0,
             base_lineage: None,
             operation_id: None,
-            command: Command::Claim { work },
+            command: Command::claim(work),
         })
         .expect_err("gated");
     let response = serde_json::to_value(error.response()).expect("json");

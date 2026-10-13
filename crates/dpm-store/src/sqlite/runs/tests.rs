@@ -36,7 +36,7 @@ pub(super) fn claimed() -> (Plan, WorkItemId) {
     apply_command(
         &mut plan,
         worker(),
-        Command::Claim { work },
+        Command::claim(work),
         Utc::now(),
         OperationId::new(),
     )

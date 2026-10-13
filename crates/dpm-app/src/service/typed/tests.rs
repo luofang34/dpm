@@ -23,7 +23,7 @@ fn started() -> Application {
     let mut app = Application::in_memory_blocking(&fixture()).expect("app");
     let work = app.work_id_blocking("TEST-A").expect("work");
     for (revision, command) in [
-        Command::Claim { work },
+        Command::claim(work),
         Command::Start {
             work,
             occurred_at: None,

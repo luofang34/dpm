@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Start, submit and verify record when their event occurred beside the operation's commit time,
-and refuse an occurrence time after the commit or before the task's previous event, its claim
-included, alike through the CLI and MCP."""
+"""Claim, start, submit, verify and decide record when their event occurred beside the operation's
+commit time, and refuse an occurrence time after the commit or before the task's previous event,
+its claim included, alike through the CLI and MCP. A project entered long after it happened then
+looks back to when its events occurred."""
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from smoke_agent import ROOT, Agent, run_cli
+from smoke_agent import ROOT, Agent, run_cli, run_cli_envelope
 
 FIXTURE = ROOT / 'tests/support/execution-plan.json'
 
@@ -83,7 +84,52 @@ def occurrence_smoke(directory):
         reviewer.close()
 
 
+def historical_smoke(directory):
+    """A project recorded decades later: decide, claim, start, submit and verify in event order."""
+    database = directory / 'historical.sqlite'
+    run_cli(database, 'import', str(FIXTURE))
+    worker = Agent(database, 'agent:worker')
+    lead = Agent(database, 'human:lead')
+    try:
+        # The gate was decided in 1945; a claim before then is refused alike by both adapters.
+        early = {'key': 'TEST-B', 'base_revision': 0, 'at': '1945-06-01T00:00:00Z'}
+        remote = worker.call('claim_work', early, error='invalid_command')
+        local = run_cli(database, 'claim', 'TEST-B', '--at', early['at'], '--actor', 'agent:worker', error='invalid_command')['error']
+        assert remote == local, (remote, local)
+        decided = lead.call('decide_gate', {'decision': 'TEST-GATE', 'outcome': 'Proceed', 'base_revision': 0, 'at': '1945-07-01T00:00:00Z'})['data']
+        assert decided['command']['Decide']['occurred_at'] == '1945-07-01T00:00:00Z', decided
+        future = (datetime.now(timezone.utc) + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        run_cli(database, 'decide', 'TEST-GATE', 'Proceed', '--at', future, '--actor', 'human:lead', error='invalid_command')
+        run_cli(database, 'claim', 'TEST-A', '--at', '1945-07-02T00:00:00Z', '--actor', 'agent:worker')
+        worker.call('start_work', {'key': 'TEST-A', 'base_revision': 2, 'at': '1945-07-03T00:00:00Z'})
+        worker.call('submit_work', {'key': 'TEST-A', 'base_revision': 3, 'at': '1945-08-01T00:00:00Z'})
+        run_cli(database, 'verify', 'TEST-A', '--at', '1945-08-02T00:00:00Z', '--actor', 'human:lead')
+        claimed = worker.call('claim_work', {'key': 'TEST-B', 'base_revision': 5, 'at': '1945-08-03T00:00:00Z'})['data']
+        assert claimed['command']['Claim']['occurred_at'] == '1945-08-03T00:00:00Z', claimed
+        assert worker.call('get_work', {'key': 'TEST-B'})['data']['execution']['events'] == {'claimed_at': '1945-08-03T00:00:00Z'}
+        # Looking back follows the event times, not the minutes in which they were recorded.
+        for at, a, b, complete in [
+            ('1945-06-15T00:00:00Z', 'Planned', 'Planned', 0),
+            ('1945-07-15T00:00:00Z', 'InProgress', 'Planned', 0),
+            ('1945-08-01T12:00:00Z', 'Submitted', 'Planned', 0),
+            ('1945-08-04T00:00:00Z', 'Verified', 'Claimed', 1),
+        ]:
+            status = run_cli_envelope(database, '--clock', at, 'status')
+            assert worker.call('project_status', {'as_of': at}) == status
+            assert status['revision'] == 6 and status['data']['complete'] == complete, (at, status['data']['complete'])
+            for key, expected in (('TEST-A', a), ('TEST-B', b)):
+                shown = worker.call('get_work', {'key': key, 'as_of': at})
+                assert shown == run_cli_envelope(database, '--clock', at, 'show', key)
+                assert shown['data']['execution']['status'] == expected, (at, key, shown['data']['execution'])
+        gate = run_cli(database, '--clock', '1945-06-15T00:00:00Z', 'export')['decisions']
+        assert all(d['status'] == 'Open' for d in gate.values() if d['key'] == 'TEST-GATE'), gate
+    finally:
+        worker.close()
+        lead.close()
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='dpm-occurrence-') as directory:
         occurrence_smoke(Path(directory))
-    print('PASS: CLI/MCP occurrence times for start, submit and verify, their refusals and history')
+        historical_smoke(Path(directory))
+    print('PASS: CLI/MCP occurrence times for claim, start, submit, verify and decide, their refusals, history and look back')

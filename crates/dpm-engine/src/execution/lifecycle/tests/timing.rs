@@ -4,7 +4,7 @@ use super::*;
 fn blocking_and_rejection_keep_the_start_and_drop_the_rejected_submission() {
     let (mut plan, a, _) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
     let reviewer = ActorId::human("reviewer");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 3);
+    ok(&mut plan, &worker(), Command::claim(a), 3);
     ok(&mut plan, &worker(), start(a), 5);
     let block = Command::Block {
         work: a,

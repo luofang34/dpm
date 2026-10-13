@@ -27,7 +27,7 @@ fn started_pair(kind: DependencyKind, lag: f64) -> (Plan, WorkItemId, WorkItemId
     plan.dependencies = vec![Dependency::new(a, b, kind, lag)];
     let owner = ActorId::agent("author");
     for command in [
-        Command::Claim { work: a },
+        Command::claim(a),
         Command::Start {
             work: a,
             occurred_at: None,

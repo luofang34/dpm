@@ -121,7 +121,7 @@ fn a_revert_that_would_rewrite_started_work_is_refused_like_any_change() {
     });
     let agent = ActorId::agent("pilot");
     for command in [
-        Command::Claim { work: a },
+        Command::claim(a),
         Command::Start {
             work: a,
             occurred_at: None,
@@ -145,6 +145,7 @@ fn only_a_plan_change_can_be_reverted() {
     let plan = fixture();
     let claim = Command::Claim {
         work: work(&plan, "TEST-A"),
+        occurred_at: None,
     };
     let refused = propose_revert(&plan, OperationId::new(), &claim)
         .expect_err("a lifecycle event is not a plan change");
@@ -244,7 +245,7 @@ fn a_revert_after_a_lifecycle_event_says_so() {
     apply_command(
         &mut plan,
         ActorId::agent("pilot"),
-        Command::Claim { work: a },
+        Command::claim(a),
         Utc::now(),
         OperationId::new(),
     )

@@ -63,10 +63,11 @@ fn excluded_quote(started: bool) -> (Plan, WorkItemId) {
     let decide = Command::Decide {
         decision: supplier,
         outcome: "A".into(),
+        occurred_at: None,
     };
     run(&mut plan, &lead(), decide, 1);
     let design = id(&plan, "SUP-DESIGN");
-    run(&mut plan, &worker(), Command::Claim { work: design }, 2);
+    run(&mut plan, &worker(), Command::claim(design), 2);
     run(
         &mut plan,
         &worker(),
@@ -89,7 +90,7 @@ fn excluded_quote(started: bool) -> (Plan, WorkItemId) {
     };
     run(&mut plan, &lead(), verify, 2);
     let quote = id(&plan, "SUP-A-QUOTE");
-    run(&mut plan, &worker(), Command::Claim { work: quote }, 3);
+    run(&mut plan, &worker(), Command::claim(quote), 3);
     if started {
         run(
             &mut plan,
@@ -146,7 +147,7 @@ fn an_excluded_claim_is_released_and_stops_counting_as_in_flight() {
     let summary = status(&plan, false, t(5)).expect("status");
     assert_eq!(summary.excluded_in_flight, 0);
     assert!(!summary.gates[&quote].ready, "excluded work is never ready");
-    let claim = Command::Claim { work: quote };
+    let claim = Command::claim(quote);
     assert!(matches!(
         refused(&mut plan, &worker(), claim, 6),
         EngineError::NotReady { .. }

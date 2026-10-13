@@ -263,9 +263,15 @@ fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, C
             key,
             outcome,
             actor: who,
+            at,
         } => {
             let decision = app.decision_id_blocking(&key)?;
-            (actor(&who)?, Command::Decide { decision, outcome })
+            let command = Command::Decide {
+                decision,
+                outcome,
+                occurred_at: at,
+            };
+            (actor(&who)?, command)
         }
         artifact @ (Commands::Artifact { .. } | Commands::AttachGitHead { .. }) => {
             artifact_mutation_blocking(app, artifact)?

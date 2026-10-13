@@ -17,9 +17,7 @@ fn claim(app: &Application, id: OperationId) -> CommandRequest {
         base_revision: 0,
         base_lineage: None,
         operation_id: Some(id),
-        command: Command::Claim {
-            work: app.work_id_blocking("TEST-A").expect("work"),
-        },
+        command: Command::claim(app.work_id_blocking("TEST-A").expect("work")),
     }
 }
 

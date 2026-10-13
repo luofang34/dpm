@@ -24,9 +24,7 @@ fn claim_request_blocking(app: &Application, base_revision: u64) -> CommandReque
         base_revision,
         base_lineage: None,
         operation_id: None,
-        command: Command::Claim {
-            work: task_blocking(app),
-        },
+        command: Command::claim(task_blocking(app)),
     }
 }
 
@@ -99,7 +97,7 @@ fn a_locator_switched_to_a_restored_store_is_refused_for_every_call_and_writes_n
     let b = root.join(".dpm/b.sqlite");
     let mut app = Application::initialize_blocking(&a, &plan).expect("store A");
     let task = task_blocking(&app);
-    commit_blocking(&mut app, &worker(), Command::Claim { work: task });
+    commit_blocking(&mut app, &worker(), Command::claim(task));
     let archive = root.join("archive.sqlite");
     app.backup_blocking(&archive).expect("backup");
     crate::restore_store_blocking(&archive, &b).expect("restore as store B");
@@ -261,7 +259,7 @@ fn an_unsupported_protocol_on_the_typed_boundary_refuses_every_call_and_changes_
     let directory = tempfile::tempdir().expect("directory");
     let mut app = live_blocking(directory.path());
     let task = task_blocking(&app);
-    commit_blocking(&mut app, &worker(), Command::Claim { work: task });
+    commit_blocking(&mut app, &worker(), Command::claim(task));
     let before = serde_json::to_value(app.history_blocking(0, 1000).expect("history"))
         .expect("history json");
     let revision = app.revision_blocking().expect("revision");

@@ -54,7 +54,7 @@ fn refused_at(plan: &mut Plan, actor: &ActorId, command: Command, hour: i64) -> 
 #[test]
 fn backfilled_events_are_recorded_while_operations_keep_their_commit_time() {
     let (mut plan, a, _) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &worker(), Command::claim(a), 0);
     let started = commit(&mut plan, &worker(), start_at(a, 2), 10);
     let submitted = commit(&mut plan, &worker(), submit_at(a, 4), 11);
     let verified = commit(&mut plan, &reviewer(), verify_at(a, 6), 12);
@@ -93,13 +93,13 @@ fn backfilled_events_are_recorded_while_operations_keep_their_commit_time() {
 fn an_absent_occurrence_time_serializes_and_replays_as_before() {
     let (mut plan, a, _) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
     let mut replayed = plan.clone();
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &worker(), Command::claim(a), 0);
     let operation = commit(&mut plan, &worker(), start(a), 1);
     let json = serde_json::to_string(&operation.command).expect("json");
     assert_eq!(json, format!(r#"{{"Start":{{"work":"{a}"}}}}"#));
     let backfilled = commit(&mut plan, &worker(), submit_at(a, 1), 3);
     // A logged operation replays from its serialized form to the same state.
-    ok(&mut replayed, &worker(), Command::Claim { work: a }, 0);
+    ok(&mut replayed, &worker(), Command::claim(a), 0);
     for recorded in [operation, backfilled] {
         let text = serde_json::to_string(&recorded).expect("json");
         let decoded: Operation = serde_json::from_str(&text).expect("decode");
@@ -122,7 +122,7 @@ fn an_absent_occurrence_time_serializes_and_replays_as_before() {
 #[test]
 fn an_occurrence_after_the_commit_is_refused_with_both_times() {
     let (mut plan, a, _) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &worker(), Command::claim(a), 0);
     let error = refused_at(&mut plan, &worker(), start_at(a, 11), 10);
     let EngineError::OccurrenceInFuture {
         work,
@@ -166,7 +166,7 @@ fn before_previous(error: &EngineError) -> (Transition, DateTime<Utc>, DateTime<
 fn an_occurrence_before_the_previous_recorded_event_is_refused() {
     let (mut plan, a, _) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
     let finisher = ActorId::agent("finisher");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &worker(), Command::claim(a), 0);
     let handoff = Command::Handoff {
         work: a,
         from: worker(),
@@ -202,8 +202,8 @@ fn an_occurrence_before_the_previous_recorded_event_is_refused() {
 fn gates_are_evaluated_at_the_backfilled_time() {
     let (mut plan, a, b) = pair(DependencyKind::FinishFinish, 4.0, DependencyPolicy::Hard);
     let other = ActorId::agent("other");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
-    ok(&mut plan, &other, Command::Claim { work: b }, 0);
+    ok(&mut plan, &worker(), Command::claim(a), 0);
+    ok(&mut plan, &other, Command::claim(b), 0);
     ok(&mut plan, &worker(), start(a), 1);
     ok(&mut plan, &worker(), submit(a), 1);
     ok(&mut plan, &reviewer(), verify_at(a, 1), 3);
@@ -226,12 +226,12 @@ fn gates_are_evaluated_at_the_backfilled_time() {
 fn a_start_backfilled_before_its_predecessor_finished_is_refused() {
     let (mut plan, a, b) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
     let other = ActorId::agent("other");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &worker(), Command::claim(a), 0);
     ok(&mut plan, &worker(), start(a), 1);
     ok(&mut plan, &worker(), submit(a), 2);
     ok(&mut plan, &reviewer(), verify(a), 8);
     // The claim waits for the finish, and the start cannot precede the claim.
-    ok(&mut plan, &other, Command::Claim { work: b }, 9);
+    ok(&mut plan, &other, Command::claim(b), 9);
     let error = refused_at(&mut plan, &other, start_at(b, 7), 9);
     assert_eq!(before_previous(&error), (Transition::Start, t(7), t(9)));
     ok(&mut plan, &other, start_at(b, 9), 9);
@@ -240,7 +240,7 @@ fn a_start_backfilled_before_its_predecessor_finished_is_refused() {
 #[test]
 fn an_occurrence_before_the_claim_is_refused_at_every_later_step() {
     let (mut plan, a, _) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 10);
+    ok(&mut plan, &worker(), Command::claim(a), 10);
     assert_eq!(plan.work_items[&a].execution.events.claimed_at, Some(t(10)));
     let error = refused_at(&mut plan, &worker(), start_at(a, 1), 12);
     assert_eq!(before_previous(&error), (Transition::Start, t(1), t(10)));
@@ -261,7 +261,7 @@ fn the_claim_time_follows_the_reservation_through_blocks_handoffs_and_releases()
     let (mut plan, a, _) = pair(DependencyKind::FinishStart, 0.0, DependencyPolicy::Hard);
     let claimed_at = |plan: &Plan| plan.work_items[&a].execution.events.claimed_at;
     let finisher = ActorId::agent("finisher");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 1);
+    ok(&mut plan, &worker(), Command::claim(a), 1);
     let block = Command::Block {
         work: a,
         reason: "waiting".into(),
@@ -287,7 +287,7 @@ fn the_claim_time_follows_the_reservation_through_blocks_handoffs_and_releases()
     };
     ok(&mut plan, &finisher, release, 5);
     assert_eq!(claimed_at(&plan), None, "released work is unowned");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 7);
+    ok(&mut plan, &worker(), Command::claim(a), 7);
     assert_eq!(claimed_at(&plan), Some(t(7)));
     let error = refused_at(&mut plan, &worker(), start_at(a, 6), 8);
     assert_eq!(before_previous(&error), (Transition::Start, t(6), t(7)));
@@ -301,7 +301,7 @@ fn a_claim_time_on_started_or_unowned_work_is_invalid() {
         work.execution.events.claimed_at = Some(t(1));
     }
     assert!(unowned.validate().is_err());
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 1);
+    ok(&mut plan, &worker(), Command::claim(a), 1);
     ok(&mut plan, &worker(), start(a), 2);
     if let Some(work) = plan.work_items.get_mut(&a) {
         work.execution.events.claimed_at = Some(t(1));
@@ -317,10 +317,10 @@ fn a_provisional_basis_is_recorded_at_the_backfilled_start() {
     }
     plan.validate().expect("provisional pair");
     let other = ActorId::agent("other");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &worker(), Command::claim(a), 0);
     ok(&mut plan, &worker(), start(a), 1);
     ok(&mut plan, &worker(), submit(a), 2);
-    ok(&mut plan, &other, Command::Claim { work: b }, 3);
+    ok(&mut plan, &other, Command::claim(b), 3);
     ok(&mut plan, &other, start_at(b, 3), 5);
     let basis = plan.work_items[&b].execution.basis.first().expect("basis");
     assert_eq!((basis.attempt, basis.recorded_at), (1, t(3)));
@@ -333,10 +333,10 @@ fn a_start_before_the_predecessor_was_reviewed_relies_on_its_attempt() {
         edge.start_basis = StartBasis::Provisional;
     }
     let other = ActorId::agent("other");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &worker(), Command::claim(a), 0);
     ok(&mut plan, &worker(), start(a), 1);
     ok(&mut plan, &worker(), submit(a), 2);
-    ok(&mut plan, &other, Command::Claim { work: b }, 3);
+    ok(&mut plan, &other, Command::claim(b), 3);
     ok(&mut plan, &reviewer(), verify(a), 5);
     // At +3h the attempt still awaited review, although it is verified by the commit.
     ok(&mut plan, &other, start_at(b, 3), 6);
@@ -351,10 +351,10 @@ fn a_start_after_the_predecessor_was_verified_records_no_basis() {
         edge.start_basis = StartBasis::Provisional;
     }
     let other = ActorId::agent("other");
-    ok(&mut plan, &worker(), Command::Claim { work: a }, 0);
+    ok(&mut plan, &worker(), Command::claim(a), 0);
     ok(&mut plan, &worker(), start(a), 1);
     ok(&mut plan, &worker(), submit(a), 2);
-    ok(&mut plan, &other, Command::Claim { work: b }, 3);
+    ok(&mut plan, &other, Command::claim(b), 3);
     ok(&mut plan, &reviewer(), verify(a), 5);
     ok(&mut plan, &other, start_at(b, 5), 6);
     assert!(plan.work_items[&b].execution.basis.is_empty());

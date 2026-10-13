@@ -322,7 +322,7 @@ fn detail_shows_recorded_events_and_every_transition_gate() {
         .expect("time");
     let (worker, occurred_at) = (dpm_model::ActorId::agent("worker"), None);
     use dpm_engine::Command::{Claim, Start};
-    for command in [Claim { work }, Start { work, occurred_at }] {
+    for command in [Claim { work, occurred_at }, Start { work, occurred_at }] {
         dpm_engine::apply_command(
             &mut plan,
             worker.clone(),
@@ -376,6 +376,7 @@ fn conditional_work_shows_scenarios_exclusions_and_the_stranded_reason() {
         dpm_engine::Command::Decide {
             decision,
             outcome: "B".into(),
+            occurred_at: None,
         },
         chrono::Utc::now(),
         dpm_model::OperationId::new(),
@@ -419,6 +420,7 @@ fn excluded_package_plan() -> Plan {
         dpm_engine::Command::Decide {
             decision,
             outcome: "B".into(),
+            occurred_at: None,
         },
         chrono::Utc::now(),
         dpm_model::OperationId::new(),

@@ -14,9 +14,10 @@ fn backfilled_lifecycle_events_replay_with_their_occurrence_times() {
         Command::Decide {
             decision: gate,
             outcome,
+            occurred_at: None,
         },
     );
-    r.run(author(), Command::Claim { work: a });
+    r.run(author(), Command::claim(a));
     // Each event occurred an hour before the operation that records it commits.
     let occurred_at = Some(t(r.hour));
     r.run(
@@ -78,16 +79,17 @@ fn claim_times_replay_through_releases_handoffs_and_the_start() {
         Command::Decide {
             decision: gate,
             outcome,
+            occurred_at: None,
         },
     );
     let claimed_at = |r: &Recorder| r.plan().work_items[&a].execution.events.claimed_at;
     // Every recorded operation is replayed from genesis and compared with its snapshot.
-    r.run(author(), Command::Claim { work: a });
+    r.run(author(), Command::claim(a));
     assert_eq!(claimed_at(&r), Some(t(2)));
     let reason = text("not yet");
     r.run(author(), Command::Release { work: a, reason });
     assert_eq!(claimed_at(&r), None);
-    r.run(author(), Command::Claim { work: a });
+    r.run(author(), Command::claim(a));
     let (from, to, reason) = (author(), successor(), text("reassigned"));
     r.run(
         lead(),

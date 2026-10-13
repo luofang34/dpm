@@ -136,7 +136,7 @@ fn execution_locks_its_contract_context_and_dependencies_but_not_future_work() {
     apply_command(
         &mut plan,
         ActorId::agent("worker"),
-        Command::Claim { work },
+        Command::claim(work),
         Utc::now(),
         dpm_model::OperationId::new(),
     )
@@ -261,7 +261,7 @@ fn plan_changes_cannot_author_or_rewrite_event_times() {
     let gate = plan.find_decision_by_key("TEST-GATE").expect("gate").id;
     let worker = ActorId::agent("worker");
     for command in [
-        Command::Claim { work: task },
+        Command::claim(task),
         Command::Start {
             work: task,
             occurred_at: None,
@@ -279,6 +279,7 @@ fn plan_changes_cannot_author_or_rewrite_event_times() {
     let decide = Command::Decide {
         decision: gate,
         outcome: "go".into(),
+        occurred_at: None,
     };
     apply_command(
         &mut plan,

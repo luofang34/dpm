@@ -47,7 +47,7 @@ fn chosen_at_ten() -> Plan {
     let mut plan = fixture();
     let work = id(&plan, "SUP-DESIGN");
     let steps = [
-        Command::Claim { work },
+        Command::claim(work),
         Command::Start {
             work,
             occurred_at: None,
@@ -75,7 +75,11 @@ fn chosen_at_ten() -> Plan {
     run(
         &mut plan,
         lead(),
-        Command::Decide { decision, outcome },
+        Command::Decide {
+            decision,
+            outcome,
+            occurred_at: None,
+        },
         t(10),
     );
     plan
@@ -124,7 +128,7 @@ fn every_transition_of_selected_work_waits_for_the_choice_that_selected_it() {
 fn selected_work_cannot_be_backfilled_before_its_choice() {
     let mut plan = chosen_at_ten();
     let work = id(&plan, "SUP-A-QUOTE");
-    run(&mut plan, worker(), Command::Claim { work }, t(11));
+    run(&mut plan, worker(), Command::claim(work), t(11));
     let backdated = |hour| Command::Start {
         work,
         occurred_at: Some(t(hour)),

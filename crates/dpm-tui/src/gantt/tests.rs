@@ -199,7 +199,7 @@ fn work_that_ran_draws_its_recorded_range_and_remaining_work_follows() {
     let a = plan.find_work_by_key("TEST-A").expect("a").id;
     let worker = dpm_model::ActorId::agent("worker");
     let steps = [
-        (worker.clone(), dpm_engine::Command::Claim { work: a }, 10),
+        (worker.clone(), dpm_engine::Command::claim(a), 10),
         (
             worker.clone(),
             dpm_engine::Command::Start {

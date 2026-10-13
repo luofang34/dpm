@@ -121,6 +121,7 @@ fn work_outside_the_active_graph_is_listed_only_by_the_scenario_that_selects_it(
     let decide = Command::Decide {
         decision,
         outcome: "B".into(),
+        occurred_at: None,
     };
     apply_command(
         &mut plan,
@@ -152,6 +153,7 @@ fn the_list_matches_the_tasks_the_remaining_projection_runs_at_zero_hours() {
     let decide = Command::Decide {
         decision,
         outcome: "B".into(),
+        occurred_at: None,
     };
     apply_command(
         &mut plan,
@@ -164,11 +166,11 @@ fn the_list_matches_the_tasks_the_remaining_projection_runs_at_zero_hours() {
     let design = plan.find_work_by_key("SUP-DESIGN").expect("work").id;
     let quote = plan.find_work_by_key("SUP-B-QUOTE").expect("work").id;
     for (actor, command) in [
-        ("worker", Command::Claim { work: design }),
+        ("worker", Command::claim(design)),
         ("worker", start_command(design)),
         ("worker", submit_command(design)),
         ("lead", verify_command(design)),
-        ("worker", Command::Claim { work: quote }),
+        ("worker", Command::claim(quote)),
         ("worker", start_command(quote)),
         ("worker", submit_command(quote)),
     ] {

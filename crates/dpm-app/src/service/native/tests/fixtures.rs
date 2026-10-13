@@ -57,7 +57,7 @@ pub(super) fn report_blocking(app: &mut Application, run: RunId, state: RunState
 pub(super) fn shared_blocking(directory: &Path) -> (Application, Application) {
     let mut app = live_blocking(directory);
     let task = task_blocking(&app);
-    commit_blocking(&mut app, &worker(), Command::Claim { work: task });
+    commit_blocking(&mut app, &worker(), Command::claim(task));
     let other = Application::open_blocking(directory.join("state.sqlite")).expect("second");
     (app, other)
 }

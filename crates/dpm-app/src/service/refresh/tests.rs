@@ -36,7 +36,7 @@ fn claim_blocking(app: &mut Application, plan: &Plan) {
         base_revision: 0,
         base_lineage: None,
         operation_id: None,
-        command: Command::Claim { work },
+        command: Command::claim(work),
     })
     .expect("claim");
 }

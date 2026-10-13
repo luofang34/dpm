@@ -63,7 +63,7 @@ fn execute(
         } => apply_change(plan, actor, changes, reason, at),
         Command::RatifyContract { work } => review::ratify(plan, actor, *work),
         Command::Reject { work, reason } => review::reject(plan, actor, *work, reason, at),
-        Command::Claim { work } => claim(plan, actor, *work, at),
+        Command::Claim { work, occurred_at } => claim(plan, actor, *work, *occurred_at, at),
         Command::Release { work, reason } => ownership::release(plan, actor, *work, reason, at),
         Command::Handoff {
             work,
@@ -108,9 +108,11 @@ fn execute(
             attempt,
             reason,
         } => revalidation::revalidate(plan, actor, *work, *dependency, *attempt, reason, at),
-        Command::Decide { decision, outcome } => {
-            choice::decide(plan, actor, *decision, outcome, at)
-        }
+        Command::Decide {
+            decision,
+            outcome,
+            occurred_at,
+        } => choice::decide(plan, actor, *decision, outcome, *occurred_at, at),
     }
 }
 

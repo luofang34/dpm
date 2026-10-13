@@ -17,6 +17,7 @@ fn decide_b(plan: &mut Plan) {
         dpm_engine::Command::Decide {
             decision,
             outcome: "B".into(),
+            occurred_at: None,
         },
         chrono::Utc::now(),
         dpm_model::OperationId::new(),

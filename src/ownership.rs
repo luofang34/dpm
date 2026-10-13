@@ -9,10 +9,15 @@ pub(crate) fn mutation_blocking(
     command: OwnershipCommand,
 ) -> Result<(ActorId, Command), CliError> {
     Ok(match command {
-        OwnershipCommand::Claim { key, actor: who } => (
+        OwnershipCommand::Claim {
+            key,
+            actor: who,
+            at,
+        } => (
             actor(&who)?,
             Command::Claim {
                 work: app.work_id_blocking(&key)?,
+                occurred_at: at,
             },
         ),
         OwnershipCommand::Release {

@@ -340,7 +340,7 @@ fn a_run_starts_only_for_an_executor_that_owns_started_or_claimed_work() {
         "invalid_command"
     );
     let id = work(&app);
-    project(&mut app, &worker(), Command::Claim { work: id });
+    project(&mut app, &worker(), Command::claim(id));
     let mut other = start_request();
     other.actor = ActorId::human("lead");
     other.executor = Some(ActorId::agent("someone-else"));

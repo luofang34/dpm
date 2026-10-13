@@ -186,6 +186,9 @@ pub(crate) enum Commands {
         outcome: String,
         #[arg(long)]
         actor: String,
+        /// When the decision was actually made, if before now; the operation keeps its commit time.
+        #[arg(long, value_name = "RFC3339")]
+        at: Option<chrono::DateTime<chrono::Utc>>,
     },
     /// Attach the current Git commit as an artifact to a work item.
     AttachGitHead {
@@ -343,6 +346,9 @@ pub(crate) enum OwnershipCommand {
         key: String,
         #[arg(long)]
         actor: String,
+        /// When the task was actually reserved, if before now; the operation keeps its commit time.
+        #[arg(long, value_name = "RFC3339")]
+        at: Option<chrono::DateTime<chrono::Utc>>,
     },
     /// Give up your own unstarted claim; the task returns to Planned without an owner.
     Release {

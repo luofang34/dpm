@@ -12,7 +12,7 @@ fn archive_with(directory: &std::path::Path, runs: bool) -> (Application, RunSta
         Application::initialize_blocking(&directory.join("state.sqlite"), &fixture_plan())
             .expect("app");
     let task = work(&app);
-    project(&mut app, &worker(), Command::Claim { work: task });
+    project(&mut app, &worker(), Command::claim(task));
     project(
         &mut app,
         &worker(),
@@ -174,7 +174,7 @@ fn an_archived_run_store_beside_a_live_project_refuses_every_write_including_sta
     let live = directory.path().join("state.sqlite");
     let mut app = Application::initialize_blocking(&live, &fixture_plan()).expect("app");
     let task = work(&app);
-    project(&mut app, &worker(), Command::Claim { work: task });
+    project(&mut app, &worker(), Command::claim(task));
     let request = start_request();
     app.start_run_blocking(request.clone()).expect("run");
     let run = request.run_id.expect("id");
