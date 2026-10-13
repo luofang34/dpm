@@ -12,5 +12,7 @@ mod view;
 mod work_label;
 mod wrap;
 
-pub use console::{TuiError, run_blocking, run_following_blocking, run_preview_blocking};
+pub use console::{
+    TuiError, run_as_of_blocking, run_blocking, run_following_blocking, run_preview_blocking,
+};
 pub use source::{Snapshot, SnapshotSource, SourceRevision};

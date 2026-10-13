@@ -30,17 +30,22 @@ Queries measure lag gates, the remaining hours of started work and `next` penalt
 current time, so two reads of one revision may differ by the time between them. The CLI's global
 `--clock RFC3339`, also given to `dpm mcp`, evaluate queries at that instant
 instead, which makes CLI and tool results comparable exactly. The CLI refuses `--clock` on every
-command except workspace queries (`invalid_request`, also for `validate` and `plan schema`, which
+command except workspace queries and `dpm tui`, which then opens read-only on the workspace as it
+stood at that instant (`invalid_request`, also for `validate` and `plan schema`, which
 read no clock), and in `dpm mcp` mutation tools ignore it: an operation's timestamp is always the
 time it was committed. A pinned clock is for comparing and replaying reads, not for acting on them:
 readiness that `explain_work` reports at a pinned instant can differ from the gates a mutation
-checks at the time it commits, so agents that act run without `--clock`. A clock earlier than the
-workspace's latest operation observes the workspace as recorded at that instant: the genesis plan
-with every operation committed by then, so `revision`, states, progress, calibration and forecasts
-are those of that moment. Recording time decides, so a start backfilled with an earlier
-`occurred_at` is absent at clocks before it was recorded. Events an imported plan already carried
-cannot be rewound; a clock before them is refused (`invalid_request`), and so is a run view at a
-clock before that run's latest report, because a run keeps only its latest state. The query tools
+checks at the time it commits, so agents that act run without `--clock`. An earlier clock observes
+the workspace as it stood then, judged by when events occurred: lifecycle events, attempts,
+handoffs and releases after it are withdrawn and each task's state rolled back to its last earlier
+event, decisions resolved and waivers granted after it are open again, and states, progress,
+calibration and forecasts follow. Work recorded after the fact with `occurred_at`, or imported with
+its history, therefore looks back to when it happened. The structure (`revision`, contracts,
+estimates, dependencies) stays current; `history` shows what was recorded when. A start clears the
+claim time, so started work looked at between its claim and start reads as unowned `Planned`, and a
+block or reported percentage, which carry no time, are kept only while the state is unchanged. A
+run view at a clock before that run's latest report is refused (`invalid_request`), because a run
+keeps only its latest state. The query tools
 `project_status`, `get_schedule`, `get_calibration`, `next_work`, `get_work`, `explain_work` and
 `export_plan` take the same reading per call as `as_of` (RFC 3339), so an agent looks back without
 restarting the server; the result equals the CLI command with `--clock`.

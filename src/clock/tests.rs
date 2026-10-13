@@ -20,6 +20,7 @@ fn queries_take_a_pinned_clock_and_mutations_refuse_it() {
         &["dpm", "--clock", at, "history"],
         &["dpm", "--clock", at, "plan", "diff", "candidate.json"],
         &["dpm", "--clock", at, "mcp", "--actor", "agent:a"],
+        &["dpm", "--clock", at, "tui"],
     ] {
         let clock = clock_for(query).expect("query");
         assert_eq!(clock, QueryClock::Pinned(instant), "{query:?}");
@@ -33,7 +34,6 @@ fn queries_take_a_pinned_clock_and_mutations_refuse_it() {
         ],
         &["dpm", "--clock", at, "import", "plan.json"],
         &["dpm", "--clock", at, "backup", "--to", "copy.sqlite"],
-        &["dpm", "--clock", at, "tui"],
         &["dpm", "--clock", at, "validate", "plan.json"],
         &["dpm", "--clock", at, "plan", "schema"],
     ] {
