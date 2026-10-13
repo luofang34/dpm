@@ -35,7 +35,7 @@ fn is_query(command: &Commands) -> bool {
             | Commands::Show { .. }
             | Commands::Explain { .. }
             | Commands::Export
-            | Commands::Open(OpenCommand::Mcp { .. })
+            | Commands::Open(OpenCommand::Mcp { .. } | OpenCommand::Tui)
             | Commands::Store(
                 StoreCommand::History { .. }
                     | StoreCommand::Revision

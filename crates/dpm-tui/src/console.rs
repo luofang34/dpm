@@ -60,6 +60,16 @@ pub fn run_preview_blocking(plan: &Plan) -> Result<(), TuiError> {
     run_fixed_blocking(plan, true)
 }
 
+/// Open a read-only console on `plan` as it stood at `at`, evaluated at that instant: a look back.
+/// It does not follow the source; reopen it to see facts recorded since.
+pub fn run_as_of_blocking(plan: &Plan, at: chrono::DateTime<chrono::Utc>) -> Result<(), TuiError> {
+    let snapshot = Snapshot {
+        plan: plan.clone(),
+        lineage_id: None,
+    };
+    run_on_clock_blocking(snapshot.clone(), true, &mut FixedPlan(snapshot), &|| at)
+}
+
 fn run_fixed_blocking(plan: &Plan, preview: bool) -> Result<(), TuiError> {
     let snapshot = Snapshot {
         plan: plan.clone(),
@@ -76,7 +86,16 @@ pub fn run_following_blocking(
     preview: bool,
     source: &mut impl SnapshotSource,
 ) -> Result<(), TuiError> {
-    let mut view = View::new(&initial.plan, chrono::Utc::now())?;
+    run_on_clock_blocking(initial, preview, source, &chrono::Utc::now)
+}
+
+fn run_on_clock_blocking(
+    initial: Snapshot,
+    preview: bool,
+    source: &mut impl SnapshotSource,
+    clock: &dyn Fn() -> chrono::DateTime<chrono::Utc>,
+) -> Result<(), TuiError> {
+    let mut view = View::new(&initial.plan, clock())?;
     view.preview = preview;
     view.set_colors(std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()));
     let mut watch = Watch::new(initial.revision(), Instant::now());
@@ -87,7 +106,14 @@ pub fn run_following_blocking(
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
     terminal.clear()?;
-    let result = event_loop_blocking(&mut terminal, &mut view, &mut watch, source, &interrupts);
+    let result = event_loop_blocking(
+        &mut terminal,
+        &mut view,
+        &mut watch,
+        source,
+        &interrupts,
+        clock,
+    );
     drop(guard);
     drop(interrupts);
     result
@@ -99,13 +125,14 @@ fn event_loop_blocking<S: SnapshotSource>(
     watch: &mut Watch,
     source: &mut S,
     interrupts: &Interrupts,
+    clock: &dyn Fn() -> chrono::DateTime<chrono::Utc>,
 ) -> Result<(), TuiError> {
     loop {
         // A signal ends the console like the q key, so the guard restores the terminal.
         if interrupts.received() {
             return Ok(());
         }
-        tick_blocking(view, watch, source, Instant::now(), chrono::Utc::now());
+        tick_blocking(view, watch, source, Instant::now(), clock());
         terminal.draw(|frame| view.render(frame))?;
         match event::poll(INPUT_WAIT) {
             Ok(true) => {}
@@ -113,7 +140,7 @@ fn event_loop_blocking<S: SnapshotSource>(
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(error.into()),
         }
-        if handle_event(view, watch, source, event::read()?, chrono::Utc::now()) {
+        if handle_event(view, watch, source, event::read()?, clock()) {
             return Ok(());
         }
     }

@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 import termios
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from smoke_agent import CLI, ROOT, run_cli
@@ -69,7 +70,7 @@ def header_revision(rows):
 
 
 class Console:
-    def __init__(self, database=None, project=None, extra_env=None):
+    def __init__(self, database=None, project=None, extra_env=None, clock=None):
         self.master, self.slave = pty.openpty()
         self.original = termios.tcgetattr(self.slave)
         self.size(130, 42)
@@ -80,7 +81,7 @@ class Console:
 
         selection = ['--project', str(project)] if project else ['--database', str(database)]
         self.process = subprocess.Popen(
-            [str(CLI), *selection, 'tui'], cwd=ROOT,
+            [str(CLI), *selection, *(['--clock', clock] if clock else []), 'tui'], cwd=ROOT,
             stdin=self.slave, stdout=self.slave, stderr=self.slave,
             env={**os.environ, 'TERM': 'xterm-256color', 'NO_COLOR': '1', **(extra_env or {})},
             preexec_fn=controlling_terminal,
@@ -252,6 +253,21 @@ def smoke(directory):
         interrupted.stop(b'\x03')
     finally:
         interrupted.close()
+    # A pinned clock before the claim shows the workspace as it stood then: the current revision
+    # without the claim or the block, which had not happened.
+    claimed = run_cli(database, 'history')['entries'][0]['operation']['timestamp']
+    early = (datetime.fromisoformat(claimed) - timedelta(hours=1)).isoformat()
+    looking_back = Console(database, clock=early)
+    try:
+        deadline = time.monotonic() + 15
+        while not re.search(rf"read-only\s+revision\s+{final['revision']}\s", ''.join(replay(whole_frames(looking_back.output))[1:2])):
+            assert time.monotonic() < deadline, replay(whole_frames(looking_back.output))[:3]
+            looking_back.read_some(0.5)
+        looking_back.key(b'g', b'Gantt')
+        assert b'waiting-terminal-refresh' not in looking_back.output
+        looking_back.stop(b'q')
+    finally:
+        looking_back.close()
     for signal_number in (signal.SIGINT, signal.SIGTERM):
         signalled = Console(database)
         try:
