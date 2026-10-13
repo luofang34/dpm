@@ -14,12 +14,14 @@ impl Plan {
     /// A task's lifecycle is rolled back to the last of its own events at or before `at`: verified,
     /// a pending submission, started, claimed, or planned. Its owner then is the one a later
     /// handoff took it from or a later release gave it up from. Facts that carry no time of their
-    /// own (the reported percentage and a block) are kept while the lifecycle is unchanged and
-    /// cleared when it rolls back, since they cannot be placed before the later event. A start
-    /// clears the claim time, so a started task looked at between its claim and start shows as
-    /// planned. Events whose time was never recorded count as having occurred. Decisions resolved
-    /// after `at` are open again, a decision superseded after `at` stands as it was, and a waiver
-    /// granted after `at` is withdrawn.
+    /// own (the reported percentage and a block) are kept while the lifecycle is unchanged, a block
+    /// from the latest lifecycle event it must follow, and cleared when it rolls back further,
+    /// since they cannot be placed before the later event. The claim time is the current
+    /// reservation's: a start clears it and a handoff or re-claim replaces it, so unstarted work
+    /// looked at before that later reservation shows as planned. Events whose time was never
+    /// recorded count as having occurred. Decisions resolved after `at` are open again, a
+    /// replacement resolved after `at` no longer replaces anything and the decision it superseded
+    /// stands as it was, and a waiver granted after `at` is withdrawn.
     #[must_use]
     pub fn as_of(&self, at: DateTime<Utc>) -> Self {
         let mut plan = self.clone();
@@ -39,6 +41,10 @@ impl Plan {
                 decision.status = DecisionStatus::Open;
                 decision.outcome = None;
                 decision.resolved_at = None;
+                // A replacement made later neither replaced nor gated anything yet.
+                if decision.supersedes.take().is_some() {
+                    decision.blocks.clear();
+                }
             } else if superseded_later.contains(&decision.id) {
                 decision.status = if decision.outcome.is_some() {
                     DecisionStatus::Decided
@@ -101,10 +107,31 @@ fn execution_as_of(execution: &mut ExecutionRecord, at: DateTime<Utc>) {
                 _ => None,
             });
     }
+    // The current submission is the pending latest attempt, after a rejection and resubmission too.
+    if !execution.attempts.is_empty() {
+        execution.events.submitted_at = execution
+            .attempts
+            .last()
+            .filter(|a| a.outcome == AttemptOutcome::Pending)
+            .map(|a| a.submitted_at);
+    }
     execution.handoffs.retain(|h| h.at <= at);
     execution.releases.retain(|r| r.at <= at);
     execution.basis.retain(|b| b.recorded_at <= at);
-    let status = status_then(execution, &recorded);
+    let mut status = status_then(execution, &recorded);
+    // A block suspends work where it stood. Every lifecycle transition needs the work unblocked, so
+    // a standing block came after the latest of them; only handoffs and reviews of a basis follow.
+    let suspended = if execution.events.started_at.is_some() || recorded.events.start_unrecorded {
+        WorkStatus::InProgress
+    } else {
+        WorkStatus::Claimed
+    };
+    if recorded.status == WorkStatus::Blocked
+        && status == suspended
+        && lifecycle_recorded_at(&recorded).is_none_or(|latest| latest <= at)
+    {
+        status = WorkStatus::Blocked;
+    }
     if status != execution.status {
         execution.status = status;
         execution.block_reason = None;
@@ -151,6 +178,29 @@ fn status_then(execution: &ExecutionRecord, recorded: &ExecutionRecord) -> WorkS
     } else {
         WorkStatus::Planned
     }
+}
+
+/// Latest time of a claim, start, submission, review or verification.
+fn lifecycle_recorded_at(execution: &ExecutionRecord) -> Option<DateTime<Utc>> {
+    let events = &execution.events;
+    let reviews = execution.attempts.iter().flat_map(|a| {
+        let closed = match &a.outcome {
+            AttemptOutcome::Pending => None,
+            AttemptOutcome::Rejected { at, .. } | AttemptOutcome::Verified { at, .. } => Some(*at),
+        };
+        [Some(a.submitted_at), closed]
+    });
+    [
+        events.claimed_at,
+        events.started_at,
+        events.submitted_at,
+        events.verified_at,
+        execution.last_rejection.as_ref().map(|r| r.at),
+    ]
+    .into_iter()
+    .chain(reviews)
+    .flatten()
+    .max()
 }
 
 /// Who held the task at `at`: whoever the first later handoff or release took it from.

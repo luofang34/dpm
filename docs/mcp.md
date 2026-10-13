@@ -41,9 +41,14 @@ handoffs and releases after it are withdrawn and each task's state rolled back t
 event, decisions resolved and waivers granted after it are open again, and states, progress,
 calibration and forecasts follow. Work recorded after the fact with `occurred_at`, or imported with
 its history, therefore looks back to when it happened. The structure (`revision`, contracts,
-estimates, dependencies) stays current; `history` shows what was recorded when. A start clears the
-claim time, so started work looked at between its claim and start reads as unowned `Planned`, and a
-block or reported percentage, which carry no time, are kept only while the state is unchanged. A
+estimates, dependencies) stays current; `history` shows what was recorded when. A replacement
+decision resolved later neither replaces nor gates anything then, and the decision it superseded
+stands as it was. The claim time is the current reservation's (a start clears it, a handoff or
+re-claim replaces it), so work looked at before that later reservation reads as unowned `Planned`.
+A reported percentage, which carries no time, is kept only while the state is unchanged, and a
+block from the task's latest lifecycle event, which it must follow. Occurrence times are checked
+against the task's own history only, so nothing refuses one earlier than the change that added the
+task or decision. A
 run view at a clock before that run's latest report is refused (`invalid_request`), because a run
 keeps only its latest state. The query tools
 `project_status`, `get_schedule`, `get_calibration`, `next_work`, `get_work`, `explain_work` and
