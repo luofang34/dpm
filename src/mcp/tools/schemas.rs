@@ -1,5 +1,6 @@
 //! Input schemas shared by several tools.
 
+use dpm_app::AppError;
 use serde_json::{Value, json};
 
 /// An `Artifact` as `add_artifact` accepts it.
@@ -27,4 +28,27 @@ pub(super) fn identity() -> Value {
         "kind":{"oneOf":[{"type":"string","enum":["Issue","PullRequest"]},other],"description":"Kind from the provider table; kinds sharing a number space (GitHub issue/pull request/discussion, GitLab issue/incident/task, any Jira or Linear issue type) name one object"},
         "external_id":{"type":"string","minLength":1,"description":"A number on GitHub, GitLab, Forgejo and Gitea; a PROJECT-N key on Jira and Linear"}
     }})
+}
+
+/// Refuse an argument the tool's input schema does not declare.
+pub(super) fn validate_argument_names(name: &str, value: &Value) -> Result<(), AppError> {
+    let definition = super::definitions()
+        .into_iter()
+        .find(|d| d.get("name").and_then(Value::as_str) == Some(name))
+        .ok_or_else(|| AppError::InvalidRequest(format!("unknown tool {name}")))?;
+    let fields = value
+        .as_object()
+        .ok_or_else(|| AppError::InvalidRequest("arguments must be an object".into()))?;
+    for key in fields.keys() {
+        if definition
+            .pointer("/inputSchema/properties")
+            .and_then(|properties| properties.get(key))
+            .is_none()
+        {
+            return Err(AppError::InvalidRequest(format!(
+                "unexpected argument {key} for {name}"
+            )));
+        }
+    }
+    Ok(())
 }

@@ -40,7 +40,10 @@ with every operation committed by then, so `revision`, states, progress, calibra
 are those of that moment. Recording time decides, so a start backfilled with an earlier
 `occurred_at` is absent at clocks before it was recorded. Events an imported plan already carried
 cannot be rewound; a clock before them is refused (`invalid_request`), and so is a run view at a
-clock before that run's latest report, because a run keeps only its latest state.
+clock before that run's latest report, because a run keeps only its latest state. The query tools
+`project_status`, `get_schedule`, `get_calibration`, `next_work`, `get_work`, `explain_work` and
+`export_plan` take the same reading per call as `as_of` (RFC 3339), so an agent looks back without
+restarting the server; the result equals the CLI command with `--clock`.
 
 This table lists every `dpm` command with its tool, or why it has none. Each tool also declares its
 command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a row differs from
