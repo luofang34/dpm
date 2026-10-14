@@ -129,6 +129,7 @@ struct Qualify {
             ("gantt-fit-whole", context.ganttFitIsWhole),
             ("gantt-locate-ancestors", context.ganttLocateRevealsOnlyAncestors),
             ("gantt-relation-labels", context.ganttRelationLabelsDoNotOverprint),
+            ("gantt-package-bracket", context.ganttPackageBracketIsOneSimpleOutline),
             ("network-walked-text", context.networkWalkedTextFollowsEachStep),
         ]
         // A control that must fail: it waits for something that never happens. It runs only when asked

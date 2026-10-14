@@ -53,7 +53,7 @@ struct NetworkCanvas: View {
                         let rect = CGRect(x: label.x, y: label.y, width: label.width, height: label.height)
                         guard rect.intersects(visible) else { continue }
                         context.fill(Path(roundedRect: rect, cornerRadius: 3), with: .color(Color(nsColor: .windowBackgroundColor).opacity(0.85)))
-                        context.draw(Text(label.text).font(.system(size: 9)), at: CGPoint(x: rect.midX, y: rect.midY))
+                        context.draw(Text(label.text).font(.caption2.monospacedDigit()), at: CGPoint(x: rect.midX, y: rect.midY))
                     }
                 }
                 for node in nodes {
@@ -162,7 +162,7 @@ struct NetworkCanvas: View {
         context.fill(GanttEditDrag.arrowhead(at: CGPoint(x: tip.x, y: tip.y), pointingRight: before.x < tip.x || (before.x == tip.x && link.kind.hasSuffix("Start"))),
                      with: .color(Palette.relationEmphasis))
         let middle = link.labelPoint
-        let plate = Text("draft \(GanttRelation.abbreviation(link.kind))").font(.system(size: 9, weight: .semibold)).foregroundColor(Palette.relationEmphasis)
+        let plate = Text("draft \(GanttRelation.abbreviation(link.kind))").font(.caption2.weight(.semibold)).foregroundColor(Palette.relationEmphasis)
         context.fill(Path(roundedRect: CGRect(x: middle.x - 26, y: middle.y - 7, width: 52, height: 14), cornerRadius: 3),
                      with: .color(Color(nsColor: .windowBackgroundColor).opacity(0.9)))
         context.draw(plate, at: CGPoint(x: middle.x, y: middle.y))
@@ -205,19 +205,19 @@ struct NetworkCanvas: View {
             let room = node.kind == .milestone ? 20 : 26
             let key = node.key.count > room ? String(node.key.prefix(room - 1)) + "…" : node.key
             let title = node.title.count > room - 4 ? String(node.title.prefix(room - 5)) + "…" : node.title
-            inner.draw(Text(key).font(.system(size: 9, weight: .semibold)), at: CGPoint(x: rect.midX, y: rect.midY - 6))
+            inner.draw(Text(key).font(.caption2.weight(.semibold)), at: CGPoint(x: rect.midX, y: rect.midY - 6))
             inner.draw(Text(title).font(.system(size: 8)), at: CGPoint(x: rect.midX, y: rect.midY + 7))
             return
         }
         let title = node.title.count > 26 ? String(node.title.prefix(25)) + "…" : node.title
         guard let times = timesLine(node) else {
-            context.draw(Text(node.key).font(.system(size: 10, weight: .semibold)), at: CGPoint(x: rect.midX, y: rect.minY + 13))
-            context.draw(Text(title).font(.system(size: 9)), at: CGPoint(x: rect.midX, y: rect.minY + 29))
+            context.draw(Text(node.key).font(.caption2.weight(.semibold)), at: CGPoint(x: rect.midX, y: rect.minY + 13))
+            context.draw(Text(title).font(.caption2), at: CGPoint(x: rect.midX, y: rect.minY + 29))
             return
         }
         // An activity-on-node box: key, title, then earliest start, latest start and total float.
-        context.draw(Text(node.key).font(.system(size: 10, weight: .semibold)), at: CGPoint(x: rect.midX, y: rect.minY + 10))
-        context.draw(Text(title).font(.system(size: 9)), at: CGPoint(x: rect.midX, y: rect.minY + 23))
+        context.draw(Text(node.key).font(.caption2.weight(.semibold)), at: CGPoint(x: rect.midX, y: rect.minY + 10))
+        context.draw(Text(title).font(.caption2), at: CGPoint(x: rect.midX, y: rect.minY + 23))
         context.draw(Text(times).font(.system(size: 8).monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: rect.midX, y: rect.minY + 35))
     }
 

@@ -1,4 +1,4 @@
-use crate::text_panel::TextPanel;
+use crate::{shortcuts::Context, text_panel::TextPanel, theme::Theme};
 use dpm_engine::{EngineError, ProgressSummary, actual_spans, progress, schedule_span};
 use dpm_model::{Plan, Timeline, WorkItem, WorkItemId, WorkKind};
 use dpm_schedule::{Schedule, deterministic_remaining};
@@ -7,12 +7,13 @@ use std::collections::BTreeMap;
 
 mod chart;
 pub(crate) mod dependencies;
+mod help;
 mod inspection;
 mod interaction;
 mod palette;
 mod release;
 mod viewport;
-use palette::{Palette, RECORDED};
+use palette::RECORDED;
 use viewport::Viewport;
 
 /// Read-only timeline of recorded history before the clock reading and remaining work after it;
@@ -24,7 +25,7 @@ pub(crate) struct Gantt {
     timeline: Timeline,
     progress: BTreeMap<WorkItemId, ProgressSummary>,
     viewport: Viewport,
-    palette: Palette,
+    theme: Theme,
     inspector: TextPanel,
     help_panel: TextPanel,
     inspecting: bool,
@@ -57,7 +58,7 @@ impl Gantt {
             timeline,
             progress: progress(plan, clock)?.work,
             viewport,
-            palette: Palette { enabled: true },
+            theme: Theme { enabled: true },
             inspector: TextPanel::default(),
             help_panel: TextPanel::default(),
             inspecting: false,
@@ -72,7 +73,7 @@ impl Gantt {
     /// it is temporary inspection that the next pointer event re-establishes.
     pub(crate) fn restore_navigation(&mut self, previous: &mut Self) {
         self.viewport.restore(&previous.viewport);
-        self.palette.enabled = previous.palette.enabled;
+        self.theme = previous.theme;
         self.inspecting = previous.inspecting;
         self.help = previous.help;
         self.first_row = previous.first_row;
@@ -86,7 +87,17 @@ impl Gantt {
         self.inspector.area
     }
     pub(crate) fn set_colors(&mut self, enabled: bool) {
-        self.palette.enabled = enabled;
+        self.theme.enabled = enabled;
+    }
+    /// Where keyboard focus is inside the Gantt, for the footer's hints.
+    pub(crate) fn shortcut_context(&self) -> Context {
+        if self.help {
+            Context::Help
+        } else if self.inspecting {
+            Context::Inspector
+        } else {
+            Context::Chart
+        }
     }
     fn bar(&self, start: f64, end: f64, width: usize, symbol: char, kind: WorkKind) -> String {
         let mut bar = vec![' '; width];

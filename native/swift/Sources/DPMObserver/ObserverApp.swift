@@ -2,8 +2,8 @@
 // then edits go through the application's review and explicit apply, and progress through the owner's report.
 //
 // Quitting, or closing the window, ends the helper and nothing else: no run is stopped, no task is
-// released and nothing is verified. Menu commands switch views and read again; none of them can
-// write to a project.
+// released and nothing is verified. Menu commands switch views, change what the Gantt shows and read
+// again; none of them can write to a project.
 
 import AppKit
 import DPMObserverCore
@@ -45,6 +45,7 @@ struct ObserverApp: App {
     var body: some Scene {
         Window("DPM Observer", id: "main") {
             RootView(model: model)
+                .tint(DPMColor.accent)
                 .environment(\.layoutRegistry, Launch.shared.layout)
                 .environment(\.hostObservation, Launch.shared.host)
                 .frame(minWidth: 900, minHeight: 560)
@@ -64,6 +65,7 @@ struct ObserverApp: App {
                 Divider()
                 Button("Read Again") { model.reload() }.keyboardShortcut("r", modifiers: .command).disabled(!model.hasWorkspace)
             }
+            GanttCommands(model: model)
         }
     }
 }

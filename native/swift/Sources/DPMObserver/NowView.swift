@@ -140,6 +140,8 @@ struct BlockerRow: View {
 
 struct RunRow: View {
     let run: RunSummary
+    /// On Live, a working run also shows the quiet working line with its elapsed time.
+    var live = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -151,6 +153,7 @@ struct RunRow: View {
             }
             Text("\(run.executor) · last heard \(displayTime(run.lastReceiptAt)) · \(run.recorded) records")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if live, run.status == "working" { RunWorkingLine(run: run) }
         }
         .spoken("Run of \(run.workKey)", value: runSpeech(run))
         .accessibilityIdentifier("row.run.\(run.identity)")

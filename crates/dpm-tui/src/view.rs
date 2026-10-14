@@ -1,4 +1,8 @@
-use crate::gantt::dependencies;
+use crate::{
+    gantt::dependencies,
+    shortcuts::{self, Context},
+    theme::{Role, Theme},
+};
 use chrono::{DateTime, Utc};
 use crossterm::event::{KeyCode, MouseEvent};
 use dpm_engine::{
@@ -8,10 +12,16 @@ use dpm_engine::{
 use dpm_model::{Plan, Timeline, WorkItem, WorkStatus};
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout},
+    layout::{Alignment, Constraint, Layout, Rect},
     style::{Modifier, Style},
-    widgets::{Block, List, ListItem, ListState, Paragraph},
+    text::{Line, Span},
+    widgets::{List, ListItem, ListState, Paragraph},
 };
+use unicode_width::UnicodeWidthStr;
+
+/// Right-aligned header label of a source that rejects every mutation. The trailing space keeps
+/// the border in place on terminals that draw the pause sign two cells wide.
+const READ_ONLY: &str = "⏸ read-only preview ";
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Page {
@@ -39,6 +49,7 @@ pub(crate) struct View {
     notice: Option<crate::notice::ReloadNotice>,
     pub(crate) preview: bool,
     pub(crate) page: Page,
+    theme: Theme,
     work: Vec<WorkItem>,
     state: ListState,
     now: String,
@@ -87,6 +98,7 @@ impl View {
             notice: None,
             preview: false,
             page: Page::Now,
+            theme: Theme { enabled: true },
             work,
             state,
             now,
@@ -122,6 +134,7 @@ impl View {
         let mut next = Self::new(plan, clock)?;
         next.page = self.page;
         next.preview = self.preview;
+        next.theme = self.theme;
         next.gantt.restore_navigation(&mut self.gantt);
         let kept = selected.and_then(|id| next.work.iter().position(|w| w.id == id));
         next.state
@@ -165,6 +178,7 @@ impl View {
     }
 
     pub(crate) fn set_colors(&mut self, enabled: bool) {
+        self.theme.enabled = enabled;
         self.gantt.set_colors(enabled);
     }
 
@@ -228,30 +242,73 @@ impl View {
         self.text_panel.reset();
     }
 
-    fn render_header(&self, frame: &mut Frame<'_>, area: ratatui::layout::Rect) {
-        let block = Block::bordered();
+    /// `DPM · <Page>`, the snapshot's revision and clock in the dim role, and a right-aligned
+    /// label when the source is a read-only preview; any source notice below.
+    fn render_header(&self, frame: &mut Frame<'_>, area: Rect) {
+        let block = self.theme.pane(false);
         let inner = block.inner(area);
         frame.render_widget(block, area);
         let [title, notice_area] =
             Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).areas(inner);
-        frame.render_widget(
-            Paragraph::new(format!(
-                "DPM · {} · {} revision {} at {}  [1–5] Pages [↑↓/jk] Navigate [r] Reload [q] Quit",
+        let badge = if self.preview { READ_ONLY } else { "" };
+        let [left, right] = Layout::horizontal([
+            Constraint::Min(0),
+            Constraint::Length(u16::try_from(badge.width()).unwrap_or(u16::MAX)),
+        ])
+        .areas(title);
+        let dim = self.theme.style(Role::Dim);
+        let mut spans = vec![
+            Span::styled(
+                " DPM",
+                self.theme.style(Role::Accent).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" · ", dim),
+            Span::styled(
                 self.page.title(),
-                match (self.preview, self.notice.as_ref().and_then(|n| n.label)) {
-                    (true, None) => "PREVIEW read-only".into(),
-                    (true, Some(label)) => format!("PREVIEW read-only {label}"),
-                    (false, None) => "snapshot".into(),
-                    (false, Some(label)) => format!("{label} snapshot"),
-                },
+                self.theme.style(Role::Text).add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("   "),
+        ];
+        // A notice's label is a caution about the snapshot, so it is not dimmed with the metadata.
+        if let Some(label) = self.notice.as_ref().and_then(|n| n.label) {
+            spans.push(Span::styled(
+                format!("{label} "),
+                self.theme.style(Role::Warning),
+            ));
+        }
+        spans.push(Span::styled(
+            format!(
+                "snapshot revision {} at {}",
                 self.plan.revision,
                 self.evaluated_at().format("%Y-%m-%d %H:%M:%SZ"),
-            )),
-            title,
+            ),
+            dim,
+        ));
+        frame.render_widget(Paragraph::new(Line::from(spans)), left);
+        frame.render_widget(
+            Paragraph::new(Span::styled(badge, self.theme.style(Role::Warning)))
+                .alignment(Alignment::Right),
+            right,
         );
         if let Some(notice) = &self.notice {
             notice.render(frame, notice_area);
         }
+    }
+
+    /// One dim line of `key action` hints for whatever has keyboard focus.
+    fn render_footer(&self, frame: &mut Frame<'_>, area: Rect) {
+        let context = match self.page {
+            Page::Gantt => self.gantt.shortcut_context(),
+            Page::Work => Context::Work,
+            Page::Now | Page::Network | Page::Detail => Context::Text,
+        };
+        frame.render_widget(
+            Paragraph::new(Line::styled(
+                format!(" {}", shortcuts::footer(context)),
+                self.theme.style(Role::Dim),
+            )),
+            area,
+        );
     }
 
     pub(crate) fn render(&mut self, frame: &mut Frame<'_>) {
@@ -260,9 +317,14 @@ impl View {
         } else {
             3
         };
-        let [top, body] =
-            Layout::vertical([Constraint::Length(header), Constraint::Min(1)]).areas(frame.area());
+        let [top, body, footer] = Layout::vertical([
+            Constraint::Length(header),
+            Constraint::Min(1),
+            Constraint::Length(1),
+        ])
+        .areas(frame.area());
         self.render_header(frame, top);
+        self.render_footer(frame, footer);
         if matches!(self.page, Page::Gantt) {
             self.gantt
                 .render(frame, body, &self.plan, &self.work, self.state.selected());
@@ -286,8 +348,8 @@ impl View {
                 ))
             });
             let list = List::new(items)
-                .block(Block::bordered().title("Work · select then [4] Detail"))
-                .highlight_symbol("> ")
+                .block(self.theme.pane(true).title(" Work "))
+                .highlight_symbol("❯ ")
                 .highlight_style(Style::default().add_modifier(Modifier::BOLD));
             frame.render_stateful_widget(list, body, &mut self.state);
             return;
@@ -302,8 +364,9 @@ impl View {
             frame,
             body,
             text.into(),
-            &format!("{} · PgUp/PgDn scroll", self.page.title()),
-            false,
+            self.page.title(),
+            true,
+            self.theme,
         );
     }
 

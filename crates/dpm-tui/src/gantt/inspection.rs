@@ -1,9 +1,15 @@
 use super::*;
+use crate::theme::Role;
 use ratatui::{
     Frame,
-    style::{Color, Modifier},
+    style::Modifier,
     text::{Line, Text},
 };
+
+/// Dim tree connector that introduces each group of relations under the inspected work.
+const BRANCH: &str = "  ⎿  ";
+/// Indent of the values listed under a branch, aligned with its label.
+const VALUE: &str = "     ";
 
 impl Gantt {
     pub(super) fn render_inspection(
@@ -24,9 +30,7 @@ impl Gantt {
         };
         let mut lines = vec![Line::styled(
             format!("{heading} {} — {}", work.key, work.title),
-            self.palette
-                .style(Color::Reset)
-                .add_modifier(Modifier::BOLD),
+            self.theme.style(Role::Text).add_modifier(Modifier::BOLD),
         )];
         let progress = self.progress.get(&work.id).copied().unwrap_or_default();
         let state = if work.kind == WorkKind::Milestone {
@@ -53,20 +57,37 @@ impl Gantt {
         }
         self.relationships(&mut lines, plan, work, true);
         self.relationships(&mut lines, plan, work, false);
-        lines.extend(release::decision_gates(plan, &self.timeline, work.id).map(Line::from));
-        lines.push(Line::from(
+        let gates = release::decision_gates(plan, &self.timeline, work.id);
+        if !gates.is_empty() {
+            lines.push(Line::from(vec![
+                self.label("decision gates"),
+                Span::styled(gates.join(", "), self.theme.style(Role::Gate)),
+            ]));
+        }
+        for note in [
             "FS finish→start · SS start→start · FF finish→finish · SF start→finish",
-        ));
-        lines.push(Line::from(
             "+lag delay / -lag lead (hours). Each link shows its release at this snapshot's clock.",
-        ));
+        ] {
+            lines.push(Line::styled(note, self.theme.style(Role::Dim)));
+        }
         let title = if self.inspecting {
-            "Inspector FOCUS · Tab chart · ↑↓ scroll"
+            "Inspector · focus"
         } else {
-            "Inspector · Tab focus · PgUp/PgDn scroll"
+            "Inspector"
         };
-        self.inspector
-            .render(frame, area, Text::from(lines), title, self.inspecting);
+        self.inspector.render(
+            frame,
+            area,
+            Text::from(lines),
+            title,
+            self.inspecting,
+            self.theme,
+        );
+    }
+
+    /// A branch label: the tree connector and its name in the dim role, then a gap before values.
+    fn label(&self, name: &str) -> Span<'static> {
+        Span::styled(format!("{BRANCH}{name}  "), self.theme.style(Role::Dim))
     }
 
     fn relationships(
@@ -87,24 +108,19 @@ impl Gantt {
                 }
             })
             .collect();
-        let color = if incoming {
-            Color::Cyan
+        let (role, name) = if incoming {
+            (Role::RelationPredecessor, "predecessors ←")
         } else {
-            Color::Magenta
+            (Role::RelationSuccessor, "successors →")
         };
-        let label = if incoming {
-            "Predecessors ←"
-        } else {
-            "Successors →"
-        };
-        lines.push(Line::styled(
-            format!(
-                "{label} ({}){}",
-                links.len(),
-                if links.is_empty() { ": none" } else { "" }
-            ),
-            self.palette.style(color),
-        ));
+        lines.push(Line::from(vec![
+            self.label(name),
+            Span::raw(if links.is_empty() {
+                "none".to_owned()
+            } else {
+                format!("({})", links.len())
+            }),
+        ]));
         for link in links {
             let Some(related) = plan.work_items.get(&if incoming {
                 link.predecessor
@@ -117,78 +133,22 @@ impl Gantt {
             let to = dependencies::label(plan, link.successor);
             lines.push(Line::styled(
                 format!(
-                    "  {from} --{}{:+.1}h→{to}{}",
+                    "{VALUE}{from} --{}{:+.1}h→{to}{}",
                     dependencies::abbreviation(link.kind),
                     link.lag_hours,
                     dependencies::tags(link)
                 ),
-                self.palette.style(color),
+                self.theme.style(role),
             ));
             lines.push(Line::from(format!(
-                "    {}",
+                "{VALUE}  {}",
                 release::state(plan, &self.timeline, link)
             )));
-            lines.push(Line::from(format!("  {} — {}", related.key, related.title)));
+            lines.push(Line::from(format!(
+                "{VALUE}{} — {}",
+                related.key, related.title
+            )));
         }
-    }
-
-    pub(super) fn render_help(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        let mut lines = vec![
-            Line::from("Gantt keyboard and mouse"),
-            Line::from(
-                "↑/↓ or j/k: select task. ←/→: pan timeline. +/-: zoom. f: fit. Home/End: timeline start/end.",
-            ),
-            Line::from(
-                "Tab: focus inspector or chart. Inspector ↑/↓, j/k, Home/End: scroll full title and links. PgUp/PgDn: inspector pages from either focus.",
-            ),
-            Line::from(
-                "Hover a row: temporary title/link preview. Click a row: select it. Wheel over chart: select rows; over inspector: scroll text.",
-            ),
-            Line::from(
-                "Enter/4: full task Detail. 5/g: Gantt. ? toggles help. Esc: close help or return focus to chart; otherwise quit. q: quit.",
-            ),
-            Line::from(
-                "Use keyboard selection if the terminal does not report mouse motion. Terminal text selection usually requires Shift while mouse capture is active.",
-            ),
-            Line::from(""),
-            self.palette.legend(),
-            Line::from(
-                "Name badge [M] means Milestone: ◇[M] pending, ◆[M] reached. It remains visible when the time point is outside the chart window.",
-            ),
-            Line::from(
-                "Status wins over critical color: verified, blocked, submitted for review, then critical. The inspector states critical=true/false separately.",
-            ),
-            Line::styled(
-                "<P cyan labels: direct predecessors of the inspected task.",
-                self.palette.style(Color::Cyan),
-            ),
-            Line::styled(
-                ">S magenta labels: direct successors of the inspected task.",
-                self.palette.style(Color::Magenta),
-            ),
-            Line::from(
-                "@ reversed/bold: keyboard selection. ~ underline: mouse preview. Bar colors describe status; label colors describe relationships.",
-            ),
-            Line::from(
-                "Every relationship remains listed even when its task row or time lies outside the chart window. Scroll the inspector to read all links and titles.",
-            ),
-            Line::from(dependencies::LEGEND),
-            Line::from(
-                "+lag delays / -lag leads the temporal bound. Dependencies are schedule constraints; they do not grant execution authorization.",
-            ),
-            Line::from(
-                "NO_COLOR=1 disables colors. Symbols, direction arrows, explicit states and selection emphasis remain available.",
-            ),
-            Line::from("Navigation is read-only. Press r to reload a fresh snapshot."),
-        ];
-        lines.push(Line::from("End of help · Esc or ? returns to the chart"));
-        self.help_panel.render(
-            frame,
-            area,
-            Text::from(lines),
-            "Help · ↑↓/PgUp/PgDn scroll · Esc close",
-            true,
-        );
     }
 }
 

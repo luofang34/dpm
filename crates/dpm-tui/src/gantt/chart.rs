@@ -1,15 +1,21 @@
 use super::*;
 
+use crate::theme::Role;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout},
-    style::{Color, Modifier},
+    style::Modifier,
     text::Line,
-    widgets::{Block, Paragraph},
+    widgets::Paragraph,
 };
 
 const MIN_INNER_WIDTH: u16 = 36;
-const MIN_INNER_HEIGHT: u16 = 10;
+/// The inspector's five rows, the chart's axis row and three work rows.
+const MIN_INNER_HEIGHT: u16 = 9;
+/// Row label prefix of the keyboard selection.
+const SELECTED: &str = "❯ ";
+/// Row label prefix of the row under the pointer: a preview, never a selection.
+const HOVER: &str = "~ ";
 
 impl Gantt {
     pub(crate) fn render(
@@ -22,7 +28,10 @@ impl Gantt {
     ) {
         self.row_area = Rect::default();
         self.inspector.area = Rect::default();
-        let block = Block::bordered().title("Gantt · hours from now · [?] Help");
+        let block = self
+            .theme
+            .pane(!self.inspecting && !self.help)
+            .title(" Gantt · hours from now ");
         let inner = block.inner(area);
         frame.render_widget(block, area);
         if work.is_empty() && inner.width >= 36 && inner.height > 0 {
@@ -58,10 +67,9 @@ impl Gantt {
             self.render_help(frame, inner);
             return;
         }
-        let [chart, inspection, legend] = Layout::vertical([
+        let [chart, inspection] = Layout::vertical([
             Constraint::Min(2),
             Constraint::Length((inner.height / 3).clamp(5, 12)),
-            Constraint::Length(3),
         ])
         .areas(inner);
         let last = work.len().saturating_sub(1);
@@ -72,18 +80,6 @@ impl Gantt {
         };
         self.render_chart(frame, chart, plan, work, current, focused);
         self.render_inspection(frame, inspection, plan, focused);
-        let footer = vec![
-            self.palette.legend(),
-            Line::from(vec![
-                Span::styled("<P Predecessor  ", self.palette.style(Color::Cyan)),
-                Span::styled(">S Successor  ", self.palette.style(Color::Magenta)),
-                Span::raw("@ Selected  ~ Hover  · direct links to inspected work"),
-            ]),
-            Line::from(
-                "↑↓ Select  ←→ Pan  +/- Zoom  f Fit  Tab Inspect  PgUp/PgDn Scroll  Enter Detail  ? Help",
-            ),
-        ];
-        frame.render_widget(Paragraph::new(footer), legend);
     }
 
     fn render_chart(
@@ -108,20 +104,20 @@ impl Gantt {
         let count = work.len().saturating_sub(self.first_row).min(visible);
         self.row_area = Rect::new(area.x, area.y + 1, area.width, count as u16);
         let label = truncate(&format!("Work {}/{}", current + 1, work.len()), label_width);
-        let mut lines = vec![Line::from(format!(
-            "{label:<label_width$}    % |{}",
-            self.axis(width)
-        ))];
+        let mut lines = vec![Line::styled(
+            format!("{label:<label_width$}    % |{}", self.axis(width)),
+            self.theme.style(Role::Dim),
+        )];
         for (index, item) in work.iter().enumerate().skip(self.first_row).take(count) {
             let relation = dependencies::relation(plan, focused.id, item.id);
             let marker = if self.hovered == Some(index) {
-                "~ "
+                HOVER
             } else if index == current {
-                "@ "
+                SELECTED
             } else {
                 relation.marker()
             };
-            lines.push(self.row(plan, item, marker, relation.color(), label_width, width));
+            lines.push(self.row(plan, item, marker, relation.role(), label_width, width));
         }
         frame.render_widget(Paragraph::new(lines), area);
     }
@@ -131,18 +127,18 @@ impl Gantt {
         plan: &Plan,
         item: &WorkItem,
         marker: &str,
-        relation: Color,
+        relation: Role,
         label_width: usize,
         width: usize,
     ) -> Line<'static> {
         let bounds = self.bounds(plan, item);
         let critical = bounds.is_some_and(|b| b.2);
         let progress = self.progress.get(&item.id).copied().unwrap_or_default();
-        let (symbol, bar_style) = self.palette.activity(item, progress.verified, critical);
-        let selected = marker == "@ ";
+        let (symbol, bar_style) = palette::activity(self.theme, item, progress.verified, critical);
+        let selected = marker == SELECTED;
         let emphasis = if selected {
             Modifier::BOLD | Modifier::REVERSED
-        } else if marker == "~ " {
+        } else if marker == HOVER {
             Modifier::UNDERLINED
         } else {
             Modifier::empty()
@@ -156,7 +152,7 @@ impl Gantt {
             ),
             label_width,
         );
-        let label_style = self.palette.style(relation).add_modifier(emphasis);
+        let label_style = self.theme.style(relation).add_modifier(emphasis);
         let label = format!(
             "{label}{} {:>3.0}% |",
             " ".repeat(label_width.saturating_sub(Span::raw(&label).width())),
@@ -171,7 +167,7 @@ impl Gantt {
                     }
                     None => format!("{:<width$}", truncate(&self.outside_graph(item), width)),
                 },
-                bar_style.add_modifier(if selected || marker == "~ " {
+                bar_style.add_modifier(if selected || marker == HOVER {
                     Modifier::BOLD
                 } else {
                     Modifier::empty()

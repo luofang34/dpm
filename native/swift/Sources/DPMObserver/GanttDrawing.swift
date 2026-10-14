@@ -85,7 +85,8 @@ struct GanttFrame {
 /// One package folding or unfolding: its rows stay where they are and are hidden or revealed through a band under the
 /// package whose bottom edge moves with the rows below it, so nothing above the package moves and no row is squeezed.
 struct GanttMotion {
-    static let duration = 0.22
+    /// The window's base duration; the motion is skipped entirely under reduced motion (see `GanttBody.animateFold`).
+    static let duration = DPMMotion.base
     let start: Date
     let before: [String: Int]
     /// The rows a fold removes, each at the position it had.
@@ -125,10 +126,10 @@ struct GanttMotion {
         }
     }
 
-    /// Eased progress at `now`, from 0 to 1.
+    /// Eased progress at `now`, from 0 to 1, on the shared ease-out curve: the rows move most at the start and settle.
     func progress(at now: Date) -> Double {
         let t = min(1, max(0, now.timeIntervalSince(start) / Self.duration))
-        return t * t * (3 - 2 * t)
+        return DPMMotion.Curve.easeOut.value(at: t)
     }
 }
 
@@ -229,7 +230,7 @@ enum GanttDrawing {
                 line.move(to: CGPoint(x: x, y: GanttGeometry.axis - 6))
                 line.addLine(to: CGPoint(x: x, y: size.height))
                 context.stroke(line, with: .color(Palette.grid), lineWidth: 0.5)
-                context.draw(Text(tick == tick.rounded() ? "\(Int(tick)) h" : hoursText(tick)).font(.system(size: 9)).foregroundColor(.secondary), at: CGPoint(x: x + 3, y: 8), anchor: .leading)
+                context.draw(Text(tick == tick.rounded() ? "\(Int(tick)) h" : hoursText(tick)).font(.caption2.monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: x + 3, y: 8), anchor: .leading)
             }
             tick += step
         }
@@ -255,7 +256,7 @@ enum GanttDrawing {
             context.stroke(line, with: .color(Palette.marker), style: StrokeStyle(lineWidth: 1, dash: marker.dash))
         }
         for label in GanttAxisLabels.place(markers.map { (x: $0.hours * scale - geometry.offsetX, text: $0.text) }, width: size.width) {
-            context.draw(Text(label.text).font(.system(size: 9, weight: .medium)).foregroundColor(.secondary), at: CGPoint(x: label.x, y: GanttAxisLabels.lineY), anchor: .leading)
+            context.draw(Text(label.text).font(.caption2.weight(.medium).monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: label.x, y: GanttAxisLabels.lineY), anchor: .leading)
         }
 
         // Relations, under the bars. Every drawn row's incoming relations are drawn lightly; those of
@@ -338,11 +339,11 @@ enum GanttDrawing {
         for label in GanttRelationLabels.place(labels) {
             let plate = CGRect(x: label.minX - 2, y: label.minY, width: label.maxX - label.minX + 4, height: label.maxY - label.minY)
             context.fill(Path(roundedRect: plate, cornerRadius: 3), with: .style(.background.opacity(0.88)))
-            context.draw(Text(label.text).font(.system(size: 9, weight: .semibold)).foregroundColor(.primary), at: CGPoint(x: label.x, y: label.y), anchor: label.leading ? .leading : .trailing)
+            context.draw(Text(label.text).font(.caption2.weight(.semibold)).foregroundColor(.primary), at: CGPoint(x: label.x, y: label.y), anchor: label.leading ? .leading : .trailing)
         }
 
         if let mark = frame.marked {
-            context.draw(Text(mark).font(.system(size: 11, weight: .bold)).foregroundColor(Palette.critical), at: CGPoint(x: size.width - 8, y: 8), anchor: .trailing)
+            context.draw(Text(mark).font(.subheadline.weight(.bold)).foregroundColor(Palette.critical), at: CGPoint(x: size.width - 8, y: 8), anchor: .trailing)
         }
 
         stamp(frame, geometry: geometry, schedule: schedule)
@@ -357,12 +358,12 @@ enum GanttDrawing {
         let recordedEnd = GanttHistoryDrawing.draw(row, top: top, scale: scale, offsetX: geometry.offsetX, in: &context)
         guard let span = row.span else {
             if recordedEnd != nil { return }
-            context.draw(Text("not scheduled: \(row.applicability)").font(.system(size: 10).italic()).foregroundColor(.secondary), at: CGPoint(x: 8, y: mid), anchor: .leading)
+            context.draw(Text("not scheduled: \(row.applicability)").font(.caption2.italic()).foregroundColor(.secondary), at: CGPoint(x: 8, y: mid), anchor: .leading)
             return
         }
         // Verified work has no remaining duration: a mark after its recorded bar, or at the origin, and no float.
         if row.status == "Verified" {
-            context.draw(Text("✓ \(row.key) · done").font(.system(size: 10)).foregroundColor(.secondary), at: CGPoint(x: (recordedEnd ?? -geometry.offsetX) + 6, y: mid), anchor: .leading)
+            context.draw(Text("✓ \(row.key) · done").font(.caption2).foregroundColor(.secondary), at: CGPoint(x: (recordedEnd ?? -geometry.offsetX) + 6, y: mid), anchor: .leading)
             return
         }
         let (x, width) = GanttLayout.bar(span, scale: scale)
@@ -379,7 +380,7 @@ enum GanttDrawing {
             diamond.closeSubpath()
             context.fill(diamond, with: .color(fill))
             context.stroke(diamond, with: .color(Palette.structure), lineWidth: 1)
-            context.draw(Text("◆ \(row.key) milestone, \(hoursText(span.start))").font(.system(size: 10, weight: .semibold)).foregroundColor(.primary), at: CGPoint(x: left + 12, y: mid), anchor: .leading)
+            context.draw(Text("◆ \(row.key) milestone, \(hoursText(span.start))").font(.caption2.weight(.semibold).monospacedDigit()).foregroundColor(.primary), at: CGPoint(x: left + 12, y: mid), anchor: .leading)
             return
         }
         if let times = row.times, times.totalFloat > 0 {
@@ -399,14 +400,10 @@ enum GanttDrawing {
         if row.isPackage {
             // A work package spans its descendants: a bracket in the colour of the work it holds, whose ends point down
             // at that work, so it reads as a span and never as a task of its own.
-            let bar = top + 8, right = left + max(width, 1)
-            var summary = Path(roundedRect: CGRect(x: left, y: bar, width: right - left, height: 6), cornerRadius: 1.5)
-            for (end, inward) in [(left, 7.0), (right, -7.0)] {
-                summary.move(to: CGPoint(x: end, y: bar + 5))
-                summary.addLine(to: CGPoint(x: end + inward, y: bar + 5))
-                summary.addLine(to: CGPoint(x: end, y: bar + 13))
-                summary.closeSubpath()
-            }
+            let corners = GanttBracket.outline(left: left, right: left + max(width, 1), top: top + 8)
+            var summary = Path()
+            summary.addLines(corners.map { CGPoint(x: $0.x, y: $0.y) })
+            summary.closeSubpath()
             context.fill(summary, with: .color(fill.opacity(0.9)))
         } else {
             // A zero-hour task is still a visible mark; its hours are in its label.
@@ -427,7 +424,7 @@ enum GanttDrawing {
         default: state = ""
         }
         let tag = "\(row.key)\(critical ? (row.isPackage ? " · holds critical work" : " · critical path") : "")\(row.isPackage ? "" : state) · \(hoursText(span.hours))"
-        context.draw(Text(tag).font(.system(size: 10)).foregroundColor(.primary), at: CGPoint(x: left + width + 6, y: mid), anchor: .leading)
+        context.draw(Text(tag).font(.caption2.monospacedDigit()).foregroundColor(.primary), at: CGPoint(x: left + width + 6, y: mid), anchor: .leading)
     }
 
     /// The draw pass reports what it drew. This is the app-owned draw the measurement record counts as a

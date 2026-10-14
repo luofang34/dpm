@@ -246,7 +246,7 @@ struct GanttEditMarks: View {
                 context.fill(GanttEditDrag.arrowhead(at: tip, pointingRight: toEnd == .start), with: .color(Palette.relationEmphasis))
                 // The label sits on the connector's vertical run, clear of the bars' own labels.
                 let run = path.boundingRect
-                let plate = Text("draft \(GanttRelation.abbreviation(PlanEdit.kind(from: fromEnd, to: toEnd)))").font(.system(size: 9, weight: .semibold))
+                let plate = Text("draft \(GanttRelation.abbreviation(PlanEdit.kind(from: fromEnd, to: toEnd)))").font(.caption2.weight(.semibold))
                     .foregroundColor(Palette.relationEmphasis)
                 let at = CGPoint(x: (fromEnd == .finish ? max(start.x, tip.x) : min(start.x, tip.x)) + (fromEnd == .finish ? 14 : -14), y: run.midY)
                 context.fill(Path(roundedRect: CGRect(x: at.x - (fromEnd == .finish ? 2 : 50), y: at.y - 7, width: 52, height: 14), cornerRadius: 3),

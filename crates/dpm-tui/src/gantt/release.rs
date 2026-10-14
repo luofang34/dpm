@@ -52,9 +52,9 @@ fn gated(edge: &Dependency, starting: bool) -> Vec<String> {
         .collect()
 }
 
-/// Decisions gating the work or a containing package, each open or resolved at the clock.
-pub(crate) fn decision_gates(plan: &Plan, timeline: &Timeline, work: WorkItemId) -> Option<String> {
-    let gates: Vec<_> = timeline
+/// Decisions gating the work or a containing package, each named open or resolved at the clock.
+pub(crate) fn decision_gates(plan: &Plan, timeline: &Timeline, work: WorkItemId) -> Vec<String> {
+    timeline
         .decisions(plan, work)
         .into_iter()
         .map(|(decision, release)| {
@@ -65,8 +65,7 @@ pub(crate) fn decision_gates(plan: &Plan, timeline: &Timeline, work: WorkItemId)
             };
             format!("{} {state}", decision.key)
         })
-        .collect();
-    (!gates.is_empty()).then(|| format!("Decision gates: {}", gates.join(", ")))
+        .collect()
 }
 
 fn start_state(start: &StartRelease, edge: &Dependency, event: Endpoint, key: &str) -> String {

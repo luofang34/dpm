@@ -1,22 +1,31 @@
-// The window: the status bar that always says what is shown and how current it is, a sidebar of
-// the six views, and the view itself. Before a workspace is chosen it shows how to choose one.
+// The window: its title names the page shown and its subtitle the revision and how current it is; a bar
+// under the toolbar appears only when something is not normal (a read-only source, a lost connection, a
+// failed read). A sidebar of the six views in two groups, and the view itself. Before a workspace is
+// chosen it shows how to choose one.
 
 import DPMObserverCore
 import SwiftUI
 
 struct RootView: View {
     @ObservedObject var model: ObserverModel
+    /// The subtitle's clock: the age it states is rewritten once a second, and nothing else is.
+    @State private var now = Date()
+    /// One timer for the process: a publisher made per view value would restart whenever the window is rebuilt.
+    private static let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 0) {
             if model.hasWorkspace {
                 StatusBar(model: model).reportFrame("status")
-                Divider()
+                if StatusBar.hasNews(model.snapshot) { Divider() }
                 NavigationSplitView {
                     Sidebar(model: model)
                         .navigationSplitViewColumnWidth(min: 150, ideal: 170, max: 220)
                 } detail: {
-                    PageView(model: model).reportFrame("page")
+                    PageView(model: model)
+                        .reportFrame("page")
+                        .navigationTitle(model.page.rawValue)
+                        .navigationSubtitle(Text(StatusBar.subtitle(model.snapshot, now: now)).monospacedDigit())
                 }
             } else {
                 WelcomeView(model: model)
@@ -24,6 +33,8 @@ struct RootView: View {
         }
         .reportFrame("root")
         .toolbar { toolbar }
+        // During a scripted measurement the age is not ticked, so nothing but what is measured redraws the window.
+        .onReceive(Self.clock) { if MeasureLog.shared == nil { now = $0 } }
     }
 
     @ToolbarContentBuilder
@@ -41,10 +52,16 @@ struct RootView: View {
 struct Sidebar: View {
     @ObservedObject var model: ObserverModel
 
+    /// The pages in two groups: the plan as it stands, and the work being executed and reviewed. The order inside a
+    /// group, and every page's ⌘ shortcut, are unchanged.
+    static let plan: [ObserverModel.Page] = [.now, .gantt, .network, .detail]
+    static let execution: [ObserverModel.Page] = [.live, .review]
+
     var body: some View {
         VStack(spacing: 0) {
             pages
             Divider()
+            RevisionLine(model: model)
             InspectionView(model: model)
         }
         .reportFrame("sidebar")
@@ -52,16 +69,63 @@ struct Sidebar: View {
 
     private var pages: some View {
         List(selection: Binding<ObserverModel.Page?>(get: { model.page }, set: { if let page = $0 { model.show(page) } })) {
-            ForEach(ObserverModel.Page.allCases) { page in
-                Label(page.rawValue, systemImage: page.symbol)
-                    .tag(page)
-                    .help("\(page.hint) (⌘\(String(describing: page.shortcut.character)))")
-                    .accessibilityLabel("\(page.rawValue): \(page.hint)")
-                    .accessibilityIdentifier("page.\(page.rawValue.lowercased())")
+            Section("Plan") {
+                ForEach(Self.plan) { page in row(page) }
+            }
+            Section("Execution") {
+                ForEach(Self.execution) { page in row(page) }
             }
         }
         .accessibilityLabel("Pages")
         .accessibilityIdentifier("sidebar")
+    }
+
+    /// One page: its symbol and name, the count awaiting review on Review, and a quiet working indicator on Live while
+    /// a run reports working. Each is also said in words, in the tooltip and to assistive technology.
+    private func row(_ page: ObserverModel.Page) -> some View {
+        let working = page == .live ? model.snapshot.runs.filter { $0.status == "working" }.count : 0
+        let waiting = page == .review ? (model.snapshot.status?.awaitingVerification ?? 0) : 0
+        let note = working > 0 ? " · \(working) working" : (waiting > 0 ? " · \(waiting) awaiting review" : "")
+        return HStack(spacing: 6) {
+            Label {
+                Text(page.rawValue)
+            } icon: {
+                Image(systemName: page.symbol).symbolRenderingMode(.hierarchical)
+            }
+            if working > 0 {
+                Spacer(minLength: 4)
+                QuietDots()
+            }
+        }
+        .badge(waiting)
+        .tag(page)
+        .help("\(page.hint)\(note) (⌘\(String(describing: page.shortcut.character)))")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(page.rawValue): \(page.hint)")
+        .accessibilityValue(note.isEmpty ? "" : String(note.dropFirst(3)))
+        .accessibilityIdentifier("page.\(page.rawValue.lowercased())")
+    }
+}
+
+/// The revision on display, with the workspace and lineage identities in its tooltip and its accessibility label: the
+/// window subtitle says the same revision, and this keeps it as an element of its own.
+struct RevisionLine: View {
+    @ObservedObject var model: ObserverModel
+
+    var body: some View {
+        let snapshot = model.snapshot
+        if let words = StatusBar.identityWords(snapshot) {
+            Text("Revision \(snapshot.revision.map { String($0) } ?? "unknown")")
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.top, 6)
+                .help(words)
+                .accessibilityLabel(words)
+                .accessibilityIdentifier("status.revision")
+        }
     }
 }
 

@@ -477,7 +477,8 @@ public enum GanttAxisLabels {
         public var text: String
         public var x: Double
         public var minX: Double { x }
-        public var maxX: Double { x + Double(text.count) * 5.4 + 4 }
+        /// A generous estimate of the drawn width at the 10-point caption style the axis labels use.
+        public var maxX: Double { x + Double(text.count) * 6.0 + 4 }
     }
 
     /// The y of the label line, in points from the top of the chart.

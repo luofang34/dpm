@@ -763,9 +763,11 @@ expand, zoom, pan and filters change only what is drawn, never the selection
 package leaves every row above it in place and, unless reduced motion is asked for or a scripted
 measurement runs, slides the rows below over a fifth of a second; a later pan only shrinks an offset
 kept past the end, never jumps it. A single click selects at once and a second click opens Detail;
-the selection band spans the name and the timeline. The status bar shows the revision and badges
-only what is not the normal case (a preview or archive, a lost or failed connection, a stale
-reading). The page's `schedule` read is displayed, and judged for staleness, only while the page is
+the selection band spans the name and the timeline. The window title names the page and its subtitle
+gives the revision and how fresh the reading is, or that it is being refreshed; a bar under the
+toolbar appears only for what is not the normal case (a preview or archive, a lost or failed
+connection, a failed read). The cursor row's complete text is in the inspector's Info (Option-Cmd-I),
+and the View menu lists the view operations the Gantt's keys perform. The page's `schedule` read is displayed, and judged for staleness, only while the page is
 shown. A schedule read that is owed because the status changed stays owed, and the view stays marked
 stale, until a schedule is installed or the page is hidden: a status read that succeeds followed by
 a schedule read that fails once is retried, not forgotten. A row's text, its accessibility words and

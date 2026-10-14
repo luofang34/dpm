@@ -62,8 +62,9 @@ public enum GanttRelationLabels {
         "+\(count) more incoming relation\(count == 1 ? "" : "s"): every one is in the row text and Detail"
     }
 
-    /// A generous width per character of the 9-point label font, so an estimated rectangle covers the drawn text.
-    public static let characterWidth = 5.6
+    /// A generous width per character of the 10-point label font (the caption style), so an estimated rectangle covers
+    /// the drawn text.
+    public static let characterWidth = 6.2
     public static let lineHeight = 12.0
     /// The first line sits this far above the arrowhead; each further line one `lineHeight` higher.
     public static let firstLine = 9.0
