@@ -72,11 +72,17 @@ struct GanttLabel: View {
         HStack(spacing: 4) {
             Color.clear.frame(width: Double(item.depth) * 14)
             if item.children > 0 {
-                Image(systemName: item.expanded ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .bold)).frame(width: 12)
-                    .accessibilityHidden(true)
-                    .onTapGesture { model?.toggleDisclosure(item.id) }
+                // A button over the row's full height: a click near the glyph folds the package, and is never taken by
+                // the row, whose second click would count as a double click and open Detail.
+                Button { model?.toggleDisclosure(item.id) } label: {
+                    Image(systemName: item.expanded ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .bold))
+                        .frame(width: 18, height: GanttLayout.rowHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
             } else {
-                Color.clear.frame(width: 12)
+                Color.clear.frame(width: 18)
             }
             Image(systemName: GanttGlyph.symbol(row)).font(.caption2).foregroundStyle(row.status == "Verified" ? .secondary : .primary)
                 .help(row.status).accessibilityHidden(true)

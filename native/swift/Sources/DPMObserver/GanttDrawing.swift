@@ -400,14 +400,10 @@ enum GanttDrawing {
         if row.isPackage {
             // A work package spans its descendants: a bracket in the colour of the work it holds, whose ends point down
             // at that work, so it reads as a span and never as a task of its own.
-            let bar = top + 8, right = left + max(width, 1)
-            var summary = Path(roundedRect: CGRect(x: left, y: bar, width: right - left, height: 6), cornerRadius: 1.5)
-            for (end, inward) in [(left, 7.0), (right, -7.0)] {
-                summary.move(to: CGPoint(x: end, y: bar + 5))
-                summary.addLine(to: CGPoint(x: end + inward, y: bar + 5))
-                summary.addLine(to: CGPoint(x: end, y: bar + 13))
-                summary.closeSubpath()
-            }
+            let corners = GanttBracket.outline(left: left, right: left + max(width, 1), top: top + 8)
+            var summary = Path()
+            summary.addLines(corners.map { CGPoint(x: $0.x, y: $0.y) })
+            summary.closeSubpath()
             context.fill(summary, with: .color(fill.opacity(0.9)))
         } else {
             // A zero-hour task is still a visible mark; its hours are in its label.

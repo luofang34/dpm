@@ -2674,6 +2674,66 @@ def gantt_drag_route(bundle, directory):
         app.close()
 
 
+def gantt_disclosure_route(bundle, directory):
+    """The package's disclosure folds on real clicks anywhere in its cell, the full row height beside the glyph, and is
+    never taken by the row: a click at the cell's top edge folds TEST-PKG at once, a double click on the glyph folds it
+    twice and opens no Detail, and a following click on a task's name still selects it on the Gantt. Only the complete
+    route passes; an interrupted one is NOT ASSESSED."""
+    case = 'gantt_disclosure_route'
+    if not accessibility_trusted():
+        not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so no pointer event was posted')
+        return None
+    database = gantt_store(directory, 'gantt-disclosure')
+    app = App(bundle, directory, ['--database', str(database), '--page', 'gantt', '--window-size', '1400x900'])
+    front = None
+    measured = lambda s: 'rows' in ((s['gantt'].get('layout') or {}).get('frames') or {})
+    try:
+        shown = app.wait(lambda s: gantt_loaded(s) and measured(s) and any(b['key'] == 'TEST-PKG' for b in s['gantt']['bars']), 30,
+                         'the Gantt with TEST-PKG drawn and its rows measured')
+        front = Foreground(app.process.pid)
+        front.activate(app.process)
+        front.arm()
+        rows = shown['gantt']['rows']
+        height = shown['gantt']['row_height']
+
+        def row_frame(key):
+            """The row label's own frame on screen, from the app's accessibility tree: the target a person sees."""
+            found = front.find(f'gantt.row.{key}')
+            assert found and found.get('frame'), f'the owned app has no gantt.row.{key} with a frame: {found}'
+            return found['frame']
+        package = row_frame('TEST-PKG')
+        assert abs(package[3] - height) <= 1.5, f'the TEST-PKG label is not one row high: {package}'
+        # The cell is 18 pt wide after the label's 6 pt inset; TEST-PKG is at depth 0.
+        cell_x, row_top = package[0] + 6 + 9, package[1]
+        post_click(app, front, (cell_x, row_top + 3), step="a click at the top edge of TEST-PKG's disclosure cell")
+        folded = guarded_wait(app, front, lambda s: s['gantt']['collapsed'] == 1 and s['gantt']['rows'] == rows - 3, 10,
+                              'TEST-PKG to fold on one click at the edge of its cell')
+        assert folded['page'] == 'gantt', f"the edge click left the Gantt: {folded['page']}"
+        post_click(app, front, (cell_x, row_top + height / 2), clicks=2, step="a double click on TEST-PKG's disclosure")
+        # Events are delivered in order: a click on a task's name, which the page still has only if no Detail opened.
+        refolded = guarded_wait(app, front, lambda s: s['gantt']['collapsed'] == 1 and s['gantt']['view_sequence'] > folded['gantt']['view_sequence'], 10,
+                                'the double click to unfold and fold TEST-PKG again')
+        task = next(b for b in refolded['gantt']['bars'] if b['kind'] not in ('WorkPackage', 'Milestone'))
+        name = row_frame(task['key'])
+        post_click(app, front, (name[0] + name[2] / 2, name[1] + name[3] / 2), step=f"a click on {task['key']}'s name")
+        after = guarded_wait(app, front, lambda s: s['gantt']['selected_key'] == task['key'], 10, f"{task['key']} to be selected")
+        assert after['page'] == 'gantt', f"the double click on the disclosure opened {after['page']}"
+        uninterrupted(front, 'the route is complete')
+        assert app.quit() == 0
+        return (f"TEST-PKG's disclosure folded on one real click 3 pt below its row's top, a double click on it folded it twice and "
+                f"opened no Detail, and a click on {task['key']}'s name then selected it on the Gantt")
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption))
+        return None
+    except AssertionError as error:
+        kept = keep_failure(case, app, front, {'error': str(error)[:4000]})
+        raise AssertionError(f'{error} (complete failing state kept at {kept})') from None
+    finally:
+        if front:
+            front.close()
+        app.close()
+
+
 def network_drag_route(bundle, directory):
     """Linking on the network by a real pointer drag while editing: from the right half of one drawn task to the left
     half of another drafts a finish-to-start link, which the canvas then draws between those ends with its kind;
@@ -3527,7 +3587,8 @@ def main(bundle):
         for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
                          edit_flag_first, gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
                          filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
-                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route, inspector_edit_keyboard_route, gantt_drag_route, network_drag_route):
+                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route, inspector_edit_keyboard_route, gantt_drag_route, gantt_disclosure_route,
+                         network_drag_route):
             result = scenario(packaged, directory)
             # A case that was skipped or not assessed says so itself, loudly, and returns nothing: it is never a pass.
             if result is not None:
