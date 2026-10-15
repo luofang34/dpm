@@ -39,7 +39,10 @@ struct NetworkList: View {
                             }
                             .padding(.horizontal, 6)
                             .padding(.vertical, focused ? 6 : 3)
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(focused ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: focused ? 2 : 1))
+                            // The cursor row is set apart by a fill, its expanded lines and its heavier first line, never by
+                            // a box: no row carries an outline, so the list reads as one surface, as the Gantt's names do.
+                            .background(focused ? Color.accentColor.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .id(node.identity)

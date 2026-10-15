@@ -75,6 +75,24 @@ for path in swift:
     for key in system_chords(path.read_text()):
         failures.append(f'{path.relative_to(ROOT)}: Option-Command-{key.upper()} is a macOS system shortcut')
 
+# A view is set apart by a fill, spacing or a separator, never by outlining it: boxed rows inside a pane read as nested
+# frames. Outlines belong to drawn symbols, where the shape itself carries meaning (a package, a focus ring on a canvas).
+OUTLINED_VIEW = re.compile(r'\.border\(|\.overlay\(\s*(?:RoundedRectangle|Rectangle|Capsule|Circle)\([^)]*\)\s*\.stroke')
+
+
+def outlined_views(source):
+    """The lines of `source` that draw a closed outline around a SwiftUI view."""
+    return [number for number, line in enumerate(source.splitlines(), 1) if OUTLINED_VIEW.search(line)]
+
+
+assert outlined_views('x.overlay(RoundedRectangle(cornerRadius: 4).stroke(.red))') == [1], 'an outlined row must be found'
+assert outlined_views('x.border(Color.red)') == [1], 'a bordered view must be found'
+assert outlined_views('context.stroke(Path(rect), with: .color(.red))') == [], 'a drawn symbol must pass'
+assert outlined_views('x.background(.red, in: RoundedRectangle(cornerRadius: 5))') == [], 'a fill must pass'
+for path in swift:
+    for number in outlined_views(path.read_text()):
+        failures.append(f'{path.relative_to(ROOT)}:{number}: set the view apart with a fill or a separator, not an outline')
+
 files = sorted((ROOT / 'crates').rglob('*.rs')) + sorted((ROOT / 'src').rglob('*.rs'))
 for path in files:
     source = path.read_text()
