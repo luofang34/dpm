@@ -9,7 +9,7 @@ use dpm_model::{
 };
 use dpm_schedule::{
     ActivityCalendar, ActivitySchedule, Schedule, SimulationSummary, deterministic_remaining_at,
-    simulate_remaining_at,
+    pert_variance_hours2, simulate_remaining_at,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -73,10 +73,23 @@ pub struct ScheduledWork {
     /// the projection is deterministic only, while open choices make it meaningless, or for work
     /// outside the active graph.
     pub criticality: Option<f64>,
+    /// The task's own PERT estimate, as a PERT network diagram labels an activity; absent for a
+    /// package, a milestone, a task without an estimate and work outside the active graph.
+    pub pert: Option<ActivityPert>,
     /// Calendar placement, present only when the plan has calendars.
     pub calendar: Option<ActivityCalendar>,
     /// What was recorded: when the work started and finished; absent before either happened.
     pub actual: Option<ActualSpan>,
+}
+
+/// Classical PERT figures of one task's whole three-point estimate. They describe the estimate,
+/// not the remaining work: progress, elapsed time and overrun never change them.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ActivityPert {
+    /// Expected duration `te = (O + 4M + P) / 6`, in hours.
+    pub expected_hours: f64,
+    /// Standard deviation `σ = (P − O) / 6`, in hours.
+    pub sigma_hours: f64,
 }
 
 /// Seeded Monte Carlo completion percentiles, in elapsed hours.
@@ -162,6 +175,12 @@ pub fn schedule_projection(
         .map(|item| {
             let mut scheduled = row(&timeline, &schedule, simulation.as_ref(), &spans, item);
             scheduled.actual = actuals.get(&item.id).copied();
+            if item.kind == WorkKind::Task && scheduled.times.is_some() {
+                scheduled.pert = item.schedule.estimate.map(|estimate| ActivityPert {
+                    expected_hours: estimate.pert_expected_hours(),
+                    sigma_hours: pert_variance_hours2(estimate).sqrt(),
+                });
+            }
             if let Some(leaves) = leaves.get(&item.id) {
                 roll_up(&mut scheduled, &schedule, simulation.as_ref(), leaves);
             }
@@ -259,6 +278,7 @@ fn row(
         span: spans.get(&item.id).copied(),
         times: activity.map(times),
         criticality: simulation.and_then(|s| s.criticality.get(&item.id).copied()),
+        pert: None,
         calendar: activity.and_then(|a| a.calendar.clone()),
         actual: None,
     }
