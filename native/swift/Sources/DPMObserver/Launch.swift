@@ -110,6 +110,7 @@ final class Launch {
     private(set) var host: HostObservation?
     private var started = false
     private var signals: [DispatchSourceSignal] = []
+    private let inputSources = InputSources()
 
     private init() {
         // The measurement log, if one was asked for, opens before anything else so that its first event

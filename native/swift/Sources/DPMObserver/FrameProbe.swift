@@ -54,6 +54,7 @@ extension View {
 final class NamedProbeView: NSView {
     var name = ""
     weak var registry: LayoutRegistry?
+    private var moved: NSObjectProtocol?
 
     override func layout() {
         super.layout()
@@ -62,7 +63,20 @@ final class NamedProbeView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if let moved { NotificationCenter.default.removeObserver(moved) }
+        moved = nil
+        // A window that only moves lays nothing out, yet the reported window frame (and every screen point derived from
+        // it) changes: the move publishes again.
+        if registry != nil, let window {
+            moved = NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.publish() }
+            }
+        }
         publish()
+    }
+
+    deinit {
+        if let moved { NotificationCenter.default.removeObserver(moved) }
     }
 
     private func publish() {
