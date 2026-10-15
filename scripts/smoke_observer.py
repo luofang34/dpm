@@ -303,6 +303,71 @@ def selected_run_window(bundle, directory):
         app.close()
 
 
+def live_reading_holds_still(bundle, directory):
+    """A reader scrolled down a run's activity does not have it pushed under them: with 30 records shown, the run pane is
+    scrolled off its top by real wheel steps over it, two records arrive, and the pane still shows the same newest record with the two waiting
+    behind its button; back at the top, all 32 show. The pane's own report says what it shows. An interrupted route is
+    NOT ASSESSED."""
+    case = 'live_reading_holds_still'
+    if not accessibility_trusted():
+        not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so no wheel was posted')
+        return None
+    database = store(directory, 'reading')
+    run_cli(database, 'claim', 'TEST-A', '--actor', WORKER)
+    run_cli(database, 'start', 'TEST-A', '--actor', WORKER)
+    run_cli(database, 'run', 'start', 'TEST-A', '--actor', SERVICE, '--run-id', ACTIVITY_RUN, '--observation', 'managed', '--executor', WORKER)
+    for n in range(1, 31):
+        run_cli(database, 'run', 'record', ACTIVITY_RUN, 'progress', '--sequence', str(n), '--text', f'step {n} of the reading test', '--actor', SERVICE)
+    app = App(bundle, directory, ['--database', str(database), '--select-run', ACTIVITY_RUN, '--page', 'live', '--window-size', '1280x760'])
+    front = None
+    reading = lambda s: ((s.get('host') or {}).get('live_activity') or {})  # noqa: E731
+    try:
+        app.wait(lambda s: connected(s) and s['window'] and s['window']['entries'] == 30 and reading(s).get('shown_newest') is not None, 30, "the run's 30 records")
+        # Real wheel steps, tagged as this process's, drive the route and only the app's report judges it. The app is brought
+        # forward once; if it is not in front when a step misses, the route is NOT ASSESSED, and so is any input from
+        # elsewhere that reaches it.
+        front = Foreground(app.process.pid)
+        front.activate(app.process)
+        pane = front.find('run.scroll')
+        assert pane and pane.get('frame'), f'the run pane has no accessibility frame: {pane}'
+        x, y, w, h = pane['frame']
+        point = (x + w / 2, y + h / 2)
+
+        def wait(predicate, timeout, what):
+            try:
+                state = app.wait(predicate, timeout, what)
+            except AssertionError:
+                problem = app.process.poll() is None and front.current_problem()
+                if problem:
+                    raise NotAssessed(f'while waiting for {what}: {problem}') from None
+                raise
+            foreign = foreign_input(state)
+            if foreign:
+                raise NotAssessed(f'before {what} counts as shown: input from another process reached the app ({foreign})')
+            return state
+        state = wait(lambda s: reading(s).get('at_top') is True and reading(s).get('pending') == 0, 10, 'the run pane at its top')
+        newest = reading(state)['shown_newest']
+        for _ in range(6):
+            post_scroll(app, front, -60, step='a wheel step down the run pane', at=point)
+        wait(lambda s: reading(s).get('at_top') is False, 10, 'the run pane to leave its top')
+        for n in (31, 32):
+            run_cli(database, 'run', 'record', ACTIVITY_RUN, 'progress', '--sequence', str(n), '--text', f'arrived while reading ({n})', '--actor', SERVICE)
+        held = wait(lambda s: s['window'] and s['window']['entries'] == 32 and reading(s).get('pending') == 2, 20, 'two new records to wait behind the button')
+        assert reading(held)['shown_newest'] == newest, f'the pane showed newer records while the reader was away from its top: {reading(held)} (newest when reading began {newest})'
+        for _ in range(40):
+            post_scroll(app, front, 120, step='a wheel step back up the run pane', at=point)
+        back = wait(lambda s: reading(s).get('at_top') is True and reading(s).get('pending') == 0, 10, 'the run pane back at its top with every record')
+        return (f"while the reader was scrolled down, two new records waited behind the button and the pane kept showing record {newest}; "
+                f"back at the top it showed record {reading(back)['shown_newest']}")
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption))
+        return None
+    finally:
+        if front:
+            front.close()
+        app.close()
+
+
 def preview_and_refusals(bundle, directory):
     locator = (ROOT / '.dpm/project.toml').read_bytes()
     app = App(bundle, directory, ['--project', str(ROOT)])
@@ -3338,10 +3403,15 @@ def post_click(app, front, point, clicks=1, step='a click'):
         post_mouse(app, front, 'up', point, n, step=step)
 
 
-def post_scroll(app, front, dy, dx=0, step='a wheel'):
+def post_scroll(app, front, dy, dx=0, step='a wheel', at=None):
+    """One real wheel event, guarded like a pointer event. With `at` (a global top-left screen point) the event carries
+    that location, so it reaches the window under that point and nothing behind it."""
     pointer_guard(app, front, step)
-    quartz, core, _ = _quartz()
+    quartz, core, Point = _quartz()
     event = quartz.CGEventCreateScrollWheelEvent2(None, 0, 2, dy, dx, 0)  # pixel units
+    if at is not None:
+        quartz.CGEventSetLocation.argtypes = [ctypes.c_void_p, Point]
+        quartz.CGEventSetLocation(event, Point(*at))
     quartz.CGEventSetIntegerValueField(event, EVENT_TAG_FIELD, os.getpid())
     quartz.CGEventPost(0, event)
     core.CFRelease(event)
@@ -3721,7 +3791,7 @@ def main(bundle):
         directory = Path(scratch)
         packaged = directory / 'DPMObserver.app'
         shutil.copytree(bundle, packaged, symlinks=True)
-        for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
+        for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, live_reading_holds_still, preview_and_refusals, stale_and_source_change,
                          edit_flag_first, gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
                          filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
                          network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, quit_with_review_open, launch_layout_holds_still, inspector_keyboard_route, inspector_edit_keyboard_route, gantt_drag_route, gantt_disclosure_route,
