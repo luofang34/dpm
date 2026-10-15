@@ -254,8 +254,8 @@ struct NetworkInspector: View {
                     if let walked = model.network.walked { Prose(text: walked, font: .caption).id(walked).accessibilityIdentifier("network.walked") }
                     if let note = model.network.locateNote { Prose(text: note, font: .caption).accessibilityIdentifier("network.locate-note-text") }
                     if let report = model.networkReport {
-                        Prose(text: "As explain reports it — predecessors: \(names(report.predecessors)); successors: \(names(report.successors)).", font: .caption)
-                        Prose(text: report.unmet.isEmpty ? "Unmet gates: none reported." : "Unmet gates: " + report.unmet.map(\.words).joined(separator: "; "), font: .caption)
+                        Prose(text: "Predecessors: \(names(report.predecessors)) · Successors: \(names(report.successors))", font: .caption)
+                        Prose(text: report.unmet.isEmpty ? "Nothing is holding it back." : "Waiting: it " + report.unmet.map(\.words).joined(separator: "; it "), font: .caption)
                         if let reason = report.blockReason { Prose(text: "Blocked: \(reason)", font: .caption) }
                     } else if !node.isDecision {
                         Prose(text: "Select this node (Space) to read what explain reports: its predecessors, successors and unmet gates.", font: .caption)

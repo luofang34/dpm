@@ -2,7 +2,7 @@
 // carries the projection's own ES, duration and EF over LS, TF and LF; critical work leads every column, so the
 // critical chain TEST-A -> TEST-B -> TEST-C runs along the top row; every connector is drawn with horizontal and vertical
 // segments only; a plain finish-to-start link without lag is unlabelled while every other link names its relation. The
-// text list says every box value in words. Pure view geometry and text of the real model's graph; nothing is written.
+// text list says every box value in words, and what holds the selected work back reads in plain words. Pure view geometry and text of the real model's graph; nothing is written.
 
 import DPMNative
 import DPMObserverCore
@@ -54,6 +54,14 @@ extension Context {
         let other = temporal.filter { edge in !plain.contains(edge) }
         check(!plain.isEmpty && plain.allSatisfy { $0.connectorLabel == nil } && !other.isEmpty && other.allSatisfy { ($0.connectorLabel ?? "").hasPrefix($0.relation?.abbreviation ?? "?") },
               "\(plain.count) plain FS links are unlabelled and \(other.count) others name their relation: \(other.map { $0.connectorLabel ?? "nil" })")
+        // What holds the selected work back is said in plain words: TEST-C waits for TEST-B to finish and TEST-A to start.
+        guard let c = graph.nodes.first(where: { $0.key == "TEST-C" }) else { throw SuiteError(description: "the FX has no TEST-C") }
+        await MainActor.run { model.focusNode(c.identity, selecting: true) }
+        _ = try await modelExpect(model, "explain's report for TEST-C", 30) { _ in MainActor.assumeIsolated { model.networkReport != nil } }
+        let waits = await MainActor.run { model.networkReport?.unmet.map(\.words) ?? [] }
+        check(waits.contains { $0.hasPrefix("can start once TEST-B finishes") } && waits.contains { $0.hasPrefix("can start once TEST-A starts") }
+              && !waits.contains { $0.contains("FinishStart") || $0.contains("StartStart") || $0.contains("awaiting event") },
+              "TEST-C's unmet dependencies read as plain words: \(waits)")
         await closeGantt(model)
     }
 }
