@@ -1,5 +1,5 @@
 // NETWORK-PERT-01: the network reads as an activity-on-node (PERT/CPM) diagram on the 9-node FX. Each scheduled box
-// carries the projection's own ES, duration and EF over LS, TF and LF; critical work leads every column, so the
+// carries the projection's own ES, the task's PERT te±σ and EF over LS, TF and LF; critical work leads every column, so the
 // critical chain TEST-A -> TEST-B -> TEST-C runs along the top row; every connector is drawn with horizontal and vertical
 // segments only, leaving and entering the ends its relation names; a plain finish-to-start link without lag is unlabelled while every other link names its relation. The
 // text list says every box value in words, and what holds the selected work back reads in plain words. Pure view geometry and text of the real model's graph; nothing is written.
@@ -25,12 +25,18 @@ extension Context {
             let shown = cells.count == 6 ? [cells[0], cells[2], cells[3], cells[4], cells[5]] : []
             if shown != expected { wrong.append("\(node.key) box \(cells) vs schedule \(expected)") }
             let words = NetworkText.lines(node, graph: graph, kinds: Set(NetworkEdgeKind.allCases)).joined(separator: " ")
+            if let pert = schedule.row(node.identity)?.pert {
+                let spread = "\(number(pert.expected))±\(number(pert.sigma))"
+                if cells.count != 6 || cells[1] != spread { wrong.append("\(node.key) duration cell \(cells) is not te±σ \(spread)") }
+                if !words.contains("PERT te \(number(pert.expected)) h ± σ \(number(pert.sigma)) h") { wrong.append("\(node.key) text list lacks its PERT te and σ") }
+            }
             for fact in ["earliest start \(number(times.earliestStart)) h", "earliest finish \(number(times.earliestFinish)) h", "latest start \(number(times.latestStart)) h",
                          "latest finish \(number(times.latestFinish)) h", "total float \(number(times.totalFloat)) h", "free float \(number(times.freeFloat)) h"] where !words.contains(fact) {
                 wrong.append("\(node.key) text list lacks \"\(fact)\"")
             }
         }
-        check(wrong.isEmpty && graph.nodes.contains { $0.boxCells != nil }, "every scheduled box holds the projection's ES, EF, LS, TF and LF, and the text list says each: \(wrong)")
+        check(wrong.isEmpty && graph.nodes.contains { $0.boxCells != nil } && graph.nodes.contains { ($0.pertSigma ?? 0) > 0 && $0.pertExpected != nil },
+              "every scheduled box holds the projection's ES, te±σ, EF, LS, TF and LF, and the text list says each: \(wrong)")
 
         // Critical work leads each column, and the critical chain is the top row.
         var columns: [Int: [NetworkNode]] = [:]
