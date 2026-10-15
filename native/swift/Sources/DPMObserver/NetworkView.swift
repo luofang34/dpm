@@ -110,9 +110,10 @@ struct NetworkView: View {
                 Spacer(minLength: 0)
             }
             let counts = graph.counts
-            let words = "Showing \(shown) of \(counts.nodes) nodes · \(model.network.filter.words). In the plan: \(counts.words). Hours are elapsed hours from the schedule query; no calendar date is supplied, so none is shown."
+            let finish = graph.terminals.map { " · \($0.finishWords)" } ?? ""
+            let words = "Showing \(shown) of \(counts.nodes) nodes · \(model.network.filter.words). In the plan: \(counts.words). Start at 0.0 h\(finish.replacingOccurrences(of: " · finish", with: "; finish")). Hours are elapsed hours from the schedule query; no calendar date is supplied, so none is shown."
             // One short line on the page; the complete sentence is the element's label and its tooltip.
-            Text("\(shown) of \(counts.nodes) nodes · \(model.network.filter.words) · elapsed hours, no dates").font(.caption).foregroundStyle(.secondary).lineLimit(1).help(words)
+            Text("\(shown) of \(counts.nodes) nodes · \(model.network.filter.words)\(finish) · elapsed hours, no dates").font(.caption).foregroundStyle(.secondary).lineLimit(1).help(words)
                 .accessibilityLabel(words)
                 .accessibilityIdentifier("network.counts")
         }

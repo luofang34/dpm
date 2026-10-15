@@ -63,6 +63,27 @@ extension Context {
         check(misplaced.isEmpty && kindsSeen.isSuperset(of: ["FinishStart", "StartStart", "FinishFinish"]),
               "every link leaves and enters the ends its relation names (kinds \(kindsSeen.sorted())): \(misplaced)")
 
+        // Start joins every activity without a temporal predecessor and Finish every one without a successor; no connector
+        // crosses a box, and the Finish carries the projection's own finish and percentiles.
+        if let terminals = graph.terminals {
+            let activities = graph.nodes.filter { $0.kind == .task || $0.kind == .milestone }
+            let temporal = graph.edges.filter { $0.kind == .temporal }
+            let expectStarts = activities.filter { node in !temporal.contains { $0.to == node.identity } }.map(\.identity)
+            let expectFinishes = activities.filter { node in !temporal.contains { $0.from == node.identity } }.map(\.identity)
+            var crossing: [String] = []
+            for (key, route) in terminals.routes {
+                for node in graph.nodes where !key.contains(node.identity) {
+                    if let at = graph.place[node.identity], route.touches(NetworkLayout.rect(at)) { crossing.append("\(key) crosses \(node.key)") }
+                }
+            }
+            let finish = String(format: "finish %.1f h", schedule.projectFinishHours)
+            check(terminals.starts == expectStarts && terminals.finishes == expectFinishes && !expectStarts.isEmpty && !expectFinishes.isEmpty
+                  && crossing.isEmpty && terminals.finishWords.hasPrefix(finish) && (schedule.uncertainty == nil || terminals.finishWords.contains("P80")),
+                  "Start joins \(expectStarts.map(graph.name)), Finish is joined from \(expectFinishes.map(graph.name)), no connector crosses a box (\(crossing)); \(terminals.finishWords)")
+        } else {
+            check(false, "the network has Start and Finish markers")
+        }
+
         // Plain FS links are unlabelled; every other temporal link names its relation.
         let temporal = graph.edges.filter { $0.kind == .temporal }
         let plain = temporal.filter { $0.relation?.kind == "FinishStart" && $0.relation?.lagHours == 0 && $0.relation?.policy != "Soft" }
