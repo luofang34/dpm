@@ -101,6 +101,17 @@ public struct NetworkEdge: Identifiable, Hashable, Sendable {
 }
 
 extension NetworkNode {
+    /// How many progress diagonals a network diagram draws across the box: none before the work starts, one once it has
+    /// started (in progress, blocked or submitted), two once it is verified; nil for a decision.
+    public var progressMarks: Int? {
+        guard !isDecision else { return nil }
+        switch status {
+        case "InProgress", "Blocked", "Submitted": return 1
+        case "Verified": return 2
+        default: return 0
+        }
+    }
+
     /// The activity-on-node box's six cells in reading order, top row then bottom: ES, duration, EF, then LS, TF, LF,
     /// each in the projection's elapsed hours as written; nil when the projection gave no times.
     public var boxCells: [(label: String, value: String)]? {

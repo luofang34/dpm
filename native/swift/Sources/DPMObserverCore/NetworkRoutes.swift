@@ -1,19 +1,30 @@
 // The presentation routes of the network's edges: view geometry only, from the node placement and the edge
-// list, never from a schedule or a rule. An edge between adjacent columns is a curve across the column gap
-// between them. Every other edge (one that skips columns, goes back or stays in its column) leaves its source
-// into the gap on its right, runs along a row gap, where no node is ever placed, and enters its target from the
-// gap on its left, so it never runs through an intervening node. Each node spreads its incoming ends (and its
+// list, never from a schedule or a rule. As in a precedence diagram, a link leaves the end of its predecessor its
+// relation names (the right side for a finish, the left for a start) and enters the end of its successor it names
+// (the left side for a start, the right for a finish); decision gates and context links run finish to start. A
+// finish-to-start link to the next column turns once in the middle of the column gap. Every other link leaves into
+// the gap beside its side, runs along a row gap, where no node is ever placed, and enters from the gap beside its
+// target's side, so it never runs through an intervening node. Each node spreads its incoming ends (and its
 // outgoing starts) over its side, so two edges into one node never share a track or an arrowhead.
 // The routes are the single basis of the drawing, the label anchors, the culling bounds and the fit extent.
 
 import Foundation
 
 public struct NetworkRoute: Equatable, Sendable {
-    /// The points the edge is drawn through, from the source's right side to the target's left side.
+    /// The points the edge is drawn through, from the side of the source its relation names to that of the target.
     public let points: [NetworkPoint]
     /// Whether the route runs along a row gap; else it crosses one column gap. Either way it is drawn as straight,
     /// right-angled segments, as a network diagram's links are.
     public let detour: Bool
+    /// Whether the route enters its target's left side (a start), so its end mark points right; else it enters the
+    /// right side (a finish) and points left.
+    public var entersFromLeft = true
+
+    public init(points: [NetworkPoint], detour: Bool, entersFromLeft: Bool = true) {
+        self.points = points
+        self.detour = detour
+        self.entersFromLeft = entersFromLeft
+    }
     /// What the end mark (an arrowhead or a bar) adds around the route's points.
     static let mark = 8.0
 
@@ -75,13 +86,17 @@ public enum NetworkRouting {
     /// Every edge's route, by edge id, in a deterministic order (the edge list's, then the node rows). Nodes
     /// without a place have no route.
     public static func routes(edges: [NetworkEdge], place: [String: NetworkPlace], tallest: Int) -> [String: NetworkRoute] {
-        struct Plan { let index: Int; let edge: NetworkEdge; let from: NetworkPlace; let to: NetworkPlace; let detour: Bool; let gap: Int; let lane: Double; let leave: Double; let arrive: Double }
+        struct Plan { let index: Int; let edge: NetworkEdge; let from: NetworkPlace; let to: NetworkPlace; let detour: Bool; let gap: Int; let lane: Double; let leave: Double; let arrive: Double
+            let leaveRight: Bool; let enterLeft: Bool }
         let centre = { (p: NetworkPlace) in NetworkLayout.origin(column: p.column, row: p.row).y + NetworkLayout.nodeHeight / 2 }
         var plans: [Plan] = []
         var taken: [Int: Int] = [:]
         for (index, edge) in edges.enumerated() {
             guard let a = place[edge.from], let b = place[edge.to] else { continue }
-            let detour = b.column != a.column + 1
+            let kind = edge.relation?.kind ?? "FinishStart"
+            let leaveRight = kind == "FinishStart" || kind == "FinishFinish"
+            let enterLeft = kind == "FinishStart" || kind == "StartStart"
+            let detour = !(leaveRight && enterLeft && b.column == a.column + 1)
             var gap = 0, lane = 0.0
             if detour {
                 // The row gap nearest the middle of the two ends; on a tie the lower one.
@@ -92,13 +107,13 @@ public enum NetworkRouting {
             }
             let track = gapY(gap) + lane
             plans.append(Plan(index: index, edge: edge, from: a, to: b, detour: detour, gap: gap, lane: lane,
-                              leave: detour ? track : centre(b), arrive: detour ? track : centre(a)))
+                              leave: detour ? track : centre(b), arrive: detour ? track : centre(a), leaveRight: leaveRight, enterLeft: enterLeft))
         }
         // Each node's starts and ends, spread over its side in the order their routes leave or arrive.
         var outs: [String: [Int]] = [:], ins: [String: [Int]] = [:]
         for (position, plan) in plans.enumerated() {
-            outs[plan.edge.from, default: []].append(position)
-            ins[plan.edge.to, default: []].append(position)
+            outs["\(plan.edge.from)|\(plan.leaveRight)", default: []].append(position)
+            ins["\(plan.edge.to)|\(plan.enterLeft)", default: []].append(position)
         }
         var startY = [Double](repeating: 0, count: plans.count), endY = startY
         var startStub = [Int](repeating: 0, count: plans.count), endStub = startStub
@@ -118,8 +133,8 @@ public enum NetworkRouting {
         var routes: [String: NetworkRoute] = [:]
         for (position, plan) in plans.enumerated() {
             let from = NetworkLayout.origin(column: plan.from.column, row: plan.from.row), to = NetworkLayout.origin(column: plan.to.column, row: plan.to.row)
-            let start = NetworkPoint(x: from.x + NetworkLayout.nodeWidth, y: startY[position])
-            let end = NetworkPoint(x: to.x, y: endY[position])
+            let start = NetworkPoint(x: from.x + (plan.leaveRight ? NetworkLayout.nodeWidth : 0), y: startY[position])
+            let end = NetworkPoint(x: to.x + (plan.enterLeft ? 0 : NetworkLayout.nodeWidth), y: endY[position])
             guard plan.detour else {
                 // Across one column gap: out of the source, down or up the middle of the gap, into the target.
                 let middle = start.x + NetworkLayout.columnGap / 2
@@ -128,9 +143,10 @@ public enum NetworkRouting {
                 continue
             }
             let track = gapY(plan.gap) + plan.lane
-            let out = start.x + stub(startStub[position]), into = max(2, end.x - stub(endStub[position]))
+            let out = plan.leaveRight ? start.x + stub(startStub[position]) : max(2, start.x - stub(startStub[position]))
+            let into = plan.enterLeft ? max(2, end.x - stub(endStub[position])) : end.x + stub(endStub[position])
             routes[plan.edge.id] = NetworkRoute(points: [start, NetworkPoint(x: out, y: start.y), NetworkPoint(x: out, y: track),
-                                                         NetworkPoint(x: into, y: track), NetworkPoint(x: into, y: end.y), end], detour: true)
+                                                         NetworkPoint(x: into, y: track), NetworkPoint(x: into, y: end.y), end], detour: true, entersFromLeft: plan.enterLeft)
         }
         return routes
     }
