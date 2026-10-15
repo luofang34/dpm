@@ -38,25 +38,40 @@ struct LiveView: View {
 struct RunPane: View {
     @ObservedObject var model: ObserverModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.hostObservation) private var host
+    /// While the reader is scrolled away from the top, the newest record they had: newer ones wait behind a button, so the
+    /// line being read never moves under them. Nil at the top, where the newest record leads as it arrives.
+    @State private var frozenAt: UInt64?
+    @State private var atTop = true
+    @State private var probe = LiveReadingProbe()
 
     var body: some View {
         let snapshot = model.snapshot
         if case .run(let id)? = model.selection {
             if let run = snapshot.runDetail, run.identity == id {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Layout.margin) {
-                        header(run)
-                        Unavailable(controls: snapshot.unsupported)
-                        if let window = snapshot.window, window.run == id {
-                            inputRequests(window)
-                            activity(window)
-                            lifecycle(window)
-                        } else {
-                            ProgressView("Reading this run's activity…")
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Layout.margin) {
+                            Color.clear.frame(height: 0).id(Self.top)
+                                .background(GeometryReader { Color.clear.preference(key: RunTopOffset.self, value: $0.frame(in: .named(Self.space)).minY) })
+                            header(run)
+                            Unavailable(controls: snapshot.unsupported)
+                            if let window = snapshot.window, window.run == id {
+                                inputRequests(window)
+                                activity(window, proxy: proxy)
+                                lifecycle(window)
+                            } else {
+                                ProgressView("Reading this run's activity…")
+                            }
                         }
+                        .padding(Layout.margin)
                     }
-                    .padding(Layout.margin)
+                    .coordinateSpace(.named(Self.space))
+                    .modifier(ScrollTopWatch { offset in scrolled(to: offset, window: snapshot.window, run: id) })
                 }
+                .onPreferenceChange(RunTopOffset.self) { offset in scrolled(to: offset, window: snapshot.window, run: id) }
+                .onChange(of: id) { _, _ in frozenAt = nil }
+                .onChange(of: readingKey(snapshot.window), initial: true) { _, _ in report(snapshot.window) }
                 .accessibilityIdentifier("run.scroll")
             } else if let error = snapshot.detail?.error {
                 EmptyState(symbol: "exclamationmark.triangle", title: "This run could not be read", message: error)
@@ -107,16 +122,63 @@ struct RunPane: View {
         .accessibilityIdentifier("run.input")
     }
 
-    private func activity(_ window: RunWindow) -> some View {
-        VStack(alignment: .leading, spacing: Layout.rowSpacing) {
+    /// The reader moved: at the top the newest record leads again; away from it, the records shown are kept.
+    private func scrolled(to offset: Double, window: RunWindow?, run id: String) {
+        probe.topOffset = offset
+        host?.noteChange()
+        let top = offset > -8
+        guard top != atTop else { return }
+        atTop = top
+        frozenAt = top ? nil : window.flatMap { $0.run == id ? $0.entries.map(\.sequence).max() : nil }
+    }
+
+    private static let top = "run.top"
+    private static let space = "run.scroll"
+
+    /// The records shown: all of them at the top; while the reader is away, those up to the newest they had.
+    private func shown(_ window: RunWindow) -> [ActivityEntry] {
+        guard let frozenAt else { return window.entries }
+        return window.entries.filter { $0.sequence <= frozenAt }
+    }
+
+    private func readingKey(_ window: RunWindow?) -> String {
+        guard let window else { return "none" }
+        let visible = shown(window)
+        return "\(visible.map(\.sequence).max().map(String.init) ?? "none")/\(window.entries.count - visible.count)/\(atTop)"
+    }
+
+    /// What the reader is shown, for the window's state report only.
+    private func report(_ window: RunWindow?) {
+        guard let host else { return }
+        let visible = window.map(shown) ?? []
+        probe.shownNewest = visible.map(\.sequence).max()
+        probe.pending = (window?.entries.count ?? 0) - visible.count
+        probe.atTop = atTop
+        let probe = self.probe
+        host.register("live_activity") { ["shown_newest": probe.shownNewest ?? NSNull(), "pending": probe.pending, "at_top": probe.atTop, "top_offset": probe.topOffset] }
+        host.noteChange()
+    }
+
+    private func activity(_ window: RunWindow, proxy: ScrollViewProxy) -> some View {
+        let visible = shown(window)
+        let pending = window.entries.count - visible.count
+        return VStack(alignment: .leading, spacing: Layout.rowSpacing) {
             Text("Activity, newest first").font(.headline).accessibilityAddTraits(.isHeader)
+            if pending > 0 {
+                // Newer records wait here while the reader is further down, so what they read stays where it is.
+                Button("\(pending) newer record\(pending == 1 ? "" : "s") arrived — show them") {
+                    frozenAt = nil
+                    withAnimation(DPMMotion.unlessReduced(DPMMotion.settle, reduceMotion: reduceMotion)) { proxy.scrollTo(Self.top, anchor: .top) }
+                }
+                .accessibilityIdentifier("run.newer")
+            }
             if window.droppedFromView > 0 {
                 Prose(text: "Showing the newest \(window.entries.count) of \(window.recorded) records; \(window.droppedFromView) older are not shown here.", font: .callout)
             }
             if let gap = window.gap { Badge(text: gap, symbol: "exclamationmark.triangle", tint: .orange).accessibilityIdentifier("run.gap") }
             if let incomplete = window.incomplete { Badge(text: incomplete, symbol: "exclamationmark.triangle", tint: .orange).accessibilityIdentifier("run.incomplete") }
             if window.entries.isEmpty { Text("No activity recorded yet.").foregroundStyle(.secondary) }
-            ForEach(window.entries.reversed()) { entry in
+            ForEach(visible.reversed()) { entry in
                 ActivityRow(entry: entry).transition(.activityReveal)
             }
         }
@@ -206,4 +268,32 @@ private struct ActivityReveal: ViewModifier {
 
 extension AnyTransition {
     static var activityReveal: AnyTransition { .modifier(active: ActivityReveal(hidden: true), identity: ActivityReveal(hidden: false)) }
+}
+
+/// How far the top of the run pane's content is from the top of its scroll view; 0 at the top, negative below it.
+private struct RunTopOffset: PreferenceKey {
+    static let defaultValue = 0.0
+    static func reduce(value: inout Double, nextValue: () -> Double) { value = nextValue() }
+}
+
+/// The run pane's reading state, sampled when a state is written.
+private final class LiveReadingProbe {
+    var shownNewest: UInt64?
+    var pending = 0
+    var atTop = true
+    var topOffset = 0.0
+}
+
+/// Where the run pane's content sits under its scroll view's top (0 at the top, negative below it), from the platform's
+/// scroll geometry where it reports it; earlier systems rely on the content's own position preference.
+private struct ScrollTopWatch: ViewModifier {
+    let changed: (Double) -> Void
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15, *) {
+            content.onScrollGeometryChange(for: Double.self, of: { -($0.contentOffset.y + $0.contentInsets.top) }, action: { _, offset in changed(offset) })
+        } else {
+            content
+        }
+    }
 }
