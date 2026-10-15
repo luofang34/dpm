@@ -99,6 +99,12 @@ struct NetworkView: View {
                 EditToggle(model: model)
             }
             HStack(spacing: 6) {
+                let packages = model.network.filter.packages
+                Button { model.performNetwork(.togglePackages) } label: { Text("\(packages ? "☑" : "☐") ▭ Work packages") }
+                    .help("\(packages ? "Hide" : "Show") work packages; a network diagram shows activities (4)")
+                    .accessibilityLabel("work packages")
+                    .accessibilityValue(packages ? "shown" : "hidden")
+                    .accessibilityIdentifier("network.packages")
                 ForEach(NetworkEdgeKind.allCases, id: \.self) { kind in
                     let on = model.network.filter.kinds.contains(kind)
                     Button { model.performNetwork(Self.toggle(kind)) } label: { Text("\(on ? "☑" : "☐") \(kind.cue) \(Self.short(kind))") }
@@ -111,9 +117,11 @@ struct NetworkView: View {
             }
             let counts = graph.counts
             let finish = graph.terminals.map { " · \($0.finishWords)" } ?? ""
-            let words = "Showing \(shown) of \(counts.nodes) nodes · \(model.network.filter.words). In the plan: \(counts.words). Start at 0.0 h\(finish.replacingOccurrences(of: " · finish", with: "; finish")). Hours are elapsed hours from the schedule query; no calendar date is supplied, so none is shown."
+            let hiddenPackages = model.network.filter.packages ? 0 : graph.nodes.filter { $0.kind == .package }.count
+            let packageWords = hiddenPackages == 0 ? "" : " · \(hiddenPackages) work package\(hiddenPackages == 1 ? "" : "s") hidden (4 shows)"
+            let words = "Showing \(shown) of \(counts.nodes) nodes · \(model.network.filter.words)\(packageWords). In the plan: \(counts.words). Start at 0.0 h\(finish.replacingOccurrences(of: " · finish", with: "; finish")). Hours are elapsed hours from the schedule query; no calendar date is supplied, so none is shown."
             // One short line on the page; the complete sentence is the element's label and its tooltip.
-            Text("\(shown) of \(counts.nodes) nodes · \(model.network.filter.words)\(finish) · elapsed hours, no dates").font(.caption).foregroundStyle(.secondary).lineLimit(1).help(words)
+            Text("\(shown) of \(counts.nodes) nodes · \(model.network.filter.words)\(packageWords)\(finish) · elapsed hours, no dates").font(.caption).foregroundStyle(.secondary).lineLimit(1).help(words)
                 .accessibilityLabel(words)
                 .accessibilityIdentifier("network.counts")
         }

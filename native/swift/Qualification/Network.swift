@@ -160,11 +160,22 @@ extension Context {
                 _ = await MainActor.run { self.pressNetwork(model, key) }
             }
         }
-        let cleared = await MainActor.run { () -> (Int, Int) in
+        // Cleared, the view is the default one: every node but the work packages, which a network diagram leaves out, and
+        // every edge between the nodes shown; 4 shows the packages and with them every node and edge.
+        let cleared = await MainActor.run { () -> (Int, Int, Int, Int, Int, Int) in
             _ = self.pressNetwork(model, "x")
-            return (model.networkNodes.count, model.networkVisibleEdges.count)
+            let graph = model.networkGraph
+            let packages = Set(graph.nodes.filter { $0.kind == .package }.map(\.identity))
+            let touching = graph.edges.filter { packages.contains($0.from) || packages.contains($0.to) }.count
+            let byDefault = (model.networkNodes.count, model.networkVisibleEdges.count)
+            _ = self.pressNetwork(model, "4")
+            let withPackages = (model.networkNodes.count, model.networkVisibleEdges.count)
+            _ = self.pressNetwork(model, "4")
+            return (byDefault.0, byDefault.1, packages.count, touching, withPackages.0, withPackages.1)
         }
-        check(cleared.0 == full.nodes && cleared.1 == full.temporal + full.decisionBlocks + full.contextLinks, "clearing the filter presents every node and edge again: \(cleared)")
+        let every = full.temporal + full.decisionBlocks + full.contextLinks
+        check(cleared.2 > 0 && cleared.0 == full.nodes - cleared.2 && cleared.1 == every - cleared.3 && cleared.4 == full.nodes && cleared.5 == every,
+              "clearing the filter presents every node but the \(cleared.2) work packages, with the edges between them; 4 presents every node and edge again: \(cleared)")
         await compare("cleared")
         // Zoom and pan change only the view.
         await MainActor.run {
@@ -323,12 +334,12 @@ extension Context {
         let database = try await newStore("network-dense", plan: try requirePlan(tools.densePlan, "--dense-plan"))
         let model = try await openGanttModel(.database(database), page: .network)
         let before = try await readOnlyRecord(database)
-        let (counts, columns, placed) = await MainActor.run { () -> (NetworkCounts, Int, Int) in
+        let (counts, columns, placed, packageCount) = await MainActor.run { () -> (NetworkCounts, Int, Int, Int) in
             let graph = model.networkGraph
-            return (graph.counts, graph.columns, graph.place.count)
+            return (graph.counts, graph.columns, graph.place.count, graph.nodes.filter { $0.kind == .package }.count)
         }
         check(counts.nodes == 1100 && counts.temporal == 1994 && counts.predecessorEntries == 1994 && counts.successorEntries == 1994, "DS-D: 1100 nodes and 2N-6 = 1994 temporal edges, all listed: \(counts.words)")
-        check(placed == 1100 && columns >= 334, "every node is placed; the layered layout has at least the longest path's 334 columns: \(columns)")
+        check(placed == 1100 - packageCount && columns >= 334, "every activity and decision is placed (the \(packageCount) work packages are hidden); the layered layout has at least the longest path's 334 columns: \(columns)")
         // The REAL End key, checked on its own: it goes to the last node in plan order, which in DS-D with its hierarchy
         // overlay is the package PERF-P100; a package has no temporal predecessor, so that is asserted as what it is.
         let ended = await MainActor.run { () -> (String?, String?, Int) in

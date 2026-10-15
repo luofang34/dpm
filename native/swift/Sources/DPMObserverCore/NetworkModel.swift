@@ -10,7 +10,7 @@ public enum NetworkIntent: String, CaseIterable, Sendable {
     case select, openDetail, closeDetail
     case predecessor, successor, gate, blocker
     case zoomIn, zoomOut, panLeft, panRight, panUp, panDown
-    case toggleTemporal, toggleBlocks, toggleContext, clearFilter, focusFilter
+    case toggleTemporal, toggleBlocks, toggleContext, togglePackages, clearFilter, focusFilter
     case fit, locate, resetView
 }
 
@@ -45,6 +45,7 @@ public enum NetworkKeyDecoder {
         case "1": return .toggleTemporal
         case "2": return .toggleBlocks
         case "3": return .toggleContext
+        case "4": return .togglePackages
         case "x": return .clearFilter
         case "/": return .focusFilter
         case "f": return .fit
@@ -66,8 +67,9 @@ extension ObserverModel {
     /// The graph of the installed snapshot: the inventory (`export`) and, while it is read, the schedule.
     public var networkGraph: NetworkGraph {
         let token = snapshot.gantt?.token
-        if let cached = networkCache, cached.schedule == token, cached.inventory == snapshot.inventory { return cached.graph }
-        let graph = NetworkGraph(inventory: snapshot.inventory, schedule: snapshot.gantt)
+        let packages = network.filter.packages
+        if let cached = networkCache, cached.schedule == token, cached.inventory == snapshot.inventory, cached.graph.packagesPlaced == packages { return cached.graph }
+        let graph = NetworkGraph(inventory: snapshot.inventory, schedule: snapshot.gantt, placingPackages: packages)
         networkCache = (snapshot.inventory, token, graph)
         return graph
     }
@@ -78,9 +80,10 @@ extension ObserverModel {
         return networkGraph.nodes.filter { filter.matches($0) }
     }
 
-    /// The identities of the nodes shown, or nil when the text filter shows every node.
+    /// The identities of the nodes shown, or nil when every node is shown.
     public var networkShown: Set<String>? {
-        network.filter.text.trimmingCharacters(in: .whitespaces).isEmpty ? nil : Set(networkNodes.map(\.identity))
+        let all = network.filter.text.trimmingCharacters(in: .whitespaces).isEmpty && (network.filter.packages || !networkGraph.nodes.contains { $0.kind == .package })
+        return all ? nil : Set(networkNodes.map(\.identity))
     }
 
     /// The edges both the text list and the canvas present: one projection for both.
@@ -201,6 +204,7 @@ extension ObserverModel {
         case .toggleTemporal: toggleKind(.temporal)
         case .toggleBlocks: toggleKind(.decisionBlock)
         case .toggleContext: toggleKind(.context)
+        case .togglePackages: networkOperation { $0.filter.packages.toggle() }
         case .clearFilter: networkOperation { $0.filter = NetworkFilter() }
         case .focusFilter:
             // A request only: the field's actual editor taking the keyboard reports `networkFilterFocus(true)`.

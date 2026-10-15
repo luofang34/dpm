@@ -152,6 +152,8 @@ public struct NetworkGraph: Equatable, Sendable {
     public let routeExtent: (x: Double, y: Double)
     /// The Start and Finish markers a network diagram draws: view markers, never plan items; nil without activities.
     public let terminals: NetworkTerminals?
+    /// Whether work packages have places; when they are hidden they are left out of the layout altogether.
+    public let packagesPlaced: Bool
 
     public static func ==(left: NetworkGraph, right: NetworkGraph) -> Bool {
         left.nodes == right.nodes && left.edges == right.edges
@@ -159,7 +161,8 @@ public struct NetworkGraph: Equatable, Sendable {
 
     public static let empty = NetworkGraph(inventory: .empty, schedule: nil)
 
-    public init(inventory: Inventory, schedule: GanttSchedule?) {
+    public init(inventory: Inventory, schedule: GanttSchedule?, placingPackages: Bool = true) {
+        packagesPlaced = placingPackages
         var nodes: [NetworkNode] = inventory.items.map { item in
             let row = schedule?.row(item.identity)
             let kind = NetworkNode.Kind(rawValue: item.kind) ?? .task
@@ -202,7 +205,8 @@ public struct NetworkGraph: Equatable, Sendable {
         self.index = index
         self.incoming = incoming
         self.outgoing = outgoing
-        let laid = Self.layout(nodes: nodes, edges: edges, index: index)
+        let placed = placingPackages ? nodes : nodes.filter { $0.kind != .package }
+        let laid = Self.layout(nodes: placed, edges: edges, index: Dictionary(placed.enumerated().map { ($0.element.identity, $0.offset) }, uniquingKeysWith: { first, _ in first }))
         place = laid.place
         columns = laid.columns
         tallest = laid.tallest

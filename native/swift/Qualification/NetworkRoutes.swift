@@ -100,7 +100,9 @@ extension Context {
         // Deterministic: the same routes on a fresh computation, and the same under every node and edge filter.
         let stable = await MainActor.run { () -> (Bool, [String]) in
             let snapshot = model.snapshot
-            let once = NetworkGraph(inventory: snapshot.inventory, schedule: snapshot.gantt), again = NetworkGraph(inventory: snapshot.inventory, schedule: snapshot.gantt)
+            let packages = model.network.filter.packages
+            let once = NetworkGraph(inventory: snapshot.inventory, schedule: snapshot.gantt, placingPackages: packages),
+                again = NetworkGraph(inventory: snapshot.inventory, schedule: snapshot.gantt, placingPackages: packages)
             let same = once.routes == again.routes && once.routes == model.networkGraph.routes && once.edges.map(\.id) == again.edges.map(\.id)
             let all = model.networkGraph.routes
             var changed: [String] = []

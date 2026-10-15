@@ -9,12 +9,16 @@ public struct NetworkFilter: Equatable, Sendable {
     public var text = ""
     /// The edge kinds drawn and listed; all three unless a person hides one.
     public var kinds: Set<NetworkEdgeKind> = Set(NetworkEdgeKind.allCases)
+    /// Whether work packages are drawn. A network diagram shows activities, so packages are left out unless a person
+    /// asks for them; they stay in Detail and the Gantt, and the counts say they are hidden.
+    public var packages = false
 
     public init() {}
 
     public var isActive: Bool { !text.trimmingCharacters(in: .whitespaces).isEmpty || kinds.count != NetworkEdgeKind.allCases.count }
 
     func matches(_ node: NetworkNode) -> Bool {
+        if node.kind == .package, !packages { return false }
         let needle = text.trimmingCharacters(in: .whitespaces).lowercased()
         return needle.isEmpty || [node.key, node.title, node.status, node.kindWord].contains { $0.lowercased().contains(needle) }
     }
