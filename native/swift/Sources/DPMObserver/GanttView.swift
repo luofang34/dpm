@@ -96,10 +96,14 @@ struct GanttView: View {
         inspectorOpen = true
     }
 
-    /// The view controls, in the window's toolbar while the Gantt is shown: each acts through the same model call as its key.
+    /// The view controls, in the window's toolbar while the Gantt is shown, as four groups a person reads at a glance:
+    /// zoom (out, the scale, in), where to look (fit, locate), the outline (collapse and expand all), and help with the
+    /// inspector at the trailing end. A gap between groups keeps a system that draws adjacent items as one piece from
+    /// merging them. Each control acts through the same model call as its key.
     @ToolbarContentBuilder
     private func windowTools(_ frame: GanttFrame) -> some ToolbarContent {
         let state = frame.state
+        GanttToolbarGap()
         ToolbarItemGroup {
             GanttTool(label: "Zoom out", symbol: "minus.magnifyingglass", id: "gantt.zoom-out", help: "Zoom out (− or ⌘−)",
                       disabled: state.zoomLevel == 0 && state.fitScale == nil) { model.perform(.zoomOut) }
@@ -109,14 +113,21 @@ struct GanttView: View {
                 .accessibilityLabel("Zoom: \(GanttToolbar.scaleWords(state.scale)) points per elapsed hour")
             GanttTool(label: "Zoom in", symbol: "plus.magnifyingglass", id: "gantt.zoom-in", help: "Zoom in (+ or ⌘=)",
                       disabled: state.zoomLevel == GanttLayout.zoomSteps.count - 1 && state.fitScale == nil) { model.perform(.zoomIn) }
+        }
+        GanttToolbarGap()
+        ToolbarItemGroup {
             GanttTool(label: "Fit timeline", symbol: "arrow.left.and.right.square", id: "gantt.fit",
                       help: "Fit timeline (⌘0): zoom so the whole plan, from its earliest recorded start to its last finish or p95, fills the timeline. Changes only the view.") { model.fitTimeline() }
             GanttTool(label: "Locate selected", symbol: "scope", id: "gantt.locate",
                       help: "Locate selected: put the cursor on the selected task and scroll its bar into view") { model.locateSelected() }
         }
+        GanttToolbarGap()
         ToolbarItemGroup {
             GanttTool(label: "Collapse all", symbol: "rectangle.compress.vertical", id: "gantt.collapse-all", help: "Collapse all work packages (,)") { model.perform(.collapseAll) }
             GanttTool(label: "Expand all", symbol: "rectangle.expand.vertical", id: "gantt.expand-all", help: "Expand all work packages (.)") { model.perform(.expandAll) }
+        }
+        GanttToolbarGap()
+        ToolbarItemGroup {
             GanttKeysButton()
             GanttTool(label: "Inspector", symbol: "sidebar.trailing", id: "gantt.inspector-toggle",
                       help: "Show or hide the inspector: the cursor row in full, or the editor (⌥⌘I)") { toggleInspector() }
@@ -368,6 +379,15 @@ enum GanttGlyph {
         case "Blocked": return "exclamationmark.circle"
         case "Proposed": return "circle.dashed"
         default: return "circle"
+        }
+    }
+}
+
+/// The fixed gap between two Gantt toolbar groups where the system provides one; elsewhere groups already stand apart.
+struct GanttToolbarGap: ToolbarContent {
+    var body: some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            ToolbarSpacer(.fixed)
         }
     }
 }

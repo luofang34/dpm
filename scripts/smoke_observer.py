@@ -3742,6 +3742,13 @@ def network_layout_and_pointer(bundle, directory):
         if not row_frame:
             undisturbed(app, front, 'reading the TEST-D row label\'s AX frame')
         assert row_frame, 'the TEST-D row label has no AX frame'
+        # The toolbar reads as groups: fit and locate, collapse and expand each touch, and a gap parts zoom from fit and
+        # locate from collapse, so the controls never run together as one strip of icons.
+        tools = {name: (front.find(f'gantt.{name}') or {}).get('frame') for name in ('zoom-in', 'fit', 'locate', 'collapse-all', 'expand-all')}
+        assert all(tools.values()), f'a Gantt toolbar control has no AX frame: {tools}'
+        gap = lambda a, b: tools[b][0] - (tools[a][0] + tools[a][2])  # noqa: E731
+        assert abs(gap('fit', 'locate')) <= 1 and abs(gap('collapse-all', 'expand-all')) <= 1 and gap('zoom-in', 'fit') >= 4 and gap('locate', 'collapse-all') >= 4, \
+            f'the Gantt toolbar does not read as groups (within a group the controls touch, between groups a gap): {tools}'
         start_x, whole = fitted_gantt['gantt']['timeline_extent']
         assert start_x == 0 and whole <= fitted_gantt['gantt']['viewport_width'] + 0.5 and whole >= fitted_gantt['gantt']['viewport_width'] * 0.9, \
             f"the fitted timeline {whole} pt from {start_x} does not fill the measured timeline {fitted_gantt['gantt']['viewport_width']} pt"
