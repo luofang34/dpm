@@ -150,6 +150,8 @@ public struct NetworkGraph: Equatable, Sendable {
     public let routes: [String: NetworkRoute]
     /// The right and bottom limits of every route with its end mark, at zoom 1.
     public let routeExtent: (x: Double, y: Double)
+    /// The Start and Finish markers a network diagram draws: view markers, never plan items; nil without activities.
+    public let terminals: NetworkTerminals?
 
     public static func ==(left: NetworkGraph, right: NetworkGraph) -> Bool {
         left.nodes == right.nodes && left.edges == right.edges
@@ -205,7 +207,8 @@ public struct NetworkGraph: Equatable, Sendable {
         columns = laid.columns
         tallest = laid.tallest
         routes = NetworkRouting.routes(edges: edges, place: laid.place, tallest: laid.tallest)
-        routeExtent = routes.values.reduce((0.0, 0.0)) { far, route in
+        terminals = NetworkTerminals(nodes: nodes, edges: edges, place: laid.place, columns: laid.columns, schedule: schedule)
+        routeExtent = (Array(routes.values) + (terminals.map { Array($0.routes.values) } ?? [])).reduce((0.0, 0.0)) { far, route in
             let b = route.bounds
             return (max(far.0, b.x + b.width), max(far.1, b.y + b.height))
         }
@@ -347,6 +350,8 @@ public enum NetworkText {
             if let free = node.freeFloat { values.append("free float \(hours(free))") }
             if let criticality = node.criticality { values.append(String(format: "criticality %.0f%% of simulations", criticality * 100)) }
             out.append(values.isEmpty ? "Schedule values: not read" : "Schedule (from the query): " + values.joined(separator: ", "))
+            if graph.terminals?.starts.contains(node.identity) == true { out.append("Joined from Start: it has no temporal predecessor") }
+            if graph.terminals?.finishes.contains(node.identity) == true { out.append("Joined to Finish: it has no temporal successor") }
         }
         let incoming = graph.edges(into: node.identity, kinds: kinds).filter { NetworkGraph.within($0, shown) }
         let outgoing = graph.edges(outOf: node.identity, kinds: kinds).filter { NetworkGraph.within($0, shown) }
