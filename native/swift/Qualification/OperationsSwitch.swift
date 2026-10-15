@@ -67,7 +67,9 @@ extension Context {
         if let held { throw SuiteError(description: "the claim was held before it was sent: \(held)") }
         check(await claimSent.wait() && stopped.withLock({ $0 }), "the claim is on the wire to a stopped helper, unanswered")
         await MainActor.run { model.open(.database(second)) }
-        _ = try await modelExpect(model, "the second workspace to be read", 60) { $0.inventory.basis != nil && $0.freshness.current }
+        // Operations are held as read-only until the workspace's identity says it is live, which can arrive just after its
+        // first current read; the check below judges the live second workspace.
+        _ = try await modelExpect(model, "the second workspace to be read as live", 60) { $0.inventory.basis != nil && $0.freshness.current && $0.identity?.source == "live" }
         let clean = await MainActor.run { (model.operations.phase == .idle, model.operationBlocker, model.applyBlocker) }
         check(clean.0 && clean.1 == nil, "the second workspace has nothing pending from the first: \(clean)")
         kill(helper, SIGKILL)
