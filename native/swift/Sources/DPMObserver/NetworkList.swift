@@ -11,10 +11,20 @@ struct NetworkList: View {
     let nodes: [NetworkNode]
 
     var body: some View {
+        // The heading stands above the scrolling rows, so revealing a row at the top never cuts it off.
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Text list of the network (\(nodes.count) nodes)").font(.headline).accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, 8).padding(.top, 8).padding(.bottom, 2)
+                .reportFrame("network_list_heading")
+            rows
+        }
+        .accessibilityIdentifier("network.list")
+    }
+
+    private var rows: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
-                    Text("Text list of the network (\(nodes.count) nodes)").font(.headline).accessibilityAddTraits(.isHeader)
                     let shown = model.networkShown
                     ForEach(nodes) { node in
                         let lines = NetworkText.lines(node, graph: graph, kinds: model.network.filter.kinds, shown: shown)
@@ -83,7 +93,6 @@ struct NetworkList: View {
                 reveal.request(focus, proxy)
             }
         }
-        .accessibilityIdentifier("network.list")
     }
 
     @State private var reveal = NetworkListReveal()
