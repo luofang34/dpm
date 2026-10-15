@@ -303,8 +303,9 @@ enum GanttDrawing {
             context.fill(head, with: .color(color))
             if strong {
                 let names = frame.schedule?.row(edge.predecessor)?.key ?? "?"
-                labels.append(GanttRelationLabels.Request(id: edge.id, target: edge.successor, text: GanttRelationLabels.text(edge, from: names, critical: onCriticalPath),
-                                                          x: to.x + (atFinish ? 10 : -10), y: to.y, leading: atFinish))
+                let text = GanttRelationLabels.text(edge, from: names, critical: onCriticalPath)
+                labels.append(GanttRelationLabels.Request(id: edge.id, target: edge.successor, text: text, x: to.x + (atFinish ? 10 : -10), y: to.y, leading: atFinish,
+                                                          measured: Double(context.resolve(Self.relationLabel(text)).measure(in: CGSize(width: 10_000, height: 100)).width)))
             }
         }
         for position in geometry.firstRow..<max(geometry.firstRow, last) {
@@ -335,11 +336,20 @@ enum GanttDrawing {
             }
         }
 
-        // The emphasised relations' labels, each on its own line and on a plate, so what is under it does not cross it.
-        for label in GanttRelationLabels.place(labels) {
+        // The emphasised relations' labels, each on its own line and on a plate, so what is under it does not cross it. They
+        // stay inside the chart and keep off the drawn bars where a free line exists.
+        let bars = (geometry.firstRow..<max(geometry.firstRow, last)).compactMap { position -> GanttRelationLabels.Obstacle? in
+            let row = rows[position].row
+            guard let span = row.span, row.status != "Verified" else { return nil }
+            let (x, width) = GanttLayout.bar(span, scale: scale)
+            let left = x - geometry.offsetX, top = frame.top(of: rows[position].id, at: position, geometry)
+            return row.isMilestone ? GanttRelationLabels.Obstacle(minX: left - 8, minY: top + rowHeight / 2 - 8, maxX: left + 8, maxY: top + rowHeight / 2 + 8)
+                                   : GanttRelationLabels.Obstacle(minX: left, minY: top + 7, maxX: left + max(width, 3), maxY: top + rowHeight - 7)
+        }
+        for label in GanttRelationLabels.place(labels, bounds: 2...max(2, Double(size.width) - 2), obstacles: bars) {
             let plate = CGRect(x: label.minX - 2, y: label.minY, width: label.maxX - label.minX + 4, height: label.maxY - label.minY)
             context.fill(Path(roundedRect: plate, cornerRadius: 3), with: .style(.background.opacity(0.88)))
-            context.draw(Text(label.text).font(.caption2.weight(.semibold)).foregroundColor(.primary), at: CGPoint(x: label.x, y: label.y), anchor: label.leading ? .leading : .trailing)
+            context.draw(Self.relationLabel(label.text), at: CGPoint(x: label.x, y: label.y), anchor: label.leading ? .leading : .trailing)
         }
 
         if let mark = frame.marked {
@@ -347,6 +357,19 @@ enum GanttDrawing {
         }
 
         stamp(frame, geometry: geometry, schedule: schedule)
+    }
+
+    static func relationLabel(_ text: String) -> Text {
+        Text(text).font(.caption2.weight(.semibold)).foregroundColor(.primary)
+    }
+
+    /// A bar's or milestone's label on a plate, so a relation line passing behind it never strikes the words through.
+    private static func plated(_ text: Text, at point: CGPoint, in context: inout GraphicsContext) {
+        let resolved = context.resolve(text)
+        let size = resolved.measure(in: CGSize(width: 10_000, height: 100))
+        let plate = CGRect(x: point.x - 2, y: point.y - size.height / 2 - 1, width: size.width + 4, height: size.height + 2)
+        context.fill(Path(roundedRect: plate, cornerRadius: 3), with: .style(.background.opacity(0.88)))
+        context.draw(resolved, at: point, anchor: .leading)
     }
 
     /// One row's bar, milestone or package summary, its float lane and its label, with its top at `top`.
@@ -380,7 +403,7 @@ enum GanttDrawing {
             diamond.closeSubpath()
             context.fill(diamond, with: .color(fill))
             context.stroke(diamond, with: .color(Palette.structure), lineWidth: 1)
-            context.draw(Text("◆ \(row.key) milestone, \(hoursText(span.start))").font(.caption2.weight(.semibold).monospacedDigit()).foregroundColor(.primary), at: CGPoint(x: left + 12, y: mid), anchor: .leading)
+            plated(Text("◆ \(row.key) milestone, \(hoursText(span.start))").font(.caption2.weight(.semibold).monospacedDigit()).foregroundColor(.primary), at: CGPoint(x: left + 12, y: mid), in: &context)
             return
         }
         if let times = row.times, times.totalFloat > 0 {
@@ -424,7 +447,7 @@ enum GanttDrawing {
         default: state = ""
         }
         let tag = "\(row.key)\(critical ? (row.isPackage ? " · holds critical work" : " · critical path") : "")\(row.isPackage ? "" : state) · \(hoursText(span.hours))"
-        context.draw(Text(tag).font(.caption2.monospacedDigit()).foregroundColor(.primary), at: CGPoint(x: left + width + 6, y: mid), anchor: .leading)
+        plated(Text(tag).font(.caption2.monospacedDigit()).foregroundColor(.primary), at: CGPoint(x: left + width + 6, y: mid), in: &context)
     }
 
     /// The draw pass reports what it drew. This is the app-owned draw the measurement record counts as a
