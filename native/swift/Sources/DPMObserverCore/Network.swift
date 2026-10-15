@@ -59,6 +59,9 @@ public struct NetworkNode: Identifiable, Equatable, Sendable {
     public var freeFloat: Double? = nil
     /// The remaining elapsed hours the projection schedules for the work (its bar's length on the Gantt).
     public var duration: Double? = nil
+    /// The task's classical PERT expected duration and standard deviation of its whole estimate; estimated tasks only.
+    public var pertExpected: Double? = nil
+    public var pertSigma: Double? = nil
 
     public var isDecision: Bool { kind == .decision }
 
@@ -112,12 +115,14 @@ extension NetworkNode {
         }
     }
 
-    /// The activity-on-node box's six cells in reading order, top row then bottom: ES, duration, EF, then LS, TF, LF,
-    /// each in the projection's elapsed hours as written; nil when the projection gave no times.
+    /// The activity-on-node box's six cells in reading order, top row then bottom: ES, duration, EF, then LS, TF, LF, each
+    /// in the projection's elapsed hours as written; an estimated task's duration cell is its classical PERT te±σ, as a
+    /// PERT network labels an activity. Nil when the projection gave no times.
     public var boxCells: [(label: String, value: String)]? {
         guard let es = earliestStart, let ef = earliestFinish, let ls = latestStart, let lf = latestFinish, let tf = totalFloat else { return nil }
         let number = { (hours: Double) in String(format: "%.1f", hours) }
-        return [("ES", number(es)), ("", number(duration ?? ef - es) + " h"), ("EF", number(ef)),
+        let spread = pertExpected.map { te in "\(number(te))±\(number(pertSigma ?? 0))" } ?? number(duration ?? ef - es) + " h"
+        return [("ES", number(es)), ("", spread), ("EF", number(ef)),
                 ("LS", number(ls)), ("TF", number(tf)), ("LF", number(lf))]
     }
 }
@@ -175,6 +180,8 @@ public struct NetworkGraph: Equatable, Sendable {
             node.latestFinish = row?.times?.latestFinish
             node.freeFloat = row?.times?.freeFloat
             node.duration = row?.span?.hours
+            node.pertExpected = row?.pert?.expected
+            node.pertSigma = row?.pert?.sigma
             return node
         }
         nodes += inventory.decisions.map { decision in
@@ -348,6 +355,7 @@ public enum NetworkText {
             let hours = { (value: Double) in "\(String(format: "%.1f", value)) h" }
             if let critical = node.critical { values.append(critical ? "on the critical path" : "not on the critical path") }
             if let duration = node.duration { values.append("duration \(hours(duration))") }
+            if let te = node.pertExpected, let sigma = node.pertSigma { values.append("PERT te \(hours(te)) ± σ \(hours(sigma))") }
             if let es = node.earliestStart, let ef = node.earliestFinish { values.append("earliest start \(hours(es)), earliest finish \(hours(ef))") }
             if let ls = node.latestStart, let lf = node.latestFinish { values.append("latest start \(hours(ls)), latest finish \(hours(lf))") }
             if let float = node.totalFloat { values.append("total float \(hours(float))") }

@@ -51,6 +51,8 @@ public struct GanttRow: Identifiable, Equatable, Sendable {
     public let times: GanttTimes?
     /// The fraction of seeded simulations in which the work is critical; nil when the query gave none.
     public let criticality: Double?
+    /// The task's classical PERT te and σ of its whole estimate; nil for packages, points and unestimated work.
+    public let pert: GanttPert?
     /// Calendar placement, in words, when the plan has calendars. Never a date.
     public let calendar: String?
 
@@ -86,6 +88,7 @@ public struct GanttRow: Identifiable, Equatable, Sendable {
             self.times = nil
         }
         criticality = json["criticality"].double
+        pert = GanttPert(json["pert"])
         let placed = json["calendar"]
         if let name = placed["calendar"].string {
             let who = placed["executor"].string.map { ", executor \($0)" } ?? ""
