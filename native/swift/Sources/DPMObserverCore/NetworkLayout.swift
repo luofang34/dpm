@@ -73,6 +73,9 @@ public enum NetworkLayout {
     public static let nodeHeight = 66.0
     public static let columnGap = 70.0
     public static let rowGap = 26.0
+    /// The lane before the first column and after the last, where the Start and Finish markers stand.
+    public static let terminalLane = 84.0
+    public static let terminalRadius = 20.0
     public static let zoomSteps: [Double] = [0.25, 0.4, 0.6, 0.8, 1, 1.25, 1.6]
     public static let defaultZoom = 4
 
@@ -80,12 +83,12 @@ public enum NetworkLayout {
 
     /// The node's rectangle at zoom 1, in points from the canvas origin.
     public static func origin(column: Int, row: Int) -> (x: Double, y: Double) {
-        (Double(column) * (nodeWidth + columnGap) + 20, Double(row) * (nodeHeight + rowGap) + 20)
+        (Double(column) * (nodeWidth + columnGap) + 20 + terminalLane, Double(row) * (nodeHeight + rowGap) + 20)
     }
 
     /// The whole drawing at zoom 1: every node and every edge route with its end mark, plus the margin.
     public static func extent(_ graph: NetworkGraph) -> (width: Double, height: Double) {
-        (max(Double(graph.columns) * (nodeWidth + columnGap) + 40, graph.routeExtent.x + 20),
+        (max(Double(graph.columns) * (nodeWidth + columnGap) + 40 + 2 * terminalLane, graph.routeExtent.x + 20),
          max(Double(graph.tallest) * (nodeHeight + rowGap) + 40, graph.routeExtent.y + 20))
     }
 

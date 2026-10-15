@@ -56,6 +56,7 @@ struct NetworkCanvas: View {
                         context.draw(Text(label.text).font(.caption2.monospacedDigit()), at: CGPoint(x: rect.midX, y: rect.midY))
                     }
                 }
+                if let terminals = graph.terminals { Self.drawTerminals(terminals, shown: Set(nodes.map(\.identity)), in: &context) }
                 for node in nodes {
                     guard let at = graph.place[node.identity] else { continue }
                     let origin = NetworkLayout.origin(column: at.column, row: at.row)
@@ -142,6 +143,39 @@ struct NetworkCanvas: View {
             context.stroke(bar, with: .color(color), lineWidth: edge.released ? 1.5 : 3)
         case .context:
             context.stroke(path, with: .color(.secondary), style: StrokeStyle(lineWidth: 1, dash: [1, 3]))
+        }
+    }
+
+    /// The Start and Finish markers and their thin connectors to the shown activities that have no temporal predecessor or
+    /// successor. They are markers only; what they say is also in the text list and the summary line.
+    static func drawTerminals(_ terminals: NetworkTerminals, shown: Set<String>, in context: inout GraphicsContext) {
+        for (key, route) in terminals.routes {
+            let id = key.hasPrefix("start>") ? String(key.dropFirst(6)) : String(key.dropLast(7))
+            guard shown.contains(id) else { continue }
+            var path = Path()
+            path.move(to: CGPoint(x: route.start.x, y: route.start.y))
+            for point in route.points.dropFirst() { path.addLine(to: CGPoint(x: point.x, y: point.y)) }
+            context.stroke(path, with: .color(.secondary.opacity(0.7)), lineWidth: 0.8)
+            let end = route.end
+            var head = Path()
+            head.move(to: CGPoint(x: end.x, y: end.y))
+            head.addLine(to: CGPoint(x: end.x - 6, y: end.y - 3.5))
+            head.addLine(to: CGPoint(x: end.x - 6, y: end.y + 3.5))
+            head.closeSubpath()
+            context.fill(head, with: .color(.secondary.opacity(0.7)))
+        }
+        let radius = NetworkLayout.terminalRadius
+        for (point, word) in [(terminals.start, "Start"), (terminals.finish, "Finish")] {
+            let circle = Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2))
+            context.fill(circle, with: .color(Color(nsColor: .controlBackgroundColor)))
+            context.stroke(circle, with: .color(.secondary), lineWidth: 1.2)
+            context.draw(Text(word).font(.caption2.weight(.semibold)), at: CGPoint(x: point.x, y: point.y))
+        }
+        context.draw(Text("0.0 h").font(.caption2.monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: terminals.start.x, y: terminals.start.y + radius + 8))
+        // The finish and its percentiles, one per line under the marker so they fit the lane.
+        let lines = terminals.finishWords.replacingOccurrences(of: "finish ", with: "").components(separatedBy: " · ")
+        for (index, line) in lines.enumerated() {
+            context.draw(Text(line).font(.caption2.monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: terminals.finish.x, y: terminals.finish.y + radius + 8 + Double(index) * 13))
         }
     }
 
