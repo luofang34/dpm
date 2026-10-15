@@ -3509,6 +3509,11 @@ def _network_layout_problem(state, size):
     outside = [n for n in names if not _inside(frames[n], area)]
     if outside:
         return f'{outside} lie outside the usable content area: {where}'
+    heading, listed = frames.get('network_list_heading'), frames['network_list']
+    if not heading:
+        return 'the text list heading has not been measured yet'
+    if heading[1] < listed[1] - 0.5 or heading[1] + heading[3] > listed[1] + listed[3] + 0.5:
+        return f'the text list heading {heading} is cut off by the list {listed}: revealing the cursor row scrolled it away: {where}'
     canvas = frames['network_canvas']
     if canvas[2] < 200 or canvas[3] < 120:
         return f'the canvas {canvas} is not a useful plot area: {where}'
