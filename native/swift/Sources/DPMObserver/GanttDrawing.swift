@@ -421,13 +421,13 @@ enum GanttDrawing {
         }
         let reported = frame.inventory.byIdentity[row.identity]?.reportedProgress ?? 0
         if row.isPackage {
-            // A work package spans its descendants: a bracket in the colour of the work it holds, whose ends point down
-            // at that work, so it reads as a span and never as a task of its own.
+            // A work package spans its descendants: a neutral bracket whose ends point down at that work, so it reads as a
+            // span and never as a task of its own. Its label says when it holds critical work; the red stays on that work.
             let corners = GanttBracket.outline(left: left, right: left + max(width, 1), top: top + 8)
             var summary = Path()
             summary.addLines(corners.map { CGPoint(x: $0.x, y: $0.y) })
             summary.closeSubpath()
-            context.fill(summary, with: .color(fill.opacity(0.9)))
+            context.fill(summary, with: .color(Palette.structure))
         } else {
             // A zero-hour task is still a visible mark; its hours are in its label.
             let bar = CGRect(x: left, y: top + 7, width: max(width, 3), height: rowHeight - 14)

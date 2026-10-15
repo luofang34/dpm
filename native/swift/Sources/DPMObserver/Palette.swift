@@ -30,7 +30,7 @@ enum Palette {
     /// A driving relation between critical work: the critical path's own links.
     static let relationCritical = critical
     /// A decision that gates work, which waits on a person: a heavy line ending in a bar.
-    static let gate = dynamic(light: 0x762575, dark: 0xDCBCF1)
+    static let gate = dynamic(light: 0x4E1E61, dark: 0xDCBCF1)
 
     // Chart furniture.
     static let grid = Color.secondary.opacity(0.22)

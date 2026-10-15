@@ -2,7 +2,8 @@
 """The observer's chart colours, read from the Swift sources, keep the Sokoly workstation palette's rules: the
 selection accent and every data colour drawn as an unlabelled mark (planned, critical, gate) stay at least ΔE00 10
 apart in normal vision and under protanopia, deuteranopia and tritanopia, and each stands at least 3:1 against the
-surfaces it is drawn on, in both appearances. A new or changed colour fails here before a person can mistake one
+surfaces it is drawn on, in both appearances; saturated marks also sit at least 45° apart in OKLCH hue, so two of
+them never read as one family (a crimson and a plum). A new or changed colour fails here before a person can mistake one
 mark for another."""
 import itertools
 import math
@@ -15,7 +16,7 @@ SOURCES = ROOT / 'native' / 'swift' / 'Sources' / 'DPMObserver'
 MARKS = ('planned', 'critical', 'gate')
 # The surfaces a chart is drawn on: the Sokoly workstation surfaces and the macOS window backgrounds.
 SURFACES = {'light': ['#EFF1F5', '#F7F9FC', '#FFFFFF', '#ECECEC'], 'dark': ['#101316', '#171A1E', '#1D2125', '#25292E', '#1E1F22', '#2A2B2F']}
-DISTINCT, GRAPHIC = 10.0, 3.0
+DISTINCT, GRAPHIC, HUE_APART, NEUTRAL_CHROMA = 10.0, 3.0, 45.0, 0.05
 # Machado, Oliveira & Fernandes (2009), severity 1.0, applied in linear RGB.
 CVD = {
     'protan': ((0.152286, 1.052583, -0.204868), (0.114503, 0.786281, 0.099216), (-0.003882, -0.048116, 1.051998)),
@@ -75,6 +76,15 @@ def delta_e2000(c1, c2):
     return math.sqrt(((l2 - l1) / sl) ** 2 + ((c2p - c1p) / sc) ** 2 + (dhh / sh) ** 2 + rt * ((c2p - c1p) / sc) * (dhh / sh))
 
 
+def oklch(colour):
+    r, g, b = (linear(c) for c in colour)
+    l = (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b) ** (1 / 3)
+    m = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b) ** (1 / 3)
+    s = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b) ** (1 / 3)
+    a, bb = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+    return 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, math.hypot(a, bb), math.degrees(math.atan2(bb, a)) % 360
+
+
 def worst_separation(a, b):
     return min([delta_e2000(a, b)] + [delta_e2000(simulate(a, k), simulate(b, k)) for k in CVD])
 
@@ -105,12 +115,18 @@ def problems(found):
             separation = worst_separation(colours[a], colours[b])
             if separation < DISTINCT:
                 out.append(f'{appearance} {a} vs {b}: ΔE00 {separation:.1f} for the weakest reader, below {DISTINCT}')
+            (_, ca, ha), (_, cb, hb) = oklch(colours[a]), oklch(colours[b])
+            apart = min(abs(ha - hb), 360 - abs(ha - hb))
+            if ca >= NEUTRAL_CHROMA and cb >= NEUTRAL_CHROMA and apart < HUE_APART:
+                out.append(f'{appearance} {a} vs {b}: {apart:.0f}° apart in hue, below {HUE_APART:.0f}°: one colour family')
     return out
 
 
 # A blue planned bar beside the blue accent, as the observer once drew, must fail.
 assert problems({'light': {}, 'dark': {'accent': (77, 148, 255), 'planned': (57, 135, 229)}}), 'a blue planned bar must fail'
 assert not problems({'light': {}, 'dark': {'accent': (77, 148, 255), 'planned': (129, 141, 159)}}), 'a neutral planned bar must pass'
+# A plum gate beside the crimson critical, far enough by ΔE00, must fail as one family.
+assert problems({'light': {'critical': (173, 39, 77), 'gate': (118, 37, 117)}, 'dark': {}}), 'a plum gate beside crimson must fail'
 
 if __name__ == '__main__':
     found = marks((SOURCES / 'Palette.swift').read_text(), (SOURCES / 'Design.swift').read_text())
