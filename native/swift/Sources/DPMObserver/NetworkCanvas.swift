@@ -29,6 +29,7 @@ struct NetworkCanvas: View {
                 context.translateBy(x: -state.panX, y: -state.panY)
                 context.scaleBy(x: scale, y: scale)
                 let visible = CGRect(x: state.panX / scale, y: state.panY / scale, width: size.width / scale, height: size.height / scale).insetBy(dx: -NetworkLayout.nodeWidth, dy: -NetworkLayout.nodeHeight)
+                if graph.timescale != .logical { Self.drawPeriods(graph, visible: visible, in: &context) }
                 var candidates: [NetworkLabels.Candidate] = []
                 // Each edge is drawn, culled and labelled on its one route (`NetworkRouting`).
                 for edge in visibleEdges {
@@ -103,6 +104,18 @@ struct NetworkCanvas: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("network.canvas")
+    }
+
+    /// The boundaries between the periods of a time-scaled layout: a faint rule down the middle of each column gap.
+    static func drawPeriods(_ graph: NetworkGraph, visible: CGRect, in context: inout GraphicsContext) {
+        var rules = Path()
+        for column in 1..<max(graph.columns + 1, 2) {
+            let x = NetworkLayout.origin(column: column, row: 0).x - NetworkLayout.columnGap / 2
+            guard x >= visible.minX, x <= visible.maxX else { continue }
+            rules.move(to: CGPoint(x: x, y: visible.minY))
+            rules.addLine(to: CGPoint(x: x, y: visible.maxY))
+        }
+        context.stroke(rules, with: .color(.secondary.opacity(0.25)), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
     }
 
     /// Edge labels are drawn only from this scale up; below it they could not be read.
@@ -315,7 +328,7 @@ struct NetworkInspector: View {
                         .help("Open the node in Detail (Return or ⌘D); closing Detail returns here")
                         .accessibilityIdentifier("network.openDetail")
                     DisclosureGroup("Keys and pointer") {
-                        Prose(text: "Keys: ↑ ↓ move, Space selects, Return opens Detail; p, s, g, b walk to predecessors, successors, decision gates and blockers; 1 2 3 show or hide each edge kind, 4 work packages; = and - zoom; f fits, l locates the selected node, 0 resets; Shift-arrows pan; / filters. Pointer: a click selects a node, a double click opens Detail, a drag on the background or a scroll pans, a pinch zooms; nothing moves a plan item. While editing, a drag from a task or milestone proposes a link from the half pressed (start or finish) to the half it is dropped on, reviewed before it applies.", font: .caption2)
+                        Prose(text: "Keys: ↑ ↓ move, Space selects, Return opens Detail; p, s, g, b walk to predecessors, successors, decision gates and blockers; 1 2 3 show or hide each edge kind, 4 work packages, t lays columns out by logic, day or week; = and - zoom; f fits, l locates the selected node, 0 resets; Shift-arrows pan; / filters. Pointer: a click selects a node, a double click opens Detail, a drag on the background or a scroll pans, a pinch zooms; nothing moves a plan item. While editing, a drag from a task or milestone proposes a link from the half pressed (start or finish) to the half it is dropped on, reviewed before it applies.", font: .caption2)
                     }
                     .font(.caption)
                     .accessibilityIdentifier("network.keys")
@@ -330,4 +343,27 @@ struct NetworkInspector: View {
     }
 
     private func names(_ ids: [String]) -> String { ids.isEmpty ? "none" : ids.map { graph.name($0) }.joined(separator: ", ") }
+}
+
+/// The period ruler over a time-scaled network: each column's period, at the canvas's own pan and scale, so it stays
+/// over its column while the graph moves and remains in view while the graph scrolls vertically.
+struct NetworkTimescaleHeader: View {
+    let graph: NetworkGraph
+    let scale: Double
+    let panX: Double
+
+    var body: some View {
+        let labels = (0..<max(graph.columns, 1)).compactMap { column in graph.timescale.label(column: column) }
+        Canvas { context, size in
+            for (column, label) in labels.enumerated() {
+                let x = (NetworkLayout.origin(column: column, row: 0).x + NetworkLayout.nodeWidth / 2) * scale - panX
+                guard x > -NetworkLayout.nodeWidth * scale, x < size.width + NetworkLayout.nodeWidth * scale else { continue }
+                context.draw(Text(label).font(.caption2.monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: x, y: size.height / 2))
+            }
+        }
+        .frame(height: 18)
+        .accessibilityElement()
+        .accessibilityLabel("Periods: " + labels.joined(separator: ", "))
+        .accessibilityIdentifier("network.periods")
+    }
 }

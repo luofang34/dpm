@@ -51,6 +51,8 @@ public struct NetworkLinkDrag: Equatable, Sendable {
 /// What a person changed about how the network is drawn. None of it is part of the project.
 public struct NetworkViewState: Equatable, Sendable {
     public var filter = NetworkFilter()
+    /// Whether columns follow the gating chain or the period of each earliest start.
+    public var timescale = NetworkTimescale.logical
     /// While editing, the link being drawn; view state only.
     public var linking: NetworkLinkDrag?
     public var zoomLevel = NetworkLayout.defaultZoom

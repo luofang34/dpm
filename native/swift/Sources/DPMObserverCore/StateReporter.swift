@@ -293,6 +293,7 @@ public final class StateReporter {
             "nodes": counts.nodes, "temporal": counts.temporal, "decision_blocks": counts.decisionBlocks, "context_links": counts.contextLinks,
             "listed_nodes": model.networkNodes.count,
             "packages_shown": view.filter.packages,
+            "timescale": view.timescale.rawValue,
             "visible_edges": model.networkVisibleEdges.count,
             "cursor_key": orNull(model.networkFocusedNode?.key),
             "focus_target": orNull(model.focusTarget),
