@@ -163,7 +163,24 @@ public struct StatusSummary: Hashable, Sendable {
             let status = unmet["status"].string ?? "unknown"
             let relation = unmet["relation"].string ?? "dependency"
             let release = unmet["release"]["state"].string ?? "unknown"
-            return (.dependency, key, "waits on \(key) (\(status)); \(relation) \(release.replacingOccurrences(of: "_", with: " "))")
+            // What the relation means for this work, in the words a person uses for it.
+            let wait: String
+            switch relation {
+            case "FinishStart": wait = "can start once \(key) finishes"
+            case "StartStart": wait = "can start once \(key) starts"
+            case "FinishFinish": wait = "can finish once \(key) finishes"
+            case "StartFinish": wait = "can finish once \(key) starts"
+            default: wait = "waits on \(key) (\(relation))"
+            }
+            let why: String
+            switch release {
+            case "awaiting_event": why = ""
+            case "elapsing": why = "; its lag is still running"
+            case "unrecorded_event_time": why = "; when \(key) did so was never recorded, so its lag cannot run"
+            case "lag_out_of_range": why = "; its lag runs past the supported calendar"
+            default: why = "; \(release.replacingOccurrences(of: "_", with: " "))"
+            }
+            return (.dependency, key, "\(wait) (\(key) is \(status))\(why)")
         case "lifecycle":
             let status = unmet["status"].string ?? "unknown"
             return (.lifecycle, status, "is already \(status)")

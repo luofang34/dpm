@@ -11,11 +11,9 @@ import Foundation
 public struct NetworkRoute: Equatable, Sendable {
     /// The points the edge is drawn through, from the source's right side to the target's left side.
     public let points: [NetworkPoint]
-    /// Whether the route runs along a row gap (straight segments); else it is one curve across a column gap.
+    /// Whether the route runs along a row gap; else it crosses one column gap. Either way it is drawn as straight,
+    /// right-angled segments, as a network diagram's links are.
     public let detour: Bool
-
-    /// How far the curve's controls reach from its ends, along the horizontal.
-    public static let reach = 30.0
     /// What the end mark (an arrowhead or a bar) adds around the route's points.
     static let mark = 8.0
 
@@ -29,7 +27,8 @@ public struct NetworkRoute: Equatable, Sendable {
         return (minX, minY, xs.max()! + Self.mark - minX, ys.max()! + Self.mark - minY)
     }
 
-    /// The segment a label sits on: the longest one of the route (for a curve, its chord, whose middle is the curve's).
+    /// The segment a label sits on: the longest one of a detour; across one column gap, the chord, whose middle is the
+    /// middle of the connector's vertical.
     public var labelSegment: (from: NetworkPoint, to: NetworkPoint) {
         guard detour else { return (start, end) }
         var best = (points[0], points[1])
@@ -39,16 +38,6 @@ public struct NetworkRoute: Equatable, Sendable {
 
     /// Points along the route as it is drawn, no more than about 2 points apart.
     public var samples: [NetworkPoint] {
-        if !detour {
-            let a = start, b = end
-            let c1 = NetworkPoint(x: a.x + Self.reach, y: a.y), c2 = NetworkPoint(x: b.x - Self.reach, y: b.y)
-            let steps = max(16, Int(Self.length(a, b) / 2))
-            return (0...steps).map { i in
-                let t = Double(i) / Double(steps), u = 1 - t
-                let w0 = u * u * u, w1 = 3 * u * u * t, w2 = 3 * u * t * t, w3 = t * t * t
-                return NetworkPoint(x: w0 * a.x + w1 * c1.x + w2 * c2.x + w3 * b.x, y: w0 * a.y + w1 * c1.y + w2 * c2.y + w3 * b.y)
-            }
-        }
         var out = [points[0]]
         for i in 1..<points.count {
             let a = points[i - 1], b = points[i]
@@ -132,7 +121,10 @@ public enum NetworkRouting {
             let start = NetworkPoint(x: from.x + NetworkLayout.nodeWidth, y: startY[position])
             let end = NetworkPoint(x: to.x, y: endY[position])
             guard plan.detour else {
-                routes[plan.edge.id] = NetworkRoute(points: [start, end], detour: false)
+                // Across one column gap: out of the source, down or up the middle of the gap, into the target.
+                let middle = start.x + NetworkLayout.columnGap / 2
+                let points = start.y == end.y ? [start, end] : [start, NetworkPoint(x: middle, y: start.y), NetworkPoint(x: middle, y: end.y), end]
+                routes[plan.edge.id] = NetworkRoute(points: points, detour: false)
                 continue
             }
             let track = gapY(plan.gap) + plan.lane
