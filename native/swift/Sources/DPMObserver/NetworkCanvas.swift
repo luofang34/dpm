@@ -124,10 +124,12 @@ struct NetworkCanvas: View {
             // A link of the critical path is heavier as well as coloured; its words say so too.
             let color = edge.critical ? Palette.relationCritical : Color.primary.opacity(0.55)
             context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: edge.critical ? 2.2 : 1.1, dash: soft ? [5, 3] : []))
+            // The arrow points into the side it enters: right into a start, left into a finish.
+            let back = route.entersFromLeft ? -7.0 : 7.0
             var head = Path()
             head.move(to: end)
-            head.addLine(to: CGPoint(x: end.x - 7, y: end.y - 4))
-            head.addLine(to: CGPoint(x: end.x - 7, y: end.y + 4))
+            head.addLine(to: CGPoint(x: end.x + back, y: end.y - 4))
+            head.addLine(to: CGPoint(x: end.x + back, y: end.y + 4))
             head.closeSubpath()
             context.fill(head, with: .color(color))
         case .decisionBlock:
@@ -198,8 +200,23 @@ struct NetworkCanvas: View {
             context.fill(shape, with: .color(Color(nsColor: .controlBackgroundColor)))
             context.stroke(shape, with: .color(outline), lineWidth: weight)
             if node.kind == .package { context.stroke(Path(rect.insetBy(dx: 3, dy: 3)), with: .color(.secondary), lineWidth: 1) }
+            drawProgress(node, in: rect, context: &context)
             drawBox(node, in: rect, context: &context)
         }
+    }
+
+    /// A network diagram's progress marks, faint under the text: one diagonal once the work has started, two once it is
+    /// verified. The status is also in words in the text list and the inspector.
+    private static func drawProgress(_ node: NetworkNode, in rect: CGRect, context: inout GraphicsContext) {
+        guard let marks = node.progressMarks, marks > 0 else { return }
+        var lines = Path()
+        lines.move(to: CGPoint(x: rect.minX + 2, y: rect.maxY - 2))
+        lines.addLine(to: CGPoint(x: rect.maxX - 2, y: rect.minY + 2))
+        if marks > 1 {
+            lines.move(to: CGPoint(x: rect.minX + 2, y: rect.minY + 2))
+            lines.addLine(to: CGPoint(x: rect.maxX - 2, y: rect.maxY - 2))
+        }
+        context.stroke(lines, with: .color(.secondary.opacity(0.4)), lineWidth: 1)
     }
 
     /// The activity-on-node box: earliest start, duration and earliest finish across the top, the key and title in the
