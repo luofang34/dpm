@@ -10,7 +10,7 @@ public enum NetworkIntent: String, CaseIterable, Sendable {
     case select, openDetail, closeDetail
     case predecessor, successor, gate, blocker
     case zoomIn, zoomOut, panLeft, panRight, panUp, panDown
-    case toggleTemporal, toggleBlocks, toggleContext, togglePackages, clearFilter, focusFilter
+    case toggleTemporal, toggleBlocks, toggleContext, togglePackages, cycleTimescale, clearFilter, focusFilter
     case fit, locate, resetView
 }
 
@@ -46,6 +46,7 @@ public enum NetworkKeyDecoder {
         case "2": return .toggleBlocks
         case "3": return .toggleContext
         case "4": return .togglePackages
+        case "t": return .cycleTimescale
         case "x": return .clearFilter
         case "/": return .focusFilter
         case "f": return .fit
@@ -67,9 +68,10 @@ extension ObserverModel {
     /// The graph of the installed snapshot: the inventory (`export`) and, while it is read, the schedule.
     public var networkGraph: NetworkGraph {
         let token = snapshot.gantt?.token
-        let packages = network.filter.packages
-        if let cached = networkCache, cached.schedule == token, cached.inventory == snapshot.inventory, cached.graph.packagesPlaced == packages { return cached.graph }
-        let graph = NetworkGraph(inventory: snapshot.inventory, schedule: snapshot.gantt, placingPackages: packages)
+        let packages = network.filter.packages, timescale = network.timescale
+        if let cached = networkCache, cached.schedule == token, cached.inventory == snapshot.inventory, cached.graph.packagesPlaced == packages,
+           cached.graph.timescale == timescale { return cached.graph }
+        let graph = NetworkGraph(inventory: snapshot.inventory, schedule: snapshot.gantt, placingPackages: packages, timescale: timescale)
         networkCache = (snapshot.inventory, token, graph)
         return graph
     }
@@ -205,6 +207,7 @@ extension ObserverModel {
         case .toggleBlocks: toggleKind(.decisionBlock)
         case .toggleContext: toggleKind(.context)
         case .togglePackages: networkOperation { $0.filter.packages.toggle() }
+        case .cycleTimescale: networkOperation { $0.timescale = $0.timescale.next }
         case .clearFilter: networkOperation { $0.filter = NetworkFilter() }
         case .focusFilter:
             // A request only: the field's actual editor taking the keyboard reports `networkFilterFocus(true)`.

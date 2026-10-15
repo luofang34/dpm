@@ -159,6 +159,8 @@ public struct NetworkGraph: Equatable, Sendable {
     public let terminals: NetworkTerminals?
     /// Whether work packages have places; when they are hidden they are left out of the layout altogether.
     public let packagesPlaced: Bool
+    /// How columns are placed: by the chain of gating edges, or by the period of each earliest start.
+    public let timescale: NetworkTimescale
 
     public static func ==(left: NetworkGraph, right: NetworkGraph) -> Bool {
         left.nodes == right.nodes && left.edges == right.edges
@@ -166,8 +168,9 @@ public struct NetworkGraph: Equatable, Sendable {
 
     public static let empty = NetworkGraph(inventory: .empty, schedule: nil)
 
-    public init(inventory: Inventory, schedule: GanttSchedule?, placingPackages: Bool = true) {
+    public init(inventory: Inventory, schedule: GanttSchedule?, placingPackages: Bool = true, timescale: NetworkTimescale = .logical) {
         packagesPlaced = placingPackages
+        self.timescale = timescale
         var nodes: [NetworkNode] = inventory.items.map { item in
             let row = schedule?.row(item.identity)
             let kind = NetworkNode.Kind(rawValue: item.kind) ?? .task
@@ -213,7 +216,8 @@ public struct NetworkGraph: Equatable, Sendable {
         self.incoming = incoming
         self.outgoing = outgoing
         let placed = placingPackages ? nodes : nodes.filter { $0.kind != .package }
-        let laid = Self.layout(nodes: placed, edges: edges, index: Dictionary(placed.enumerated().map { ($0.element.identity, $0.offset) }, uniquingKeysWith: { first, _ in first }))
+        let laid = Self.layout(nodes: placed, edges: edges, index: Dictionary(placed.enumerated().map { ($0.element.identity, $0.offset) }, uniquingKeysWith: { first, _ in first }),
+                               timescale: timescale)
         place = laid.place
         columns = laid.columns
         tallest = laid.tallest
@@ -229,8 +233,9 @@ public struct NetworkGraph: Equatable, Sendable {
     /// every such edge points rightwards). Within a column, critical work comes first, so the critical path runs along
     /// the top row as a network diagram draws it, then each node by the mean row of its neighbours (a few barycentre
     /// sweeps, left to right and back), which keeps chains level and crossings few; plan order breaks ties. Context
-    /// links do not place nodes. A node on a cycle the snapshot should not contain stays in column 0. Geometry only.
-    static func layout(nodes: [NetworkNode], edges: [NetworkEdge], index: [String: Int]) -> (place: [String: NetworkPlace], columns: Int, tallest: Int) {
+    /// links do not place nodes. A node on a cycle the snapshot should not contain stays in column 0. A time-scaled
+    /// layout takes its columns from `NetworkTimescale` instead and orders rows the same way. Geometry only.
+    static func layout(nodes: [NetworkNode], edges: [NetworkEdge], index: [String: Int], timescale: NetworkTimescale = .logical) -> (place: [String: NetworkPlace], columns: Int, tallest: Int) {
         var indegree = [Int](repeating: 0, count: nodes.count)
         var next = [[Int]](repeating: [], count: nodes.count)
         for edge in edges where edge.kind != .context {
@@ -250,7 +255,8 @@ public struct NetworkGraph: Equatable, Sendable {
                 if indegree[to] == 0 { queue.append(to) }
             }
         }
-        let placed = nodes.indices.map { indegree[$0] > 0 ? 0 : column[$0] }
+        let placed = timescale.periodHours.map { NetworkTimescale.columns(nodes: nodes, edges: edges, index: index, period: $0) }
+            ?? nodes.indices.map { indegree[$0] > 0 ? 0 : column[$0] }
         var neighbours = [[Int]](repeating: [], count: nodes.count)
         for (from, targets) in next.enumerated() {
             for to in targets {

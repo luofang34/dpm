@@ -33,6 +33,10 @@ struct NetworkView: View {
                         .reportFrame("network_list")
                     Divider()
                     VStack(spacing: 0) {
+                        if graph.timescale != .logical {
+                            NetworkTimescaleHeader(graph: graph, scale: model.network.scale, panX: model.network.panX)
+                            Divider()
+                        }
                         NetworkCanvas(model: model, graph: graph, nodes: nodes)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .overlay { if let link = model.network.linking { NetworkLinkView(link: link, model: model) } }
@@ -105,6 +109,12 @@ struct NetworkView: View {
                     .accessibilityLabel("work packages")
                     .accessibilityValue(packages ? "shown" : "hidden")
                     .accessibilityIdentifier("network.packages")
+                let timescale = model.network.timescale
+                Button { model.performNetwork(.cycleTimescale) } label: { Text("⏱ \(timescale.title)") }
+                    .help("Layout \(timescale.title.lowercased()); press for \(timescale.next.title.lowercased()) (t). By day or by week, each column is one period of elapsed hours and a box stands in the period of its earliest start.")
+                    .accessibilityLabel("network layout")
+                    .accessibilityValue(timescale.title)
+                    .accessibilityIdentifier("network.timescale")
                 ForEach(NetworkEdgeKind.allCases, id: \.self) { kind in
                     let on = model.network.filter.kinds.contains(kind)
                     Button { model.performNetwork(Self.toggle(kind)) } label: { Text("\(on ? "☑" : "☐") \(kind.cue) \(Self.short(kind))") }
@@ -119,9 +129,10 @@ struct NetworkView: View {
             let finish = graph.terminals.map { " · \($0.finishWords)" } ?? ""
             let hiddenPackages = model.network.filter.packages ? 0 : graph.nodes.filter { $0.kind == .package }.count
             let packageWords = hiddenPackages == 0 ? "" : " · \(hiddenPackages) work package\(hiddenPackages == 1 ? "" : "s") hidden (4 shows)"
-            let words = "Showing \(shown) of \(counts.nodes) nodes · \(model.network.filter.words)\(packageWords). In the plan: \(counts.words). Start at 0.0 h\(finish.replacingOccurrences(of: " · finish", with: "; finish")). Hours are elapsed hours from the schedule query; no calendar date is supplied, so none is shown."
+            let layoutWords = graph.timescale == .logical ? "" : " · columns \(graph.timescale.title.lowercased()) of earliest start"
+            let words = "Showing \(shown) of \(counts.nodes) nodes · \(model.network.filter.words)\(packageWords)\(layoutWords). In the plan: \(counts.words). Start at 0.0 h\(finish.replacingOccurrences(of: " · finish", with: "; finish")). Hours are elapsed hours from the schedule query; no calendar date is supplied, so none is shown."
             // One short line on the page; the complete sentence is the element's label and its tooltip.
-            Text("\(shown) of \(counts.nodes) nodes · \(model.network.filter.words)\(packageWords)\(finish) · elapsed hours, no dates").font(.caption).foregroundStyle(.secondary).lineLimit(1).help(words)
+            Text("\(shown) of \(counts.nodes) nodes · \(model.network.filter.words)\(packageWords)\(layoutWords)\(finish) · elapsed hours, no dates").font(.caption).foregroundStyle(.secondary).lineLimit(1).help(words)
                 .accessibilityLabel(words)
                 .accessibilityIdentifier("network.counts")
         }

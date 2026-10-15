@@ -2,7 +2,8 @@
 // carries the projection's own ES, the task's PERT te±σ and EF over LS, TF and LF; critical work leads every column, so the
 // critical chain TEST-A -> TEST-B -> TEST-C runs along the top row; every connector is drawn with horizontal and vertical
 // segments only, leaving and entering the ends its relation names; a plain finish-to-start link without lag is unlabelled while every other link names its relation. The
-// text list says every box value in words, and what holds the selected work back reads in plain words. Pure view geometry and text of the real model's graph; nothing is written.
+// text list says every box value in words, and what holds the selected work back reads in plain words. Laid out by
+// day, each box stands in the 24 h period of its earliest start. Pure view geometry and text of the real model's graph; nothing is written.
 
 import DPMNative
 import DPMObserverCore
@@ -115,6 +116,29 @@ extension Context {
             return (unplaced, placed, model.networkGraph.place[hidden.first?.identity ?? ""] == nil, model.network.filter.packages)
         }
         check(packages.0 && packages.1 && packages.2 && !packages.3, "work packages are hidden and unplaced by default, placed and listed after 4, hidden again after a second 4: \(packages)")
+
+        // t lays columns out by day: every box stands in the 24 h period of its earliest start, a decision in the
+        // earliest period of the work it gates, connectors stay right-angled and every period is labelled.
+        let byDay = await MainActor.run { () -> (NetworkGraph, String, String) in
+            _ = self.pressNetwork(model, "t")
+            let day = model.networkGraph
+            let reported = model.network.timescale.rawValue
+            _ = self.pressNetwork(model, "t")
+            _ = self.pressNetwork(model, "t")
+            return (day, reported, model.network.timescale.rawValue)
+        }
+        let day = byDay.0
+        let offPeriod = day.nodes.filter { node in
+            guard let es = node.earliestStart, let at = day.place[node.identity] else { return false }
+            return at.column != Int((max(0, es) / 24 + 1e-9).rounded(.down))
+        }.map(\.key)
+        let gates = day.edges.filter { $0.kind == .decisionBlock && day.node($0.from)?.earliestStart == nil }
+        let gateOff = gates.filter { edge in (day.place[edge.from]?.column ?? -1) > (day.place[edge.to]?.column ?? -1) }.map(\.id)
+        let dayKinked = day.routes.filter { _, route in route.points.indices.dropFirst().contains { route.points[$0 - 1].x != route.points[$0].x && route.points[$0 - 1].y != route.points[$0].y } }
+        let span = (day.nodes.compactMap(\.earliestStart).max() ?? 0) / 24
+        check(day.timescale == .day && byDay.1 == "day" && byDay.2 == "logical" && offPeriod.isEmpty && gateOff.isEmpty && dayKinked.isEmpty
+              && day.columns == Int(span.rounded(.down)) + 1 && day.timescale.label(column: 1) == "Day 2 · 24–48 h",
+              "by day each box stands in its earliest start's period (off: \(offPeriod)), gates no later than what they gate (\(gateOff)), connectors right-angled (\(dayKinked.keys.sorted())), \(day.columns) columns; state \(byDay.1), cycled back to \(byDay.2)")
 
         // Progress marks follow the recorded lifecycle: none before a start, one once TEST-A is started.
         check(graph.nodes.filter { !$0.isDecision && $0.status == "Planned" }.allSatisfy { $0.progressMarks == 0 } && graph.nodes.filter(\.isDecision).allSatisfy { $0.progressMarks == nil },
