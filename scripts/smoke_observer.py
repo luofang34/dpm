@@ -2367,6 +2367,78 @@ def network_page(bundle, directory):
         app.close()
 
 
+def launch_layout_holds_still(bundle, directory):
+    """From the first layout measured at the requested size until the Gantt has loaded and the workspace's source and
+    freshness are known, the page and its timeline stay where they were first drawn: opening the workspace and reading
+    the schedule are said by the subtitle and the strip, never by a row that appears and then collapses under a reader.
+    Every state the app writes in that time is judged; nothing is posted to the app."""
+    database = gantt_store(directory, 'launch-still')
+    # Editing is offered once the window is shown, which keeps the launch's transient states on screen longest.
+    app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'gantt', '--window-size', '1400x900'])
+    seen = []
+
+    def settled(state):
+        frames = (((state.get('gantt') or {}).get('layout') or {}).get('frames') or {})
+        if 'timeline' in frames and at_requested_size(app, state):
+            seen.append({'page': frames.get('page'), 'timeline': frames['timeline'], 'status_height': (frames.get('status') or [0, 0, 0, 0])[3]})
+        freshness = state.get('freshness') or {}
+        return gantt_loaded(state) and state['gantt'].get('fitted') and state.get('source') and freshness.get('current') and not freshness.get('catching_up')
+
+    try:
+        app.wait(settled, 30, 'the Gantt loaded with its source and freshness known')
+        assert seen, 'no layout was measured at the requested size before the Gantt loaded'
+        distinct = [dict(t) for t in {tuple(sorted((k, repr(v)) for k, v in entry.items())) for entry in seen}]
+        assert len(distinct) == 1, f'the page moved while the workspace opened and loaded ({len(seen)} states judged): {distinct}'
+        assert seen[0]['status_height'] == 0, f'a status row was shown for an ordinary launch: {seen[0]}'
+        return f'from the first measured layout to the loaded Gantt ({len(seen)} states), the page and timeline stayed at {seen[0]["timeline"]} with no status row'
+    finally:
+        app.close()
+
+
+def quit_with_review_open(bundle, directory):
+    """A terminate request from outside quits the app while the review sheet is open: AppKit refuses to terminate
+    past an attached sheet, so the app closes the review (which records nothing) and quits within the budget, writing
+    nothing. Real key events draft an outdent and open the review; an interrupted route is NOT ASSESSED."""
+    case = 'quit_with_review_open'
+    if not accessibility_trusted():
+        not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so CGEventPostToPid would be ignored; no key was sent')
+        return None
+    database = gantt_store(directory, 'quit-review')
+    operations = len(run_cli(database, 'history')['entries'])
+    app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'gantt', '--select-key', 'TEST-C'])
+    front = None
+    try:
+        app.wait(lambda s: gantt_loaded(s) and s['gantt']['selected_key'] == 'TEST-C' and s['editing']['enabled'], 30, 'the Gantt with TEST-C selected and editing on')
+        front = Foreground(app.process.pid)
+        front.allow_sheets = True
+        front.activate(app.process)
+        front.arm()
+        guarded_wait(app, front, lambda s: s['gantt']['focus_reported'] == 'gantt.row.TEST-C', 15, 'the Gantt region to hold the keyboard on TEST-C')
+        guarded_key(app, front, 'Shift-Tab to draft moving TEST-C out of its package', KEY_CODES['tab'], SHIFT_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 1, 10, 'Shift-Tab to add one edit to the draft')
+        guarded_key(app, front, 'Command-Return to review the draft', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the review to be shown')
+        front.close()
+        front = None
+        asked = time.monotonic()
+        app.process.send_signal(signal.SIGTERM)
+        try:
+            code = app.process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            raise AssertionError('with the review open, the app did not quit within 10 seconds of a terminate request') from None
+        took = time.monotonic() - asked
+        assert code == 0, f'the app exited {code} after a terminate request with the review open'
+        assert len(run_cli(database, 'history')['entries']) == operations, 'quitting with the review open wrote to the store'
+        return f'a terminate request with the review sheet open closed the review and quit in {took:.1f} s, writing nothing'
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption))
+        return None
+    finally:
+        if front:
+            front.close()
+        app.close()
+
+
 def edit_keyboard_route(bundle, directory):
     """Reviewed plan editing by keyboard alone in the packaged app, with real key events: with editing on and the
     Gantt holding the keyboard on the nested TEST-C, Shift-Tab proposes moving it out of its package (a draft edit) and
@@ -3579,18 +3651,21 @@ def network_layout_and_pointer(bundle, directory):
         gantt_db = gantt_store(directory, 'gantt-pointer')
         launched = now_ms()
         app = App(bundle, directory, ['--database', str(gantt_db), '--page', 'gantt', '--select-key', 'TEST-F', '--window-size', 'x'.join(map(str, DEFAULT_CONTENT))])
-        state = _await_layout(app, lambda s: _fresh_problem(app, s, launched) or (None if gantt_loaded(s) and 'timeline' in s['gantt']['layout']['frames'] and s['gantt']['selected_key'] == 'TEST-F' else 'the Gantt timeline is not measured yet'),
-                              'the Gantt with its timeline measured')
+        state = _await_layout(app, lambda s: _fresh_problem(app, s, launched) or (None if gantt_loaded(s) and 'timeline' in s['gantt']['layout']['frames'] and s['gantt']['selected_key'] == 'TEST-F' else 'the Gantt timeline is not measured yet')
+                              or (None if at_requested_size(app, s) else 'the window is not at the requested size yet'), 'the Gantt with its timeline measured')
         front = Foreground(app.process.pid)
         front.activate(app.process)
         front.arm()
         # The initial fit: the whole timeline (hour 0 to its last finish or p95, with its trailing room) is as wide as the
         # measured timeline, unless a viewport was chosen first. Its state, read after the activation, is the click's geometry.
-        fitted_gantt = guarded_wait(app, front, lambda t: t['gantt'].get('fitted') and t['gantt'].get('timeline_extent') and 'timeline' in ((t['gantt'].get('layout') or {}).get('frames') or {}),
+        fitted_gantt = guarded_wait(app, front, lambda t: t['gantt'].get('fitted') and t['gantt'].get('timeline_extent') and 'timeline' in ((t['gantt'].get('layout') or {}).get('frames') or {})
+                                    and at_requested_size(app, t),
                                     10, 'the initial fit of the Gantt timeline')
         timeline = fitted_gantt['gantt']['layout']['frames']['timeline']
         row = front.find('gantt.row.TEST-D')  # role, identifier and frame (screen points, top left), or None
         row_frame = row['frame'] if row else None
+        if not row_frame:
+            undisturbed(app, front, 'reading the TEST-D row label\'s AX frame')
         assert row_frame, 'the TEST-D row label has no AX frame'
         start_x, whole = fitted_gantt['gantt']['timeline_extent']
         assert start_x == 0 and whole <= fitted_gantt['gantt']['viewport_width'] + 0.5 and whole >= fitted_gantt['gantt']['viewport_width'] * 0.9, \
@@ -3649,7 +3724,7 @@ def main(bundle):
         for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
                          edit_flag_first, gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
                          filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
-                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route, inspector_edit_keyboard_route, gantt_drag_route, gantt_disclosure_route,
+                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, quit_with_review_open, launch_layout_holds_still, inspector_keyboard_route, inspector_edit_keyboard_route, gantt_drag_route, gantt_disclosure_route,
                          network_drag_route):
             result = scenario(packaged, directory)
             # A case that was skipped or not assessed says so itself, loudly, and returns nothing: it is never a pass.
