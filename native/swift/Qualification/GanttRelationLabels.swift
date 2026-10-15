@@ -1,5 +1,5 @@
 // GANTT-RELATION-LABEL-01: several emphasised relations ending at one target must not draw their labels at one
-// point. The relations are the real model's (the network fixture's TEST-E has two FS predecessors ending at its
+// point, and a label stays inside the chart and off the drawn bars when a free line exists. The relations are the real model's (the network fixture's TEST-E has two FS predecessors ending at its
 // start and an FF ending at its finish); the anchors are worked out as the drawing works them out, and the
 // placement is the one shared function the drawing calls. This checks the label geometry and the text; the
 // pixels of the actual window are the UI verifier's.
@@ -57,6 +57,25 @@ extension Context {
                   "seven relations at one point give \(GanttRelationLabels.perTarget - 1) labels and one aggregate line: \(crowded.filter { $0.target == target.id }.map(\.text))")
             check(disjoint(crowded), "with two crowded targets no two label rectangles overlap (\(crowded.count) placed)")
             check(GanttRelationLabels.place((many + below).reversed()) == crowded, "the crowded placement is deterministic too")
+        }
+
+        // Inside the chart: two labels of a target near hour 0 run left of their arrowhead, past the chart's left edge; they
+        // move right until they fit, still apart. A bar under the first line pushes a label to the next free line.
+        if let edge = incoming.first {
+            let edgeRequests = (0..<2).map { GanttRelationLabels.Request(id: "edge#\($0)", target: "early", text: GanttRelationLabels.text(edge, from: "TEST-\($0)"), x: 20, y: 200, leading: false) }
+            let kept = GanttRelationLabels.place(edgeRequests, bounds: 2...600)
+            check(kept.count == 2 && kept.allSatisfy { $0.minX >= 2 && $0.maxX <= 600 } && disjoint(kept),
+                  "labels anchored near the chart's left edge stay inside it and apart: \(kept.map { "\($0.minX)...\($0.maxX), \($0.minY)" })")
+            let lone = GanttRelationLabels.Request(id: "lone", target: "lone", text: GanttRelationLabels.text(edge, from: "TEST-A"), x: 300, y: 400, leading: false)
+            let firstLine = 400 - GanttRelationLabels.firstLine
+            let bar = GanttRelationLabels.Obstacle(minX: 0, minY: firstLine - 4, maxX: 600, maxY: firstLine + 4)
+            let avoided = GanttRelationLabels.place([lone], bounds: 2...600, obstacles: [bar])
+            check(avoided.count == 1 && !avoided[0].covers(bar), "a label moves off a bar to a free line: \(avoided.map { "\($0.minY)...\($0.maxY)" }) against the bar \(bar.minY)...\(bar.maxY)")
+            let walled = (0..<GanttRelationLabels.lines).map { line -> GanttRelationLabels.Obstacle in
+                let y = firstLine - Double(line) * GanttRelationLabels.lineHeight
+                return GanttRelationLabels.Obstacle(minX: 0, minY: y - 4, maxX: 600, maxY: y + 4)
+            }
+            check(GanttRelationLabels.place([lone], bounds: 2...600, obstacles: walled).count == 1, "with bars on every line the label is still drawn, on its first free line")
         }
 
         // Nothing is lost: every relation of TEST-E is in the row's full text.
