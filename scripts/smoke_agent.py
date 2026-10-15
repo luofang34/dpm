@@ -247,6 +247,9 @@ def smoke(database):
         assert summary == run_cli(database, '--clock', at, 'status') and summary['progress']['percent_complete'] > 0
         assert scheduled == run_cli_envelope(database, '--clock', at, 'schedule', '--no-simulation')
         assert datetime.fromisoformat(scheduled['data']['evaluated_at']) == datetime.fromisoformat(at), scheduled['data']['evaluated_at']
+        # Both adapters publish each estimated task's classical PERT te and σ, and none for a point.
+        figures = {w['key']: w['pert'] for w in scheduled['data']['work']}
+        assert figures['TEST-B'] == {'expected_hours': 20.0, 'sigma_hours': 20 / 6} and figures['TEST-M1'] is None, figures
         # A clock before the work began observes the workspace as it stood then.
         early = (datetime.fromisoformat(started['timestamp']) - timedelta(hours=1)).isoformat()
         local = run_cli_envelope(database, '--clock', early, 'status')

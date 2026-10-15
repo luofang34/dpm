@@ -963,7 +963,10 @@ computes scheduling. `data.work` lists every work item in key order with `id`, `
 `parent`, `title`, `status`, `applicability`, `priority` (the human priority, never criticality),
 `span` (`start_hours`, `finish_hours`, `critical`: the activity itself, or a package's applicable
 descendants), `times` (`earliest_start_hours`, `earliest_finish_hours`, `latest_start_hours`,
-`latest_finish_hours`, `total_float_hours`, `free_float_hours`, `critical`), `criticality` and
+`latest_finish_hours`, `total_float_hours`, `free_float_hours`, `critical`), `criticality`,
+`pert` (the classical PERT figures of a task's whole three-point estimate, `expected_hours`
+`te = (O + 4M + P) / 6` and `sigma_hours` `σ = (P − O) / 6`, unchanged by progress or overrun;
+`null` for packages, milestones, unestimated tasks and work outside the active graph),
 `calendar`, and `actual`: what was recorded, `started_at` (a package's earliest recorded
 descendant start) and `finished_at` (verification, or a milestone's or package's completion) with
 `start_hours` and `finish_hours` from the clock reading, negative in the past; it is absent before
