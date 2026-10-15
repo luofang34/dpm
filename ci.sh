@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 cargo fmt --all -- --check
 python3 scripts/check_structure.py
+python3 scripts/check_palette.py
 python3 scripts/check_repository.py
 if ! command -v cargo-deny >/dev/null 2>&1; then
     printf '%s\n' 'Install the required dependency checker: cargo install cargo-deny --locked --version 0.19.8' >&2
