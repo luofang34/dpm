@@ -110,6 +110,7 @@ final class Launch {
     private(set) var host: HostObservation?
     private var started = false
     private var signals: [DispatchSourceSignal] = []
+    private let inputSources = InputSources()
 
     private init() {
         // The measurement log, if one was asked for, opens before anything else so that its first event
@@ -139,15 +140,31 @@ final class Launch {
         host = reporter == nil ? nil : HostObservation()
     }
 
+    /// Quits for an outside request. AppKit refuses to terminate while a window has a sheet attached, and a review that
+    /// is still being presented is not attached yet, so the review (which records nothing) is closed in the model and any
+    /// attached sheet ended first; `terminate` returns only when it was refused, and is then tried again on a later turn.
+    private func quitOnRequest(attemptsLeft: Int) {
+        model.closeReview()
+        for window in NSApp.windows {
+            if let sheet = window.attachedSheet { window.endSheet(sheet) }
+        }
+        DispatchQueue.main.async {
+            NSApp.terminate(nil)
+            guard attemptsLeft > 1 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.quitOnRequest(attemptsLeft: attemptsLeft - 1) }
+        }
+    }
+
     /// Once, when the window first appears: report, and open the workspace the arguments named.
     func start() {
         guard !started else { return }
         started = true
+        if let host { inputSources.attach(host: host) }
         // A terminate request from outside quits the way the menu does, so the helper is ended first.
         for number in [SIGTERM, SIGINT] {
             signal(number, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
-            source.setEventHandler { NSApp.terminate(nil) }
+            source.setEventHandler { [weak self] in self?.quitOnRequest(attemptsLeft: 50) }
             source.resume()
             signals.append(source)
         }

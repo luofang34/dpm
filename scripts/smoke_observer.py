@@ -59,6 +59,8 @@ class App:
         self.directory = directory / f'app-{_apps[0]}'
         self.directory.mkdir()
         self.state_file = self.directory / 'state.json'
+        sized = arguments[arguments.index('--window-size') + 1] if '--window-size' in arguments else None
+        self.requested_size = tuple(float(v) for v in sized.split('x')) if sized else None
         executable = bundle / 'Contents/MacOS/dpm-observer'
         self.process = subprocess.Popen([str(executable), *arguments, '--state-file', str(self.state_file)], cwd='/',
                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -102,8 +104,14 @@ class App:
             try:
                 self.process.wait(timeout=15)
             except subprocess.TimeoutExpired:
+                foreign = foreign_input(self.state())
                 self.process.kill()
                 self.process.wait(timeout=5)
+                if foreign:
+                    # Another process's keys or clicks can leave a menu or sheet open, which holds the quit; the quit
+                    # itself is then not judged, and the case says so.
+                    not_assessed('quitting the app', f'it did not quit within 15 seconds after input from another process reached it ({foreign})')
+                    return self.process.returncode
                 raise AssertionError('the app did not quit within 15 seconds')
         return self.process.returncode
 
@@ -475,6 +483,12 @@ def accessibility_trusted():
         return False
 
 
+# kCGEventSourceUserData: every event this process posts carries its pid here, so the app's report of who delivered its
+# input tells this route's events from anyone else's (a mouse event posted to the HID tap otherwise arrives stamped 0, as
+# a device's own does).
+EVENT_TAG_FIELD = 42
+
+
 def post_key(pid, code, flags=0):
     """One key press delivered to one process with CGEventPostToPid."""
     quartz = ctypes.CDLL('/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices')
@@ -483,9 +497,11 @@ def post_key(pid, code, flags=0):
     quartz.CGEventCreateKeyboardEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint16, ctypes.c_bool]
     quartz.CGEventSetFlags.argtypes = [ctypes.c_void_p, ctypes.c_uint64]
     quartz.CGEventPostToPid.argtypes = [ctypes.c_int, ctypes.c_void_p]
+    quartz.CGEventSetIntegerValueField.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int64]
     core.CFRelease.argtypes = [ctypes.c_void_p]
     for down in (True, False):
         event = quartz.CGEventCreateKeyboardEvent(None, code, down)
+        quartz.CGEventSetIntegerValueField(event, EVENT_TAG_FIELD, os.getpid())
         if flags:
             quartz.CGEventSetFlags(event, flags)
         quartz.CGEventPostToPid(pid, event)
@@ -739,6 +755,16 @@ def _await_layout(app, problem_of, what, timeout=30):
         return app.wait(ready, timeout, what)
     except AssertionError as error:
         raise AssertionError(f'{error}; the layout condition that did not hold: {last[0]}') from None
+
+
+def at_requested_size(app, state):
+    """True once the reported window has the content size its launch asked for, or none was asked. `--window-size` is
+    applied only after the window first appears, and the resize keeps the bottom edge and moves the top, so a screen
+    point computed from an earlier layout misses by the change in height."""
+    if not app.requested_size:
+        return True
+    frame = (((state or {}).get('gantt') or {}).get('layout') or {}).get('window_frame')
+    return bool(frame) and abs(frame[2] - app.requested_size[0]) <= 0.5 and abs(frame[3] - app.requested_size[1]) <= 0.5
 
 
 def _fresh_problem(app, state, launched):
@@ -1675,6 +1701,39 @@ def interruption_or_death(process, interruption):
     return str(interruption)
 
 
+def foreign_input(state):
+    """The presses, keys and scrolls the app received from any process but this one (another automation's posted events,
+    or a person's own keyboard and mouse, stamped 0), as 'pid N ×k'; None when every one came from here or the app
+    reports none. Such input lands on the window a route drives, so what follows it is not the route's doing."""
+    by_source = (((state or {}).get('host') or {}).get('input_sources') or {}).get('by_source') or {}
+    me = str(os.getpid())
+    others = {source: count for source, count in by_source.items() if me not in source.split('/')[:2]}
+    if not others:
+        return None
+    kinds = {'1': 'press', '3': 'right press', '10': 'key', '22': 'scroll', '25': 'other press'}
+
+    def named(source, count):
+        pid, _tag, kind = (source.split('/') + ['', ''])[:3]
+        return f'pid {pid} {kinds.get(kind, "event " + kind)} ×{count}' + (' (a device, or an untagged HID post)' if pid == '0' else '')
+    return ', '.join(named(source, count) for source, count in sorted(others.items()))
+
+
+assert foreign_input({'host': {'input_sources': {'by_source': {f'{os.getpid()}/0/10': 2, f'0/{os.getpid()}/1': 3}}}}) is None, \
+    'input this process posted, whether its pid arrives as the source or only as the tag, is not foreign'
+assert foreign_input({'host': {'input_sources': {'by_source': {'0/0/10': 1, '7/0/1': 2}}}}) == \
+    'pid 0 key ×1 (a device, or an untagged HID post), pid 7 press ×2', 'other input must be named'
+assert foreign_input(None) is None, 'no state reports no input'
+
+
+def undisturbed(app, front, what):
+    """Stop the route if focus was lost since it was armed or input from another process reached the app, before `what`
+    counts."""
+    uninterrupted(front, what)
+    foreign = foreign_input(app.state())
+    if foreign:
+        raise NotAssessed(f'before {what}: input from another process reached the app ({foreign})')
+
+
 def uninterrupted(front, what):
     """Stop the route if an interruption was observed since it was armed, before `what` (a next key, a wait taken as
     satisfied, the route's result) counts."""
@@ -1707,11 +1766,12 @@ def guarded_wait(app, front, predicate, timeout, what):
         state = app.wait(predicate, timeout, what)
     except AssertionError:
         if app.process.poll() is None:
-            problem = front.problem()
+            foreign = foreign_input(app.state())
+            problem = front.problem() or (foreign and f'input from another process reached the app ({foreign})')
             if problem:
                 raise NotAssessed(f'while waiting for {what}: {problem}') from None
         raise
-    uninterrupted(front, f'{what} counts as shown')
+    undisturbed(app, front, f'{what} counts as shown')
     return state
 
 
@@ -2307,6 +2367,78 @@ def network_page(bundle, directory):
         app.close()
 
 
+def launch_layout_holds_still(bundle, directory):
+    """From the first layout measured at the requested size until the Gantt has loaded and the workspace's source and
+    freshness are known, the page and its timeline stay where they were first drawn: opening the workspace and reading
+    the schedule are said by the subtitle and the strip, never by a row that appears and then collapses under a reader.
+    Every state the app writes in that time is judged; nothing is posted to the app."""
+    database = gantt_store(directory, 'launch-still')
+    # Editing is offered once the window is shown, which keeps the launch's transient states on screen longest.
+    app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'gantt', '--window-size', '1400x900'])
+    seen = []
+
+    def settled(state):
+        frames = (((state.get('gantt') or {}).get('layout') or {}).get('frames') or {})
+        if 'timeline' in frames and at_requested_size(app, state):
+            seen.append({'page': frames.get('page'), 'timeline': frames['timeline'], 'status_height': (frames.get('status') or [0, 0, 0, 0])[3]})
+        freshness = state.get('freshness') or {}
+        return gantt_loaded(state) and state['gantt'].get('fitted') and state.get('source') and freshness.get('current') and not freshness.get('catching_up')
+
+    try:
+        app.wait(settled, 30, 'the Gantt loaded with its source and freshness known')
+        assert seen, 'no layout was measured at the requested size before the Gantt loaded'
+        distinct = [dict(t) for t in {tuple(sorted((k, repr(v)) for k, v in entry.items())) for entry in seen}]
+        assert len(distinct) == 1, f'the page moved while the workspace opened and loaded ({len(seen)} states judged): {distinct}'
+        assert seen[0]['status_height'] == 0, f'a status row was shown for an ordinary launch: {seen[0]}'
+        return f'from the first measured layout to the loaded Gantt ({len(seen)} states), the page and timeline stayed at {seen[0]["timeline"]} with no status row'
+    finally:
+        app.close()
+
+
+def quit_with_review_open(bundle, directory):
+    """A terminate request from outside quits the app while the review sheet is open: AppKit refuses to terminate
+    past an attached sheet, so the app closes the review (which records nothing) and quits within the budget, writing
+    nothing. Real key events draft an outdent and open the review; an interrupted route is NOT ASSESSED."""
+    case = 'quit_with_review_open'
+    if not accessibility_trusted():
+        not_assessed(case, 'this process has no Accessibility permission (AXIsProcessTrusted is false), so CGEventPostToPid would be ignored; no key was sent')
+        return None
+    database = gantt_store(directory, 'quit-review')
+    operations = len(run_cli(database, 'history')['entries'])
+    app = App(bundle, directory, ['--edit', '--database', str(database), '--page', 'gantt', '--select-key', 'TEST-C'])
+    front = None
+    try:
+        app.wait(lambda s: gantt_loaded(s) and s['gantt']['selected_key'] == 'TEST-C' and s['editing']['enabled'], 30, 'the Gantt with TEST-C selected and editing on')
+        front = Foreground(app.process.pid)
+        front.allow_sheets = True
+        front.activate(app.process)
+        front.arm()
+        guarded_wait(app, front, lambda s: s['gantt']['focus_reported'] == 'gantt.row.TEST-C', 15, 'the Gantt region to hold the keyboard on TEST-C')
+        guarded_key(app, front, 'Shift-Tab to draft moving TEST-C out of its package', KEY_CODES['tab'], SHIFT_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['edits'] == 1, 10, 'Shift-Tab to add one edit to the draft')
+        guarded_key(app, front, 'Command-Return to review the draft', KEY_CODES['return'], COMMAND_FLAG)
+        guarded_wait(app, front, lambda s: s['editing']['reviewing'] and s['editing']['phase'] == 'reviewed', 20, 'the review to be shown')
+        front.close()
+        front = None
+        asked = time.monotonic()
+        app.process.send_signal(signal.SIGTERM)
+        try:
+            code = app.process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            raise AssertionError('with the review open, the app did not quit within 10 seconds of a terminate request') from None
+        took = time.monotonic() - asked
+        assert code == 0, f'the app exited {code} after a terminate request with the review open'
+        assert len(run_cli(database, 'history')['entries']) == operations, 'quitting with the review open wrote to the store'
+        return f'a terminate request with the review sheet open closed the review and quit in {took:.1f} s, writing nothing'
+    except NotAssessed as interruption:
+        not_assessed(case, interruption_or_death(app.process, interruption))
+        return None
+    finally:
+        if front:
+            front.close()
+        app.close()
+
+
 def edit_keyboard_route(bundle, directory):
     """Reviewed plan editing by keyboard alone in the packaged app, with real key events: with editing on and the
     Gantt holding the keyboard on the nested TEST-C, Shift-Tab proposes moving it out of its package (a draft edit) and
@@ -2587,8 +2719,8 @@ def gantt_drag_route(bundle, directory):
     try:
         # The timeline's frame is measured after the first draw: the aim needs it, so it is awaited with the bars.
         measured = lambda s: 'timeline' in ((s['gantt'].get('layout') or {}).get('frames') or {})
-        shown = app.wait(lambda s: gantt_loaded(s) and s['editing']['enabled'] and {'TEST-B', 'TEST-C', 'TEST-D', 'TEST-F'} <= set(bars(s)) and measured(s), 30,
-                         'the Gantt with its bars, a measured timeline and editing on')
+        shown = app.wait(lambda s: gantt_loaded(s) and s['editing']['enabled'] and {'TEST-B', 'TEST-C', 'TEST-D', 'TEST-F'} <= set(bars(s)) and measured(s)
+                         and at_requested_size(app, s), 30, 'the Gantt with its bars, a measured timeline and editing on, at the requested size')
         front = Foreground(app.process.pid)
         front.allow_sheets = True
         front.activate(app.process)
@@ -2750,8 +2882,8 @@ def network_drag_route(bundle, directory):
     try:
         tasks = lambda s: [n for n in s['network']['drawn'] if n['kind'].startswith('task')]
         measured = lambda s: (((s.get('gantt') or {}).get('layout') or {}).get('frames') or {}).get('network_canvas')
-        shown = app.wait(lambda s: network_shown(s) and s['editing']['enabled'] and len(tasks(s)) >= 2 and measured(s), 30,
-                         'the network with a measured canvas, two drawn tasks and editing on')
+        shown = app.wait(lambda s: network_shown(s) and s['editing']['enabled'] and len(tasks(s)) >= 2 and measured(s) and at_requested_size(app, s), 30,
+                         'the network with a measured canvas, two drawn tasks and editing on, at the requested size')
         front = Foreground(app.process.pid)
         front.activate(app.process)
         front.arm()
@@ -3192,6 +3324,7 @@ def post_mouse(app, front, kind, point, clicks=1, step='a pointer event'):
     code = {'down': 1, 'up': 2, 'moved': 5, 'dragged': 6}[kind]
     event = quartz.CGEventCreateMouseEvent(None, code, Point(*point), 0)
     quartz.CGEventSetIntegerValueField(event, 1, clicks)  # kCGMouseEventClickState
+    quartz.CGEventSetIntegerValueField(event, EVENT_TAG_FIELD, os.getpid())
     posted = time.clock_gettime(time.CLOCK_UPTIME_RAW)
     quartz.CGEventPost(0, event)
     core.CFRelease(event)
@@ -3209,6 +3342,7 @@ def post_scroll(app, front, dy, dx=0, step='a wheel'):
     pointer_guard(app, front, step)
     quartz, core, _ = _quartz()
     event = quartz.CGEventCreateScrollWheelEvent2(None, 0, 2, dy, dx, 0)  # pixel units
+    quartz.CGEventSetIntegerValueField(event, EVENT_TAG_FIELD, os.getpid())
     quartz.CGEventPost(0, event)
     core.CFRelease(event)
 
@@ -3517,18 +3651,21 @@ def network_layout_and_pointer(bundle, directory):
         gantt_db = gantt_store(directory, 'gantt-pointer')
         launched = now_ms()
         app = App(bundle, directory, ['--database', str(gantt_db), '--page', 'gantt', '--select-key', 'TEST-F', '--window-size', 'x'.join(map(str, DEFAULT_CONTENT))])
-        state = _await_layout(app, lambda s: _fresh_problem(app, s, launched) or (None if gantt_loaded(s) and 'timeline' in s['gantt']['layout']['frames'] and s['gantt']['selected_key'] == 'TEST-F' else 'the Gantt timeline is not measured yet'),
-                              'the Gantt with its timeline measured')
+        state = _await_layout(app, lambda s: _fresh_problem(app, s, launched) or (None if gantt_loaded(s) and 'timeline' in s['gantt']['layout']['frames'] and s['gantt']['selected_key'] == 'TEST-F' else 'the Gantt timeline is not measured yet')
+                              or (None if at_requested_size(app, s) else 'the window is not at the requested size yet'), 'the Gantt with its timeline measured')
         front = Foreground(app.process.pid)
         front.activate(app.process)
         front.arm()
         # The initial fit: the whole timeline (hour 0 to its last finish or p95, with its trailing room) is as wide as the
         # measured timeline, unless a viewport was chosen first. Its state, read after the activation, is the click's geometry.
-        fitted_gantt = guarded_wait(app, front, lambda t: t['gantt'].get('fitted') and t['gantt'].get('timeline_extent') and 'timeline' in ((t['gantt'].get('layout') or {}).get('frames') or {}),
+        fitted_gantt = guarded_wait(app, front, lambda t: t['gantt'].get('fitted') and t['gantt'].get('timeline_extent') and 'timeline' in ((t['gantt'].get('layout') or {}).get('frames') or {})
+                                    and at_requested_size(app, t),
                                     10, 'the initial fit of the Gantt timeline')
         timeline = fitted_gantt['gantt']['layout']['frames']['timeline']
         row = front.find('gantt.row.TEST-D')  # role, identifier and frame (screen points, top left), or None
         row_frame = row['frame'] if row else None
+        if not row_frame:
+            undisturbed(app, front, 'reading the TEST-D row label\'s AX frame')
         assert row_frame, 'the TEST-D row label has no AX frame'
         start_x, whole = fitted_gantt['gantt']['timeline_extent']
         assert start_x == 0 and whole <= fitted_gantt['gantt']['viewport_width'] + 0.5 and whole >= fitted_gantt['gantt']['viewport_width'] * 0.9, \
@@ -3587,7 +3724,7 @@ def main(bundle):
         for scenario in (review_and_verify, reachable_work, latency_and_burst, selected_run_window, preview_and_refusals, stale_and_source_change,
                          edit_flag_first, gantt_page, gantt_window_layout, gantt_real_keys, detail_accessibility, detail_scroll_route, detail_keyboard_route,
                          filter_exit_route, filter_composition_route, keyboard_guard_controls, gantt_instruments, gantt_scroll_guards, gantt_rendered,
-                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, inspector_keyboard_route, inspector_edit_keyboard_route, gantt_drag_route, gantt_disclosure_route,
+                         network_page, network_layout_and_pointer, network_keyboard_route, edit_keyboard_route, quit_with_review_open, launch_layout_holds_still, inspector_keyboard_route, inspector_edit_keyboard_route, gantt_drag_route, gantt_disclosure_route,
                          network_drag_route):
             result = scenario(packaged, directory)
             # A case that was skipped or not assessed says so itself, loudly, and returns nothing: it is never a pass.

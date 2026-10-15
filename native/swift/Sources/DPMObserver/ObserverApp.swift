@@ -39,7 +39,9 @@ struct ObserverApp: App {
         // The app's own options are parsed by Launch. AppKit would otherwise pair a flag with no value, such as
         // `--edit`, with the next option and take the value left over as a file to open, and a launch that opens a
         // file shows no main window.
-        UserDefaults.standard.register(defaults: ["NSTreatUnknownArgumentsAsOpen": false])
+        // A launch opens what its arguments name in the one main window; window state saved by an earlier run (one that
+        // ended with no window shown) would otherwise keep that window from opening at all.
+        UserDefaults.standard.register(defaults: ["NSTreatUnknownArgumentsAsOpen": false, "ApplePersistenceIgnoreStateQuietly": true])
     }
 
     var body: some Scene {

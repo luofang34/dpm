@@ -186,7 +186,12 @@ struct GanttCursorLine: View {
                 Text(words).font(.callout).lineLimit(1).help(words).accessibilityLabel(words)
             }
         } else {
-            ProgressView("Reading the schedule from the application…").controlSize(.small)
+            // Inline and small, so the strip keeps its one-line height when the schedule arrives and the chart below
+            // it does not move.
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Reading the schedule from the application…").font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }

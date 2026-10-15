@@ -151,13 +151,17 @@ struct StatusBar: View {
         .accessibilityIdentifier("status.bar")
     }
 
-    /// Whether anything but the normal case (a live, connected workspace whose reads succeed) is to be said.
+    /// Whether anything but the normal case (a live, connected workspace whose reads succeed) is to be said. Opening is
+    /// the normal start, said by the subtitle: a bar shown only until the first read would push the page down and then
+    /// let it jump back while a person is already reading it.
     static func hasNews(_ snapshot: ObserverSnapshot) -> Bool {
-        snapshot.identity?.source != "live" || !snapshot.connection.isLive || snapshot.freshness.lastError != nil
+        if case .opening = snapshot.connection, snapshot.freshness.lastError == nil { return false }
+        return snapshot.identity?.source != "live" || !snapshot.connection.isLive || snapshot.freshness.lastError != nil
     }
 
     /// The window subtitle: the revision and when it was last received, for example "Revision 42 · Updated 9 s ago".
     static func subtitle(_ snapshot: ObserverSnapshot, now: Date) -> String {
+        if case .opening = snapshot.connection { return "Opening the workspace…" }
         let revision = "Revision \(snapshot.revision.map { String($0) } ?? "unknown")"
         guard let received = snapshot.freshness.receivedAt else { return "\(revision) · Nothing read yet" }
         if snapshot.connection.isLive, !snapshot.freshness.current { return "\(revision) · \(staleWords(snapshot.freshness))" }
