@@ -107,12 +107,7 @@ struct NetworkCanvas: View {
     /// Edge labels are drawn only from this scale up; below it they could not be read.
     static let labelScale = 0.55
 
-    /// The short label of a temporal edge: its relation, its lead or lag, and Soft; nil for the other kinds (their line
-    /// and end mark say what they are).
-    static func label(_ edge: NetworkEdge) -> String? {
-        guard edge.kind == .temporal, let relation = edge.relation else { return nil }
-        return "\(relation.abbreviation)\(relation.lagHours == 0 ? "" : " " + GanttRelation.lagWords(relation.lagHours, basis: relation.lagBasis))\(relation.policy == "Soft" ? " Soft" : "")"
-    }
+    static func label(_ edge: NetworkEdge) -> String? { edge.connectorLabel }
 
     /// Each edge kind has its own line and its own end mark, so none is told by colour alone: a solid line
     /// with an arrow (temporal; dashed when Soft), a heavy line ending in a bar (decision gate), a dotted line
@@ -122,11 +117,7 @@ struct NetworkCanvas: View {
         let start = CGPoint(x: route.start.x, y: route.start.y), end = CGPoint(x: route.end.x, y: route.end.y)
         var path = Path()
         path.move(to: start)
-        if route.detour {
-            for point in route.points.dropFirst() { path.addLine(to: CGPoint(x: point.x, y: point.y)) }
-        } else {
-            path.addCurve(to: end, control1: CGPoint(x: start.x + NetworkRoute.reach, y: start.y), control2: CGPoint(x: end.x - NetworkRoute.reach, y: end.y))
-        }
+        for point in route.points.dropFirst() { path.addLine(to: CGPoint(x: point.x, y: point.y)) }
         switch edge.kind {
         case .temporal:
             let soft = edge.relation?.policy == "Soft"
@@ -169,16 +160,25 @@ struct NetworkCanvas: View {
     }
 
     static func drawNode(_ node: NetworkNode, in rect: CGRect, focused: Bool, keyboard: Bool, context: inout GraphicsContext) {
-        let shape: Path
+        let outline: Color = node.critical == true ? Palette.critical : .secondary
+        // Critical work is outlined in the critical colour and a little heavier, and says "critical" in its box.
+        let weight = node.critical == true ? 1.6 : 1.0
+        if focused { context.stroke(Path(rect.insetBy(dx: -4, dy: -4)), with: .color(keyboard ? .accentColor : .secondary), style: StrokeStyle(lineWidth: 2, dash: keyboard ? [] : [3, 2])) }
         switch node.kind {
         case .milestone:
+            // A zero-duration event: a small diamond, with its key and time beside it.
+            let size = 11.0, centre = CGPoint(x: rect.minX + size + 2, y: rect.midY)
             var diamond = Path()
-            diamond.move(to: CGPoint(x: rect.midX, y: rect.minY))
-            diamond.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-            diamond.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-            diamond.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+            diamond.move(to: CGPoint(x: centre.x, y: centre.y - size))
+            diamond.addLine(to: CGPoint(x: centre.x + size, y: centre.y))
+            diamond.addLine(to: CGPoint(x: centre.x, y: centre.y + size))
+            diamond.addLine(to: CGPoint(x: centre.x - size, y: centre.y))
             diamond.closeSubpath()
-            shape = diamond
+            context.fill(diamond, with: .color(Color(nsColor: .controlBackgroundColor)))
+            context.stroke(diamond, with: .color(outline), lineWidth: weight)
+            let at = node.earliestStart.map { " · at \(hoursText($0))" } ?? ""
+            context.draw(Text(fitted(node.key + (node.critical == true ? " · critical" : ""), 30)).font(.caption.weight(.semibold)), at: CGPoint(x: centre.x + size + 6, y: rect.midY - 8), anchor: .leading)
+            context.draw(Text(fitted("milestone\(at)", 32)).font(.caption2.monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: centre.x + size + 6, y: rect.midY + 8), anchor: .leading)
         case .decision:
             var hexagon = Path()
             let inset = 14.0
@@ -189,45 +189,55 @@ struct NetworkCanvas: View {
             hexagon.addLine(to: CGPoint(x: rect.minX + inset, y: rect.maxY))
             hexagon.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
             hexagon.closeSubpath()
-            shape = hexagon
+            context.fill(hexagon, with: .color(Color(nsColor: .controlBackgroundColor)))
+            context.stroke(hexagon, with: .color(.secondary), lineWidth: 1)
+            context.draw(Text(fitted(node.key, 30)).font(.caption.weight(.semibold)), at: CGPoint(x: rect.midX, y: rect.midY - 8))
+            context.draw(Text(fitted(node.title, 32)).font(.caption2), at: CGPoint(x: rect.midX, y: rect.midY + 8))
         case .task, .package:
-            shape = Path(roundedRect: rect, cornerRadius: node.kind == .package ? 0 : 5)
+            let shape = Path(roundedRect: rect, cornerRadius: node.kind == .package ? 0 : 4)
+            context.fill(shape, with: .color(Color(nsColor: .controlBackgroundColor)))
+            context.stroke(shape, with: .color(outline), lineWidth: weight)
+            if node.kind == .package { context.stroke(Path(rect.insetBy(dx: 3, dy: 3)), with: .color(.secondary), lineWidth: 1) }
+            drawBox(node, in: rect, context: &context)
         }
-        context.fill(shape, with: .color(Color(nsColor: .controlBackgroundColor)))
-        context.stroke(shape, with: .color(node.critical == true ? Palette.critical : .secondary), lineWidth: node.critical == true ? 2.5 : 1)
-        if node.kind == .package { context.stroke(Path(rect.insetBy(dx: 3, dy: 3)), with: .color(.secondary), lineWidth: 1) }
-        if focused { context.stroke(Path(rect.insetBy(dx: -4, dy: -4)), with: .color(keyboard ? .accentColor : .secondary), style: StrokeStyle(lineWidth: 2, dash: keyboard ? [] : [3, 2])) }
-        if node.kind == .milestone || node.kind == .decision {
-            // Inside the diamond or hexagon the text is kept to the shape's interior and clipped to it, so no outline
-            // crosses it; the full key and title are in the hover, the inspector, the list and the region's value.
-            var inner = context
-            inner.clip(to: shape)
-            let room = node.kind == .milestone ? 20 : 26
-            let key = node.key.count > room ? String(node.key.prefix(room - 1)) + "…" : node.key
-            let title = node.title.count > room - 4 ? String(node.title.prefix(room - 5)) + "…" : node.title
-            inner.draw(Text(key).font(.caption2.weight(.semibold)), at: CGPoint(x: rect.midX, y: rect.midY - 6))
-            inner.draw(Text(title).font(.system(size: 8)), at: CGPoint(x: rect.midX, y: rect.midY + 7))
-            return
-        }
-        let title = node.title.count > 26 ? String(node.title.prefix(25)) + "…" : node.title
-        guard let times = timesLine(node) else {
-            context.draw(Text(node.key).font(.caption2.weight(.semibold)), at: CGPoint(x: rect.midX, y: rect.minY + 13))
-            context.draw(Text(title).font(.caption2), at: CGPoint(x: rect.midX, y: rect.minY + 29))
-            return
-        }
-        // An activity-on-node box: key, title, then earliest start, latest start and total float.
-        context.draw(Text(node.key).font(.caption2.weight(.semibold)), at: CGPoint(x: rect.midX, y: rect.minY + 10))
-        context.draw(Text(title).font(.caption2), at: CGPoint(x: rect.midX, y: rect.minY + 23))
-        context.draw(Text(times).font(.system(size: 8).monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: rect.midX, y: rect.minY + 35))
     }
 
-    /// "ES 9.8 h · LS 12.0 h · TF 2.2 h" for scheduled work, or "critical · ES 9.8 h · TF 0.0 h" on the critical
-    /// path (where LS equals ES), so a critical node says so in words and not by its outline alone; nil when the
-    /// projection gave no times.
-    static func timesLine(_ node: NetworkNode) -> String? {
-        guard let early = node.earliestStart, let late = node.latestStart, let float = node.totalFloat else { return nil }
-        if node.critical == true { return "critical · ES \(hoursText(early)) · TF \(hoursText(float))" }
-        return "ES \(hoursText(early)) · LS \(hoursText(late)) · TF \(hoursText(float))"
+    /// The activity-on-node box: earliest start, duration and earliest finish across the top, the key and title in the
+    /// middle, latest start, total float and latest finish across the bottom. Without schedule times the box holds the
+    /// key and title only.
+    private static func drawBox(_ node: NetworkNode, in rect: CGRect, context: inout GraphicsContext) {
+        let band = 18.0
+        let name = node.key + (node.critical == true ? " · critical" : "")
+        guard let cells = node.boxCells else {
+            context.draw(Text(fitted(name, 34)).font(.caption.weight(.semibold)), at: CGPoint(x: rect.midX, y: rect.midY - 8))
+            context.draw(Text(fitted(node.title, 36)).font(.caption2), at: CGPoint(x: rect.midX, y: rect.midY + 8))
+            return
+        }
+        var rules = Path()
+        for y in [rect.minY + band, rect.maxY - band] {
+            rules.move(to: CGPoint(x: rect.minX, y: y))
+            rules.addLine(to: CGPoint(x: rect.maxX, y: y))
+        }
+        for third in [1.0, 2.0] {
+            let x = rect.minX + rect.width * third / 3
+            rules.move(to: CGPoint(x: x, y: rect.minY))
+            rules.addLine(to: CGPoint(x: x, y: rect.minY + band))
+            rules.move(to: CGPoint(x: x, y: rect.maxY - band))
+            rules.addLine(to: CGPoint(x: x, y: rect.maxY))
+        }
+        context.stroke(rules, with: .color(.secondary.opacity(0.35)), lineWidth: 0.5)
+        for (index, cell) in cells.enumerated() {
+            let column = Double(index % 3), top = index < 3
+            let point = CGPoint(x: rect.minX + rect.width * (column + 0.5) / 3, y: top ? rect.minY + band / 2 : rect.maxY - band / 2)
+            context.draw(Text(cell.label + " ").font(.caption2).foregroundColor(.secondary) + Text(cell.value).font(.caption2.monospacedDigit()), at: point)
+        }
+        context.draw(Text(fitted(name, 34)).font(.caption.weight(.semibold)), at: CGPoint(x: rect.midX, y: rect.minY + band + 8))
+        context.draw(Text(fitted(node.title, 36)).font(.caption2), at: CGPoint(x: rect.midX, y: rect.minY + band + 21))
+    }
+
+    /// The text cut to `room` characters with an ellipsis; the full text is in the hover, the inspector and the list.
+    static func fitted(_ text: String, _ room: Int) -> String {
+        text.count > room ? String(text.prefix(room - 1)) + "…" : text
     }
 }
 

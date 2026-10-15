@@ -68,10 +68,11 @@ public enum NetworkLabels {
 }
 
 public enum NetworkLayout {
-    public static let nodeWidth = 180.0
-    public static let nodeHeight = 44.0
+    /// An activity-on-node box: ES | duration | EF over the key and title, over LS | TF | LF.
+    public static let nodeWidth = 216.0
+    public static let nodeHeight = 66.0
     public static let columnGap = 70.0
-    public static let rowGap = 22.0
+    public static let rowGap = 26.0
     public static let zoomSteps: [Double] = [0.25, 0.4, 0.6, 0.8, 1, 1.25, 1.6]
     public static let defaultZoom = 4
 

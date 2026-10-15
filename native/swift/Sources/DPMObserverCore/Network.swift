@@ -51,9 +51,14 @@ public struct NetworkNode: Identifiable, Equatable, Sendable {
     public let critical: Bool?
     public let totalFloat: Double?
     public let criticality: Double?
-    /// Earliest and latest start, in the projection's elapsed hours; nil when it gave none.
+    /// The activity-on-node times, in the projection's elapsed hours; nil when it gave none.
     public var earliestStart: Double? = nil
     public var latestStart: Double? = nil
+    public var earliestFinish: Double? = nil
+    public var latestFinish: Double? = nil
+    public var freeFloat: Double? = nil
+    /// The remaining elapsed hours the projection schedules for the work (its bar's length on the Gantt).
+    public var duration: Double? = nil
 
     public var isDecision: Bool { kind == .decision }
 
@@ -95,6 +100,28 @@ public struct NetworkEdge: Identifiable, Hashable, Sendable {
     }
 }
 
+extension NetworkNode {
+    /// The activity-on-node box's six cells in reading order, top row then bottom: ES, duration, EF, then LS, TF, LF,
+    /// each in the projection's elapsed hours as written; nil when the projection gave no times.
+    public var boxCells: [(label: String, value: String)]? {
+        guard let es = earliestStart, let ef = earliestFinish, let ls = latestStart, let lf = latestFinish, let tf = totalFloat else { return nil }
+        let number = { (hours: Double) in String(format: "%.1f", hours) }
+        return [("ES", number(es)), ("", number(duration ?? ef - es) + " h"), ("EF", number(ef)),
+                ("LS", number(ls)), ("TF", number(tf)), ("LF", number(lf))]
+    }
+}
+
+extension NetworkEdge {
+    /// The short label a connector carries: its relation, its lead or lag, and Soft. Nil for the other kinds (their line
+    /// and end mark say what they are), and for a plain finish-to-start link with no lag, the common case a network
+    /// diagram leaves unlabelled. Every relation stays in full in the text list and the inspector.
+    public var connectorLabel: String? {
+        guard kind == .temporal, let relation else { return nil }
+        if relation.kind == "FinishStart", relation.lagHours == 0, relation.policy != "Soft" { return nil }
+        return "\(relation.abbreviation)\(relation.lagHours == 0 ? "" : " " + GanttRelation.lagWords(relation.lagHours, basis: relation.lagBasis))\(relation.policy == "Soft" ? " Soft" : "")"
+    }
+}
+
 /// The network of one snapshot: every work item and decision as a node, every edge the snapshot lists.
 public struct NetworkGraph: Equatable, Sendable {
     public let nodes: [NetworkNode]
@@ -128,6 +155,10 @@ public struct NetworkGraph: Equatable, Sendable {
                                    criticality: row?.criticality)
             node.earliestStart = row?.times?.earliestStart
             node.latestStart = row?.times?.latestStart
+            node.earliestFinish = row?.times?.earliestFinish
+            node.latestFinish = row?.times?.latestFinish
+            node.freeFloat = row?.times?.freeFloat
+            node.duration = row?.span?.hours
             return node
         }
         nodes += inventory.decisions.map { decision in
@@ -170,8 +201,10 @@ public struct NetworkGraph: Equatable, Sendable {
     }
 
     /// Columns by the longest chain of temporal and blocking edges before a node (a bounded layered layout:
-    /// every such edge points rightwards), rows in plan order within a column. Context links do not place
-    /// nodes. A node on a cycle the snapshot should not contain stays in column 0. Geometry only.
+    /// every such edge points rightwards). Within a column, critical work comes first, so the critical path runs along
+    /// the top row as a network diagram draws it, then each node by the mean row of its neighbours (a few barycentre
+    /// sweeps, left to right and back), which keeps chains level and crossings few; plan order breaks ties. Context
+    /// links do not place nodes. A node on a cycle the snapshot should not contain stays in column 0. Geometry only.
     static func layout(nodes: [NetworkNode], edges: [NetworkEdge], index: [String: Int]) -> (place: [String: NetworkPlace], columns: Int, tallest: Int) {
         var indegree = [Int](repeating: 0, count: nodes.count)
         var next = [[Int]](repeating: [], count: nodes.count)
@@ -192,15 +225,36 @@ public struct NetworkGraph: Equatable, Sendable {
                 if indegree[to] == 0 { queue.append(to) }
             }
         }
-        var rowsIn: [Int: Int] = [:]
-        var place: [String: NetworkPlace] = [:]
-        for (position, node) in nodes.enumerated() {
-            let c = indegree[position] > 0 ? 0 : column[position]
-            let r = rowsIn[c, default: 0]
-            rowsIn[c] = r + 1
-            place[node.identity] = NetworkPlace(column: c, row: r)
+        let placed = nodes.indices.map { indegree[$0] > 0 ? 0 : column[$0] }
+        var neighbours = [[Int]](repeating: [], count: nodes.count)
+        for (from, targets) in next.enumerated() {
+            for to in targets {
+                neighbours[from].append(to)
+                neighbours[to].append(from)
+            }
         }
-        return (place, (rowsIn.keys.max() ?? -1) + 1, rowsIn.values.max() ?? 0)
+        var members: [Int: [Int]] = [:]
+        for position in nodes.indices { members[placed[position], default: []].append(position) }
+        var row = [Int](repeating: 0, count: nodes.count)
+        func order(_ column: Int, towards side: Int?) {
+            guard let inColumn = members[column] else { return }
+            let mean = { (position: Int) -> Double in
+                let near = neighbours[position].filter { side == nil || placed[$0] == column + side! }
+                return near.isEmpty ? Double(row[position]) : Double(near.map { row[$0] }.reduce(0, +)) / Double(near.count)
+            }
+            let ranked = inColumn.map { ($0, nodes[$0].critical == true ? 0 : 1, mean($0)) }
+                .sorted { ($0.1, $0.2, $0.0) < ($1.1, $1.2, $1.0) }
+            for (r, entry) in ranked.enumerated() { row[entry.0] = r }
+        }
+        let columns = (members.keys.max() ?? -1) + 1
+        for c in 0..<columns { order(c, towards: nil) }
+        for _ in 0..<4 {
+            for c in 1..<max(1, columns) { order(c, towards: -1) }
+            for c in stride(from: columns - 2, through: 0, by: -1) { order(c, towards: 1) }
+        }
+        var place: [String: NetworkPlace] = [:]
+        for (position, node) in nodes.enumerated() { place[node.identity] = NetworkPlace(column: placed[position], row: row[position]) }
+        return (place, columns, members.values.map(\.count).max() ?? 0)
     }
 
     public func node(_ identity: String) -> NetworkNode? { index[identity].map { nodes[$0] } }
@@ -273,8 +327,13 @@ public enum NetworkText {
         if let reason = node.blockReason { out.append("Blocked, as its owner recorded: \(reason)") }
         if !node.isDecision {
             var values: [String] = []
+            let hours = { (value: Double) in "\(String(format: "%.1f", value)) h" }
             if let critical = node.critical { values.append(critical ? "on the critical path" : "not on the critical path") }
-            if let float = node.totalFloat { values.append("total float \(String(format: "%.1f", float)) h") }
+            if let duration = node.duration { values.append("duration \(hours(duration))") }
+            if let es = node.earliestStart, let ef = node.earliestFinish { values.append("earliest start \(hours(es)), earliest finish \(hours(ef))") }
+            if let ls = node.latestStart, let lf = node.latestFinish { values.append("latest start \(hours(ls)), latest finish \(hours(lf))") }
+            if let float = node.totalFloat { values.append("total float \(hours(float))") }
+            if let free = node.freeFloat { values.append("free float \(hours(free))") }
             if let criticality = node.criticality { values.append(String(format: "criticality %.0f%% of simulations", criticality * 100)) }
             out.append(values.isEmpty ? "Schedule values: not read" : "Schedule (from the query): " + values.joined(separator: ", "))
         }
