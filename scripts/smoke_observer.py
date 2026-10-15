@@ -2424,7 +2424,12 @@ def network_page(bundle, directory):
         net = state['network']
         assert net['nodes'] == len(plan['work_items']) + len(plan['decisions']), net
         assert net['temporal'] == len(plan['dependencies']) and net['decision_blocks'] == blocks and net['context_links'] == related, net
-        assert net['listed_nodes'] == net['nodes'] and net['visible_edges'] == net['temporal'] + blocks + related, net
+        # A network diagram shows activities: by default the work packages, and the edges that touch them, are not listed.
+        packages = {w['id'] for w in plan['work_items'].values() if w.get('kind') == 'WorkPackage'}
+        touching = sum(1 for d in plan['dependencies'] if d['predecessor'] in packages or d['successor'] in packages)
+        touching += sum(1 for d in plan['decisions'].values() for t in d.get('blocks', []) + d.get('related_work', []) if t in packages)
+        assert net['packages_shown'] is False and packages, net
+        assert net['listed_nodes'] == net['nodes'] - len(packages) and net['visible_edges'] == net['temporal'] + blocks + related - touching, (net, len(packages), touching)
         assert len(run_cli(database, 'history')['entries']) == operations, 'the network wrote nothing'
         return (f"the network page opened with the cursor on the selected nested task TEST-C and listed {net['nodes']} nodes, {net['temporal']} temporal edges, "
                 f"{blocks} decision blocks and {related} context links, the exported plan's, with nothing written")

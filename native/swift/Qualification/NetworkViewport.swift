@@ -39,7 +39,8 @@ extension Context {
             let extent = fitted.1
             check(fitted.4 && extent[0] == 0 && extent[1] == 0 && extent[2] <= viewport.0 + 0.5 && extent[3] <= viewport.1 + 0.5 && (extent[2] >= viewport.0 - 0.5 || extent[3] >= viewport.1 - 0.5),
                   "Fit in a \(viewport.0) x \(viewport.1) canvas: the whole transformed extent \(extent.map { ($0 * 10).rounded() / 10 }) lies inside it and fills one axis (scale \(fitted.0))")
-            check(fitted.2 == fitted.3 && fitted.3 == 1100, "after Fit every one of the \(fitted.3) node rectangles lies inside the canvas (\(fitted.2) inside)")
+            // The work packages are hidden by default, so the canvas holds the dense graph's 1000 activities and decisions.
+            check(fitted.2 == fitted.3 && fitted.3 == 1000, "after Fit every one of the \(fitted.3) node rectangles shown lies inside the canvas (\(fitted.2) inside)")
         }
         let located = await MainActor.run { () -> (Double, Bool, String?) in
             if let task = model.networkGraph.nodes.first(where: { $0.key == "PERF-1000" }) { model.focusNode(task.identity, selecting: true) }

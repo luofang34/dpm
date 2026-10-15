@@ -98,6 +98,18 @@ extension Context {
         check(waits.contains { $0.hasPrefix("can start once TEST-B finishes") } && waits.contains { $0.hasPrefix("can start once TEST-A starts") }
               && !waits.contains { $0.contains("FinishStart") || $0.contains("StartStart") || $0.contains("awaiting event") },
               "TEST-C's unmet dependencies read as plain words: \(waits)")
+        // Work packages are summaries, not activities: by default they have no place and are not listed; 4 shows them.
+        let packages = await MainActor.run { () -> (Bool, Bool, Bool, Bool) in
+            let hidden = graph.nodes.filter { $0.kind == .package }
+            let unplaced = !hidden.isEmpty && hidden.allSatisfy { graph.place[$0.identity] == nil } && !model.networkNodes.contains { $0.kind == .package }
+            _ = self.pressNetwork(model, "4")
+            let shownGraph = model.networkGraph
+            let placed = hidden.allSatisfy { shownGraph.place[$0.identity] != nil } && model.networkNodes.contains { $0.kind == .package }
+            _ = self.pressNetwork(model, "4")
+            return (unplaced, placed, model.networkGraph.place[hidden.first?.identity ?? ""] == nil, model.network.filter.packages)
+        }
+        check(packages.0 && packages.1 && packages.2 && !packages.3, "work packages are hidden and unplaced by default, placed and listed after 4, hidden again after a second 4: \(packages)")
+
         // Progress marks follow the recorded lifecycle: none before a start, one once TEST-A is started.
         check(graph.nodes.filter { !$0.isDecision && $0.status == "Planned" }.allSatisfy { $0.progressMarks == 0 } && graph.nodes.filter(\.isDecision).allSatisfy { $0.progressMarks == nil },
               "planned work has no progress mark and decisions none at all")
