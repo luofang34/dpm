@@ -150,7 +150,8 @@ fn evidence() -> Artifact {
     Artifact {
         id: ArtifactId::new(),
         kind: ArtifactKind::TestResult,
-        uri: "file:///results/a.txt".into(),
+        // A local copy that new commands refuse; recorded history holding one must still replay.
+        uri: ".dpm/artifacts/a/run.log".into(),
         label: "A acceptance run".into(),
         metadata: std::collections::BTreeMap::new(),
         created_by: ActorId::agent("finisher"),

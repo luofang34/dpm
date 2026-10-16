@@ -268,6 +268,14 @@ def smoke(database):
         worker.call('report_progress', {'key': 'TEST-A', 'percent': 50, 'base_revision': 4, 'as_of': early}, error='invalid_request')
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
         worker.call('attach_git_head', {'key': 'TEST-A', 'asset': 'TEST-REPO', 'base_revision': 4})
+        # Evidence is a link: both adapters refuse a copy kept in the store directory alike.
+        copied = {'id': str(uuid.uuid4()), 'kind': 'TestResult', 'uri': '.dpm/artifacts/run/screenshot.png', 'label': 'Run',
+                  'metadata': {}, 'created_by': {'kind': 'Agent', 'name': 'parity'}, 'created_at': datetime.now(timezone.utc).isoformat()}
+        copy_file = Path(database).parent / 'copied-evidence.json'
+        copy_file.write_text(json.dumps(copied))
+        remote = worker.call('add_artifact', {'key': 'TEST-A', 'artifact': copied, 'base_revision': 5}, error='invalid_command')
+        local = run_cli(database, 'artifact', 'TEST-A', str(copy_file), '--actor', 'agent:parity', error='invalid_command')['error']
+        assert remote['message'] == local['message'] and 'evidence is a link' in local['message'], (remote, local)
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')
         assert worker.call('next_work', {})['data']['candidates'] == []
         worker.call('unblock_work', {'key': 'TEST-A', 'base_revision': 6})

@@ -69,7 +69,7 @@ impl McpServer {
         Ok(
             json!({"protocolVersion":"2025-11-25","capabilities":{"tools":{"listChanged":false}},
             "serverInfo":{"name":"dpm","version":env!("CARGO_PKG_VERSION")},
-            "instructions":format!("Configured actor: {}. Query next_work and explain_work, then mutate using the observed base_revision. Verification requires a distinct configured actor.",self.actor)}),
+            "instructions":format!("Configured actor: {}. Query next_work and explain_work, then mutate using the observed base_revision. Verification requires a distinct configured actor. Evidence is a link (attach_git_head, or add_artifact with a git:/https: URI); never copy logs, screenshots or binaries into .dpm.",self.actor)}),
         )
     }
     fn call_blocking(&mut self, params: Value) -> Result<Value, (i64, String)> {

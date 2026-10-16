@@ -73,7 +73,7 @@ fn executed() -> Value {
     let worker = json!({"kind": "Agent", "name": "worker"});
     let reviewer = json!({"kind": "Human", "name": "reviewer"});
     let artifact = json!({
-        "id": derived_id(1, 99), "kind": "TestResult", "uri": "file:report.txt", "label": "Report",
+        "id": derived_id(1, 99), "kind": "TestResult", "uri": "https://ci.example.com/report", "label": "Report",
         "metadata": {"purpose": "evidence"}, "created_by": worker, "created_at": at(3)
     });
     let link = json!({

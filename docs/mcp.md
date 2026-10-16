@@ -184,7 +184,17 @@ work is refused (reject it first), as are unowned work, `to` equal to the owner 
 `to` (`invalid_request`). No actor that has held the work, now or before a handoff or release, may
 verify, reject, revalidate its basis or waive its edges, and no author of evidence attached to the
 task may verify or reject it. Only a task's current owner attaches evidence to it (`add_artifact`,
-`attach_git_head`); unclaimed tasks are refused. A recorded rejection or revalidation stays valid
+`attach_git_head`); unclaimed tasks are refused.
+
+Evidence is a link to where it lives, never a copy: the store directory holds plan state only.
+An artifact `uri` uses one of the schemes `git:` (a commit, or `git:<revision>:<path>` for a
+committed file), `https:`/`http:` (pull request, CI run, hosted report), `repo:` (a text file in
+the repository), `urn:` or `doi:`. A path without a scheme, `file:` and `data:` URIs, paths that
+leave the repository or lie in `.dpm`, and screenshots, recordings, binaries, archives and
+databases committed as evidence are `invalid_request`, as are a `uri` over 2048 bytes, a `label`
+over 500 bytes and more than 32 metadata entries or any over 1024 bytes. Recorded artifacts are
+kept as they are. Commit the change and use `attach_git_head`, or upload a screenshot or log
+where it is hosted (CI artifacts, the pull request) and link that page. A recorded rejection or revalidation stays valid
 when its reviewer later takes the work over: independence is judged against the holders at the
 review time. Plan changes cannot change owners, handoffs or releases.
 See [the decision log](architecture.md#release-and-handoff).
@@ -843,7 +853,8 @@ The workflow below applies to an authorized execution workspace; tool availabili
    `at` (likewise for submit_work and verify_work), never earlier than the claim; see
    [execution events](#execution-events-and-elapsed-lag).
 5. Perform the work and acceptance checks. Use report_progress for intermediate execution reports;
-   use add_artifact or attach_git_head to record evidence while you own the task.
+   use add_artifact or attach_git_head to record evidence while you own the task. Evidence is
+   a link (commit, pull request, CI run); never copy logs, screenshots or binaries into `.dpm`.
 6. Call submit_work with an evidence summary once `explain_work.transitions.submit.ready` holds.
    Another configured actor verifies the result.
 7. Call report_blocker when blocked; do not silently ignore dependencies or change lifecycle fields.

@@ -114,7 +114,10 @@ const NAMES: &[(&str, &str)] = &[
         "Report owned task execution percent; 100% does not verify the result",
     ),
     ("verify_work", "Verify another actor's submitted result"),
-    ("add_artifact", "Attach evidence attributed to this actor"),
+    (
+        "add_artifact",
+        "Attach a link to evidence attributed to this actor: a commit, hosted page or committed text file, never a copied file or screenshot",
+    ),
     (
         "attach_git_head",
         "Attach the current repository HEAD as immutable evidence",

@@ -200,7 +200,7 @@ def lifecycle_parity(directory, reviewer, worker, heir):
         twins.mutate(heir, 'report_blocker', {**task, 'blocker': 'Fixture missing'}, 'block', 'TEST-A', 'Fixture missing')
         twins.mutate(heir, 'unblock_work', task, 'unblock', 'TEST-A')
         kind, name = heir.split(':')
-        artifact = {'id': '5f0f7c1e-8d7a-4b9e-9a51-3f3c2b1a0d11', 'kind': 'TestResult', 'uri': 'file:report.txt',
+        artifact = {'id': '5f0f7c1e-8d7a-4b9e-9a51-3f3c2b1a0d11', 'kind': 'TestResult', 'uri': 'https://ci.example.com/report',
                     'label': 'Report', 'metadata': {}, 'created_by': {'kind': kind.capitalize(), 'name': name},
                     'created_at': '2026-09-01T00:00:00Z'}
         path = directory / 'parity-artifact.json'

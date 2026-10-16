@@ -3,6 +3,18 @@ use chrono::{DateTime, Utc};
 use dpm_model::{ActorId, Artifact, DecisionStatus, OperationId, Plan, WorkItem, WorkItemId};
 use lifecycle::{block, claim, report_progress, start, submit, unblock, verify};
 
+/// Admit a newly submitted command under rules that bind new commands only.
+///
+/// Recorded history is replayed through [`apply_command`] and must keep replaying exactly, so a
+/// rule introduced after operations were recorded is enforced here, where a client submits a
+/// command, and never during replay.
+pub fn admit_command(command: &Command) -> Result<(), EngineError> {
+    match command {
+        Command::AttachArtifact { artifact, .. } => evidence::check(artifact),
+        _ => Ok(()),
+    }
+}
+
 /// Apply one validated semantic command atomically and return its audit operation.
 ///
 /// Errors leave every field, including the revision, unchanged. Revisions wrap at `u64::MAX`.
@@ -269,6 +281,7 @@ fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
 }
 
 mod choice;
+mod evidence;
 mod lifecycle;
 mod occurrence;
 mod ownership;

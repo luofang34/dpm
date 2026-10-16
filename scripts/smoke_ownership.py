@@ -25,7 +25,7 @@ def same_refusal(agent, tool, arguments, database, command, code='invalid_comman
 def evidence(directory, author):
     """An artifact attributed to `author`, as the MCP argument and as a CLI input file."""
     kind, name = author.split(':')
-    artifact = {'id': str(uuid.uuid4()), 'kind': 'TestResult', 'uri': 'file:report.txt', 'label': 'Report',
+    artifact = {'id': str(uuid.uuid4()), 'kind': 'TestResult', 'uri': 'https://ci.example.com/report', 'label': 'Report',
                 'metadata': {}, 'created_by': {'kind': kind.capitalize(), 'name': name},
                 'created_at': '2026-09-01T00:00:00Z'}
     path = directory / f"{artifact['id']}.json"

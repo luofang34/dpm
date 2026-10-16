@@ -199,7 +199,9 @@ pub(crate) enum Commands {
         #[arg(long)]
         asset: Option<String>,
     },
-    /// Attach an Artifact JSON object through the shared command API.
+    /// Attach an Artifact JSON object through the shared command API. Its URI links the evidence
+    /// (git:, https:, repo:, urn:, doi:); copies in .dpm, file: paths, screenshots and binaries are
+    /// rejected.
     Artifact {
         key: String,
         file: PathBuf,

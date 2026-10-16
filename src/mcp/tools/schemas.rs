@@ -9,7 +9,8 @@ pub(super) fn artifact() -> Value {
     "properties":{
         "id":{"type":"string","format":"uuid"},
         "kind":{"type":"string","enum":["GitCommit","PullRequest","File","Build","TestResult","Datasheet","Quote","PurchaseOrder","Cad","Photo","Other"]},
-        "uri":{"type":"string","minLength":1},"label":{"type":"string","minLength":1},
+        "uri":{"type":"string","minLength":1,
+            "description":"Where the evidence lives, never a copy of it: git: (commit or git:<rev>:<path>), https:/http: (pull request, CI run, hosted report), repo: (committed text file), urn: or doi:. Paths in .dpm, local file: paths, screenshots and binaries are rejected"},"label":{"type":"string","minLength":1},
         "metadata":{"type":"object","additionalProperties":{"type":"string"}},
         "created_by":{"type":"object","required":["kind","name"],"additionalProperties":false,
             "properties":{"kind":{"type":"string","enum":["Human","Agent","Service"]},"name":{"type":"string","minLength":1}}},
