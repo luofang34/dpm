@@ -1,5 +1,5 @@
 // NETWORK-PERT-01: the network reads as an activity-on-node (PERT/CPM) diagram on the 9-node FX. Each scheduled box
-// carries the projection's own ES, the task's PERT te±σ and EF over LS, TF and LF; critical work leads every column, so the
+// carries the projection's own ES, the task's PERT te±σ (the remaining duration once started) and EF over LS, TF and LF; critical work leads every column, so the
 // critical chain TEST-A -> TEST-B -> TEST-C runs along the top row; every connector is drawn with horizontal and vertical
 // segments only, leaving and entering the ends its relation names; a plain finish-to-start link without lag is unlabelled while every other link names its relation. The
 // text list says every box value in words, and what holds the selected work back reads in plain words. Laid out by
@@ -149,6 +149,11 @@ extension Context {
         _ = try await modelExpect(model, "TEST-A to read as started", 30) { $0.inventory.items.contains { $0.key == "TEST-A" && $0.status == "InProgress" } }
         let started = await MainActor.run { model.networkGraph.nodes.first { $0.key == "TEST-A" } }
         check(started?.progressMarks == 1, "a started task carries one progress diagonal: \(String(describing: started?.status)) -> \(String(describing: started?.progressMarks))")
+        // Its box is scheduled by what remains: the duration cell is the remaining hours, labelled rem, so ES + it = EF.
+        let cell = started?.boxCells?[1]
+        let adds = started.map { n in abs((n.earliestStart ?? 0) + (n.duration ?? -1) - (n.earliestFinish ?? 0)) < 0.05 } ?? false
+        check(cell?.label == "rem" && cell?.value == started.map { String(format: "%.1f h", $0.duration ?? -1) } && adds && started?.pertExpected != nil,
+              "a started task's box shows its remaining duration, so ES + duration = EF: \(String(describing: started?.boxCells))")
         await closeGantt(model)
     }
 }

@@ -116,13 +116,18 @@ extension NetworkNode {
     }
 
     /// The activity-on-node box's six cells in reading order, top row then bottom: ES, duration, EF, then LS, TF, LF, each
-    /// in the projection's elapsed hours as written; an estimated task's duration cell is its classical PERT te±σ, as a
-    /// PERT network labels an activity. Nil when the projection gave no times.
+    /// in the projection's elapsed hours as written. Before a task starts, an estimated task's duration cell is its
+    /// classical PERT te±σ, as a PERT network labels an activity; from its start on it is the remaining duration,
+    /// labelled rem, the hours ES and EF are measured with. Nil when the projection gave no times.
     public var boxCells: [(label: String, value: String)]? {
         guard let es = earliestStart, let ef = earliestFinish, let ls = latestStart, let lf = latestFinish, let tf = totalFloat else { return nil }
         let number = { (hours: Double) in String(format: "%.1f", hours) }
-        let spread = pertExpected.map { te in "\(number(te))±\(number(pertSigma ?? 0))" } ?? number(duration ?? ef - es) + " h"
-        return [("ES", number(es)), ("", spread), ("EF", number(ef)),
+        let remaining = number(duration ?? ef - es) + " h"
+        // Started work is scheduled by what remains, so its cell is the remaining duration and ES + it = EF still holds.
+        let middle: (label: String, value: String) = progressMarks == 0
+            ? ("", pertExpected.map { te in "\(number(te))±\(number(pertSigma ?? 0))" } ?? remaining)
+            : ("rem", remaining)
+        return [("ES", number(es)), middle, ("EF", number(ef)),
                 ("LS", number(ls)), ("TF", number(tf)), ("LF", number(lf))]
     }
 }
