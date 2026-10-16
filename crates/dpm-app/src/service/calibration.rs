@@ -45,6 +45,7 @@ impl Application {
                     horizon_hours,
                 )?,
                 lineage_id,
+                stray_store_content: self.stray_store_content_blocking(),
             },
         })
     }

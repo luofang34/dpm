@@ -26,7 +26,9 @@ pub use tracking::ExternalLinkInput;
 
 #[cfg(feature = "sqlite")]
 pub use project::initialize_project_blocking;
-pub use project::{ProjectError, ProjectLocation, ProjectSource, open_workspace_blocking};
+pub use project::{
+    ProjectError, ProjectLocation, ProjectSource, StrayStoreContent, open_workspace_blocking,
+};
 
 pub use authoring::plan_schema;
 pub use dpm_interchange::ExistingMatch;

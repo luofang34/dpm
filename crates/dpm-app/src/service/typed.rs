@@ -39,6 +39,10 @@ pub struct StatusView {
     pub summary: StatusSummary,
     /// Lineage of the observed revision.
     pub lineage_id: Option<LineageId>,
+    /// Files left in the project's store directory that are not project state; absent when there
+    /// are none or no project directory was opened.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stray_store_content: Option<crate::StrayStoreContent>,
 }
 
 /// `show`: one work item with its projected progress.
@@ -97,8 +101,15 @@ impl Application {
             Ok(StatusView {
                 summary: dpm_engine::status_at_horizon(plan, probabilistic, now, horizon_hours)?,
                 lineage_id,
+                stray_store_content: self.stray_store_content_blocking(),
             })
         })
+    }
+    /// What the opened project's store directory holds besides project state.
+    pub(crate) fn stray_store_content_blocking(&self) -> Option<crate::StrayStoreContent> {
+        self.opened_location
+            .as_ref()
+            .and_then(crate::ProjectLocation::stray_store_content_blocking)
     }
     /// The remaining-work schedule projection and, when `probabilistic`, its seeded uncertainty.
     pub fn schedule_blocking(

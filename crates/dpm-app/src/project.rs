@@ -9,10 +9,12 @@ use std::{
 mod error;
 #[cfg(feature = "sqlite")]
 mod initialization;
+mod store_directory;
 pub use error::ProjectError;
 use error::io_error;
 #[cfg(feature = "sqlite")]
 pub use initialization::initialize_project_blocking;
+pub use store_directory::StrayStoreContent;
 
 /// An explicitly configured source for a project.
 #[derive(Debug, Clone, PartialEq, Eq)]
