@@ -2,6 +2,7 @@
 """Exercise project discovery, file previews and normal SQLite projects through real adapters."""
 import json
 import os
+import shutil
 import sqlite3
 import subprocess
 import tempfile
@@ -61,6 +62,15 @@ def normal(directory):
     actor = Agent(None, 'agent:discovery', cwd=child)
     try:
         assert actor.call('project_status', {'probabilistic': False})['data'] == cli(child, 'status', '--no-simulation')
+        assert 'stray_store_content' not in cli(child, 'status', '--no-simulation')
+        # Files left in the store directory are named alike through both adapters, then cleared.
+        (root / '.dpm/artifacts/run').mkdir(parents=True)
+        (root / '.dpm/artifacts/run/screenshot.png').write_bytes(bytes(1000))
+        stray = cli(child, 'status', '--no-simulation')
+        assert actor.call('project_status', {'probabilistic': False})['data'] == stray
+        assert stray['stray_store_content']['entries'] == ['artifacts'] and stray['stray_store_content']['bytes'] == 1000, stray
+        assert 'link' in stray['stray_store_content']['advice']
+        shutil.rmtree(root / '.dpm/artifacts')
         actor.call('claim_work', {'key': 'TEST-A', 'base_revision': 0})
         actor.call('start_work', {'key': 'TEST-A', 'base_revision': 1})
         cli(child, 'submit', 'TEST-A', '--actor', 'agent:discovery')

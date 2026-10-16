@@ -833,6 +833,9 @@ The workflow below applies to an authorized execution workspace; tool availabili
 
 1. Call project_status and next_work. Supply actual capabilities; an empty capability set is the
    unfiltered operator view, not a claim that the actor has every skill. Default limit is 5.
+   `project_status.stray_store_content` (absent when clean) names the top-level entries of the
+   project's `.dpm` directory that are not project state, with their combined `bytes` (a lower
+   bound unless `complete`) and `advice`; move or delete what you left there.
 2. Call explain_work. Read `work.contract.objective`, `work.contract.instructions`, `work.contract.acceptance`, predecessor
    evidence and unresolved gates. Steps describe the procedure, not permission to execute it.
 3. Call claim_work using the observed revision. Refresh after a revision_conflict. A claim only
