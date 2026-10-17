@@ -18,6 +18,10 @@ pub struct ActualSpan {
     pub start_hours: Option<f64>,
     /// `finished_at` in elapsed hours from the clock reading; negative in the past.
     pub finish_hours: Option<f64>,
+    /// On the as-built critical path: reached along driving recorded relations from the last
+    /// recorded finish. Independent of the remaining schedule's criticality.
+    #[serde(default)]
+    pub critical: bool,
 }
 
 /// Recorded start and finish of every work item with at least one, measured from the timeline's
@@ -55,6 +59,7 @@ pub fn actual_spans(plan: &Plan, timeline: &Timeline) -> BTreeMap<WorkItemId, Ac
                         finished_at,
                         start_hours: started_at.map(hours),
                         finish_hours: finished_at.map(hours),
+                        critical: false,
                     },
                 )
             })

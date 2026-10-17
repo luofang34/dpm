@@ -1,0 +1,261 @@
+{
+  "workspace": {
+    "id": "0000000e-0000-4000-8000-000000000001",
+    "name": "Recorded history test"
+  },
+  "revision": 0,
+  "projects": {
+    "0000000c-0000-4000-8000-000000000001": {
+      "id": "0000000c-0000-4000-8000-000000000001",
+      "key": "REC",
+      "parent": null,
+      "title": "Synthetic recorded graph",
+      "objective": "Exercise views of work finished long ago."
+    }
+  },
+  "work_items": {
+    "0000000b-0000-4000-8000-000000000001": {
+      "id": "0000000b-0000-4000-8000-000000000001",
+      "key": "REC-A",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Survey",
+      "contract": {
+        "objective": "Survey for the recorded test graph.",
+        "acceptance": [
+          {
+            "text": "Survey result passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "testing"
+        ],
+        "requirement_ids": [],
+        "assets": []
+      },
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P1",
+        "estimate": {
+          "optimistic_hours": 40.0,
+          "likely_hours": 48.0,
+          "pessimistic_hours": 60.0
+        }
+      },
+      "order": [
+        100
+      ]
+    },
+    "0000000b-0000-4000-8000-000000000002": {
+      "id": "0000000b-0000-4000-8000-000000000002",
+      "key": "REC-B",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Design",
+      "contract": {
+        "objective": "Design for the recorded test graph.",
+        "acceptance": [
+          {
+            "text": "Design result passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "testing"
+        ],
+        "requirement_ids": [],
+        "assets": []
+      },
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P1",
+        "estimate": {
+          "optimistic_hours": 60.0,
+          "likely_hours": 80.0,
+          "pessimistic_hours": 120.0
+        }
+      },
+      "order": [
+        200
+      ]
+    },
+    "0000000b-0000-4000-8000-000000000003": {
+      "id": "0000000b-0000-4000-8000-000000000003",
+      "key": "REC-C",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Procure",
+      "contract": {
+        "objective": "Procure for the recorded test graph.",
+        "acceptance": [
+          {
+            "text": "Procure result passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "testing"
+        ],
+        "requirement_ids": [],
+        "assets": []
+      },
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P1",
+        "estimate": {
+          "optimistic_hours": 20.0,
+          "likely_hours": 24.0,
+          "pessimistic_hours": 40.0
+        }
+      },
+      "order": [
+        300
+      ]
+    },
+    "0000000b-0000-4000-8000-000000000004": {
+      "id": "0000000b-0000-4000-8000-000000000004",
+      "key": "REC-D",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Assemble",
+      "contract": {
+        "objective": "Assemble for the recorded test graph.",
+        "acceptance": [
+          {
+            "text": "Assemble result passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "testing"
+        ],
+        "requirement_ids": [],
+        "assets": []
+      },
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P1",
+        "estimate": {
+          "optimistic_hours": 80.0,
+          "likely_hours": 96.0,
+          "pessimistic_hours": 140.0
+        }
+      },
+      "order": [
+        400
+      ]
+    },
+    "0000000b-0000-4000-8000-000000000005": {
+      "id": "0000000b-0000-4000-8000-000000000005",
+      "key": "REC-E",
+      "project": "0000000c-0000-4000-8000-000000000001",
+      "parent": null,
+      "kind": "Task",
+      "title": "Document",
+      "contract": {
+        "objective": "Document for the recorded test graph.",
+        "acceptance": [
+          {
+            "text": "Document result passes its independent check."
+          }
+        ],
+        "capabilities": [
+          "testing"
+        ],
+        "requirement_ids": [],
+        "assets": []
+      },
+      "execution": {
+        "status": "Planned",
+        "reported_progress_percent": 0,
+        "artifact_ids": [],
+        "owner": null,
+        "block_reason": null
+      },
+      "schedule": {
+        "priority": "P1",
+        "estimate": {
+          "optimistic_hours": 10.0,
+          "likely_hours": 16.0,
+          "pessimistic_hours": 30.0
+        }
+      },
+      "order": [
+        500
+      ]
+    }
+  },
+  "requirements": {},
+  "artifacts": {},
+  "decisions": {},
+  "risks": {},
+  "dependencies": [
+    {
+      "id": "0000000d-0000-4000-8000-000000000001",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "0000000b-0000-4000-8000-000000000001",
+      "successor": "0000000b-0000-4000-8000-000000000002"
+    },
+    {
+      "id": "0000000d-0000-4000-8000-000000000002",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "0000000b-0000-4000-8000-000000000001",
+      "successor": "0000000b-0000-4000-8000-000000000003"
+    },
+    {
+      "id": "0000000d-0000-4000-8000-000000000003",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "0000000b-0000-4000-8000-000000000002",
+      "successor": "0000000b-0000-4000-8000-000000000004"
+    },
+    {
+      "id": "0000000d-0000-4000-8000-000000000004",
+      "kind": "FinishStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "0000000b-0000-4000-8000-000000000003",
+      "successor": "0000000b-0000-4000-8000-000000000004"
+    },
+    {
+      "id": "0000000d-0000-4000-8000-000000000005",
+      "kind": "StartStart",
+      "lag_hours": 0.0,
+      "policy": "Hard",
+      "predecessor": "0000000b-0000-4000-8000-000000000001",
+      "successor": "0000000b-0000-4000-8000-000000000005"
+    }
+  ],
+  "format_version": 3,
+  "assets": {}
+}
