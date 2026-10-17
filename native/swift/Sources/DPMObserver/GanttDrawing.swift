@@ -218,21 +218,24 @@ enum GanttDrawing {
             }
         }
 
-        // The axis: elapsed hours from the instant the projection was evaluated at.
+        // The axis: calendar dates, placed by adding elapsed hours to the instant the projection was evaluated at.
         let scale = geometry.pointsPerHour
-        let steps: [Double] = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
-        let step = steps.first { $0 * scale >= 64 } ?? 50000
-        var tick = (geometry.offsetX / scale / step).rounded(.down) * step
-        while tick * scale - geometry.offsetX < size.width {
-            let x = tick * scale - geometry.offsetX
-            if x >= 0 {
-                var line = Path()
-                line.move(to: CGPoint(x: x, y: GanttGeometry.axis - 6))
-                line.addLine(to: CGPoint(x: x, y: size.height))
-                context.stroke(line, with: .color(Palette.grid), lineWidth: 0.5)
-                context.draw(Text(tick == tick.rounded() ? "\(Int(tick)) h" : hoursText(tick)).font(.caption2.monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: x + 3, y: 8), anchor: .leading)
+        let fromHours = geometry.offsetX / scale, toHours = (geometry.offsetX + Double(size.width)) / scale
+        let year = GanttCalendarAxis.context(origin: schedule.evaluatedAt, scale: scale, atHours: fromHours)
+        let reserved = year.map { Double($0.count) * GanttCalendarAxis.characterWidth + GanttCalendarAxis.labelGap } ?? 0
+        for tick in GanttCalendarAxis.ticks(origin: schedule.evaluatedAt, scale: scale, fromHours: fromHours, toHours: toHours) {
+            let x = tick.hours * scale - geometry.offsetX
+            var line = Path()
+            line.move(to: CGPoint(x: x, y: GanttGeometry.axis - 6))
+            line.addLine(to: CGPoint(x: x, y: size.height))
+            context.stroke(line, with: .color(Palette.grid), lineWidth: 0.5)
+            // The year at the left edge owns its room; a tick label there would overprint it.
+            if x >= reserved {
+                context.draw(Text(tick.label).font(.caption2.monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: x + 3, y: 8), anchor: .leading)
             }
-            tick += step
+        }
+        if let year {
+            context.draw(Text(year).font(.caption2.weight(.semibold).monospacedDigit()).foregroundColor(.secondary), at: CGPoint(x: 3, y: 8), anchor: .leading)
         }
         var origin = Path()
         origin.addRect(CGRect(x: 0, y: GanttGeometry.axis - 1, width: size.width, height: 1))
@@ -241,7 +244,10 @@ enum GanttDrawing {
         // The finish forecast, as the query gives it: the deterministic finish and p50, p80, p95.
         // The markers are lines; their texts share one line under the time axis labels, and a text that would
         // touch one already placed is left off the chart (the facts stay in the Schedule basis and Detail).
-        var markers: [(hours: Double, text: String, dash: [CGFloat])] = [(schedule.projectFinishHours, "finish \(hoursText(schedule.projectFinishHours))", [])]
+        // A plan with nothing outstanding has no remaining finish: its marker is the last recorded finish.
+        var markers: [(hours: Double, text: String, dash: [CGFloat])] = GanttLayout.hasRemainingWork(schedule)
+            ? [(schedule.projectFinishHours, "finish \(hoursText(schedule.projectFinishHours))", [])]
+            : GanttLayout.recordedFinishHours(schedule).map { [($0, "finished", [])] } ?? []
         // With recorded history to its left, hour 0 is the clock reading: the boundary between what happened and what remains.
         if GanttLayout.historyHours(schedule) < 0 { markers.insert((0, "now", [1, 2]), at: 0) }
         if let spread = schedule.uncertainty {
