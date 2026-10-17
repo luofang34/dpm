@@ -127,6 +127,7 @@ struct Qualify {
             ("network-hover-locate-labels", context.networkHoverLocateAndLabels),
             ("network-skip-edge-routes", context.networkSkipEdgeIsRouted),
             ("network-pert", context.networkReadsAsPert),
+            ("network-zoom", context.networkZoomsLikeACanvas),
             ("gantt-fit-whole", context.ganttFitIsWhole),
             ("gantt-locate-ancestors", context.ganttLocateRevealsOnlyAncestors),
             ("gantt-relation-labels", context.ganttRelationLabelsDoNotOverprint),

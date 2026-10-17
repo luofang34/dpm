@@ -154,49 +154,32 @@ extension ObserverModel {
         case .gate: walk("decision gate", networkWalk(.gate))
         case .blocker: walk("blocker", networkWalk(.blocker))
         case .zoomIn:
-            networkOperation { state in
-                if let fitted = state.fitScale {
-                    state.zoomLevel = NetworkLayout.zoomSteps.firstIndex { $0 > fitted + 1e-9 } ?? NetworkLayout.zoomSteps.count - 1
-                    state.fitScale = nil
-                } else {
-                    state.zoomLevel = min(NetworkLayout.zoomSteps.count - 1, state.zoomLevel + 1)
-                }
-            }
-            revealNetworkFocus()
+            // About the canvas centre, like the zoom out: what is in the middle stays there. Locate brings the cursor back.
+            stepNetworkZoom(in: true)
         case .zoomOut:
-            let graph = networkGraph
-            networkOperation { state in
-                if let fitted = state.fitScale {
-                    state.zoomLevel = NetworkLayout.zoomSteps.lastIndex { $0 < fitted - 1e-9 } ?? 0
-                    // Below the smallest step the fitted scale stays: zooming out never loses the whole-graph view.
-                    if NetworkLayout.zoomSteps[state.zoomLevel] < fitted { state.fitScale = nil }
-                } else {
-                    state.zoomLevel = max(0, state.zoomLevel - 1)
-                }
-                let most = NetworkLayout.maxPan(graph, scale: state.scale, viewport: (state.viewportWidth, state.viewportHeight))
-                state.panX = min(most.x, state.panX)
-                state.panY = min(most.y, state.panY)
-            }
+            stepNetworkZoom(in: false)
         case .fit:
-            // The scale at which the whole graph, margins included, is inside the canvas on both axes, from its top
-            // left: derived from the canvas and the extent, so a dense overview fits as well as a small plan.
-            let scale = NetworkLayout.fitScale(networkGraph, viewport: (network.viewportWidth, network.viewportHeight))
+            // The scale at which the whole graph, margins included, is inside the canvas on both axes, centred: derived
+            // from the canvas and the extent, so a dense overview fits as well as a small plan.
+            let graph = networkGraph
+            let scale = NetworkLayout.fitScale(graph, viewport: (network.viewportWidth, network.viewportHeight))
             networkOperation { state in
                 if let scale {
-                    state.fitScale = scale
-                    state.zoomLevel = NetworkLayout.zoomSteps.lastIndex { $0 <= scale } ?? 0
+                    state.scale = scale
+                    state.fitted = true
                 }
-                state.panX = 0
-                state.panY = 0
+                let bounds = NetworkLayout.panBounds(graph, scale: state.scale, viewport: (state.viewportWidth, state.viewportHeight))
+                (state.panX, state.panY) = NetworkLayout.clampPan((0, 0), within: bounds)
             }
         case .locate:
             locateSelectedNode()
         case .resetView:
+            let graph = networkGraph
             networkOperation { state in
-                state.zoomLevel = NetworkLayout.defaultZoom
-                state.fitScale = nil
-                state.panX = 0
-                state.panY = 0
+                state.scale = NetworkLayout.defaultScale
+                state.fitted = false
+                let bounds = NetworkLayout.panBounds(graph, scale: state.scale, viewport: (state.viewportWidth, state.viewportHeight))
+                (state.panX, state.panY) = NetworkLayout.clampPan((0, 0), within: bounds)
             }
             revealNetworkFocus()
         case .panLeft: panNetwork(dx: -Self.networkPanStep, dy: 0)
@@ -317,9 +300,9 @@ extension ObserverModel {
         focusTarget = Self.element(forNode: node.key)
         networkOperation { state in
             // From an overview too small to read, Locate returns to the default scale.
-            if state.scale < NetworkLayout.scale(NetworkLayout.defaultZoom - 1) {
-                state.zoomLevel = NetworkLayout.defaultZoom
-                state.fitScale = nil
+            if state.scale < NetworkLayout.readableScale {
+                state.scale = NetworkLayout.defaultScale
+                state.fitted = false
             }
             // The text list brings the node's row back as well, even when the cursor was already on it.
             state.listReveal = state.listReveal &+ 1
@@ -329,7 +312,7 @@ extension ObserverModel {
 
     // MARK: View operations
 
-    private func networkOperation(_ change: (inout NetworkViewState) -> Void) {
+    func networkOperation(_ change: (inout NetworkViewState) -> Void) {
         var state = network
         state.locateNote = nil
         change(&state)
@@ -344,13 +327,11 @@ extension ObserverModel {
         return NetworkLayout.hit(networkGraph, shown: networkNodes, at: (point.x, point.y), pan: (state.panX, state.panY), scale: state.scale)
     }
 
-    /// Pan by points, bounded on both sides by the actual canvas and the scaled content, so the graph can never be lost.
+    /// Pan by points within the pan bounds of the actual canvas and the scaled content, so the graph can never be lost.
     public func panNetwork(dx: Double, dy: Double) {
-        let graph = networkGraph
+        let bounds = networkPanBounds(scale: network.scale)
         networkOperation { state in
-            let most = NetworkLayout.maxPan(graph, scale: state.scale, viewport: (state.viewportWidth, state.viewportHeight))
-            state.panX = max(0, min(most.x, state.panX + dx))
-            state.panY = max(0, min(most.y, state.panY + dy))
+            (state.panX, state.panY) = NetworkLayout.clampPan((state.panX + dx, state.panY + dy), within: bounds)
         }
     }
 
@@ -363,9 +344,8 @@ extension ObserverModel {
         state.viewportHeight = height
         // The pointer's resting point was measured in the old canvas: the inspection ends until it moves again.
         state.hoverPoint = nil
-        let most = NetworkLayout.maxPan(networkGraph, scale: state.scale, viewport: (width, height))
-        state.panX = max(0, min(most.x, state.panX))
-        state.panY = max(0, min(most.y, state.panY))
+        let bounds = NetworkLayout.panBounds(networkGraph, scale: state.scale, viewport: (width, height))
+        (state.panX, state.panY) = NetworkLayout.clampPan((state.panX, state.panY), within: bounds)
         network = state
         if first { revealNetworkFocus() }
     }
@@ -379,9 +359,7 @@ extension ObserverModel {
         var x = network.panX, y = network.panY
         if left < x { x = left } else if right > x + network.viewportWidth { x = right - network.viewportWidth }
         if top < y { y = top } else if bottom > y + network.viewportHeight { y = bottom - network.viewportHeight }
-        let most = NetworkLayout.maxPan(networkGraph, scale: network.scale, viewport: (network.viewportWidth, network.viewportHeight))
-        x = max(0, min(most.x, x))
-        y = max(0, min(most.y, y))
+        (x, y) = NetworkLayout.clampPan((x, y), within: networkPanBounds(scale: network.scale))
         if x != network.panX || y != network.panY {
             network.panX = x
             network.panY = y

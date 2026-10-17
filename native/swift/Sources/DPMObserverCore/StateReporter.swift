@@ -302,12 +302,13 @@ public final class StateReporter {
             "walked": orNull(view.walked),
             "explain_read": model.networkReport != nil,
             "filter": ["text": view.filter.text, "kinds": view.filter.kinds.map(\.rawValue).sorted(), "editing": view.editingFilter] as [String: Any],
-            "zoom_level": view.zoomLevel,
             "pan": [view.panX, view.panY],
             "viewport": [view.viewportWidth, view.viewportHeight],
-            "max_pan": { let most = NetworkLayout.maxPan(graph, scale: view.scale, viewport: (view.viewportWidth, view.viewportHeight)); return [most.x, most.y] }(),
+            // The pan range at this scale: equal ends on an axis where the graph is smaller than the canvas and centred.
+            "min_pan": { let b = NetworkLayout.panBounds(graph, scale: view.scale, viewport: (view.viewportWidth, view.viewportHeight)); return [b.x.lowerBound, b.y.lowerBound] }(),
+            "max_pan": { let b = NetworkLayout.panBounds(graph, scale: view.scale, viewport: (view.viewportWidth, view.viewportHeight)); return [b.x.upperBound, b.y.upperBound] }(),
             "scale": view.scale,
-            "fitted": view.fitScale != nil,
+            "fitted": view.fitted,
             // The whole graph's extent as drawn now, from the canvas's top left (pan applied): Fit is whole when this lies
             // inside [0, 0, viewport].
             "extent_drawn": { () -> [Double] in let size = NetworkLayout.extent(graph); return [-view.panX, -view.panY, size.width * view.scale, size.height * view.scale] }(),

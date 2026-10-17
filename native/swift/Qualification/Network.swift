@@ -178,13 +178,16 @@ extension Context {
               "clearing the filter presents every node but the \(cleared.2) work packages, with the edges between them; 4 presents every node and edge again: \(cleared)")
         await compare("cleared")
         // Zoom and pan change only the view.
-        await MainActor.run {
+        let (zoomed, view) = await MainActor.run { () -> (NetworkViewState, NetworkViewState) in
             for key in ["=", "=", "-"] { _ = self.pressNetwork(model, key) }
+            let zoomed = model.network
             _ = self.pressNetwork(model, KeyDecoder.right, shift: true)
             _ = self.pressNetwork(model, KeyDecoder.down, shift: true)
+            return (zoomed, model.network)
         }
-        let view = await MainActor.run { model.network }
-        check(view.zoomLevel == NetworkLayout.defaultZoom + 1 && view.panX > 0 && view.panY > 0, "zoom and pan moved the view: zoom \(view.zoomLevel), pan \(view.panX), \(view.panY)")
+        let expected = NetworkLayout.preset(above: NetworkLayout.defaultScale)
+        check(abs(view.scale - expected) < 1e-9 && view.panX > zoomed.panX && view.panY > zoomed.panY,
+              "two presets in and one out leave the scale at \(expected) (\(view.scale)) and shift-arrows pan it: \(zoomed.panX), \(zoomed.panY) to \(view.panX), \(view.panY)")
         let after = try await readOnlyRecord(database)
         check(after == before, "R of J1.1: revision, history and file bytes are identical after filter, zoom and pan: before \(before), after \(after)")
         await closeGantt(model)

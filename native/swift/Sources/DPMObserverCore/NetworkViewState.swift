@@ -55,7 +55,8 @@ public struct NetworkViewState: Equatable, Sendable {
     public var timescale = NetworkTimescale.logical
     /// While editing, the link being drawn; view state only.
     public var linking: NetworkLinkDrag?
-    public var zoomLevel = NetworkLayout.defaultZoom
+    /// Points per graph point, continuous within `NetworkLayout.minScale...maxScale` (a fit may go below).
+    public var scale = NetworkLayout.defaultScale
     public var panX = 0.0
     public var panY = 0.0
     /// The node the keyboard cursor is on, by persistent identity.
@@ -75,8 +76,8 @@ public struct NetworkViewState: Equatable, Sendable {
     /// inspects is hit again against the current pan, scale and shown nodes (`ObserverModel.networkHover`), so a pan,
     /// a zoom or a filter under a stationary pointer inspects what is under it now. A resize clears it.
     public var hoverPoint: NetworkPoint?
-    /// The scale Fit derived from the canvas and the whole graph; while set it replaces the zoom step's scale.
-    public var fitScale: Double?
+    /// Whether the scale is the one Fit derived from the canvas and the whole graph, until the next zoom.
+    public var fitted = false
     /// The honest note when Locate cannot show the selected node (the filter hides it); cleared by the next view change.
     public var locateNote: String?
     /// A request to bring the cursor node's row to the top of the text list, advanced (wrapping) only by an explicit
@@ -84,9 +85,6 @@ public struct NetworkViewState: Equatable, Sendable {
     public var listReveal = 0
 
     public init() {}
-
-    /// The scale drawn now: the fitted one, else the zoom step's.
-    public var scale: Double { fitScale ?? NetworkLayout.scale(zoomLevel) }
 }
 
 public struct NetworkPoint: Equatable, Sendable {

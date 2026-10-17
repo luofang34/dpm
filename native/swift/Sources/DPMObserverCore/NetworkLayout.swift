@@ -76,10 +76,6 @@ public enum NetworkLayout {
     /// The lane before the first column and after the last, where the Start and Finish markers stand.
     public static let terminalLane = 84.0
     public static let terminalRadius = 20.0
-    public static let zoomSteps: [Double] = [0.25, 0.4, 0.6, 0.8, 1, 1.25, 1.6]
-    public static let defaultZoom = 4
-
-    public static func scale(_ level: Int) -> Double { zoomSteps[max(0, min(zoomSteps.count - 1, level))] }
 
     /// The node's rectangle at zoom 1, in points from the canvas origin.
     public static func origin(column: Int, row: Int) -> (x: Double, y: Double) {
@@ -98,29 +94,15 @@ public enum NetworkLayout {
         return (at.x, at.y, nodeWidth, nodeHeight)
     }
 
-    /// The largest pan along each axis: the scaled content beyond the viewport, never below 0.
-    public static func maxPan(_ graph: NetworkGraph, level: Int, viewport: (width: Double, height: Double)) -> (x: Double, y: Double) {
-        maxPan(graph, scale: scale(level), viewport: viewport)
-    }
-
-    public static func maxPan(_ graph: NetworkGraph, scale: Double, viewport: (width: Double, height: Double)) -> (x: Double, y: Double) {
-        let size = extent(graph)
-        return (max(0, size.width * scale - viewport.width), max(0, size.height * scale - viewport.height))
-    }
-
     /// The scale at which the whole extent, margins included, fits the canvas along both axes: the smaller of the two
-    /// ratios, never above the largest zoom step. Nil without a measured canvas. Geometry only.
+    /// ratios, never above `fitCeiling`. Nil without a measured canvas. Geometry only.
     public static func fitScale(_ graph: NetworkGraph, viewport: (width: Double, height: Double)) -> Double? {
         let size = extent(graph)
         guard viewport.width > 0, viewport.height > 0, size.width > 0, size.height > 0 else { return nil }
-        return min(zoomSteps[zoomSteps.count - 1], viewport.width / size.width, viewport.height / size.height)
+        return min(fitCeiling, viewport.width / size.width, viewport.height / size.height)
     }
 
     /// The node drawn at a point of the canvas (canvas coordinates, top left), if any: geometry only.
-    public static func hit(_ graph: NetworkGraph, shown: [NetworkNode], at point: (x: Double, y: Double), pan: (x: Double, y: Double), level: Int) -> NetworkNode? {
-        hit(graph, shown: shown, at: point, pan: pan, scale: scale(level))
-    }
-
     /// The end of `node` a point over it names, as on a Gantt bar: its left half is the start, its right half the finish.
     public static func end(of node: NetworkNode, in graph: NetworkGraph, at point: (x: Double, y: Double), pan: (x: Double, y: Double), scale: Double) -> PlanEnd {
         guard let place = graph.place[node.identity] else { return .finish }

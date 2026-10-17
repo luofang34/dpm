@@ -91,14 +91,14 @@ struct NetworkView: View {
                     .help("Put the cursor on the selected node and scroll it into view (l)")
                     .accessibilityIdentifier("network.locate")
                 Button("Reset view") { model.performNetwork(.resetView) }
-                    .help("Default zoom, scrolled to the cursor node (0)")
+                    .help("Actual size (100 %), scrolled to the cursor node (0)")
                     .accessibilityIdentifier("network.reset")
                 Button { model.performNetwork(.zoomOut) } label: { Image(systemName: "minus.magnifyingglass") }
-                    .help("Zoom out (-)").accessibilityLabel("Zoom out").accessibilityIdentifier("network.zoom-out")
+                    .help("Zoom out about the centre (-); pinch or ⌥⌘-scroll zooms about the pointer").accessibilityLabel("Zoom out").accessibilityIdentifier("network.zoom-out")
                 Text("\(Self.percent(model.network.scale)) %").font(.caption).monospacedDigit()
-                    .accessibilityLabel("Zoom \(Self.percent(model.network.scale)) percent\(model.network.fitScale != nil ? ", fitted to the whole graph" : "")")
+                    .accessibilityLabel("Zoom \(Self.percent(model.network.scale)) percent\(model.network.fitted ? ", fitted to the whole graph" : "")")
                 Button { model.performNetwork(.zoomIn) } label: { Image(systemName: "plus.magnifyingglass") }
-                    .help("Zoom in (=)").accessibilityLabel("Zoom in").accessibilityIdentifier("network.zoom-in")
+                    .help("Zoom in about the centre (=); pinch or ⌥⌘-scroll zooms about the pointer").accessibilityLabel("Zoom in").accessibilityIdentifier("network.zoom-in")
                 Spacer(minLength: 0)
                 EditToggle(model: model)
             }

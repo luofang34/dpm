@@ -77,6 +77,12 @@ final class NetworkRegionView: NSView {
             return model.handleNetworkKey(input) != .ignored
         }
         guard let region = region(in: window), region.holdsKeyboard else { return false }
+        if event.keyCode == spaceKey, !input.command, !input.option, !input.control {
+            // A held Space repeats: only its first press selects; the region remembers it is held for Space-drag.
+            let repeated = event.isARepeat
+            region.spaceDown()
+            if repeated { return true }
+        }
         return model.handleNetworkKey(input) != .ignored
     }
 
@@ -181,7 +187,13 @@ final class NetworkRegionView: NSView {
 
     override func resignFirstResponder() -> Bool {
         let accepted = super.resignFirstResponder()
-        if accepted { noteFocusRingMaskChanged(); tell() }
+        if accepted {
+            // A Space released while another view has the keyboard never reaches this one: the hold ends here.
+            spaceHeld = false
+            updateCursor()
+            noteFocusRingMaskChanged()
+            tell()
+        }
         return accepted
     }
 
@@ -210,6 +222,7 @@ final class NetworkRegionView: NSView {
         dragOrigin = event.locationInWindow
         dragged = false
         pressPoint = point
+        updateCursor()
         MainActor.assumeIsolated {
             let hit = node(at: point)
             pressed = hit.map { ($0.identity, event.clickCount) }
@@ -228,7 +241,7 @@ final class NetworkRegionView: NSView {
         MainActor.assumeIsolated {
             // While editing, a drag from a task or milestone draws a link from the half of the node pressed (its start or
             // finish, as on a Gantt bar) instead of panning; nothing moves. A work package's span comes from its tasks.
-            if let model, model.editing.enabled, let press = pressed, let start = pressPoint, let node = model.networkGraph.node(press.identity), !node.isDecision {
+            if !spaceHeld, let model, model.editing.enabled, let press = pressed, let start = pressPoint, let node = model.networkGraph.node(press.identity), !node.isDecision {
                 if node.kind == .package {
                     model.setEditNotice("A work package's span comes from its tasks: link one of its tasks instead of \(node.key).")
                     return
@@ -271,20 +284,69 @@ final class NetworkRegionView: NSView {
         pressPoint = nil
         dragOrigin = nil
         dragged = false
+        updateCursor()
     }
 
     override func scrollWheel(with event: NSEvent) {
-        let scale = event.hasPreciseScrollingDeltas ? 1.0 : 10.0
+        let precise = event.hasPreciseScrollingDeltas
+        // ⌥⌘-scroll zooms about the pointer, as on a Freeform board; ⌘-scroll does too, for a mouse without a pinch.
+        if event.modifierFlags.contains(.command) {
+            let point = canvasPoint(event)
+            let factor = Self.scrollZoomFactor(deltaY: event.scrollingDeltaY, precise: precise)
+            MainActor.assumeIsolated {
+                model?.zoomNetwork(by: factor, at: NetworkPoint(x: point.x, y: point.y))
+                note("scroll_zoom", ["delta": event.scrollingDeltaY, "precise": precise, "point": [point.x, point.y], "scale": model?.network.scale ?? 0])
+            }
+            return
+        }
+        let scale = precise ? 1.0 : 10.0
         MainActor.assumeIsolated {
             model?.panNetwork(dx: -event.scrollingDeltaX * scale, dy: -event.scrollingDeltaY * scale)
-            note("scroll", ["delta": [event.scrollingDeltaX, event.scrollingDeltaY], "precise": event.hasPreciseScrollingDeltas,
+            note("scroll", ["delta": [event.scrollingDeltaX, event.scrollingDeltaY], "precise": precise,
                             "pan": model.map { [$0.network.panX, $0.network.panY] } ?? []])
         }
     }
 
+    /// The zoom factor of one scroll step: exponential in the distance, so scrolling up and back down returns to the
+    /// same scale; a trackpad's point deltas are much finer than a wheel's line deltas.
+    static func scrollZoomFactor(deltaY: Double, precise: Bool) -> Double {
+        exp(deltaY * (precise ? 0.01 : 0.1))
+    }
+
+    /// A pinch zooms continuously about the pointer: every event scales by its own magnification, as Freeform does,
+    /// rather than jumping a whole zoom step.
     override func magnify(with event: NSEvent) {
-        guard abs(event.magnification) > 0.02 else { return }
-        MainActor.assumeIsolated { model?.performNetwork(event.magnification > 0 ? .zoomIn : .zoomOut) }
+        let point = canvasPoint(event)
+        MainActor.assumeIsolated {
+            model?.zoomNetwork(by: 1 + event.magnification, at: NetworkPoint(x: point.x, y: point.y))
+            if event.phase == .ended || event.phase == .cancelled {
+                note("pinch_end", ["point": [point.x, point.y], "scale": model?.network.scale ?? 0])
+            }
+        }
+    }
+
+    // MARK: Space-drag pans, as on a Freeform board, even from a node while editing (where a plain drag draws a link).
+
+    /// Whether Space is held while this region has the keyboard. Space still selects the cursor node when pressed; a
+    /// drag while it is held pans and shows the hand.
+    private(set) var spaceHeld = false
+
+    func spaceDown() {
+        guard !spaceHeld else { return }
+        spaceHeld = true
+        updateCursor()
+    }
+
+    override func keyUp(with event: NSEvent) {
+        guard event.keyCode == Self.spaceKey else { return super.keyUp(with: event) }
+        spaceHeld = false
+        updateCursor()
+    }
+
+    static let spaceKey: UInt16 = 49
+
+    private func updateCursor() {
+        if spaceHeld { (dragOrigin != nil ? NSCursor.closedHand : NSCursor.openHand).set() } else { NSCursor.arrow.set() }
     }
 
     override func updateTrackingAreas() {

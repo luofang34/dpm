@@ -34,11 +34,12 @@ extension Context {
                 let state = model.network, size = NetworkLayout.extent(model.networkGraph)
                 let rects = self.transformedRects(model)
                 let inside = rects.filter { $0.x >= -0.5 && $0.y >= -0.5 && $0.x + $0.width <= viewport.0 + 0.5 && $0.y + $0.height <= viewport.1 + 0.5 }.count
-                return (state.scale, [-state.panX, -state.panY, size.width * state.scale, size.height * state.scale], inside, rects.count, state.fitScale != nil)
+                return (state.scale, [-state.panX, -state.panY, size.width * state.scale, size.height * state.scale], inside, rects.count, state.fitted)
             }
             let extent = fitted.1
-            check(fitted.4 && extent[0] == 0 && extent[1] == 0 && extent[2] <= viewport.0 + 0.5 && extent[3] <= viewport.1 + 0.5 && (extent[2] >= viewport.0 - 0.5 || extent[3] >= viewport.1 - 0.5),
-                  "Fit in a \(viewport.0) x \(viewport.1) canvas: the whole transformed extent \(extent.map { ($0 * 10).rounded() / 10 }) lies inside it and fills one axis (scale \(fitted.0))")
+            let centred = abs(extent[0] - (viewport.0 - extent[2]) / 2) < 0.5 && abs(extent[1] - (viewport.1 - extent[3]) / 2) < 0.5
+            check(fitted.4 && centred && extent[2] <= viewport.0 + 0.5 && extent[3] <= viewport.1 + 0.5 && (extent[2] >= viewport.0 - 0.5 || extent[3] >= viewport.1 - 0.5),
+                  "Fit in a \(viewport.0) x \(viewport.1) canvas: the whole transformed extent \(extent.map { ($0 * 10).rounded() / 10 }) lies inside it, centred, and fills one axis (scale \(fitted.0))")
             // The work packages are hidden by default, so the canvas holds the dense graph's 1000 activities and decisions.
             check(fitted.2 == fitted.3 && fitted.3 == 1000, "after Fit every one of the \(fitted.3) node rectangles shown lies inside the canvas (\(fitted.2) inside)")
         }
@@ -49,7 +50,7 @@ extension Context {
             let visible = rect.map { $0.x >= 0 && $0.y >= 0 && $0.x + $0.width <= model.network.viewportWidth && $0.y + $0.height <= model.network.viewportHeight } ?? false
             return (model.network.scale, visible, model.networkFocusedNode?.key)
         }
-        check(located.0 >= NetworkLayout.scale(NetworkLayout.defaultZoom - 1) && located.1 && located.2 == "PERF-1000",
+        check(located.0 >= NetworkLayout.readableScale && located.1 && located.2 == "PERF-1000",
               "Locate after Fit returns to a readable scale (\(located.0)) with PERF-1000 under the cursor and inside the canvas (\(located.1))")
         let after = try await readOnlyRecord(database)
         check(after == before, "nothing was written: before \(before), after \(after)")

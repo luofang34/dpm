@@ -3632,9 +3632,9 @@ def network_layout_and_pointer(bundle, directory):
         for _ in range(3):
             if current['network']['max_pan'][0] > 60:
                 break
-            level = current['network']['zoom_level']
+            level = current['network']['scale']
             guarded_key(app, front, 'equals to zoom in', 24)
-            current = guarded_wait(app, front, lambda t, level=level: t['network']['zoom_level'] > level, 10, 'a real = to zoom in')
+            current = guarded_wait(app, front, lambda t, level=level: t['network']['scale'] > level, 10, 'a real = to zoom in')
         assert current['network']['max_pan'][0] > 60, f"the zoomed graph still fits the canvas, so no pan is possible: {current['network']}"
         # The drag's targets come from a current valid snapshot read after the zoom, not from the zoom wait's state.
         current, region = pointer_basis(app, front, 'a current pointer basis for the drag after the zoom')
@@ -3688,9 +3688,10 @@ def network_layout_and_pointer(bundle, directory):
         scrolled = guarded_wait(app, front, lambda t: t['network']['pan'] != pan_drag and any(e.get('event') == 'scroll' for e in receipts(t)), 10,
                                 'a real wheel over the canvas to pan the view')
         pan_scroll = list(scrolled['network']['pan'])
-        assert all(0 <= v <= m + 0.5 for v, m in zip(pan_scroll, scrolled['network']['max_pan'])), f'the pan left its bounds: {scrolled["network"]}'
+        assert all(lo - 0.5 <= v <= hi + 0.5 for v, lo, hi in zip(pan_scroll, scrolled['network']['min_pan'], scrolled['network']['max_pan'])), f'the pan left its bounds: {scrolled["network"]}'
         guarded_key(app, front, 'f to fit the network', 3)
-        fitted = guarded_wait(app, front, lambda t: t['network']['pan'] == [0, 0] and t['network'].get('fitted') and t['network']['scale'] < scrolled['network']['scale'], 10, 'a real f to fit the network')
+        # A fitted graph fills one axis and is centred on the other, so its pan is the single value its bounds allow.
+        fitted = guarded_wait(app, front, lambda t: t['network'].get('fitted') and t['network']['pan'] == t['network']['min_pan'] == t['network']['max_pan'] and t['network']['scale'] < scrolled['network']['scale'], 10, 'a real f to fit the network')
         net = fitted['network']
         extent, viewport = net['extent_drawn'], net['viewport']
         # The whole transformed extent, not a zoom flag: every point of the graph lies inside the canvas.
