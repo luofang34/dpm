@@ -11,8 +11,8 @@
 mod authoring;
 mod envelope;
 mod error;
-#[cfg(feature = "git")]
 mod file_artifact;
+#[cfg(feature = "git")]
 mod git_artifact;
 mod interchange;
 mod ownership;
