@@ -452,11 +452,6 @@ public enum GanttLayout {
     /// The trailing room after the last hour, for the last bar's text.
     public static let timelineMargin = 80.0
 
-    /// The hours the whole timeline spans: the projection's own finish, or the latest p95 or bar finish beyond it.
-    public static func planHours(_ schedule: GanttSchedule) -> Double {
-        max(schedule.projectFinishHours, schedule.uncertainty?.p95 ?? 0, schedule.rows.compactMap { $0.span?.finish }.max() ?? 0)
-    }
-
     /// The scale at which the whole timeline, recorded history and trailing room included, is exactly as wide as
     /// `width`: geometry only. Nil when there is no width or no hour to fit.
     public static func fitScale(_ schedule: GanttSchedule, width: Double) -> Double? {

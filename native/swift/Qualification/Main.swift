@@ -33,6 +33,7 @@ struct Qualify {
             case "--dense-plan": tools.densePlan = value
             case "--long-plan": tools.longPlan = value
             case "--network-plan": tools.networkPlan = value
+            case "--recorded-plan": tools.recordedPlan = value
             case "--only": only = value
             default: usage("unknown option \(flag)")
             }
@@ -106,6 +107,7 @@ struct Qualify {
             ("gantt-pan-model-path", context.ganttPanSurvivesAnOffscreenCursor),
             ("gantt-fold-keeps-rows-above", context.ganttFoldKeepsRowsAbove),
             ("gantt-history", context.ganttHistoryIsReachable),
+            ("gantt-recorded", context.ganttRecordedPlanIsFitted),
             ("edit-review-apply", context.editsGoThroughReviewAndApply),
             ("edit-unknown-reconciled", context.editUnknownOutcomeIsReconciled),
             ("edit-progress-owner", context.editProgressIsTheOwnersReport),
