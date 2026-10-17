@@ -108,7 +108,9 @@ When operating on a real DPM workspace, prefer the machine interface:
 5. `dpm start <KEY> --json --actor agent:<name>` when work actually begins; the start is the event SS/SF
    successors wait for, and progress and submission require it;
 6. perform the work and run its acceptance checks;
-7. `dpm attach-git-head <KEY> --json --actor agent:<name>` when a commit is relevant;
+7. `dpm attach-git-head <KEY> --json --actor agent:<name>` when a commit is relevant; evidence is a
+   reference (commit, CI run with its outcome, document URL, or `dpm attach-file` for a local file), never
+   a log, screenshot or binary copied into `.dpm`;
 8. `dpm submit <KEY> --json --actor agent:<name> --note "..."` once `explain` shows `transitions.submit`
    ready (FF/SF prerequisites and their lag);
 9. a separate human/service verifier runs `dpm verify <KEY> --json ...`.

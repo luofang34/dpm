@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 mod as_of;
 mod cli;
+mod evidence;
 mod forecast;
 mod interchange;
 mod lifecycle;
@@ -114,7 +115,10 @@ const NAMES: &[(&str, &str)] = &[
         "Report owned task execution percent; 100% does not verify the result",
     ),
     ("verify_work", "Verify another actor's submitted result"),
-    ("add_artifact", "Attach evidence attributed to this actor"),
+    (
+        "add_artifact",
+        "Attach evidence attributed to this actor by reference: a commit, CI run, pull request or document URL; never content or a copy in .dpm. TestResult and Build state metadata outcome; a local file needs sha256 and bytes (attach_file measures them)",
+    ),
     (
         "attach_git_head",
         "Attach the current repository HEAD as immutable evidence",
@@ -146,7 +150,7 @@ const NAMES: &[(&str, &str)] = &[
 ];
 
 pub(crate) fn definitions() -> Vec<Value> {
-    NAMES.iter().chain(ownership::NAMES.iter()).chain(revert::NAMES.iter()).chain(validation::NAMES.iter()).chain(runs::NAMES.iter()).map(|(name,description)| {
+    NAMES.iter().chain(evidence::NAMES.iter()).chain(ownership::NAMES.iter()).chain(revert::NAMES.iter()).chain(validation::NAMES.iter()).chain(runs::NAMES.iter()).map(|(name,description)| {
         if runs::handles(name) { return runs::definition(name, description, cli::command(name)); }
         let read = matches!(*name, "export_plan" | "plan_schema" | "plan_template" | "validate_plan" | "import_mspdi" | "export_mspdi" | "propose_change" | "propose_revert" | "history" | "workspace_revision" | "workspace_list" | "project_status" | "get_calibration" | "get_schedule" | "next_work" | "get_work" | "explain_work");
         let mut properties = serde_json::Map::new();
@@ -166,6 +170,7 @@ pub(crate) fn definitions() -> Vec<Value> {
             },
             "import_mspdi" | "export_mspdi" => interchange::schema(name, &mut properties, &mut required),
             "release_work" | "handoff_work" => ownership::schema(name, &mut properties, &mut required),
+            "attach_file" => evidence::schema(&mut properties, &mut required),
             "propose_revert" | "revert_change" => revert::schema(name, &mut properties, &mut required),
             "validate_plan" => validation::schema(&mut properties, &mut required),
             "history" => { properties.insert("after_sequence".into(),json!({"type":"integer","minimum":0,"default":0})); properties.insert("limit".into(),json!({"type":"integer","minimum":0,"maximum":1000,"default":100})); },
@@ -280,6 +285,9 @@ pub(crate) fn call_tool_blocking(
     let preconditions = preconditions::take(&mut value)?;
     if runs::handles(name) {
         return runs::call_blocking(app, actor, name, value, preconditions);
+    }
+    if evidence::handles(name) {
+        return evidence::call_blocking(app, actor, value, preconditions);
     }
     if ownership::handles(name) {
         return ownership::call_blocking(app, actor, name, value, preconditions);

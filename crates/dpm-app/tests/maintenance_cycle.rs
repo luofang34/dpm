@@ -135,9 +135,12 @@ fn perform_maintenance_blocking(app: &mut Application, id: WorkItemId) {
     let artifact = Artifact {
         id: ArtifactId::new(),
         kind: ArtifactKind::TestResult,
-        uri: "test:synthetic-maintenance/check-output".into(),
+        uri: "https://ci.example.com/synthetic-maintenance/check-output".into(),
         label: "Synthetic regression evidence, not self-host completion".into(),
-        metadata: BTreeMap::from([("input".into(), "synthetic execution fixture".into())]),
+        metadata: BTreeMap::from([
+            ("input".into(), "synthetic execution fixture".into()),
+            ("outcome".into(), "passed".into()),
+        ]),
         created_by: agent.clone(),
         created_at: Utc::now(),
     };

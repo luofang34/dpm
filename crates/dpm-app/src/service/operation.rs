@@ -181,6 +181,7 @@ fn apply(
     let now = Utc::now();
     Ok(match intent {
         Intent::Command(command) => {
+            dpm_engine::admit_command(command)?;
             dpm_engine::apply_command(plan, actor, command.clone(), now, id)?
         }
         Intent::PlanChange { proposed, reason } => {

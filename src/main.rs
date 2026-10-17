@@ -7,6 +7,7 @@ mod calibration;
 mod clock;
 mod console;
 mod error;
+mod evidence;
 mod interchange;
 mod launch;
 mod mcp;

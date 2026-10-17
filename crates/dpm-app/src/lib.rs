@@ -11,6 +11,7 @@
 mod authoring;
 mod envelope;
 mod error;
+mod file_artifact;
 #[cfg(feature = "git")]
 mod git_artifact;
 mod interchange;
@@ -20,6 +21,7 @@ mod project;
 mod registry;
 mod service;
 mod tracking;
+pub use file_artifact::FileEvidence;
 #[cfg(feature = "registry")]
 pub use registry::{BindingReport, RegistryError, StoreState, WorkspaceBinding, WorkspaceRegistry};
 pub use tracking::ExternalLinkInput;

@@ -35,6 +35,15 @@ pub enum AppError {
     /// Structured request or response is invalid.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    /// A local evidence file could not be read to fingerprint it.
+    #[error("read evidence file {path}: {source}")]
+    EvidenceFile {
+        /// The file named as evidence.
+        path: std::path::PathBuf,
+        /// Why it could not be read.
+        #[source]
+        source: std::io::Error,
+    },
     /// Git process could not be launched.
     #[cfg(feature = "git")]
     #[error("run git: {0}")]
@@ -197,7 +206,10 @@ impl AppError {
             Self::Store(error) if error.is_corruption() => "corrupt_store",
             Self::Store(_) => "storage_error",
             Self::Validation(_) => "invalid_plan",
-            Self::Json(_) | Self::InvalidRequest(_) | Self::Actor(_) => "invalid_request",
+            Self::Json(_)
+            | Self::InvalidRequest(_)
+            | Self::Actor(_)
+            | Self::EvidenceFile { .. } => "invalid_request",
         }
     }
     /// Structured refusal context: a refused transition returns the same unmet gates as `explain`.

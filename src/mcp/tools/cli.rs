@@ -35,6 +35,7 @@ pub(super) fn command(tool: &str) -> Option<&'static str> {
         "decide_gate" => "decide",
         "add_artifact" => "artifact",
         "attach_git_head" => "attach-git-head",
+        "attach_file" => "attach-file",
         "link_external" => "link-external",
         "unlink_external" => "unlink-external",
         "workspace_list" => "workspace list",
