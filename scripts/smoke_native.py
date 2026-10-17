@@ -72,12 +72,14 @@ def lagged_plan(directory):
 def gantt_plans(directory):
     """The plans of the Gantt scenarios: the nested fixture (a package, a nested task, a milestone, the four
     relation kinds with lead and lag, Hard and Soft, one long title), the same with calendars, a
-    1000-task plan with the dense overlay under 100 packages, and one with 500-character titles."""
+    1000-task plan with the dense overlay under 100 packages, one with 500-character titles, and the
+    synthetic plan the recorded-history scenarios finish long before the clock reading."""
     write = measure_gantt.write_plan
     return ['--gantt-plan', str(write(directory / 'gantt-plan.json', measure_gantt.fx_gantt())),
             '--calendar-plan', str(write(directory / 'calendar-plan.json', measure_gantt.fx_gantt(calendars=True))),
             '--dense-plan', str(write(directory / 'dense-plan.json', measure_gantt.dataset(1000, 'dense'))),
-            '--long-plan', str(write(directory / 'long-plan.json', measure_gantt.dataset(100, 'branch', long_titles=True)))]
+            '--long-plan', str(write(directory / 'long-plan.json', measure_gantt.dataset(100, 'branch', long_titles=True))),
+            '--recorded-plan', str(ROOT / 'tests/support/recorded-plan.json')]
 
 
 def network_plan(directory):

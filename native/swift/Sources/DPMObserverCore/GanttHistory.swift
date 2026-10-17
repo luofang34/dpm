@@ -25,9 +25,29 @@ public struct GanttActual: Equatable, Sendable {
 }
 
 extension GanttLayout {
-    /// The earliest recorded hour, or 0 when nothing was recorded before the clock reading: where the timeline begins.
+    /// Where the timeline begins: the earliest recorded hour, or the clock reading (0) when work remains and nothing
+    /// was recorded before it.
     public static func historyHours(_ schedule: GanttSchedule) -> Double {
-        schedule.rows.compactMap { $0.actual?.hours?.from }.reduce(0, min)
+        let recorded = schedule.rows.compactMap { $0.actual?.hours?.from }
+        guard hasRemainingWork(schedule) else { return recorded.min() ?? 0 }
+        return recorded.reduce(0, min)
+    }
+
+    /// Where the timeline ends: the projection's own finish, or the latest p95 or bar finish beyond it; for a plan
+    /// with nothing outstanding, its last recorded finish, so the clock reading after it is not part of the plan.
+    public static func planHours(_ schedule: GanttSchedule) -> Double {
+        guard hasRemainingWork(schedule) else { return recordedFinishHours(schedule) ?? 0 }
+        return max(schedule.projectFinishHours, schedule.uncertainty?.p95 ?? 0, schedule.rows.compactMap { $0.span?.finish }.max() ?? 0)
+    }
+
+    /// Whether any applicable row is still outstanding: only then does the timeline reach the clock reading.
+    public static func hasRemainingWork(_ schedule: GanttSchedule) -> Bool {
+        schedule.rows.contains { $0.span != nil && $0.actual?.finish == nil }
+    }
+
+    /// The last recorded finish, when anything finished.
+    public static func recordedFinishHours(_ schedule: GanttSchedule) -> Double? {
+        schedule.rows.compactMap { $0.actual?.finish }.max()
     }
 
     /// The pan that puts the timeline's beginning at the left edge, at a scale.

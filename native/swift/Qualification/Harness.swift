@@ -153,6 +153,8 @@ struct Tools {
     /// with calendars, a 1000-task plan with the dense overlay, and one with 500-character titles.
     var ganttPlan = "", calendarPlan = "", densePlan = "", longPlan = ""
     var networkPlan = ""
+    /// A small plan whose work is recorded as finished long before the clock reading (tests/support/recorded-plan.json).
+    var recordedPlan = ""
 }
 
 final class Context {
