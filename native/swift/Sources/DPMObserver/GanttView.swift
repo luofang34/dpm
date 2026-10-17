@@ -180,10 +180,17 @@ struct GanttCursorLine: View {
             if let item = frame.cursor {
                 let row = item.row
                 let said = speech(item, frame: frame)
-                let when = row.span.map { row.isMilestone ? "at \(hoursText($0.start))" : "\(hoursText($0.start)) to \(hoursText($0.finish))" } ?? "not scheduled: \(row.applicability)"
-                let float = row.times.map { " · total float \(hoursText($0.totalFloat))" } ?? ""
+                let date = { (hours: Double) in GanttCalendarAxis.date(origin: schedule.evaluatedAt, hours: hours) }
+                // Finished work is told by its recorded dates and the as-built path; its remaining span is all zero.
+                let finished = GanttLayout.isFinished(row)
+                let recorded = row.actual.map { actual in [actual.start, actual.finish].compactMap { $0 }.map(date).joined(separator: " to ") }
+                let when = finished ? "recorded \(recorded ?? "")" : row.span.map { row.isMilestone ? "at \(hoursText($0.start))" : "\(hoursText($0.start)) to \(hoursText($0.finish))" } ?? "not scheduled: \(row.applicability)"
+                let float = finished ? "" : row.times.map { " · total float \(hoursText($0.totalFloat))" } ?? ""
+                let path = GanttLayout.isCritical(row) ? (finished ? " · on the as-built critical path" : " · on the critical path") : ""
+                let end = GanttLayout.hasRemainingWork(schedule) ? "project finish \(hoursText(schedule.projectFinishHours))"
+                    : GanttLayout.recordedFinishHours(schedule).map { "project finished \(date($0))" } ?? "nothing recorded"
                 // The strip follows the cursor, which keys move without selecting; it says which it is.
-                let facts = "\(frame.selected == row.id ? "Selected" : "Cursor, not selected") · \(kindWords(row)) · \(row.status)\(row.priority.isEmpty ? "" : " · priority \(row.priority)")\(row.span?.critical == true ? " · on the critical path" : "") · \(when)\(float) · project finish \(hoursText(schedule.projectFinishHours))"
+                let facts = "\(frame.selected == row.id ? "Selected" : "Cursor, not selected") · \(kindWords(row)) · \(row.status)\(row.priority.isEmpty ? "" : " · priority \(row.priority)")\(path) · \(when)\(float) · \(end)"
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(row.key).font(.system(.callout, design: .monospaced).weight(.semibold))
                     Text(row.title).font(.callout.weight(.semibold)).lineLimit(1).layoutPriority(1)

@@ -39,7 +39,12 @@ public enum GanttWords {
         let row = item.row
         var parts: [String] = ["status \(row.status)"]
         if !row.priority.isEmpty { parts.append("human priority \(row.priority)") }
-        if let span = row.span {
+        // Finished work has no remaining hours, float or simulated criticality: its recorded times and the as-built
+        // path tell it instead.
+        let finished = GanttLayout.isFinished(row)
+        if finished {
+            parts.append(row.actual?.critical == true ? "on the as-built critical path" : "not on the as-built critical path")
+        } else if let span = row.span {
             parts.append(row.isMilestone ? "milestone at \(hours(span.start)) elapsed" : "elapsed hours \(hours(span.start)) to \(hours(span.finish)), \(hours(span.hours)) long")
             parts.append(span.critical ? "on the critical path" : "not on the critical path")
         } else {
@@ -48,8 +53,10 @@ public enum GanttWords {
         parts.append(inventory.byIdentity[row.id].map { estimate($0.estimate) } ?? "own estimate not available: the plan snapshot does not list this item")
         parts.append("no calendar date is supplied")
         if let recorded = GanttLayout.historyWords(row.actual) { parts.append(recorded) }
-        if let times = row.times { parts.append("total float \(hours(times.totalFloat)), free float \(hours(times.freeFloat))") }
-        parts.append(row.criticality.map { "criticality \(percent($0)) of simulated schedules" } ?? "criticality not supplied")
+        if !finished {
+            if let times = row.times { parts.append("total float \(hours(times.totalFloat)), free float \(hours(times.freeFloat))") }
+            parts.append(row.criticality.map { "criticality \(percent($0)) of simulated schedules" } ?? "criticality not supplied")
+        }
         if let calendar = row.calendar { parts.append(calendar) }
         parts.append("level \(item.depth + 1)")
         if item.children > 0 { parts.append(item.expanded ? "expanded, \(item.children) children shown" : "collapsed, \(item.children) children hidden") }

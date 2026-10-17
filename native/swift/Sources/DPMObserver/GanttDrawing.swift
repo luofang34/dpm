@@ -272,24 +272,23 @@ enum GanttDrawing {
         var seen = Set<String>()
         var labels: [GanttRelationLabels.Request] = []
         func relation(_ edge: GanttRelation, strong: Bool) {
-            // A relation from verified work is satisfied; it is drawn only for the rows being inspected.
-            if !strong, frame.schedule?.row(edge.predecessor)?.status == "Verified" { return }
+            // A link of the critical path, remaining or as built, keeps its colour when emphasised; its label and row
+            // words name it too. Any other relation from verified work is satisfied and drawn only for rows being inspected.
+            let onCriticalPath = schedule.criticalRelations.contains(edge.id) || schedule.asBuiltRelations.contains(edge.id)
+            if !strong, !onCriticalPath, frame.schedule?.row(edge.predecessor)?.status == "Verified" { return }
             guard seen.insert(edge.id).inserted, let successorAt = frame.positions[edge.successor] else { return }
             let successor = rows[successorAt].row
-            guard let target = successor.span else { return }
             let atFinish = edge.kind == "FinishFinish" || edge.kind == "StartFinish"
-            let to = CGPoint(x: (atFinish ? target.finish : target.start) * scale - geometry.offsetX, y: frame.top(of: edge.successor, at: successorAt, geometry) + rowHeight / 2)
+            guard let target = GanttLayout.eventHours(successor, start: !atFinish) else { return }
+            let to = CGPoint(x: target * scale - geometry.offsetX, y: frame.top(of: edge.successor, at: successorAt, geometry) + rowHeight / 2)
             let dash: [CGFloat] = edge.policy == "Soft" ? [4, 3] : []
-            // A link of the critical path keeps its colour when emphasised; its label and row words name it too.
-            let onCriticalPath = schedule.criticalRelations.contains(edge.id)
             let color: Color = onCriticalPath ? Palette.relationCritical : strong ? Palette.relationEmphasis : Palette.relation
             let width: CGFloat = strong ? 1.6 : onCriticalPath ? 1.2 : 0.8
             var path = Path()
-            if let predecessorAt = frame.positions[edge.predecessor], let source = rows[predecessorAt].row.span {
-                let fromFinish = edge.kind == "FinishStart" || edge.kind == "FinishFinish"
-                // Verified work is a done mark at the origin, so its arrows leave from there.
-                let doneSource = rows[predecessorAt].row.status == "Verified"
-                let from = CGPoint(x: doneSource ? 4 - geometry.offsetX : (fromFinish ? source.finish : source.start) * scale - geometry.offsetX, y: frame.top(of: edge.predecessor, at: predecessorAt, geometry) + rowHeight / 2)
+            let fromFinish = edge.kind == "FinishStart" || edge.kind == "FinishFinish"
+            if let predecessorAt = frame.positions[edge.predecessor], let source = GanttLayout.eventHours(rows[predecessorAt].row, start: !fromFinish) {
+                // Recorded work leaves from its recorded event, so a finished plan's links join its recorded bars.
+                let from = CGPoint(x: source * scale - geometry.offsetX, y: frame.top(of: edge.predecessor, at: predecessorAt, geometry) + rowHeight / 2)
                 let bend = max(from.x, to.x) + 10
                 path.move(to: from)
                 path.addLine(to: CGPoint(x: bend, y: from.y))
@@ -392,7 +391,8 @@ enum GanttDrawing {
         }
         // Verified work has no remaining duration: a mark after its recorded bar, or at the origin, and no float.
         if row.status == "Verified" {
-            context.draw(Text("✓ \(row.key) · done").font(.caption2).foregroundColor(.secondary), at: CGPoint(x: (recordedEnd ?? -geometry.offsetX) + 6, y: mid), anchor: .leading)
+            let path = row.actual?.critical == true ? (row.isPackage ? " · holds critical work" : " · critical path (as built)") : ""
+            context.draw(Text("✓ \(row.key) · done\(path)").font(.caption2).foregroundColor(.secondary), at: CGPoint(x: (recordedEnd ?? -geometry.offsetX) + 6, y: mid), anchor: .leading)
             return
         }
         let (x, width) = GanttLayout.bar(span, scale: scale)

@@ -10,10 +10,13 @@ public struct GanttActual: Equatable, Sendable {
     public let start: Double?
     /// Recorded finish (verification, or a milestone's or package's completion); nil while outstanding.
     public let finish: Double?
+    /// On the as-built critical path: the chain of driving recorded relations ending at the last recorded finish.
+    public let critical: Bool
 
     init?(_ json: JSON) {
         start = json["start_hours"].double
         finish = json["finish_hours"].double
+        critical = json["critical"].bool ?? false
         if start == nil, finish == nil { return nil }
     }
 
@@ -61,5 +64,20 @@ extension GanttLayout {
         let start = actual.start.map { "started at \(GanttWords.hours($0))" }
         let finish = actual.finish.map { "finished at \(GanttWords.hours($0))" } ?? (actual.start == nil ? nil : "not finished")
         return "recorded: " + [start, finish].compactMap { $0 }.joined(separator: ", ") + " elapsed"
+    }
+
+    /// Whether the row's work is done: it has a recorded finish, so its remaining span (all zero) says nothing.
+    public static func isFinished(_ row: GanttRow) -> Bool { row.actual?.finish != nil }
+
+    /// Critical as the row is drawn: finished work by the as-built path, outstanding work by the remaining schedule.
+    public static func isCritical(_ row: GanttRow) -> Bool {
+        isFinished(row) ? row.actual?.critical == true : row.span?.critical == true
+    }
+
+    /// Where a relation meets the row, in elapsed hours: a recorded event where one exists (a finished row's start
+    /// and finish, a started row's start), otherwise the remaining schedule's.
+    public static func eventHours(_ row: GanttRow, start: Bool) -> Double? {
+        if start { return row.actual?.start ?? (isFinished(row) ? row.actual?.finish : row.span?.start) }
+        return row.actual?.finish ?? row.span?.finish
     }
 }

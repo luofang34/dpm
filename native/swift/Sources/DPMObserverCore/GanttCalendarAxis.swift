@@ -138,4 +138,15 @@ public enum GanttCalendarAxis {
         }
         return formatter.string(from: date)
     }
+
+    /// A calendar date for elapsed `hours` after `origin`, as the strip and inspector say it.
+    public static func date(origin: Instant, hours: Double, timeZone: TimeZone = .current, locale: Locale = .current) -> String {
+        let formatter = DateFormatter()
+        formatter.timeZone = timeZone
+        formatter.locale = locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        let base = Date(timeIntervalSince1970: Double(origin.seconds) + Double(origin.nanos) / 1e9)
+        return formatter.string(from: base.addingTimeInterval(hours * 3600))
+    }
 }
