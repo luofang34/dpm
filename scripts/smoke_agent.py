@@ -250,6 +250,9 @@ def smoke(database):
         # Both adapters publish each estimated task's classical PERT te and σ, and none for a point.
         figures = {w['key']: w['pert'] for w in scheduled['data']['work']}
         assert figures['TEST-B'] == {'expected_hours': 20.0, 'sigma_hours': 20 / 6} and figures['TEST-M1'] is None, figures
+        # Nothing has finished, so no relation has both events recorded and no work is critical as built.
+        assert scheduled['data']['recorded_relations'] == [], scheduled['data']['recorded_relations']
+        assert all(not w['actual']['critical'] for w in scheduled['data']['work'] if w['actual']), scheduled['data']['work']
         # A clock before the work began observes the workspace as it stood then.
         early = (datetime.fromisoformat(started['timestamp']) - timedelta(hours=1)).isoformat()
         local = run_cli_envelope(database, '--clock', early, 'status')

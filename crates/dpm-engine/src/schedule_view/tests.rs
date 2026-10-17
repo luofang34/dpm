@@ -460,13 +460,24 @@ fn recorded_work_reports_its_actual_times_before_the_clock_reading() {
             .expect("row")
             .actual
     };
-    let worked = Some(ActualSpan {
+    let worked = ActualSpan {
         started_at: Some(hours_ago(4)),
         finished_at: Some(hours_ago(1)),
         start_hours: Some(-4.0),
         finish_hours: Some(-1.0),
-    });
-    assert_eq!(actual("TEST-A"), worked, "start to verification");
-    assert_eq!(actual("WP"), worked, "a package spans its recorded work");
+        critical: false,
+    };
+    // The only finished task is the last recorded finish, so it alone is critical as built; a
+    // package is never on that chain itself.
+    let critical = ActualSpan {
+        critical: true,
+        ..worked
+    };
+    assert_eq!(actual("TEST-A"), Some(critical), "start to verification");
+    assert_eq!(
+        actual("WP"),
+        Some(worked),
+        "a package spans its recorded work"
+    );
     assert_eq!(actual("TEST-B"), None, "nothing recorded, nothing inferred");
 }

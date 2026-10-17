@@ -969,8 +969,8 @@ descendants), `times` (`earliest_start_hours`, `earliest_finish_hours`, `latest_
 `null` for packages, milestones, unestimated tasks and work outside the active graph),
 `calendar`, and `actual`: what was recorded, `started_at` (a package's earliest recorded
 descendant start) and `finished_at` (verification, or a milestone's or package's completion) with
-`start_hours` and `finish_hours` from the clock reading, negative in the past; it is absent before
-either happened and never inferred. `data.project_finish_hours` is the deterministic remaining duration. A work package's
+`start_hours` and `finish_hours` from the clock reading, negative in the past, and `critical` (on
+the as-built critical path, below); it is absent before either happened and never inferred. `data.project_finish_hours` is the deterministic remaining duration. A work package's
 `times` enclose its outstanding applicable descendants (earliest and latest bounds, their least
 float; `null` once all its work is complete) and its `criticality` is its most critical outstanding
 descendant's, never the float of the package itself.
@@ -978,7 +978,16 @@ descendant's, never the float of the package itself.
 `id`, `predecessor`, `successor`, `kind`, `slack_hours` (how far the successor's start lies past what
 this dependency alone requires; a gap in the successor's calendar is not slack), `driving` (it sets
 the successor's earliest start, or on calendars holds its finish) and `critical` (driving between two critical items: a link of the
-critical path); satisfied, waived and inapplicable dependencies are absent. All hours are
+critical path); satisfied, waived and inapplicable dependencies are absent.
+`data.recorded_relations` answers the same question for what already happened: every applicable,
+unwaived dependency whose two events were both recorded (a milestone's start is its completion),
+in plan order, with `id`, `predecessor`, `successor`, `kind`, `gap_hours` (how far the successor's
+recorded event lay past the predecessor's plus the lag, in elapsed hours; negative when the recorded
+order broke the dependency), `driving` (the smallest gap among the successor's recorded
+dependencies) and `critical`. The as-built critical path follows driving recorded dependencies back
+from the last recorded finish of a task or milestone; `actual.critical` marks its work. It is
+derived from recorded events alone and independent of the remaining schedule, whose `times` of
+finished work are all zero. All hours are
 elapsed hours from the clock reading, which `data.evaluated_at` states (RFC 3339). `calendar` (calendar, executor, `source`, `review_wait_hours`)
 is placement only, present when the plan has calendars, and no calendar date is ever inferred.
 

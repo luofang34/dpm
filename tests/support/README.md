@@ -8,6 +8,8 @@ options `A` and `B`; `SUP-PKG-A` (with a nested package) and `SUP-PKG-B` apply o
 option, and both qualification branches meet at `SUP-MERGE`, an active-branch join followed by
 `SUP-BUILD`. `SUP-A-AUDIT` is unconditional but has an ordinary dependency on supplier A work, so
 choosing B strands it rather than releasing it.
+`recorded-plan.json` is a five-task synthetic graph (FS and SS) that qualification cases finish
+through the CLI with occurrence times in 1950, so views of work completed long ago are exercised.
 `golden-v4-store.sql` is a SQL dump of a schema 4 store written by `scripts/golden_store.py`:
 an import, a reviewed plan change (including a float that needs correctly rounded parsing), an
 operation with a client-supplied identity, and a lifecycle run through independent verification. Tests load it and require `verify-store` to replay

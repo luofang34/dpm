@@ -15,8 +15,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 mod actual;
+mod as_built;
 mod span;
 pub use actual::{ActualSpan, actual_spans};
+pub use as_built::RecordedRelation;
 pub use span::{ScheduleSpan, schedule_span};
 
 #[cfg(test)]
@@ -123,6 +125,9 @@ pub struct ScheduleProjection {
     /// Constraints that still bound outstanding work, in plan order; satisfied, waived and
     /// inapplicable ones are absent.
     pub relations: Vec<ScheduledRelation>,
+    /// Applicable, unwaived relations whose two events were both recorded, in plan order, with
+    /// the gap they left and whether they drove the work that happened.
+    pub recorded_relations: Vec<RecordedRelation>,
 }
 
 /// One outstanding constraint and how tightly it binds its successor.
@@ -167,7 +172,13 @@ pub fn schedule_projection(
         None
     };
     let spans = span::spans(plan, &timeline, &schedule);
-    let actuals = actual_spans(plan, &timeline);
+    let mut actuals = actual_spans(plan, &timeline);
+    let built = as_built::as_built(plan, &timeline, &actuals);
+    for id in &built.critical {
+        if let Some(actual) = actuals.get_mut(id) {
+            actual.critical = true;
+        }
+    }
     let leaves = span::package_leaves(plan, &timeline, &schedule);
     let mut work: Vec<ScheduledWork> = plan
         .work_items
@@ -200,6 +211,7 @@ pub fn schedule_projection(
         }),
         work,
         relations: relations(plan, &schedule),
+        recorded_relations: built.relations,
     })
 }
 
