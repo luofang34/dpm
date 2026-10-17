@@ -131,8 +131,8 @@ public struct GanttSchedule: Equatable, Sendable {
     public let revision: UInt64?
     /// The distinct lifecycle words of the rows, for the status filter.
     public let statuses: [String]
-    /// Dependency ids the projection marks as links of the critical path.
-    public let criticalRelations: Set<String>
+    /// Dependency ids the projection marks as links of the critical path, and of the as-built one.
+    public let criticalRelations: Set<String>, asBuiltRelations: Set<String>
 
     public static func == (left: GanttSchedule, right: GanttSchedule) -> Bool { left.token == right.token }
 
@@ -152,11 +152,13 @@ public struct GanttSchedule: Equatable, Sendable {
         revision = view.envelope.revision
         statuses = Array(Set(found.map(\.status))).sorted()
         criticalRelations = Set(data["relations"].items.filter { $0["critical"].bool == true }.compactMap { $0["id"].string })
+        asBuiltRelations = Set(data["recorded_relations"].items.filter { $0["critical"].bool == true }.compactMap { $0["id"].string })
     }
 
     /// A relation in full words, saying when the projection marks it a link of the critical path.
     public func words(_ relation: GanttRelation, names: (String) -> String) -> String {
-        relation.words(names: names) + (criticalRelations.contains(relation.id) ? "; on the critical path" : "")
+        relation.words(names: names) + (criticalRelations.contains(relation.id) ? "; on the critical path"
+            : asBuiltRelations.contains(relation.id) ? "; on the as-built critical path" : "")
     }
 
     public func row(_ identity: String) -> GanttRow? { index[identity].map { rows[$0] } }
@@ -263,7 +265,7 @@ public struct GanttFilter: Equatable, Sendable {
 
     func matches(_ row: GanttRow) -> Bool {
         if let status = status, row.status != status { return false }
-        if criticalOnly, row.span?.critical != true { return false }
+        if criticalOnly, !GanttLayout.isCritical(row) { return false }
         let needle = text.trimmingCharacters(in: .whitespaces).lowercased()
         return needle.isEmpty || [row.key, row.title, row.status, row.kind].contains { $0.lowercased().contains(needle) }
     }
