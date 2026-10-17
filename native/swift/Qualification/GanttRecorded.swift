@@ -40,6 +40,28 @@ extension Context {
         check(abs(fitted.panX - first * fitted.scale) < 1e-6 && abs(span - fitted.viewportWidth) < 1e-6,
               "a fit shows exactly the recorded history: pan \(fitted.panX), width \(span) of \(fitted.viewportWidth)")
         check(-fitted.panX > fitted.viewportWidth, "the clock reading lies beyond the fitted view: \(-fitted.panX) points right")
+        calendarAxis(schedule, scale: fitted.scale, from: first, to: last)
         await closeGantt(model)
+    }
+
+    /// The axis reads in calendar dates at the fitted scale and at one that spans decades, its labels never touch,
+    /// and a day is never shown without its year.
+    func calendarAxis(_ schedule: GanttSchedule, scale: Double, from: Double, to: Double) {
+        let utc = TimeZone(identifier: "UTC") ?? .current, posix = Locale(identifier: "en_US_POSIX")
+        let ticks = GanttCalendarAxis.ticks(origin: schedule.evaluatedAt, scale: scale, fromHours: from, toHours: to, timeZone: utc, locale: posix)
+        check(ticks.first?.label.hasPrefix("Jan") == true && ticks.allSatisfy { !$0.label.hasSuffix(" h") },
+              "the fitted month is labelled by date: \(ticks.map(\.label))")
+        check(GanttCalendarAxis.context(origin: schedule.evaluatedAt, scale: scale, atHours: from, timeZone: utc, locale: posix) == "1950",
+              "day labels are read with their year at the left edge")
+        let decades = 900.0 / (24 * 365 * 18)
+        let years = GanttCalendarAxis.ticks(origin: schedule.evaluatedAt, scale: decades, fromHours: from, toHours: from + 24 * 365 * 18, timeZone: utc, locale: posix)
+        check(years.first?.label == "1950" && years.count >= 9 && years.allSatisfy { $0.label.count == 4 },
+              "eighteen years across 900 points read as years: \(years.map(\.label))")
+        for (name, drawn, at) in [("fitted", ticks, scale), ("decades", years, decades)] {
+            let touching = zip(drawn, drawn.dropFirst()).filter { pair in
+                (pair.1.hours - pair.0.hours) * at < Double(pair.0.label.count) * GanttCalendarAxis.characterWidth + GanttCalendarAxis.labelGap
+            }
+            check(drawn.count > 1 && touching.isEmpty, "no two \(name) axis labels touch: \(touching.map { ($0.0.label, $0.1.label) })")
+        }
     }
 }
