@@ -282,6 +282,7 @@ fn nonempty(entity: &str, field: &str, value: &str) -> Result<(), EngineError> {
 
 mod choice;
 mod evidence;
+pub use evidence::{DIGEST_KEY, OUTCOME_KEY, OUTCOMES, SIZE_KEY};
 mod lifecycle;
 mod occurrence;
 mod ownership;

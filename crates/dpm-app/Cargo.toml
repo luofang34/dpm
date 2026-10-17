@@ -17,6 +17,7 @@ dpm-interchange = { path = "../dpm-interchange", version = "0.1.0" }
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2 = { version = "0.10", default-features = false }
 thiserror.workspace = true
 tracing.workspace = true
 toml.workspace = true

@@ -9,7 +9,7 @@ use crate::{
 use dpm_app::{Application, CommandRequest, Query, open_workspace_blocking};
 use dpm_engine::{Command, NextWorkResult};
 use dpm_model::{ActorId, ActorKind, Plan};
-use std::{fs, path::Path};
+use std::path::Path;
 
 pub(crate) fn run_blocking(cli: Cli) -> Result<(), CliError> {
     let Cli {
@@ -229,6 +229,7 @@ fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, C
         | Commands::Submit { .. }
         | Commands::Verify { .. }) => lifecycle_mutation_blocking(app, lifecycle)?,
         Commands::Ownership(command) => crate::ownership::mutation_blocking(app, command)?,
+        Commands::Evidence(command) => crate::evidence::mutation_blocking(app, command)?,
         Commands::Block {
             key,
             reason,
@@ -273,9 +274,6 @@ fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, C
             };
             (actor(&who)?, command)
         }
-        artifact @ (Commands::Artifact { .. } | Commands::AttachGitHead { .. }) => {
-            artifact_mutation_blocking(app, artifact)?
-        }
         external @ (Commands::LinkExternal { .. } | Commands::UnlinkExternal { .. }) => {
             crate::tracking::mutation_blocking(app, external)?
         }
@@ -285,50 +283,6 @@ fn mutation_blocking(app: &Application, command: Commands) -> Result<(ActorId, C
         _ => return Err(CliError::Input("expected a state-changing command".into())),
     };
     Ok(pair)
-}
-
-fn artifact_mutation_blocking(
-    app: &Application,
-    command: Commands,
-) -> Result<(ActorId, Command), CliError> {
-    match command {
-        Commands::Artifact {
-            key,
-            file,
-            actor: who,
-        } => {
-            let artifact = serde_json::from_str(
-                &fs::read_to_string(&file).map_err(io_error("read artifact", &file))?,
-            )?;
-            Ok((
-                actor(&who)?,
-                Command::AttachArtifact {
-                    work: app.work_id_blocking(&key)?,
-                    artifact,
-                },
-            ))
-        }
-        Commands::AttachGitHead {
-            key,
-            actor: who,
-            asset,
-        } => {
-            let principal = actor(&who)?;
-            let artifact = app.git_head_artifact_blocking(
-                principal.clone(),
-                app.work_id_blocking(&key)?,
-                asset.as_deref(),
-            )?;
-            Ok((
-                principal,
-                Command::AttachArtifact {
-                    work: app.work_id_blocking(&key)?,
-                    artifact,
-                },
-            ))
-        }
-        _ => Err(CliError::Input("expected artifact command".into())),
-    }
 }
 
 fn waiver_mutation_blocking(

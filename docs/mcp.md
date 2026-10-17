@@ -110,6 +110,7 @@ command in `tools/list` as `_meta["dpm/cli"]`; `smoke_adapters.py` fails when a 
 | decide KEY OUTCOME --at RFC3339 | decide_gate | Human/service resolves an open decision (agents are refused), optionally when it was actually made; with `options`, OUTCOME is exactly one option key |
 | artifact KEY FILE.json | add_artifact | Owner attaches the same Artifact JSON object to its task |
 | attach-git-head KEY --asset KEY | attach_git_head | Owner captures HEAD for an explicit workspace asset; locator binding is the default |
+| attach-file KEY PATH --kind KIND --label TEXT --outcome O --meta K=V | attach_file | Owner attaches a local file by location, SHA-256 and size; the file is never copied |
 | link-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | link_external | Link work to a provider-scoped external object; context only |
 | unlink-external KEY --provider P --instance HOST --namespace NS --kind K --id ID | unlink_external | Remove one link; the work graph is unchanged |
 | workspace list | workspace_list | List device-local bindings without changing the plan |
@@ -184,20 +185,25 @@ work is refused (reject it first), as are unowned work, `to` equal to the owner 
 `to` (`invalid_request`). No actor that has held the work, now or before a handoff or release, may
 verify, reject, revalidate its basis or waive its edges, and no author of evidence attached to the
 task may verify or reject it. Only a task's current owner attaches evidence to it (`add_artifact`,
-`attach_git_head`); unclaimed tasks are refused.
-
-Evidence is a link to where it lives, never a copy: the store directory holds plan state only.
-An artifact `uri` uses one of the schemes `git:` (a commit, or `git:<revision>:<path>` for a
-committed file), `https:`/`http:` (pull request, CI run, hosted report), `repo:` (a text file in
-the repository), `urn:` or `doi:`. A path without a scheme, `file:` and `data:` URIs, paths that
-leave the repository or lie in `.dpm`, and screenshots, recordings, binaries, archives and
-databases committed as evidence are `invalid_request`, as are a `uri` over 2048 bytes, a `label`
-over 500 bytes and more than 32 metadata entries or any over 1024 bytes. Recorded artifacts are
-kept as they are. Commit the change and use `attach_git_head`, or upload a screenshot or log
-where it is hosted (CI artifacts, the pull request) and link that page. A recorded rejection or revalidation stays valid
+`attach_git_head`, `attach_file`); unclaimed tasks are refused. A recorded rejection or revalidation stays valid
 when its reviewer later takes the work over: independence is judged against the holders at the
 review time. Plan changes cannot change owners, handoffs or releases.
 See [the decision log](architecture.md#release-and-handoff).
+
+Evidence is a reference to where it lives, never the content: the store directory holds plan
+state only. Prefer what a verifier can follow: `attach_git_head` for a commit, or an `https:` link
+to a pull request, CI run or document; non-software work may name a document system, share or
+identifier (`smb:`, `urn:`, `doi:` …). A newly attached artifact needs a `uri` with a scheme;
+`data:`, `blob:`, `javascript:` and `about:` URIs carry content and are refused. A path in a `.dpm`
+directory is refused. A local file (`file:`, `repo:`) needs metadata `sha256` (64 lowercase hex)
+and `bytes` so the reference stays checkable after it moves or changes: `attach_file` measures
+both and records a `file://` URL without copying the file. `repo:` and `git:<revision>:<path>`
+paths stay inside the repository and may not commit screenshots, recordings, binaries, archives
+or databases; link those where they are hosted. `TestResult` and `Build` evidence states
+`outcome` (`passed`, `failed` or `partial`), with `command`, `commit` or the run URL recommended,
+so a verifier reads the result without opening logs. A `uri` over 2048 bytes, a `label` over 500
+bytes and more than 32 metadata entries or any over 1024 bytes are refused. These refusals are
+`invalid_command`; recorded artifacts are kept as they are and history replays unchanged.
 
 ## External tracking references
 
@@ -853,8 +859,9 @@ The workflow below applies to an authorized execution workspace; tool availabili
    `at` (likewise for submit_work and verify_work), never earlier than the claim; see
    [execution events](#execution-events-and-elapsed-lag).
 5. Perform the work and acceptance checks. Use report_progress for intermediate execution reports;
-   use add_artifact or attach_git_head to record evidence while you own the task. Evidence is
-   a link (commit, pull request, CI run); never copy logs, screenshots or binaries into `.dpm`.
+   use attach_git_head, add_artifact or attach_file to record evidence while you own the task.
+   Evidence is a reference (commit, CI run, document, fingerprinted file); never copy logs,
+   screenshots or binaries into `.dpm`.
 6. Call submit_work with an evidence summary once `explain_work.transitions.submit.ready` holds.
    Another configured actor verifies the result.
 7. Call report_blocker when blocked; do not silently ignore dependencies or change lifecycle fields.

@@ -2,7 +2,6 @@ use super::*;
 use crate::{Command, admit_command, apply_command};
 use chrono::Utc;
 use dpm_model::{ActorId, ArtifactId, ArtifactKind, OperationId, Plan, WorkItemId};
-use std::collections::BTreeMap;
 
 fn claimed() -> (Plan, WorkItemId) {
     let mut plan: Plan = serde_json::from_str(include_str!(
@@ -21,17 +20,24 @@ fn claimed() -> (Plan, WorkItemId) {
     (plan, work)
 }
 
-fn evidence(uri: &str) -> Artifact {
+fn evidence(kind: ArtifactKind, uri: &str, metadata: &[(&str, &str)]) -> Artifact {
     Artifact {
         id: ArtifactId::new(),
-        kind: ArtifactKind::TestResult,
+        kind,
         uri: uri.into(),
         label: "Acceptance run".into(),
-        metadata: BTreeMap::new(),
+        metadata: metadata
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
         created_by: ActorId::agent("owner"),
         created_at: Utc::now(),
     }
 }
+
+const DIGEST: &str = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+const FILE: [(&str, &str); 2] = [("sha256", DIGEST), ("bytes", "2048")];
+const PASSED: [(&str, &str); 1] = [("outcome", "passed")];
 
 fn attach(artifact: Artifact) -> Result<Plan, String> {
     let (mut plan, work) = claimed();
@@ -59,67 +65,146 @@ fn attach(artifact: Artifact) -> Result<Plan, String> {
 }
 
 #[test]
-fn commits_hosted_pages_and_committed_text_files_are_accepted() {
-    for uri in [
-        "git:local@0123456789abcdef0123456789abcdef01234567",
-        "git:asset:0192f000-0000-4000-8000-000000000001@0123456789abcdef",
-        "git:git@github.com:org/repo.git@0123456789abcdef",
-        "git:0123456789abcdef0123456789abcdef01234567:docs/acceptance.md",
-        "repo:target/acceptance/report.json",
-        "https://github.com/org/repo/pull/7",
-        "https://ci.example.com/runs/42/screenshot.png",
-        "urn:po:4711",
-        "doi:10.1000/182",
+fn references_with_what_keeps_them_checkable_are_accepted() {
+    use ArtifactKind::{Build, Cad, GitCommit, Other, Photo, PullRequest, Quote, TestResult};
+    let fingerprinted = [FILE[0], FILE[1], ("outcome", "failed")];
+    for (kind, uri, metadata) in [
+        (
+            GitCommit,
+            "git:local@0123456789abcdef0123456789abcdef01234567",
+            &[][..],
+        ),
+        (
+            GitCommit,
+            "git:asset:0192f000-0000-4000-8000-000000000001@0123456789abcdef",
+            &[],
+        ),
+        (
+            GitCommit,
+            "git:git@github.com:org/repo.git@0123456789abcdef",
+            &[],
+        ),
+        (
+            Other,
+            "git:0123456789abcdef0123456789abcdef01234567:docs/acceptance.md",
+            &[],
+        ),
+        (PullRequest, "https://github.com/org/repo/pull/7", &[]),
+        (TestResult, "https://ci.example.com/runs/42", &PASSED),
+        (
+            Build,
+            "https://ci.example.com/runs/42/artifacts",
+            &[("outcome", "partial")],
+        ),
+        (
+            TestResult,
+            "repo:target/acceptance/report.json",
+            &fingerprinted,
+        ),
+        (Photo, "file:///Volumes/QA/inspection-17.jpg", &FILE),
+        (Cad, "smb://fileserver/drawings/bracket-r3.step", &[]),
+        (Quote, "urn:po:4711", &[]),
+        (Other, "doi:10.1000/182", &[]),
     ] {
-        let plan = attach(evidence(uri)).unwrap_or_else(|e| panic!("{uri}: {e}"));
+        let plan = attach(evidence(kind, uri, metadata)).unwrap_or_else(|e| panic!("{uri}: {e}"));
         assert!(plan.artifacts.values().any(|a| a.uri == uri), "{uri}");
     }
 }
 
 #[test]
-fn local_copies_and_embedded_content_are_rejected_with_guidance() {
-    for (uri, why) in [
-        (".dpm/artifacts/run/tests.log", "names no scheme"),
-        ("target/report.txt", "names no scheme"),
-        ("file:report.txt", "scheme \"file\""),
-        ("file:///results/a.txt", "scheme \"file\""),
-        ("data:image/png;base64,iVBORw0KGgo", "scheme \"data\""),
+fn content_store_copies_and_uncheckable_files_are_refused_with_guidance() {
+    use ArtifactKind::{Other, Photo, TestResult};
+    let bad_digest = [("sha256", "ABC"), ("bytes", "2048")];
+    for (kind, uri, metadata, why) in [
         (
-            "repo:.dpm/artifacts/run/tests.log",
-            "project store directory",
+            Other,
+            ".dpm/artifacts/run/tests.log",
+            &[][..],
+            "names no scheme",
         ),
-        ("repo:tools/.dpm/evidence.json", "project store directory"),
+        (Other, "target/report.txt", &[], "names no scheme"),
+        (Other, "C:\\reports\\run.txt", &[], "names no scheme"),
         (
-            "git:0123456789abcdef:.dpm/evidence/run.json",
-            "project store directory",
+            Other,
+            "data:image/png;base64,iVBORw0KGgo",
+            &[],
+            "carries content",
         ),
-        ("repo:/private/tmp/report.txt", "leaves the repository"),
-        ("repo:../elsewhere/report.txt", "leaves the repository"),
-        ("repo:evidence/ui-run/screenshot.PNG", "screenshot"),
-        ("repo:evidence/web-tests.wasm", "screenshot"),
-        ("git:0123456789abcdef:evidence/capture.mov", "screenshot"),
         (
+            Other,
+            "file:///Users/me/project/.dpm/artifacts/run.json",
+            &FILE,
+            "store directory",
+        ),
+        (
+            Other,
+            "repo:tools/.dpm/evidence.json",
+            &FILE,
+            "store directory",
+        ),
+        (
+            Other,
             "git:0123456789abcdef:.dpm/run@1.json",
-            "project store directory",
+            &[],
+            "store directory",
         ),
         (
-            "git:0123456789abcdef:evidence/run@1/capture.png",
-            "screenshot",
+            Other,
+            "repo:/private/tmp/report.txt",
+            &FILE,
+            "leaves the repository",
+        ),
+        (
+            Other,
+            "repo:../elsewhere/report.txt",
+            &FILE,
+            "leaves the repository",
+        ),
+        (
+            Photo,
+            "repo:evidence/ui-run/screenshot.PNG",
+            &FILE,
+            "commits a screenshot",
+        ),
+        (
+            Other,
+            "git:0123456789abcdef:evidence/run@1/web-tests.wasm",
+            &[],
+            "commits a screenshot",
+        ),
+        (Photo, "file:///Volumes/QA/inspection-17.jpg", &[], "sha256"),
+        (
+            Other,
+            "file:///Volumes/QA/report.txt",
+            &bad_digest,
+            "sha256",
+        ),
+        (TestResult, "https://ci.example.com/runs/42", &[], "outcome"),
+        (
+            TestResult,
+            "https://ci.example.com/runs/42",
+            &[("outcome", "green")],
+            "outcome",
         ),
     ] {
-        let error = attach(evidence(uri)).expect_err(uri);
+        let error = attach(evidence(kind, uri, metadata)).expect_err(uri);
         assert!(error.contains(why), "{uri}: {error}");
-        assert!(error.contains("attach_git_head"), "{uri}: {error}");
+        assert!(error.contains("attach_file"), "{uri}: {error}");
     }
 }
 
 #[test]
 fn content_smuggled_through_long_fields_is_rejected() {
     let long = "x".repeat(MAX_EVIDENCE_URI_BYTES);
-    let error = attach(evidence(&format!("https://h/{long}"))).expect_err("uri");
+    let error = attach(evidence(
+        ArtifactKind::Other,
+        &format!("https://h/{long}"),
+        &[],
+    ))
+    .expect_err("uri");
     assert!(error.contains("uri exceeds"), "{error}");
 
-    let mut labelled = evidence("https://h/run");
+    let mut labelled = evidence(ArtifactKind::Other, "https://h/run", &[]);
     labelled.label = "x".repeat(MAX_EVIDENCE_LABEL_BYTES + 1);
     assert!(
         attach(labelled)
@@ -127,13 +212,13 @@ fn content_smuggled_through_long_fields_is_rejected() {
             .contains("label exceeds")
     );
 
-    let mut valued = evidence("https://h/run");
+    let mut valued = evidence(ArtifactKind::Other, "https://h/run", &[]);
     valued
         .metadata
         .insert("log".into(), "x".repeat(MAX_EVIDENCE_METADATA_BYTES + 1));
     assert!(attach(valued).expect_err("value").contains("at most"));
 
-    let mut crowded = evidence("https://h/run");
+    let mut crowded = evidence(ArtifactKind::Other, "https://h/run", &[]);
     crowded.metadata = (0..=MAX_EVIDENCE_METADATA_ENTRIES)
         .map(|i| (format!("k{i}"), "v".into()))
         .collect();
@@ -143,7 +228,11 @@ fn content_smuggled_through_long_fields_is_rejected() {
 #[test]
 fn recorded_history_replays_evidence_the_rule_now_refuses() {
     let (mut plan, work) = claimed();
-    let mut recorded = evidence(".dpm/artifacts/run/tests.log");
+    let mut recorded = evidence(
+        ArtifactKind::TestResult,
+        ".dpm/artifacts/run/tests.log",
+        &[],
+    );
     recorded
         .metadata
         .insert("log".into(), "x".repeat(MAX_EVIDENCE_METADATA_BYTES + 1));

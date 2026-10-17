@@ -35,7 +35,7 @@ pub use scope::{
 };
 
 pub use command::{Command, EngineError, ExternalLinkRequest, Operation};
-pub use execution::{admit_command, apply_command};
+pub use execution::{DIGEST_KEY, OUTCOME_KEY, OUTCOMES, SIZE_KEY, admit_command, apply_command};
 pub use query::{
     Advisory, AgingWork, AppliedCalibration, AppliedFactor, AppliedReviewDelay,
     BULK_WINDOW_SECONDS, BasisReport, CalibrationReport, CalibrationRules, ClaimOutcomes,

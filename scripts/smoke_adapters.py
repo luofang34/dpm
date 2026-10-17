@@ -135,8 +135,8 @@ class Twins:
         for field in self.RECORDING:
             assert value['data'].pop(field), (tool, field, envelope)
         assert value.pop('lineage_id') == envelope['data']['lineage_id'], envelope
-        if tool == 'attach_git_head':
-            # Git evidence is captured at call time under a fresh identity.
+        if tool in {'attach_git_head', 'attach_file'}:
+            # Git and file evidence is captured at call time under a fresh identity.
             artifact = value['data']['command']['AttachArtifact']['artifact']
             assert artifact.pop('id') and artifact.pop('created_at'), artifact
         return value
@@ -201,12 +201,16 @@ def lifecycle_parity(directory, reviewer, worker, heir):
         twins.mutate(heir, 'unblock_work', task, 'unblock', 'TEST-A')
         kind, name = heir.split(':')
         artifact = {'id': '5f0f7c1e-8d7a-4b9e-9a51-3f3c2b1a0d11', 'kind': 'TestResult', 'uri': 'https://ci.example.com/report',
-                    'label': 'Report', 'metadata': {}, 'created_by': {'kind': kind.capitalize(), 'name': name},
+                    'label': 'Report', 'metadata': {'outcome': 'passed'}, 'created_by': {'kind': kind.capitalize(), 'name': name},
                     'created_at': '2026-09-01T00:00:00Z'}
         path = directory / 'parity-artifact.json'
         path.write_text(json.dumps(artifact))
         twins.mutate(heir, 'add_artifact', {**task, 'artifact': artifact}, 'artifact', 'TEST-A', str(path))
         twins.mutate(heir, 'attach_git_head', {**task, 'asset': 'TEST-REPO'}, 'attach-git-head', 'TEST-A', '--asset', 'TEST-REPO')
+        report = directory / 'parity-report.txt'
+        report.write_text('passed 3 of 3')
+        twins.mutate(heir, 'attach_file', {**task, 'path': str(report), 'kind': 'TestResult', 'label': 'Report', 'outcome': 'passed'},
+                     'attach-file', 'TEST-A', str(report), '--kind', 'TestResult', '--label', 'Report', '--outcome', 'passed')
         identity = {'provider': 'Forgejo', 'instance': 'git.alpha.example', 'namespace': 'ops/dpm', 'kind': 'Issue', 'external_id': '42'}
         flags = ['--provider', 'Forgejo', '--instance', 'git.alpha.example', '--namespace', 'ops/dpm', '--kind', 'Issue', '--id', '42']
         twins.mutate(heir, 'link_external', {**task, 'identity': identity, 'observed': 'Open'},

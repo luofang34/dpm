@@ -141,7 +141,7 @@ def smoke(database):
     reviewer = Agent(database, 'human:reviewer')
     try:
         names = {tool['name'] for tool in worker.request('tools/list', {})['tools']}
-        assert {'add_artifact', 'apply_change', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_calibration', 'get_schedule', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'propose_revert', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'revert_change', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'validate_plan', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register', 'workspace_revision', 'start_run', 'report_run', 'record_run_activity', 'link_run_operation', 'list_runs', 'get_run', 'run_lifecycle', 'run_activity'} == names
+        assert {'add_artifact', 'apply_change', 'attach_file', 'attach_git_head', 'claim_work', 'decide_gate', 'explain_work', 'export_mspdi', 'export_plan', 'get_calibration', 'get_schedule', 'get_work', 'handoff_work', 'history', 'import_mspdi', 'link_external', 'next_work', 'plan_schema', 'plan_template', 'project_status', 'propose_change', 'propose_revert', 'ratify_contract', 'reject_work', 'release_work', 'report_blocker', 'report_progress', 'restore_dependency', 'revalidate_basis', 'revert_change', 'start_work', 'submit_work', 'unblock_work', 'unlink_external', 'validate_plan', 'verify_work', 'waive_dependency', 'workspace_list', 'workspace_register', 'workspace_revision', 'start_run', 'report_run', 'record_run_activity', 'link_run_operation', 'list_runs', 'get_run', 'run_lifecycle', 'run_activity'} == names
         pairs = [
             ('project_status', {}, ('status',)),
             ('project_status', {'horizon_hours': 80}, ('status', '--horizon', '80')),
@@ -269,13 +269,13 @@ def smoke(database):
         run_cli(database, '--base-revision', '0', 'claim', 'TEST-A', error='revision_conflict')
         worker.call('attach_git_head', {'key': 'TEST-A', 'asset': 'TEST-REPO', 'base_revision': 4})
         # Evidence is a link: both adapters refuse a copy kept in the store directory alike.
-        copied = {'id': str(uuid.uuid4()), 'kind': 'TestResult', 'uri': '.dpm/artifacts/run/screenshot.png', 'label': 'Run',
+        copied = {'id': str(uuid.uuid4()), 'kind': 'TestResult', 'uri': 'repo:.dpm/artifacts/run/screenshot.png', 'label': 'Run',
                   'metadata': {}, 'created_by': {'kind': 'Agent', 'name': 'parity'}, 'created_at': datetime.now(timezone.utc).isoformat()}
         copy_file = Path(database).parent / 'copied-evidence.json'
         copy_file.write_text(json.dumps(copied))
         remote = worker.call('add_artifact', {'key': 'TEST-A', 'artifact': copied, 'base_revision': 5}, error='invalid_command')
         local = run_cli(database, 'artifact', 'TEST-A', str(copy_file), '--actor', 'agent:parity', error='invalid_command')['error']
-        assert remote['message'] == local['message'] and 'evidence is a link' in local['message'], (remote, local)
+        assert remote['message'] == local['message'] and 'store directory' in local['message'], (remote, local)
         run_cli(database, 'block', 'TEST-A', 'Waiting for fixture', '--actor', 'agent:parity')
         assert worker.call('next_work', {})['data']['candidates'] == []
         worker.call('unblock_work', {'key': 'TEST-A', 'base_revision': 6})
@@ -722,6 +722,8 @@ if __name__ == '__main__':
         provisional_smoke(Path(directory))
         from smoke_ownership import ownership_smoke
         ownership_smoke(Path(directory))
+        from smoke_evidence import evidence_smoke
+        evidence_smoke(Path(directory))
         from smoke_estimates import estimates_smoke
         estimates_smoke(Path(directory))
         from smoke_adapters import smoke as adapters_smoke

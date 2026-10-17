@@ -2,7 +2,9 @@ use clap::{Parser, Subcommand};
 use dpm_model::{LineageId, OperationId};
 use std::path::PathBuf;
 
+mod evidence;
 mod runs;
+pub(crate) use evidence::EvidenceCommand;
 pub(crate) use runs::{RunCommand, StartArgs};
 #[derive(Debug, Parser)]
 #[command(name = "dpm", version, about = "Agent-first execution planning")]
@@ -190,24 +192,6 @@ pub(crate) enum Commands {
         #[arg(long, value_name = "RFC3339")]
         at: Option<chrono::DateTime<chrono::Utc>>,
     },
-    /// Attach the current Git commit as an artifact to a work item.
-    AttachGitHead {
-        key: String,
-        #[arg(long)]
-        actor: String,
-        /// Repository asset represented by the current checkout; defaults to the locator binding.
-        #[arg(long)]
-        asset: Option<String>,
-    },
-    /// Attach an Artifact JSON object through the shared command API. Its URI links the evidence
-    /// (git:, https:, repo:, urn:, doi:); copies in .dpm, file: paths, screenshots and binaries are
-    /// rejected.
-    Artifact {
-        key: String,
-        file: PathBuf,
-        #[arg(long)]
-        actor: String,
-    },
     /// Link work to an external tracker object; context only, never evidence or verification.
     LinkExternal {
         key: String,
@@ -238,6 +222,8 @@ pub(crate) enum Commands {
     },
     #[command(flatten)]
     Open(OpenCommand),
+    #[command(flatten)]
+    Evidence(EvidenceCommand),
     /// Stop enforcing a soft dependency as a human or service; hard dependencies need plan review.
     WaiveDependency {
         /// Stable dependency identity, as shown by explain or export.
